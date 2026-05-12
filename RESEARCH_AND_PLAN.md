@@ -6,6 +6,15 @@ This document captures (1) what makes the original tick, (2) what neighboring ga
 
 ---
 
+## 0. Decisions locked in
+
+These four answers from the parent shape every section that follows; they're called out here so the rest of the document reads as a finalized plan rather than a survey of options.
+
+- **Player profile**: an 11-year-old, turning 12, already a fluent reader. The plan assumes he can handle multi-word prompts, narrator script with real vocabulary, and humor in the Hilda / Studio Ghibli / Over the Garden Wall register rather than a primary-color picture-book register. The home-row prologue stays, but it moves faster than it would for a six-year-old, and chapters introduce richer story content sooner.
+- **Story direction**: same fairy-tale storybook vibe as Touch Type Tale, **fresh world** — not Paul's niece, not the same kingdom. This gives us creative freedom and keeps us cleanly on the right side of the homage line.
+- **Build mode**: parent builds, son watches and reacts as the lead playtester. This pushes Phaser 3 + TypeScript clearly to the top of the stack list and demotes Construct 3 to a footnote.
+- **PR workflow**: a draft PR opens against a new `main` baseline so changes land via PRs rather than direct pushes.
+
 ## 1. Executive summary
 
 **Touch Type Tale** is a hand-drawn, storybook-medieval RTS controlled entirely by typing. It is narrated by Jim Broadbent, scored warmly, and structured around short missions with frequent mini-game palette cleansers (a cook-off, a keyboard-shaped shooting gallery, a rhythm game, a naval bullet-hell, a Grand Strategy puzzle). It won the German Computer Game Award 2023 for Best Expert Game and sits at ~93% positive on Steam. Pumpernickel Studio is three people in Münster; the game took six years; there is no announced sequel and no DLC.
@@ -87,15 +96,15 @@ The full survey is the input to the design that follows.
 
 ## 5. Design vision: *"The Apprentice's Almanac"* (working title)
 
-A spiritual sequel to Touch Type Tale, set in the same fairy-tale world but a generation later, centered on a child apprentice and a magical book of letters.
+A spiritual successor to Touch Type Tale: same hand-drawn fairy-tale tone, brand-new world, brand-new protagonist. The premise centers a child apprentice and a half-finished magical book of letters.
 
 ### Premise
 
-Years after Paul defeated the barbarians, his old typewriter has been retired to a dusty shelf. His niece Mira (or whichever name your son picks — see "open questions") is apprenticed to the village scribe. One night she finds the typewriter and an **Almanac of Letters**: a half-finished book whose pages are missing words, and whose missing words have become creatures, places, and people scattered across the kingdom. To finish the Almanac, she must travel, type the world back into shape, and learn the typewriter's powers letter by letter.
+In a windswept coastal town at the edge of an unmapped kingdom, an apprentice named **Wren** is bound to the village's old cartographer. The cartographer is going slowly blind, and the kingdom's roads, rivers, and creatures have begun to *fade out of his great Almanac* as he forgets them. Wren inherits the cartographer's ancient brass typewriter — a strange machine that can re-inscribe the world onto the Almanac's pages, one word at a time. Type a missing creature's name and it shows up. Type a missing road and it reappears under your feet. Type the wrong thing and... well, the typewriter is kind. It'll let you try again.
 
-The Almanac is literally the curriculum. Each chapter is a section of the book; each section requires mastery of a row of the keyboard; each finished page unlocks a new region.
+The Almanac is literally the curriculum. Each chapter is a section of the book; each section requires mastery of a row of the keyboard; each finished page unlocks a new region. Wren's story takes him from the coast inland, climbing toward a half-mythical northern library where, the cartographer thinks, the last missing pages might still exist.
 
-This frames home-row-first as in-world rather than as a worksheet. The same narrator returns (in a sequel proper this would be Broadbent if you could swing it; for a kid project, a friend with a warm voice and a recording booth in a closet is a perfectly fine stand-in — the warmth matters more than the celebrity).
+This frames home-row-first as in-world rather than as a worksheet. A warm narrator (the cartographer himself, in voice-over) reads the world to Wren as he types it back into existence. For v1 the parent records the narration on a phone; the warmth matters more than studio quality.
 
 ### Structure
 
@@ -107,25 +116,27 @@ A side-scrolling, hand-drawn adventure with a hub-and-spokes map (think Mario Wo
 
 ### Curriculum, hidden in fiction
 
+Pace is set for an 11-year-old fluent reader: the prologue moves quickly, capital letters and Shift are introduced earlier (he can already read mixed-case prose), and punctuation arrives mid-game rather than at the end.
+
 | Chapter | New keys | In-fiction framing |
 |---|---|---|
-| Prologue | `fjdksla;` home row | "The Sleeping Letters" — Mira wakes the home row by typing eight glowing tiles in the scribe's workshop. |
-| 1 | `e r u i` top-row anchors | "The Glade of Vowels" — vowel sprites are hiding among the trees. |
-| 2 | `t y g h` central column | "The Bridge of Two Hands" — two ferrymen, one for each hand, get the kid alternating. |
-| 3 | `c v b n m` bottom row | "The Caverns of Hum" — bottom-row words are heavier, dig deeper. |
-| 4 | `q w o p` outer top | "The Owl's Library" — the outer top row is where the rarer words live. |
-| 5 | `z x . , ?` punctuation & lone bottom | "The Punctuation Pirates" — a naval mini-game (echo of TTT's naval bullet-hell). |
-| 6 | Capitals & Shift | "The Capital City" — Shift is reframed as a magical "stand up" gesture: capitals are buildings, lowercase the roads. (Direct echo of TTT's case-sensitivity rule, kept intact.) |
-| 7 | Numbers & symbols (optional, late) | "The Royal Treasury" — only opens after the main story; treats numbers as bonus content, not gate. |
+| Prologue | `fjdksla;` home row | "The Sleeping Letters" — Wren wakes the home row by typing eight glowing tiles on the cartographer's desk. Brief; mostly there to establish narrator, tone, and finger placement. |
+| 1 | `e r u i` top-row anchors | "The Glade of Vowels" — vowel sprites are hiding among the trees outside town. |
+| 2 | `t y g h` central column | "The Bridge of Two Hands" — two ferrymen, one for each hand, get the player alternating across a river. |
+| 3 | `c v b n m` bottom row + Shift / capitals | "The Caverns of Hum" — bottom-row words are heavier, and the cavern's named *places* (capitalized) require Shift to enter. Mirrors TTT's case-sensitivity rule. |
+| 4 | `q w o p` outer top | "The Owl's Library" — the outer top row is where the rarer words live; the library puzzles use uncommon vocabulary. |
+| 5 | `z x . , ? !` punctuation & lone bottom | "The Punctuation Pirates" — a naval mini-game (echo of TTT's naval bullet-hell, slowed down). Punctuation is reframed as cannons. |
+| 6 | Speed + accuracy under pressure | "The Capital City" — no new keys, but timed encounters and longer phrases. This is where WPM internally starts to matter, though it's never surfaced as a number. |
+| 7 | Numbers & symbols (optional, late) | "The Royal Treasury" — opens after the main story; treats numbers as bonus content, not a gate. |
 
-A new key is only introduced when the previous row's per-letter accuracy across a sliding window of, say, 100 attempts is above ~85%. The kid never gets a "you failed the test" screen; they just get an Almanac page that hasn't yet glowed. The narrator handles the framing: *"Hmm, the letter K is still drowsy — let's wake it up properly before we go any further."*
+A new key is only introduced when the previous row's per-letter accuracy across a sliding window of, say, 100 attempts is above ~85%. The player never gets a "you failed the test" screen; they just get an Almanac page that hasn't yet glowed. The narrator handles the framing: *"Hmm, the letter K is still drowsy — let's wake it up properly before we go any further."*
 
 ### Core verbs
 
 Three verbs, all typing-driven, all directly echoing Touch Type Tale's design:
 
-1. **Address an in-world target.** A creature, plant, lantern, or door has a short word floating above it. Type the word and the thing happens (creature befriended, plant gathered, lantern lit, door opened). The word is generated from the curriculum, not from the fiction — so a sleepy fox might have the word `fad` over it because the curriculum wants the kid to practice `f`, `a`, `d`. The narrator never reads the word; he reads the action ("Oh, the fox is yawning — go say hello!").
-2. **Sing a song.** Some longer interactions open a "song" sub-screen — a short rhythm-friendly phrase the kid types at their own pace. The narrator sings along. This is where mid-length words and bigrams live.
+1. **Address an in-world target.** A creature, plant, lantern, or door has a short word floating above it. Type the word and the thing happens (creature appears in the Almanac, plant gathered, lantern lit, door opened). The word is generated from the curriculum, not from the fiction — so a sleepy fox might have the word `fad` over it because the curriculum wants the player to practice `f`, `a`, `d`. The narrator never reads the word verbatim; he reads the *action* ("Oh, the fox is yawning — go say hello!").
+2. **Inscribe a passage.** Some longer interactions open an inscription sub-screen — a short rhythm-friendly phrase or sentence the player types at their own pace, with the narrator reading it as it appears. This is where mid-length words, real sentences, and capitalization live; an 11-year-old fluent reader will enjoy this verb more than a younger kid would, so it's introduced from chapter 1 onward rather than gated late.
 3. **Cast a spell.** Hold a modifier key (Shift for "big," Alt for "wild," Ctrl for "true") while typing a word to produce a stronger or different effect. Direct lift from TTT's modifier-as-magic design. Introduced gradually, never required until the player is comfortable.
 
 ### Reward loops
@@ -136,19 +147,19 @@ Three verbs, all typing-driven, all directly echoing Touch Type Tale's design:
 - **Per session (~15 min)**: a story page completes; the narrator gives a short reading-aloud beat.
 - **Cross-session**: new biomes, new companions in the satchel (Pokémon-light collection), new outfits for Mira, more Almanac pages.
 
-The collected companions are the cosmetic-first economy: they ride in the satchel, occasionally pop their heads out, the kid can name them. They don't fight; they exist to be collected and to look cute. Nitro Type's enduring appeal is largely garage-cosmetics; this is the same principle, age-corrected.
+The collected creatures are the cosmetic-first economy: they ride in Wren's satchel, occasionally pop their heads out, can be named by the player. They don't fight; they exist to be collected and to look cute. Nitro Type's enduring appeal is largely garage-cosmetics; this is the same principle, age-corrected.
 
 ### Family / co-op mode
 
-This is the differentiator vs the entire competitive set: **asymmetric family co-op**.
+The differentiator vs the entire competitive set: **asymmetric family co-op**.
 
 - Same screen, two profiles loaded.
-- Parent's targets get longer / rarer words; kid's targets get shorter / curriculum-tuned words.
+- Parent's targets get longer / rarer / faster words; player's targets get shorter / curriculum-tuned words.
 - Shared victory — both contribute to the same chapter completion.
-- A "bedtime story" mode where the parent reads the narrator's lines aloud and the kid types responses.
+- A "read aloud" mode where the parent reads the narrator's lines and the player types responses — useful even with an 11-year-old fluent reader because it turns a solo activity into a shared one.
 - No required network play, no strangers, no chat.
 
-For a parent who wants to play *with* their son rather than supervise him, this is the headline feature. It is also a meaningful selling point if the project ever grows beyond a personal gift.
+This isn't headline-feature-zero — Phase 2 of the roadmap stays single-player for sanity — but it's the design feature most likely to differentiate the game if it ever grows beyond a personal gift.
 
 ### Tone & art
 
@@ -206,14 +217,14 @@ This is mostly DX setup. It exists so the kid sees the loop close.
 
 ### Phase 1 — The Sleeping Letters (2–4 weekends)
 
-The prologue, end-to-end. Eight glowing tiles on a scribe's-workshop background. Type the letter on a tile to wake it. When all eight are awake, an Almanac page opens with the narrator's intro line.
+The prologue, end-to-end. Eight glowing tiles on the cartographer's desk. Type the letter on a tile to wake it. When all eight are awake, an Almanac page opens with the cartographer's introduction.
 
 What ships:
-- One scene (the scribe's workshop) with a parallax background.
+- One scene (the cartographer's study) with a parallax background.
 - A simple home-row tile interaction: 8 sprites, each with a letter overhead, each playing a "wake up" animation on correct keystroke and a "shake/no" animation + soft chime on incorrect.
-- The first 30 seconds of the narrator's script, recorded by the parent on a phone.
+- The first 30–60 seconds of the narrator's script, recorded by the parent on a phone — written for an 11-year-old's ear, with the cartographer's voice already established.
 - A typewriter-clack SFX (free or hand-recorded), a "letter wakes" chime, an "Almanac page" sting.
-- A `localStorage` profile picker (3 animal avatars, no passwords).
+- A `localStorage` profile picker (3 starting avatars, no passwords).
 - Per-letter accuracy tracking, written to the profile but not yet surfaced.
 
 What's deliberately *not* in Phase 1:
@@ -222,11 +233,11 @@ What's deliberately *not* in Phase 1:
 - Mini-games.
 - Co-op.
 
-End of Phase 1, the kid has a thing he can show his friends. The narrator says his name. He chose his animal. This is when the project becomes real to him.
+End of Phase 1, the son has a thing he can show his friends. The narrator says his name (he typed it). The project becomes real to him; from this point his reactions drive the design of every subsequent chapter.
 
 ### Phase 2 — The Glade of Vowels (4–6 weekends)
 
-The first proper "chapter": a side-scrolling forest where vowel sprites hide. The kid walks Mira left/right (arrow keys or A/D — kept off the typing fingers), encounters sprites with short curriculum-tuned words floating overhead, types to befriend them. Befriended sprites enter the satchel.
+The first proper "chapter": a side-scrolling forest where vowel sprites hide. Wren walks left/right (arrow keys — kept off the typing fingers), encounters sprites with short curriculum-tuned words floating overhead, types to befriend them. Befriended sprites enter the Almanac and the satchel.
 
 What ships:
 - A side-scrolling scene with parallax forest art.
@@ -281,16 +292,16 @@ If the project ever grows past this point, the question of replacing the recorde
 
 ---
 
-## 9. Open questions for the parent
+## 9. Remaining open questions
 
-A few decisions substantially shape the plan and are best answered before Phase 1 starts:
+The four big directional decisions are locked (see section 0). A handful of smaller calls still benefit from your input before Phase 0:
 
-1. **How old is your son, and how confidently does he already read?** This sets the floor for word length and reading load in the prologue. 6 and barely-reading is a very different design than 9 and reading fluently.
-2. **Browser, desktop, or both?** Phaser-on-the-web is the default recommendation; a desktop wrapper via Electron or Tauri is easy to add later. But if he plays mostly on a Switch or tablet, the calculus changes.
-3. **How much does he want to help build it?** "Watch you build it" vs "name the animals" vs "draw the sprites" vs "actually open the editor with you" are all valid, and each one nudges the tech stack and the cadence.
-4. **What's the homage vs. original-fiction balance you want?** Mira-as-Paul's-niece is one option; a completely separate world with a different protagonist is another. The mechanics carry either way; the question is what story you want to tell *him*.
+1. **Browser, desktop, or both?** Phaser-on-the-web is the default; an Electron or Tauri desktop wrapper is easy to add later if he plays mostly on a single laptop. The plan assumes browser unless you say otherwise.
+2. **Narrator voice — you, or someone else?** Your voice in his ear, talking to him by name, is hard to beat for a personal gift; but if you'd rather an outside voice (a grandparent, a friend, a hired voice actor at a Phase 4 polish step), the recording pipeline is the same.
+3. **Name preference for the protagonist.** The plan uses "Wren" as a placeholder. Easy to swap; worth picking a name your son will enjoy reading on screen.
+4. **Mini-game preferences.** The current plan has lantern relay (Phase 2), naval cannons (Phase 3 / chapter 5), and an owl library word puzzle (Phase 3 / chapter 4). If your son already has typing mini-game patterns he loves from TTT or elsewhere, swapping one in for one of these is cheap.
 
-These are not blockers; the plan above is workable under any reasonable answer. But they shape the first weekend's choices.
+None block Phase 0. Phase 0 just sets up the project and gets the title screen on a deploy URL.
 
 ---
 

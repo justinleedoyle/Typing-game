@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { playClack } from "../audio/clack";
 import { playChime } from "../audio/chime";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
+import { RELICS } from "../game/relics";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
@@ -67,6 +68,9 @@ export class PortalChamberScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    this.drawSatchel();
+    this.drawArchLabels();
+
     this.typingInput = new TypingInputController(this.store);
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -80,6 +84,58 @@ export class PortalChamberScene extends Phaser.Scene {
     } else {
       this.askToWakeTypewriter();
     }
+  }
+
+  private drawArchLabels(): void {
+    const state = this.store.get();
+    for (const arch of ARCHES) {
+      if (!arch.label) continue;
+      const cleared = state.realms[arch.id]?.cleared;
+      const labelColor = cleared ? PALETTE.brass : PALETTE.dim;
+      this.add
+        .text(arch.x, arch.baseY + 30, arch.label, {
+          fontFamily: SERIF,
+          fontSize: "24px",
+          fontStyle: "italic",
+          color: labelColor,
+        })
+        .setOrigin(0.5);
+      if (cleared) {
+        this.add
+          .text(arch.x, arch.baseY + 60, "stamped in the almanac", {
+            fontFamily: SERIF,
+            fontSize: "18px",
+            color: PALETTE.brass,
+          })
+          .setOrigin(0.5);
+      }
+    }
+  }
+
+  private drawSatchel(): void {
+    const state = this.store.get();
+    if (state.satchel.length === 0) return;
+    const label = this.add.text(40, this.scale.height - 220, "in your satchel", {
+      fontFamily: SERIF,
+      fontSize: "22px",
+      fontStyle: "italic",
+      color: PALETTE.dim,
+    });
+    label.setOrigin(0, 0);
+    state.satchel.forEach((id, i) => {
+      const relic = RELICS[id];
+      if (!relic) return;
+      this.add.text(
+        40,
+        this.scale.height - 180 + i * 32,
+        `• ${relic.name}`,
+        {
+          fontFamily: SERIF,
+          fontSize: "22px",
+          color: PALETTE.cream,
+        },
+      );
+    });
   }
 
   private askToWakeTypewriter(): void {

@@ -20,6 +20,7 @@ export interface SaveState {
   profileName: string;
   typewriterAwakened: boolean;
   realms: Record<string, RealmProgress>;
+  satchel: string[];
   keyStats: Record<string, KeyStat>;
   updatedAt: number;
 }
@@ -29,6 +30,7 @@ export function emptySave(profileName = "Wren"): SaveState {
     profileName,
     typewriterAwakened: false,
     realms: {},
+    satchel: [],
     keyStats: {},
     updatedAt: Date.now(),
   };
@@ -70,8 +72,13 @@ export class SaveStore {
   }
 
   static async load(backend: SaveBackend): Promise<SaveStore> {
-    const loaded = (await backend.load()) ?? emptySave();
-    return new SaveStore(backend, loaded);
+    const loaded = await backend.load();
+    // Merge with emptySave so older saves missing newer fields (e.g. satchel,
+    // added in slice 2) get sane defaults without a separate migration pass.
+    const state: SaveState = loaded
+      ? { ...emptySave(loaded.profileName), ...loaded }
+      : emptySave();
+    return new SaveStore(backend, state);
   }
 
   get(): Readonly<SaveState> {

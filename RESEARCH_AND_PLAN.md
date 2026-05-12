@@ -15,9 +15,10 @@ These answers from the parent shape every section that follows; they're called o
 - **Game shape**: a **hub (the Portal Chamber) + magic portals to wildly different realms + choose-your-own-adventure branching + a final battle** to defend the kingdom. The composition of the final battle is shaped by Aiden's choices across the realms, giving the game real replay value.
 - **One cohesive game, not an anthology of mini-games.** Variety comes from realm settings, enemies, art, and narrative beats — not from swapping in different gameplay patterns per realm. The core verbs (type-to-act, type-to-battle, type-to-choose, type-to-cast-spells) stay consistent throughout so the experience plays as a single story-driven adventure, not a chapter book of disconnected mini-games.
 - **Art direction**: stay close to **Touch Type Tale's look** — hand-drawn, painterly, fairy-tale-storybook, low-clutter maps with strong silhouettes. Aiden likes how TTT looks, so we anchor the style there rather than chasing a different reference. All assets sourced cleanly (CC0 / commissioned / original) so the homage stays homage.
-- **Narrator voice**: someone *other* than the parent. Phase 1–3 can ship with a scratch track (free TTS or the parent recording placeholder lines) so development isn't blocked; for Phase 4 / Phase 5 we hire or recruit an outside voice — a grandparent, a friend, or a paid voice actor on Fiverr/Voices.com. Budget for ~5–10 minutes of finished audio per realm.
+- **Voice acting**: **AI voice generation** for the narrator, the Quiet Lord, and any other speaking characters. Default tool is ElevenLabs (consistent voices, decent emotion range, commercial-use license on the Creator/Pro tier as of 2026); alternatives are PlayHT, OpenAI TTS, or Murf. The big wins: zero recording schedule, easy iteration on lines as the script evolves, distinct voices per character without hiring multiple actors. We pick the narrator voice and the Quiet Lord voice in Phase 1, lock the cast, and reuse the same voices through Phase 4 so the characters stay recognizable.
 - **Build mode**: parent codes, Aiden watches and reacts as lead playtester. Phaser 3 + TypeScript.
 - **Target platform**: **browser, hosted on GitHub Pages**. Phaser builds to a static bundle that GitHub Pages serves for free; the project ships to a URL Aiden can open from any browser on day one. If the scope ever grows past what a browser handles well, Phaser bundles cleanly into Electron or Tauri for a Steam/desktop release later — no rewrite needed.
+- **Cloud save**: progress syncs across devices and sessions via a small backend service (**Supabase** as the default — free tier covers our needs indefinitely, Postgres + auth in one). Aiden signs in once (Google OAuth, one click) and his save follows him to any computer or browser. `localStorage` still acts as a fast local cache and a fallback when offline; cloud is the source of truth. Backend stack: GitHub Pages (static frontend) ↔ Supabase (Postgres + Auth). Schema is tiny: one row per player profile, JSON columns for realm progress and satchel contents.
 - **Test environment**: **Windows PC with a standard US English keyboard.** The plan assumes a US layout for punctuation positioning, Shift behavior, and Alt-vs-AltGr semantics. We'll test in Chrome and Edge on Windows as the primary target; other browsers/OSes get casual passes.
 - **Time budget**: heavy / active project. Phase 1 in roughly a week, Phase 2 in 3–4 weeks. Scope can be richer per phase without timeline slip.
 - **Sharing intent**: might share publicly later. Asset licensing, font choices, and the homage line are handled cleanly from day one so there's no rework if it ever ships on itch.io, GitHub Pages, or eventually Steam.
@@ -129,7 +130,7 @@ This is the load-bearing detail, lifted carefully from Touch Type Tale.
 - **Decision points**: a CYOA branch is presented as two or three short phrases at the bottom of the screen. Aiden types the *first letter* of the choice to commit, then types the full choice phrase to seal it. (Letter-lock from Z-Type: as soon as he commits a first letter, the other choices fade out, so the input never gets ambiguous.)
 - **The Almanac**: every realm Wren clears stamps a page. The page illustration is determined by the choices he made in that realm. By the time he reaches the final battle, the Almanac is a personalized record of the run.
 
-A warm narrator (the cartographer, in voice-over) reads the world to Wren as he types. For v1 the parent records the narration on a phone; the warmth matters more than studio quality.
+A warm narrator (the cartographer, in voice-over) reads the world to Wren as he types. All voices are AI-generated via ElevenLabs; we lock the narrator's voice in Phase 1 and reuse it through Phase 4, so the cartographer stays recognizable across the whole story.
 
 ### Structure
 
@@ -265,9 +266,9 @@ What ships:
 - **One CYOA branch** with the first-letter-lock UI and the typed-to-confirm verb.
 - **One battle encounter** (3–4 wolves, word-over-enemy combat with first-letter-lock).
 - **The Almanac UI**: a book in the corner of the Portal Chamber that opens to show stamped realm pages.
-- **The first 60–90 seconds of narration**, recorded by you on a phone (or via the WebAudio Recorder API — easy to add later).
+- **The first 60–90 seconds of narration**, generated via ElevenLabs using the locked narrator voice.
 - A typewriter-clack SFX, a "claim word" chime, a battle-victory sting, an Almanac-stamp sound.
-- A `localStorage` profile picker (avatar + name; no passwords).
+- **Sign-in + cloud save wiring**: Google OAuth via Supabase Auth, profile row created on first sign-in, save state written to Postgres after every realm scene. `localStorage` serves as a fast local cache for offline play.
 - Per-letter accuracy tracking, written silently to the profile.
 
 What's deliberately *not* in Phase 1:
@@ -348,14 +349,11 @@ If the project ever grows past this, replacing recorded narration with a hired v
 
 ## 9. Remaining open questions
 
-All directional decisions are now locked (see section 0). A handful of smaller calls are worth thinking about before they land, but none block Phase 0:
+All directional decisions are locked (see section 0). One small call remains, and it doesn't block Phase 0:
 
-1. **The Quiet Lord's voice and design.** The final villain doesn't need a face in Phase 1, but by Phase 4 he needs a recognizable silhouette and a way of "speaking" (does he hiss in scratched-out text? appear as a hooded figure with no mouth? whisper through other characters?). Worth sketching early since it shapes every realm's foreshadowing.
-2. **Narrator casting.** Outside-voice is locked, but the *who* is open: a relative, a friend, or a hired voice actor on Fiverr/Voices.com. The hired-actor path is ~$50–200 per realm for studio-quality audio. Decide before Phase 4; Phases 1–3 can ship with a scratch track.
-3. **Save-game scope.** Plan currently assumes `localStorage`-only saves (single computer). If Aiden ever wants to play on a different machine, we'd add a free cloud-save backend (Firebase / Supabase / Cloudflare KV). Not needed until Phase 5.
-4. **Resolution targets.** Phaser scales fine across screens, but the storybook art has a natural resolution. We'll lock a 16:9 design res (1920×1080 is the safe bet for a Windows desktop in 2026) and let it scale up/down.
+1. **The Quiet Lord's voice and design.** The villain doesn't need a face in Phase 1, but by Phase 4 he needs a recognizable silhouette and a way of "speaking" (a low, distorted ElevenLabs voice? speech rendered as scratched-out text? whispering through other characters?). Worth picking a voice and a visual treatment in Phase 1 so every realm can foreshadow him consistently.
 
-Phase 0 just sets up the project, the GitHub Pages deploy, and gets a title screen with a typewriter clack live on a URL Aiden can open. Ready to start whenever you say go.
+Phase 0 just sets up the project, wires the GitHub Pages deploy, creates the Supabase project for cloud saves, and gets a title screen with a typewriter clack live on a URL Aiden can open. Ready to start whenever you say go.
 
 ---
 

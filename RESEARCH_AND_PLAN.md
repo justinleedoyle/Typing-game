@@ -11,12 +11,16 @@ This document captures (1) what makes the original tick, (2) what neighboring ga
 These answers from the parent shape every section that follows; they're called out here so the rest of the document reads as a finalized plan rather than a survey of options.
 
 - **Player profile**: Aiden, age 11 turning 12, fluent reader, **already touch-types** with reasonable speed. The home-row prologue collapses to a brief warmup (~60 seconds); the curriculum's center of gravity moves to speed under pressure, accuracy at speed, capitals/symbols, and reforming any leftover hunt-and-peck habits. Chapters lean harder and earlier than they would for a beginner.
-- **Story direction**: same medieval fairy-tale storybook vibe as Touch Type Tale, **fresh world**. Original protagonist (Wren, working title) apprenticed to a royal cartographer.
-- **Structure**: a hub (the Portal Chamber) + **magic portals to wildly different realms** + **choose-your-own-adventure branching** inside each realm + a **final battle** to defend the home kingdom. The shape of the final battle is determined by Aiden's choices across the realms, giving the game real replay value.
+- **Story direction**: same medieval fairy-tale storybook vibe as Touch Type Tale, **fresh world** — kingdom of Hearthward, original protagonist **Wren**, original Almanac fiction. Clean homage line.
+- **Game shape**: a **hub (the Portal Chamber) + magic portals to wildly different realms + choose-your-own-adventure branching + a final battle** to defend the kingdom. The composition of the final battle is shaped by Aiden's choices across the realms, giving the game real replay value.
+- **One cohesive game, not an anthology of mini-games.** Variety comes from realm settings, enemies, art, and narrative beats — not from swapping in different gameplay patterns per realm. The core verbs (type-to-act, type-to-battle, type-to-choose, type-to-cast-spells) stay consistent throughout so the experience plays as a single story-driven adventure, not a chapter book of disconnected mini-games.
 - **Art direction**: stay close to **Touch Type Tale's look** — hand-drawn, painterly, fairy-tale-storybook, low-clutter maps with strong silhouettes. Aiden likes how TTT looks, so we anchor the style there rather than chasing a different reference. All assets sourced cleanly (CC0 / commissioned / original) so the homage stays homage.
-- **Build mode**: parent codes, Aiden watches and reacts as lead playtester. Phaser 3 + TypeScript on a static host.
+- **Narrator voice**: someone *other* than the parent. Phase 1–3 can ship with a scratch track (free TTS or the parent recording placeholder lines) so development isn't blocked; for Phase 4 / Phase 5 we hire or recruit an outside voice — a grandparent, a friend, or a paid voice actor on Fiverr/Voices.com. Budget for ~5–10 minutes of finished audio per realm.
+- **Build mode**: parent codes, Aiden watches and reacts as lead playtester. Phaser 3 + TypeScript.
+- **Target platform**: **browser, hosted on GitHub Pages**. Phaser builds to a static bundle that GitHub Pages serves for free; the project ships to a URL Aiden can open from any browser on day one. If the scope ever grows past what a browser handles well, Phaser bundles cleanly into Electron or Tauri for a Steam/desktop release later — no rewrite needed.
+- **Test environment**: **Windows PC with a standard US English keyboard.** The plan assumes a US layout for punctuation positioning, Shift behavior, and Alt-vs-AltGr semantics. We'll test in Chrome and Edge on Windows as the primary target; other browsers/OSes get casual passes.
 - **Time budget**: heavy / active project. Phase 1 in roughly a week, Phase 2 in 3–4 weeks. Scope can be richer per phase without timeline slip.
-- **Sharing intent**: might share publicly later. Asset licensing, font choices, and the homage line are handled cleanly from day one so there's no rework if it ever ships on itch.io or similar.
+- **Sharing intent**: might share publicly later. Asset licensing, font choices, and the homage line are handled cleanly from day one so there's no rework if it ever ships on itch.io, GitHub Pages, or eventually Steam.
 - **PR workflow**: changes land via PRs against `main`.
 
 ## 1. Executive summary
@@ -137,19 +141,21 @@ A side-scrolling, hand-drawn adventure with a hub-and-spokes map (think Mario Wo
 
 ### Realms & curriculum, hidden in fiction
 
-Each realm pulls double duty: a self-contained CYOA adventure *and* a focused chunk of typing curriculum. Aiden never sees the curriculum framing — the narrator and the realm names do all the framing work. He just plays the realm; the typing skill it trains is what the realm happens to require.
+Each realm pulls double duty: a self-contained CYOA episode *and* a focused chunk of typing curriculum. Aiden never sees the curriculum framing — the narrator and the realm names do all the framing work. He just plays the realm; the typing skill it trains is what the realm happens to require.
+
+**The gameplay is the same across every realm.** Wren walks, addresses targets, fights enemies, casts spells, and chooses paths using the same core verbs throughout. What changes between realms is the **setting, the enemies, the encounters, the bosses, and the narrative beats** — not the game mechanics. The Winter Mountain feels different from the Sunken Bell because the world looks and sounds different and the enemies behave differently, not because Aiden has to learn a new control scheme.
 
 Realms can be played in different orders after the first (the hub gradually unlocks more portal arches), which is part of the replay loop. The order in the table below is the **recommended first run**.
 
-| # | Realm | Typing focus | Combat / mini-game twist | CYOA hook |
+| # | Realm | Typing focus | Setting & signature encounters | CYOA hook |
 |---|---|---|---|---|
-| 0 | **The Portal Chamber** (hub) | Home-row warmup + typing the typewriter's name | Tutorial encounter against a paper effigy of the Quiet Lord | Choose which portal to open first (only one available at start) |
-| 1 | **The Winter Mountain** | All lowercase letters; per-letter slowness diagnostic | Wolf-pack combat: words appear over wolves circling Wren | Save the trapped huntress, or follow the firefly trail to the summit |
-| 2 | **The Sunken Bell** | Alternation, rhythm, bigrams | Underwater rhythm mini-game: type words on the beat of the bell | Free the merfolk king, or claim the Bell's tongue as a weapon |
-| 3 | **The Clockwork Forge** | Shift / capitals + modifier keys as power | Boss fight where Capitalized commands order golems, lowercase moves them — direct lift of TTT's case-sensitivity verb | Repair the forge for the smith, or steal the master-key for the rebels |
-| 4 | **The Sky-Island of Lanterns** | Longer words, dictionary expansion, full phrases | Library puzzle: compose words from lit lanterns (Letter-Quest pattern) | Light the great beacon, or doom-and-rescue the island's last scholar |
-| 5 | **The Haunted Wood** | Punctuation `. , ? ! ; :` + speed under pressure | Bullet-hell: ghosts approach from all sides; punctuation marks are warding glyphs | Bargain with the ghost-king, or burn the cursed grove |
-| 6 | **The Great Battle of Hearthward** | Everything | Multi-stage finale: skirmish, boss duel, and a final-phrase climax where Aiden types a long sentence to seal the Quiet Lord | The composition of his army, the boss's weaknesses, and the available final-phrase choices are all determined by his earlier realm choices |
+| 0 | **The Portal Chamber** (hub) | Home-row warmup + typing the typewriter's name | The royal library at night. Tutorial encounter against a paper effigy of the Quiet Lord. | Choose which portal to open first (only one available at start). |
+| 1 | **The Winter Mountain** | All lowercase letters; per-letter slowness diagnostic | Snowy slopes, parallax pines, a huntress's cabin. Signature encounter: wolf pack circling Wren in the dark. | Save the trapped huntress, or follow the firefly trail to the summit. |
+| 2 | **The Sunken Bell** | Alternation, rhythm, bigrams | An underwater cathedral whose great bell still tolls. The toll sets the encounter's tempo — enemies move on the beat. | Free the merfolk king, or claim the Bell's tongue as a weapon. |
+| 3 | **The Clockwork Forge** | Shift / capitals + modifier-key spells | A subterranean foundry full of clockwork golems. The boss responds to commands — Capitalized words order the golems, lowercase moves them. Direct lift of TTT's case-sensitivity verb. | Repair the forge for the smith, or steal the master-key for the rebels. |
+| 4 | **The Sky-Island of Lanterns** | Longer words, dictionary expansion, full phrases | A floating temple lit by paper lanterns. Encounters feature longer phrases inscribed on lanterns and scrolls; the boss is a riddling scholar-spirit. | Light the great beacon, or rescue the island's last scholar. |
+| 5 | **The Haunted Wood** | Punctuation `. , ? ! ; :` + speed under pressure | A misty wood where ghosts approach from every direction. Punctuation marks function as warding glyphs against them. | Bargain with the ghost-king, or burn the cursed grove. |
+| 6 | **The Great Battle of Hearthward** | Everything | Hearthward's walls and great hall. A three-phase finale: skirmish, boss duel with the Quiet Lord, and a final-phrase climax where Aiden types a long sentence to seal him. | The composition of his army, the boss's weaknesses, and the available final-phrase choices are all determined by his earlier realm choices. |
 
 ### How the CYOA branching works
 
@@ -274,11 +280,11 @@ End of Phase 1, Aiden has a thing he can show his friends. The narrator says his
 
 ### Phase 2 — The Sunken Bell + the Clockwork Forge (~3–4 weeks at heavy pace)
 
-Two more portal realms, deeper branching, the first proper mini-games. By the end of Phase 2 the realm-template is locked: any future realm is content authoring against a stable engine.
+Two more portal realms, deeper branching, and the introduction of beat-driven encounters and modifier-key spells. By the end of Phase 2 the realm-template is locked: any future realm is content authoring against a stable engine.
 
 What ships:
-- **The Sunken Bell** realm: underwater rhythm-combat. Words appear over creatures on the beat of a tolling bell. Two CYOA branches (free the merfolk king *or* claim the Bell's tongue). Practices alternation / rhythm / bigrams.
-- **The Clockwork Forge** realm: introduces Shift / capitals and the first modifier-key spells. Boss fight where Capitalized commands order golems and lowercase moves them — direct lift of TTT's case-sensitivity verb. Two CYOA branches (repair the forge *or* steal the master-key).
+- **The Sunken Bell** realm: underwater encounters where enemies move on the beat of a tolling bell. Two CYOA branches (free the merfolk king *or* claim the Bell's tongue). Practices alternation / rhythm / bigrams.
+- **The Clockwork Forge** realm: introduces Shift / capitals and the first modifier-key spells. Boss fight where Capitalized commands order golems and lowercase moves them. Two CYOA branches (repair the forge *or* steal the master-key).
 - **Realm-selection UI** on the Portal Chamber's portal arches: the second arch lights up when the Winter Mountain is cleared; the third lights up after the Sunken Bell.
 - **Allies and relics**: the satchel system. Each branch awards a different ally or relic. They appear cosmetically in the hub and will pay off in Phase 4's final battle.
 - **The narrator script** for both realms (5–10 min of audio per realm).
@@ -288,10 +294,10 @@ End of Phase 2, the project is shareable as a small but real game with three rea
 
 ### Phase 3 — The Sky-Island & the Haunted Wood (~3–4 weeks at heavy pace)
 
-The last two adventure realms, broadening the verb set.
+The last two adventure realms, broadening the kind of encounters Wren faces while keeping the same core gameplay.
 
-- **The Sky-Island of Lanterns**: word-composition mini-game (Letter-Quest pattern). Lit lanterns supply letters; Wren composes words from them to solve riddles. Practices longer words and full phrases.
-- **The Haunted Wood**: punctuation as warding glyphs in a slowed bullet-hell pattern. The last realm before the finale.
+- **The Sky-Island of Lanterns**: longer phrases and full sentences inscribed on lit lanterns and scrolls. The boss is a riddling scholar-spirit who tests Wren with longer passages. Practices longer words and phrases.
+- **The Haunted Wood**: punctuation as warding glyphs against ghosts that approach from all sides. The last realm before the finale.
 - Both realms ship with two CYOA branches and unique allies/relics.
 - **Parent dashboard** added at this point (hidden behind `?parent=1` or a long-press on the title): per-letter accuracy across the last 30 days, struggle letters, time played, weekly summary.
 - **Slow mode toggle** in settings for tired evenings.
@@ -342,16 +348,14 @@ If the project ever grows past this, replacing recorded narration with a hired v
 
 ## 9. Remaining open questions
 
-Most directional decisions are locked (see section 0). A handful of smaller calls still benefit from your input — none block Phase 0:
+All directional decisions are now locked (see section 0). A handful of smaller calls are worth thinking about before they land, but none block Phase 0:
 
-1. **Browser, desktop, or both?** Phaser-on-the-web is the default; an Electron or Tauri desktop wrapper is easy to add later. The plan assumes browser unless you say otherwise.
-2. **Narrator voice — you, or someone else?** Your voice talking to Aiden by name is hard to beat for a personal gift; an outside voice (grandparent, friend, hired actor at a Phase 4 polish step) uses the same recording pipeline.
-3. **Protagonist name.** The plan uses "Wren" as a placeholder. Worth letting Aiden weigh in — or pick a name yourself that you'd enjoy hearing the narrator say.
-4. **Specific mini-game patterns Aiden loves from TTT.** The cook-off? The shooting gallery? The naval bullet-hell? Whichever ones he names, we'll lift the *shape* (with new fiction and original assets) into the equivalent slot in our chapter list.
-5. **Hosting choice for the deploy URL.** Netlify, Vercel, Cloudflare Pages, or GitHub Pages are all fine; any is a 10-minute setup. If you already have an account somewhere, that's the answer.
-6. **Aiden's computer & screen.** Resolution, OS, keyboard type. Affects test environment and SFX tuning. Phase 0 will work on anything; Phase 2 onward benefits from knowing.
+1. **The Quiet Lord's voice and design.** The final villain doesn't need a face in Phase 1, but by Phase 4 he needs a recognizable silhouette and a way of "speaking" (does he hiss in scratched-out text? appear as a hooded figure with no mouth? whisper through other characters?). Worth sketching early since it shapes every realm's foreshadowing.
+2. **Narrator casting.** Outside-voice is locked, but the *who* is open: a relative, a friend, or a hired voice actor on Fiverr/Voices.com. The hired-actor path is ~$50–200 per realm for studio-quality audio. Decide before Phase 4; Phases 1–3 can ship with a scratch track.
+3. **Save-game scope.** Plan currently assumes `localStorage`-only saves (single computer). If Aiden ever wants to play on a different machine, we'd add a free cloud-save backend (Firebase / Supabase / Cloudflare KV). Not needed until Phase 5.
+4. **Resolution targets.** Phaser scales fine across screens, but the storybook art has a natural resolution. We'll lock a 16:9 design res (1920×1080 is the safe bet for a Windows desktop in 2026) and let it scale up/down.
 
-Phase 0 just sets up the project and gets the title screen on a deploy URL. Ready to start when you are.
+Phase 0 just sets up the project, the GitHub Pages deploy, and gets a title screen with a typewriter clack live on a URL Aiden can open. Ready to start whenever you say go.
 
 ---
 

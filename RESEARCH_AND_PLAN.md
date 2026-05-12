@@ -11,7 +11,8 @@ This document captures (1) what makes the original tick, (2) what neighboring ga
 These answers from the parent shape every section that follows; they're called out here so the rest of the document reads as a finalized plan rather than a survey of options.
 
 - **Player profile**: Aiden, age 11 turning 12, fluent reader, **already touch-types** with reasonable speed. The home-row prologue collapses to a brief warmup (~60 seconds); the curriculum's center of gravity moves to speed under pressure, accuracy at speed, capitals/symbols, and reforming any leftover hunt-and-peck habits. Chapters lean harder and earlier than they would for a beginner.
-- **Story direction**: same fairy-tale storybook vibe as Touch Type Tale, **fresh world** — not Paul's niece, not the same kingdom. Original protagonist, original Almanac fiction. Clean homage line.
+- **Story direction**: same medieval fairy-tale storybook vibe as Touch Type Tale, **fresh world**. Original protagonist (Wren, working title) apprenticed to a royal cartographer.
+- **Structure**: a hub (the Portal Chamber) + **magic portals to wildly different realms** + **choose-your-own-adventure branching** inside each realm + a **final battle** to defend the home kingdom. The shape of the final battle is determined by Aiden's choices across the realms, giving the game real replay value.
 - **Art direction**: stay close to **Touch Type Tale's look** — hand-drawn, painterly, fairy-tale-storybook, low-clutter maps with strong silhouettes. Aiden likes how TTT looks, so we anchor the style there rather than chasing a different reference. All assets sourced cleanly (CC0 / commissioned / original) so the homage stays homage.
 - **Build mode**: parent codes, Aiden watches and reacts as lead playtester. Phaser 3 + TypeScript on a static host.
 - **Time budget**: heavy / active project. Phase 1 in roughly a week, Phase 2 in 3–4 weeks. Scope can be richer per phase without timeline slip.
@@ -24,15 +25,15 @@ These answers from the parent shape every section that follows; they're called o
 
 It is **not actually designed as a kids' typing tutor**. The strategic layer, the word bank, and the humor target reading-fluent teens and adults. That a young child loves it anyway is a strong signal: he is responding to the narrator's voice, the storybook art, the immediate "I type, things happen" feedback loop, and the mini-game variety — not to RTS depth.
 
-That points straight at a real, unfilled market gap: a **kid-aimed, narrator-led, story-rich typing adventure with an honest touch-typing curriculum hidden inside the fiction**. Epistory and Nanotale occupy the adult side of this slot; TypingClub and KidzType occupy the curriculum-without-soul side. Nothing serious lives in the middle.
+That points straight at a real, unfilled market gap: a **kid-aimed, narrator-led, story-rich typing adventure with an honest touch-typing curriculum hidden inside the fiction**, and with the replay structure of a choose-your-own-adventure book — portals to different worlds, branching choices, a personalized final battle. Epistory and Nanotale occupy the adult side of the story-typing slot; TypingClub and KidzType occupy the curriculum-without-soul side. Nothing in the middle does CYOA, and nothing in CYOA games does typing-as-control.
 
 This document proposes a sequel that:
 
-- Keeps Touch Type Tale's storybook tone, narrator-as-companion, mini-game variety, and "typing as control, not as combat target" philosophy.
-- Drops the RTS managerial layer in favor of a side-scrolling adventure structure a six-to-ten-year-old can follow.
-- Bakes a real home-row-out curriculum into a fictional chapter progression.
-- Targets the browser (Phaser 3 + TypeScript) so it runs on whatever computer the kid sits at, with no installs.
-- Ships in three small playable milestones rather than one giant year-long push, so the kid sees real progress within a couple of weekends.
+- Keeps Touch Type Tale's medieval-storybook tone, narrator-as-companion, mini-game variety, hand-drawn art, and "typing as control" philosophy.
+- Replaces the RTS managerial layer with a **hub + magic portals + choose-your-own-adventure** structure: Aiden's apprentice opens portals to wildly different realms, makes branching choices inside each, gathers allies and relics, and brings them home for a **final battle** to defend the kingdom.
+- Bakes a real touch-typing curriculum into the realms — each realm trains a different skill (alternation, capitals, punctuation, speed) without ever naming the skill.
+- Targets the browser (Phaser 3 + TypeScript) so it runs on whatever computer Aiden sits at, with no installs.
+- Ships in small playable milestones rather than one giant push, so Aiden sees real progress within the first week.
 
 ---
 
@@ -97,17 +98,34 @@ The full survey is the input to the design that follows.
 
 ---
 
-## 5. Design vision: *"The Apprentice's Almanac"* (working title)
+## 5. Design vision: *"The Portalwright's Almanac"* (working title)
 
-A spiritual successor to Touch Type Tale: same hand-drawn fairy-tale tone, brand-new world, brand-new protagonist. The premise centers a child apprentice and a half-finished magical book of letters.
+A spiritual successor to Touch Type Tale: same hand-drawn medieval-fairy-tale tone, brand-new world, brand-new protagonist. The premise centers a child apprentice, a magical typewriter that punches open **portals to other realms**, and a story that builds toward a final battle to defend the home kingdom.
 
 ### Premise
 
-In a windswept coastal town at the edge of an unmapped kingdom, an apprentice named **Wren** is bound to the village's old cartographer. The cartographer is going slowly blind, and the kingdom's roads, rivers, and creatures have begun to *fade out of his great Almanac* as he forgets them. Wren inherits the cartographer's ancient brass typewriter — a strange machine that can re-inscribe the world onto the Almanac's pages, one word at a time. Type a missing creature's name and it shows up. Type a missing road and it reappears under your feet. Type the wrong thing and... well, the typewriter is kind. It'll let you try again.
+The kingdom of **Hearthward** is the last quiet place. An ancient enemy — the **Quiet Lord**, who hates language and loves silence — is gathering an army across the **Realms Beyond**. The realms drift in and out of Hearthward's reach through old, half-forgotten portals carved into the walls of the royal library.
 
-The Almanac is literally the curriculum. Each chapter is a section of the book; each section requires mastery of a row of the keyboard; each finished page unlocks a new region. Wren's story takes him from the coast inland, climbing toward a half-mythical northern library where, the cartographer thinks, the last missing pages might still exist.
+The portals only work for a Portalwright: a scribe trained to type a realm's true name and pull it close enough to step through. The kingdom has not had a Portalwright in a hundred years. The royal cartographer — old, half-blind, kind — has trained an apprentice (**Wren**, working title) on the kingdom's last brass typewriter, and now hands the apprentice the **Almanac**: a book that records each realm Wren visits, each ally won, and each artifact reclaimed. Hearthward will not survive the Quiet Lord's army on its own. Wren must travel through the realms, gather strength, and bring it home in time for the great battle.
 
-This frames home-row-first as in-world rather than as a worksheet. A warm narrator (the cartographer himself, in voice-over) reads the world to Wren as he types it back into existence. For v1 the parent records the narration on a phone; the warmth matters more than studio quality.
+### Structure: hub + portals + final battle
+
+- **Hub: the Portal Chamber** in the royal library. A circular room with portal arches set into the walls and Wren's desk at the center. Between realms, Wren returns here to write in the Almanac, talk to the cartographer, and choose the next portal.
+- **5 portal realms**, each a distinct world (medieval-fairy-tale-shaped but visually wildly different: a winter mountain, a sunken city, a clockwork forge, a sky-island temple, a haunted forest). Each realm is ~30–45 minutes of content for a touch-typer at speed.
+- **Choose-your-own-adventure branching** inside each realm. Each realm has 2–3 decision points that fork the path — different encounters, different allies/relics earned, different glimpses of the realm's story. Realms can be replayed and play differently each time.
+- **The great battle** as the climactic chapter. The allies and relics Wren gathered across the realms appear on the battlefield. The shape of the battle — who's standing next to you, what you can call on — is determined by Aiden's choices across the playthrough. This is the realization of the CYOA replay loop: a different run produces a meaningfully different finale.
+
+### How the typewriter works (the diegetic mechanic)
+
+This is the load-bearing detail, lifted carefully from Touch Type Tale.
+
+- **Opening a portal**: in the hub, type the realm's name (a multi-word phrase that grows in difficulty across the campaign — e.g. "The Sunken Bell," "The Sky-Island of Lanterns"). The portal hums to life.
+- **Inside a realm**: words attach to in-world targets — creatures, doors, allies, traps. Type a word to address it. Words are generated from the curriculum, not the fiction (TTT's design), so the difficulty model is independent of the story.
+- **Battles**: typing-combat in the TTT lineage. Words float above enemies; longer or punctuated words for tougher foes; modifier-key spells (Shift / Alt / Ctrl) for special attacks. Each realm's battles have a unique twist — see the realm table below.
+- **Decision points**: a CYOA branch is presented as two or three short phrases at the bottom of the screen. Aiden types the *first letter* of the choice to commit, then types the full choice phrase to seal it. (Letter-lock from Z-Type: as soon as he commits a first letter, the other choices fade out, so the input never gets ambiguous.)
+- **The Almanac**: every realm Wren clears stamps a page. The page illustration is determined by the choices he made in that realm. By the time he reaches the final battle, the Almanac is a personalized record of the run.
+
+A warm narrator (the cartographer, in voice-over) reads the world to Wren as he types. For v1 the parent records the narration on a phone; the warmth matters more than studio quality.
 
 ### Structure
 
@@ -117,30 +135,41 @@ A side-scrolling, hand-drawn adventure with a hub-and-spokes map (think Mario Wo
 - **A village hub** the player returns to between chapters — the scribe's workshop, where Mira customizes her satchel, looks at the Almanac, and revisits old levels.
 - **Each chapter** is one biome, one new key-row introduced, one boss, two or three mini-games, and a story page that closes when the chapter is done.
 
-### Curriculum, hidden in fiction
+### Realms & curriculum, hidden in fiction
 
-Pace is set for a player who already touch-types: the prologue is a brief warmup that establishes the typewriter's "voice" rather than teaching home row from scratch. The curriculum's center of gravity shifts from key introduction to **speed-under-pressure, accuracy-at-speed, capitals/symbols, and habit reform**. Chapters can lean harder earlier; the per-letter error tracker is repurposed from "which letter is new" to "which letter slows him down."
+Each realm pulls double duty: a self-contained CYOA adventure *and* a focused chunk of typing curriculum. Aiden never sees the curriculum framing — the narrator and the realm names do all the framing work. He just plays the realm; the typing skill it trains is what the realm happens to require.
 
-| Chapter | Focus | In-fiction framing |
-|---|---|---|
-| Prologue | Home row warmup + typewriter introduction | "The Sleeping Letters" — eight glowing tiles on the cartographer's desk. Short; sets tone and establishes narrator. |
-| 1 | All lowercase letters; per-letter slowness diagnostic | "The Glade of Vowels" — sprites in the forest. The Almanac silently identifies Aiden's three slowest letters and seeds future encounters with them. |
-| 2 | Alternation, rhythm, bigrams | "The Bridge of Two Hands" — two ferrymen, one for each hand, force alternation across a river. Tempo-based mini-game checkpoints rhythm. |
-| 3 | Shift / capitals as in-world power | "The Caverns of Hum" — named places (capitalized) require Shift to enter, lowercase paths to walk. Direct lift of TTT's case-sensitivity rule. |
-| 4 | Longer words, dictionary expansion | "The Owl's Library" — the library puzzles surface rarer vocabulary; word-composition mini-game (Letter-Quest style) for unlocking spells. |
-| 5 | Punctuation `. , ? ! ; :` | "The Punctuation Pirates" — naval mini-game (echo of TTT's bullet-hell, slowed). Each punctuation mark is a different cannon shot. |
-| 6 | Accuracy under time pressure | "The Capital City" — timed encounters, longer phrases, full sentences. WPM tracked internally; never surfaced as a number to Aiden. |
-| 7 | Numbers & symbols + modifiers (Ctrl/Alt) | "The Royal Treasury" — bonus chapter. Numbers as in-world coin denominations, symbols as alchemical glyphs. Ctrl/Alt modifier-spells become the chapter's combat verb. |
+Realms can be played in different orders after the first (the hub gradually unlocks more portal arches), which is part of the replay loop. The order in the table below is the **recommended first run**.
 
-A chapter advances when its focus skill is comfortable, not when the player passes a test. The narrator handles framing for any slowdowns: *"Hmm, the letter K still wants a longer pause — let's give it one."* Aiden never sees a fail screen.
+| # | Realm | Typing focus | Combat / mini-game twist | CYOA hook |
+|---|---|---|---|---|
+| 0 | **The Portal Chamber** (hub) | Home-row warmup + typing the typewriter's name | Tutorial encounter against a paper effigy of the Quiet Lord | Choose which portal to open first (only one available at start) |
+| 1 | **The Winter Mountain** | All lowercase letters; per-letter slowness diagnostic | Wolf-pack combat: words appear over wolves circling Wren | Save the trapped huntress, or follow the firefly trail to the summit |
+| 2 | **The Sunken Bell** | Alternation, rhythm, bigrams | Underwater rhythm mini-game: type words on the beat of the bell | Free the merfolk king, or claim the Bell's tongue as a weapon |
+| 3 | **The Clockwork Forge** | Shift / capitals + modifier keys as power | Boss fight where Capitalized commands order golems, lowercase moves them — direct lift of TTT's case-sensitivity verb | Repair the forge for the smith, or steal the master-key for the rebels |
+| 4 | **The Sky-Island of Lanterns** | Longer words, dictionary expansion, full phrases | Library puzzle: compose words from lit lanterns (Letter-Quest pattern) | Light the great beacon, or doom-and-rescue the island's last scholar |
+| 5 | **The Haunted Wood** | Punctuation `. , ? ! ; :` + speed under pressure | Bullet-hell: ghosts approach from all sides; punctuation marks are warding glyphs | Bargain with the ghost-king, or burn the cursed grove |
+| 6 | **The Great Battle of Hearthward** | Everything | Multi-stage finale: skirmish, boss duel, and a final-phrase climax where Aiden types a long sentence to seal the Quiet Lord | The composition of his army, the boss's weaknesses, and the available final-phrase choices are all determined by his earlier realm choices |
+
+### How the CYOA branching works
+
+- **2–3 decision points per realm.** Each is a fork in the path, not a paragraph of dialogue. Aiden types to commit; the narrator reads the consequence aloud.
+- **Branches diverge briefly, then reconverge** at a realm-end scene. This keeps the content tractable (a realm has ~1.5x the assets of a linear realm, not 4x) while feeling meaningfully different.
+- **Each branch leaves a different stamp on the Almanac page** and a different ally or relic in Wren's satchel. The relics aren't power-ups in the RPG sense — they're flavor that pays off in the final battle.
+- **The Quiet Lord's final form changes** depending on which realms Aiden completed and how. A different run produces a different final phrase to type.
+
+### Curriculum mechanics (under the hood)
+
+A realm advances when its focus skill is comfortable, not when Aiden passes a test. The per-letter error tracker is repurposed from "which letter is new" to "which letter slows him down" — those letters get seeded into the next realm's word bank silently. The narrator handles framing for any slowdowns: *"Hmm — the letter K still wants a longer pause. Let's give it one."* Aiden never sees a fail screen.
 
 ### Core verbs
 
-Three verbs, all typing-driven, all directly echoing Touch Type Tale's design:
+Four verbs, all typing-driven, all directly echoing Touch Type Tale's design:
 
-1. **Address an in-world target.** A creature, plant, lantern, or door has a short word floating above it. Type the word and the thing happens (creature appears in the Almanac, plant gathered, lantern lit, door opened). The word is generated from the curriculum, not from the fiction — so a sleepy fox might have the word `fad` over it because the curriculum wants the player to practice `f`, `a`, `d`. The narrator never reads the word verbatim; he reads the *action* ("Oh, the fox is yawning — go say hello!").
-2. **Inscribe a passage.** Some longer interactions open an inscription sub-screen — a short rhythm-friendly phrase or sentence the player types at their own pace, with the narrator reading it as it appears. This is where mid-length words, real sentences, and capitalization live; an 11-year-old fluent reader will enjoy this verb more than a younger kid would, so it's introduced from chapter 1 onward rather than gated late.
-3. **Cast a spell.** Hold a modifier key (Shift for "big," Alt for "wild," Ctrl for "true") while typing a word to produce a stronger or different effect. Direct lift from TTT's modifier-as-magic design. Introduced gradually, never required until the player is comfortable.
+1. **Address an in-world target.** A creature, ally, door, lantern, or trap has a short word floating above it. Type the word to act on it. The word is generated from the curriculum, not from the fiction — a sleepy fox might have the word `fad` over it because the curriculum wants Aiden to practice `f`, `a`, `d`. The narrator never reads the word verbatim; he reads the *action* ("Oh, the fox is yawning — go say hello!").
+2. **Battle.** Words float above enemies; longer/punctuated words for tougher foes. Z-Type's first-letter-lock means typing the first letter claims an enemy and visually deprioritizes the rest. Each realm puts a different spin on combat (rhythm in the Sunken Bell, bullet-hell in the Haunted Wood, command-and-control in the Clockwork Forge).
+3. **Choose a path** at a CYOA fork. Two or three short phrases appear; type the first letter to lock the choice, then complete the phrase. The narrator reads the consequence aloud.
+4. **Cast a spell.** Hold a modifier key (Shift for "big," Alt for "wild," Ctrl for "true") while typing a word for a stronger or special effect. Direct lift from TTT's modifier-as-magic design. Introduced gradually in the Clockwork Forge; never required until Aiden is comfortable.
 
 ### Reward loops
 
@@ -218,64 +247,80 @@ A static-hosted "hello world" with no game in it yet. The goal is to remove the 
 
 This is mostly DX setup. It exists so the kid sees the loop close.
 
-### Phase 1 — The Sleeping Letters (~1 week at heavy pace)
+### Phase 1 — The Portal Chamber + a tutorial realm (~1 week at heavy pace)
 
-The prologue, end-to-end. Eight glowing tiles on the cartographer's desk. Type the letter on a tile to wake it. When all eight are awake, an Almanac page opens with the cartographer's introduction.
+The hub + the very first realm, end-to-end. The Portal Chamber loads as Aiden's home base. The cartographer's voice introduces him to the typewriter. He types the typewriter's name to wake it, then types the name of the first available portal — **The Winter Mountain** — and steps through.
+
+The Winter Mountain in Phase 1 is a short, mostly-linear realm with **one CYOA branch** and **one battle encounter** (a small wolf pack). The branch is "save the trapped huntress, or follow the firefly trail" — two short paths that reconverge at the realm-end scene. Either way Wren returns to the Portal Chamber, the realm is stamped into the Almanac, and the narrator teases the next portal.
 
 What ships:
-- One scene (the cartographer's study) with a parallax background.
-- A simple home-row tile interaction: 8 sprites, each with a letter overhead, each playing a "wake up" animation on correct keystroke and a "shake/no" animation + soft chime on incorrect.
-- The first 30–60 seconds of the narrator's script, recorded by the parent on a phone — written for an 11-year-old's ear, with the cartographer's voice already established.
-- A typewriter-clack SFX (free or hand-recorded), a "letter wakes" chime, an "Almanac page" sting.
-- A `localStorage` profile picker (3 starting avatars, no passwords).
-- Per-letter accuracy tracking, written to the profile but not yet surfaced.
+- **Two scenes**: the Portal Chamber hub (a circular library room with portal arches) and the Winter Mountain realm (snowy slope, parallax pines, a small cabin).
+- **The typewriter-name and portal-name typing interactions** — short multi-word phrases.
+- **One CYOA branch** with the first-letter-lock UI and the typed-to-confirm verb.
+- **One battle encounter** (3–4 wolves, word-over-enemy combat with first-letter-lock).
+- **The Almanac UI**: a book in the corner of the Portal Chamber that opens to show stamped realm pages.
+- **The first 60–90 seconds of narration**, recorded by you on a phone (or via the WebAudio Recorder API — easy to add later).
+- A typewriter-clack SFX, a "claim word" chime, a battle-victory sting, an Almanac-stamp sound.
+- A `localStorage` profile picker (avatar + name; no passwords).
+- Per-letter accuracy tracking, written silently to the profile.
 
 What's deliberately *not* in Phase 1:
-- Anything beyond home row.
-- Movement.
-- Mini-games.
-- Co-op.
+- The other four realms.
+- Modifier-key spells.
+- The final battle.
+- Family co-op.
 
-End of Phase 1, the son has a thing he can show his friends. The narrator says his name (he typed it). The project becomes real to him; from this point his reactions drive the design of every subsequent chapter.
+End of Phase 1, Aiden has a thing he can show his friends. The narrator says his name. He's run his first portal, made his first choice, and the Almanac has its first stamp. Every subsequent realm reuses this Phase 1 scaffolding.
 
-### Phase 2 — The Glade of Vowels (~3–4 weeks at heavy pace)
+### Phase 2 — The Sunken Bell + the Clockwork Forge (~3–4 weeks at heavy pace)
 
-The first proper "chapter": a side-scrolling forest where vowel sprites hide. Wren walks left/right (arrow keys — kept off the typing fingers), encounters sprites with short curriculum-tuned words floating overhead, types to befriend them. Befriended sprites enter the Almanac and the satchel.
+Two more portal realms, deeper branching, the first proper mini-games. By the end of Phase 2 the realm-template is locked: any future realm is content authoring against a stable engine.
 
 What ships:
-- A side-scrolling scene with parallax forest art.
-- The "address an in-world target" verb: short words floating over sprites, generated from the per-key error rate.
-- A satchel UI: collected sprites visible, kid can name them.
-- 5–10 minutes of narrator script for this chapter.
-- The first **mini-game**: a "lantern relay" where the kid types a sequence of single letters in time to a slow rhythm. Two minutes long, replayable from the hub.
-- A chapter-end Almanac page that unlocks.
-- A hub-and-spokes village screen the kid returns to after the chapter.
+- **The Sunken Bell** realm: underwater rhythm-combat. Words appear over creatures on the beat of a tolling bell. Two CYOA branches (free the merfolk king *or* claim the Bell's tongue). Practices alternation / rhythm / bigrams.
+- **The Clockwork Forge** realm: introduces Shift / capitals and the first modifier-key spells. Boss fight where Capitalized commands order golems and lowercase moves them — direct lift of TTT's case-sensitivity verb. Two CYOA branches (repair the forge *or* steal the master-key).
+- **Realm-selection UI** on the Portal Chamber's portal arches: the second arch lights up when the Winter Mountain is cleared; the third lights up after the Sunken Bell.
+- **Allies and relics**: the satchel system. Each branch awards a different ally or relic. They appear cosmetically in the hub and will pay off in Phase 4's final battle.
+- **The narrator script** for both realms (5–10 min of audio per realm).
+- **A "replay realm" option** from the hub — Aiden can re-enter any cleared realm to take the other branch.
 
-This is the smallest possible end-to-end *game*. Phase 2 done, the project is shareable to relatives, posted to itch.io if you want, and stands on its own as a small thing.
+End of Phase 2, the project is shareable as a small but real game with three realms and meaningful replay value. Standalone milestone.
 
-### Phase 3 — Three more chapters and the family co-op (long horizon)
+### Phase 3 — The Sky-Island & the Haunted Wood (~3–4 weeks at heavy pace)
 
-Repeat the Phase 2 template for chapters 2, 3, and 4: new biome art, new sprites, new mini-game, new Almanac page, new row of keys introduced.
+The last two adventure realms, broadening the verb set.
 
-In parallel, add:
-- **The asymmetric family co-op mode.** Two profile slots active at once; targets divided by difficulty; shared victory screen.
-- **A parent dashboard** at a hidden URL (long-press the title, or `?parent=1` in the URL): per-letter accuracy across the kid's last 30 days, a list of struggle letters, total time played, a simple weekly summary.
-- **A "slow mode" toggle** for younger siblings or tired evenings.
-- **Two more mini-games**: a cook-off (echo of TTT's cook-off, kid-pitched) and a naval mini-game (echo of TTT's bullet hell, slowed and softened).
+- **The Sky-Island of Lanterns**: word-composition mini-game (Letter-Quest pattern). Lit lanterns supply letters; Wren composes words from them to solve riddles. Practices longer words and full phrases.
+- **The Haunted Wood**: punctuation as warding glyphs in a slowed bullet-hell pattern. The last realm before the finale.
+- Both realms ship with two CYOA branches and unique allies/relics.
+- **Parent dashboard** added at this point (hidden behind `?parent=1` or a long-press on the title): per-letter accuracy across the last 30 days, struggle letters, time played, weekly summary.
+- **Slow mode toggle** in settings for tired evenings.
 
-End of Phase 3, you have a small but real game with maybe 2–3 hours of unique content, family co-op, and a curriculum that actually works.
+End of Phase 3, five realms are playable, the Almanac is filling up with stamps, and the final battle is the only remaining content.
 
-### Phase 4 — Polish, publish, share (optional)
+### Phase 4 — The Great Battle of Hearthward (~2–3 weeks at heavy pace)
 
-Only if Phases 1–3 stuck and the kid still cares:
+The climax. This is the realization of the CYOA replay loop: a different run produces a meaningfully different finale.
 
-- An end credits sequence with him named as co-designer.
-- A trailer (60 seconds, narrator voiceover, screenshots).
-- An itch.io page (free or pay-what-you-want).
-- A short Reddit post in r/typing or r/parenting; the genuine market gap surfaced in research suggests there's an audience.
-- A Pumpernickel Studio shoutout / link, framed as homage rather than competition.
+What ships:
+- **A three-phase final battle**: (1) a defensive skirmish on the kingdom's walls; (2) a boss duel with the Quiet Lord, whose form is shaped by which realms Aiden completed; (3) a final-phrase climax where Aiden types a long sentence to seal the Quiet Lord — the available phrases depend on the allies in his satchel.
+- **The allies show up**: the merfolk king (if freed) sends a wave of reinforcements, the smith (if helped) forges a new typewriter ribbon, etc. Each is a short animated cameo + a mechanical effect.
+- **End credits** with Aiden named as co-designer and lead playtester.
+- **A "New Game+" option** that preserves nothing but lets him replay with full knowledge of the branches.
 
-If the project ever grows past this point, the question of replacing the recorded narration with a celebrity voice, of porting to Steam via Godot/Electron, of localizing into more languages — those are real options. But they are very far past the point where this is "a thing the parent and kid made together," and the original spec for this document is the latter, not the former.
+After Phase 4, the game stands on its own as a complete experience.
+
+### Phase 5 — Polish, family co-op, publish (optional)
+
+Only if Phases 1–4 stuck and Aiden still cares:
+
+- **Asymmetric family co-op mode**: two profile slots, parent gets harder words, kid gets curriculum-tuned words, shared realm clears. Easy to add now that the realm engine is stable.
+- **A trailer** (60 seconds, narrator voiceover, realm montage, the final battle teased).
+- **An itch.io page** (free or pay-what-you-want). The market gap surfaced in research suggests there's a genuine audience.
+- **A Pumpernickel Studio shoutout** in credits, framed as homage rather than competition.
+- **Localization scaffolding** if there's interest — the word lists and narrator captions are already data-driven.
+
+If the project ever grows past this, replacing recorded narration with a hired voice, porting to Steam via Electron/Tauri, and broader localization are all real options. But Phase 4 is already a complete game.
 
 ---
 

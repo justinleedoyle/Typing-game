@@ -8,12 +8,15 @@ This document captures (1) what makes the original tick, (2) what neighboring ga
 
 ## 0. Decisions locked in
 
-These four answers from the parent shape every section that follows; they're called out here so the rest of the document reads as a finalized plan rather than a survey of options.
+These answers from the parent shape every section that follows; they're called out here so the rest of the document reads as a finalized plan rather than a survey of options.
 
-- **Player profile**: an 11-year-old, turning 12, already a fluent reader. The plan assumes he can handle multi-word prompts, narrator script with real vocabulary, and humor in the Hilda / Studio Ghibli / Over the Garden Wall register rather than a primary-color picture-book register. The home-row prologue stays, but it moves faster than it would for a six-year-old, and chapters introduce richer story content sooner.
-- **Story direction**: same fairy-tale storybook vibe as Touch Type Tale, **fresh world** — not Paul's niece, not the same kingdom. This gives us creative freedom and keeps us cleanly on the right side of the homage line.
-- **Build mode**: parent builds, son watches and reacts as the lead playtester. This pushes Phaser 3 + TypeScript clearly to the top of the stack list and demotes Construct 3 to a footnote.
-- **PR workflow**: a draft PR opens against a new `main` baseline so changes land via PRs rather than direct pushes.
+- **Player profile**: Aiden, age 11 turning 12, fluent reader, **already touch-types** with reasonable speed. The home-row prologue collapses to a brief warmup (~60 seconds); the curriculum's center of gravity moves to speed under pressure, accuracy at speed, capitals/symbols, and reforming any leftover hunt-and-peck habits. Chapters lean harder and earlier than they would for a beginner.
+- **Story direction**: same fairy-tale storybook vibe as Touch Type Tale, **fresh world** — not Paul's niece, not the same kingdom. Original protagonist, original Almanac fiction. Clean homage line.
+- **Art direction**: stay close to **Touch Type Tale's look** — hand-drawn, painterly, fairy-tale-storybook, low-clutter maps with strong silhouettes. Aiden likes how TTT looks, so we anchor the style there rather than chasing a different reference. All assets sourced cleanly (CC0 / commissioned / original) so the homage stays homage.
+- **Build mode**: parent codes, Aiden watches and reacts as lead playtester. Phaser 3 + TypeScript on a static host.
+- **Time budget**: heavy / active project. Phase 1 in roughly a week, Phase 2 in 3–4 weeks. Scope can be richer per phase without timeline slip.
+- **Sharing intent**: might share publicly later. Asset licensing, font choices, and the homage line are handled cleanly from day one so there's no rework if it ever ships on itch.io or similar.
+- **PR workflow**: changes land via PRs against `main`.
 
 ## 1. Executive summary
 
@@ -116,20 +119,20 @@ A side-scrolling, hand-drawn adventure with a hub-and-spokes map (think Mario Wo
 
 ### Curriculum, hidden in fiction
 
-Pace is set for an 11-year-old fluent reader: the prologue moves quickly, capital letters and Shift are introduced earlier (he can already read mixed-case prose), and punctuation arrives mid-game rather than at the end.
+Pace is set for a player who already touch-types: the prologue is a brief warmup that establishes the typewriter's "voice" rather than teaching home row from scratch. The curriculum's center of gravity shifts from key introduction to **speed-under-pressure, accuracy-at-speed, capitals/symbols, and habit reform**. Chapters can lean harder earlier; the per-letter error tracker is repurposed from "which letter is new" to "which letter slows him down."
 
-| Chapter | New keys | In-fiction framing |
+| Chapter | Focus | In-fiction framing |
 |---|---|---|
-| Prologue | `fjdksla;` home row | "The Sleeping Letters" — Wren wakes the home row by typing eight glowing tiles on the cartographer's desk. Brief; mostly there to establish narrator, tone, and finger placement. |
-| 1 | `e r u i` top-row anchors | "The Glade of Vowels" — vowel sprites are hiding among the trees outside town. |
-| 2 | `t y g h` central column | "The Bridge of Two Hands" — two ferrymen, one for each hand, get the player alternating across a river. |
-| 3 | `c v b n m` bottom row + Shift / capitals | "The Caverns of Hum" — bottom-row words are heavier, and the cavern's named *places* (capitalized) require Shift to enter. Mirrors TTT's case-sensitivity rule. |
-| 4 | `q w o p` outer top | "The Owl's Library" — the outer top row is where the rarer words live; the library puzzles use uncommon vocabulary. |
-| 5 | `z x . , ? !` punctuation & lone bottom | "The Punctuation Pirates" — a naval mini-game (echo of TTT's naval bullet-hell, slowed down). Punctuation is reframed as cannons. |
-| 6 | Speed + accuracy under pressure | "The Capital City" — no new keys, but timed encounters and longer phrases. This is where WPM internally starts to matter, though it's never surfaced as a number. |
-| 7 | Numbers & symbols (optional, late) | "The Royal Treasury" — opens after the main story; treats numbers as bonus content, not a gate. |
+| Prologue | Home row warmup + typewriter introduction | "The Sleeping Letters" — eight glowing tiles on the cartographer's desk. Short; sets tone and establishes narrator. |
+| 1 | All lowercase letters; per-letter slowness diagnostic | "The Glade of Vowels" — sprites in the forest. The Almanac silently identifies Aiden's three slowest letters and seeds future encounters with them. |
+| 2 | Alternation, rhythm, bigrams | "The Bridge of Two Hands" — two ferrymen, one for each hand, force alternation across a river. Tempo-based mini-game checkpoints rhythm. |
+| 3 | Shift / capitals as in-world power | "The Caverns of Hum" — named places (capitalized) require Shift to enter, lowercase paths to walk. Direct lift of TTT's case-sensitivity rule. |
+| 4 | Longer words, dictionary expansion | "The Owl's Library" — the library puzzles surface rarer vocabulary; word-composition mini-game (Letter-Quest style) for unlocking spells. |
+| 5 | Punctuation `. , ? ! ; :` | "The Punctuation Pirates" — naval mini-game (echo of TTT's bullet-hell, slowed). Each punctuation mark is a different cannon shot. |
+| 6 | Accuracy under time pressure | "The Capital City" — timed encounters, longer phrases, full sentences. WPM tracked internally; never surfaced as a number to Aiden. |
+| 7 | Numbers & symbols + modifiers (Ctrl/Alt) | "The Royal Treasury" — bonus chapter. Numbers as in-world coin denominations, symbols as alchemical glyphs. Ctrl/Alt modifier-spells become the chapter's combat verb. |
 
-A new key is only introduced when the previous row's per-letter accuracy across a sliding window of, say, 100 attempts is above ~85%. The player never gets a "you failed the test" screen; they just get an Almanac page that hasn't yet glowed. The narrator handles the framing: *"Hmm, the letter K is still drowsy — let's wake it up properly before we go any further."*
+A chapter advances when its focus skill is comfortable, not when the player passes a test. The narrator handles framing for any slowdowns: *"Hmm, the letter K still wants a longer pause — let's give it one."* Aiden never sees a fail screen.
 
 ### Core verbs
 
@@ -163,8 +166,8 @@ This isn't headline-feature-zero — Phase 2 of the roadmap stays single-player 
 
 ### Tone & art
 
-- **Narrator**: warm, slightly dry, willing to be a goose. Read aloud to children for a living, if possible. The narrator should react to *what the kid does*, not just hand out approvals — surprised, delighted, occasionally bemused.
-- **Art**: hand-drawn / watercolor-feeling, with strong silhouettes (Mira and her satchel always readable). Reference: Hilda (the Netflix show), Over the Garden Wall, Studio Ghibli, the Children's Book Council's recent picture-book illustrators. Avoid: bright primary "Fisher-Price" palettes, mascot grins, thumbs-ups.
+- **Narrator**: warm, slightly dry, willing to be a goose. Read aloud to children for a living, if possible. The narrator should react to *what Aiden does*, not just hand out approvals — surprised, delighted, occasionally bemused.
+- **Art**: anchored to **Touch Type Tale's look** — hand-drawn, painterly, fairy-tale-storybook with strong silhouettes and low-clutter maps (Wren and his satchel always readable). Same family as Hilda, Over the Garden Wall, and the recent picture-book-illustrator-in-games tradition, but the immediate reference point is TTT itself. Avoid bright primary "Fisher-Price" palettes, mascot grins, thumbs-ups. All assets must be CC0, commissioned, or original — no direct copying of TTT's art.
 - **Music**: small-ensemble — strings, piano, recorder, harp. Quiet enough that the narrator and the typewriter sounds carry.
 - **Sound design**: the typewriter clack is the most important asset; it should be mechanical, warm, and physically satisfying. Layered with a chime on word completion and a longer flourish on Almanac unlock.
 
@@ -215,7 +218,7 @@ A static-hosted "hello world" with no game in it yet. The goal is to remove the 
 
 This is mostly DX setup. It exists so the kid sees the loop close.
 
-### Phase 1 — The Sleeping Letters (2–4 weekends)
+### Phase 1 — The Sleeping Letters (~1 week at heavy pace)
 
 The prologue, end-to-end. Eight glowing tiles on the cartographer's desk. Type the letter on a tile to wake it. When all eight are awake, an Almanac page opens with the cartographer's introduction.
 
@@ -235,7 +238,7 @@ What's deliberately *not* in Phase 1:
 
 End of Phase 1, the son has a thing he can show his friends. The narrator says his name (he typed it). The project becomes real to him; from this point his reactions drive the design of every subsequent chapter.
 
-### Phase 2 — The Glade of Vowels (4–6 weekends)
+### Phase 2 — The Glade of Vowels (~3–4 weeks at heavy pace)
 
 The first proper "chapter": a side-scrolling forest where vowel sprites hide. Wren walks left/right (arrow keys — kept off the typing fingers), encounters sprites with short curriculum-tuned words floating overhead, types to befriend them. Befriended sprites enter the Almanac and the satchel.
 
@@ -294,14 +297,16 @@ If the project ever grows past this point, the question of replacing the recorde
 
 ## 9. Remaining open questions
 
-The four big directional decisions are locked (see section 0). A handful of smaller calls still benefit from your input before Phase 0:
+Most directional decisions are locked (see section 0). A handful of smaller calls still benefit from your input — none block Phase 0:
 
-1. **Browser, desktop, or both?** Phaser-on-the-web is the default; an Electron or Tauri desktop wrapper is easy to add later if he plays mostly on a single laptop. The plan assumes browser unless you say otherwise.
-2. **Narrator voice — you, or someone else?** Your voice in his ear, talking to him by name, is hard to beat for a personal gift; but if you'd rather an outside voice (a grandparent, a friend, a hired voice actor at a Phase 4 polish step), the recording pipeline is the same.
-3. **Name preference for the protagonist.** The plan uses "Wren" as a placeholder. Easy to swap; worth picking a name your son will enjoy reading on screen.
-4. **Mini-game preferences.** The current plan has lantern relay (Phase 2), naval cannons (Phase 3 / chapter 5), and an owl library word puzzle (Phase 3 / chapter 4). If your son already has typing mini-game patterns he loves from TTT or elsewhere, swapping one in for one of these is cheap.
+1. **Browser, desktop, or both?** Phaser-on-the-web is the default; an Electron or Tauri desktop wrapper is easy to add later. The plan assumes browser unless you say otherwise.
+2. **Narrator voice — you, or someone else?** Your voice talking to Aiden by name is hard to beat for a personal gift; an outside voice (grandparent, friend, hired actor at a Phase 4 polish step) uses the same recording pipeline.
+3. **Protagonist name.** The plan uses "Wren" as a placeholder. Worth letting Aiden weigh in — or pick a name yourself that you'd enjoy hearing the narrator say.
+4. **Specific mini-game patterns Aiden loves from TTT.** The cook-off? The shooting gallery? The naval bullet-hell? Whichever ones he names, we'll lift the *shape* (with new fiction and original assets) into the equivalent slot in our chapter list.
+5. **Hosting choice for the deploy URL.** Netlify, Vercel, Cloudflare Pages, or GitHub Pages are all fine; any is a 10-minute setup. If you already have an account somewhere, that's the answer.
+6. **Aiden's computer & screen.** Resolution, OS, keyboard type. Affects test environment and SFX tuning. Phase 0 will work on anything; Phase 2 onward benefits from knowing.
 
-None block Phase 0. Phase 0 just sets up the project and gets the title screen on a deploy URL.
+Phase 0 just sets up the project and gets the title screen on a deploy URL. Ready to start when you are.
 
 ---
 

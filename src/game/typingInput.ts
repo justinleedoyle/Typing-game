@@ -24,6 +24,12 @@ export interface WordTarget {
   onComplete(): void;
   /** Called when the controller wants to dim/un-dim non-claimed targets. */
   setDimmed(dimmed: boolean): void;
+  /**
+   * Tiebreaker when two targets share a first letter. Higher wins. Default
+   * 0; chrome/UI targets (the almanac, settings, etc.) should sit below
+   * gameplay targets (a wolf, a portal, a choice).
+   */
+  priority?: number;
 }
 
 export class TypingInputController {
@@ -63,9 +69,7 @@ export class TypingInputController {
         this.claimed.advance();
         this.store?.recordKeystroke(ch, true);
         if (this.claimed.isComplete()) {
-          const completed = this.claimed;
-          this.releaseClaim();
-          completed.onComplete();
+          this.completeClaimed();
         }
         return true;
       }
@@ -74,9 +78,7 @@ export class TypingInputController {
       return true;
     }
 
-    const candidate = this.targets.find(
-      (t) => !t.isComplete() && t.remaining()[0] === ch,
-    );
+    const candidate = this.pickCandidate(ch);
     if (!candidate) {
       // No claim, no matching first-letter — count as a miss against the
       // typed letter so the diagnostic still picks up wandering hands.
@@ -90,10 +92,41 @@ export class TypingInputController {
     this.dimOthers(true);
     this.store?.recordKeystroke(ch, true);
     if (candidate.isComplete()) {
-      this.releaseClaim();
-      candidate.onComplete();
+      this.completeClaimed();
     }
     return true;
+  }
+
+  /**
+   * Among all targets whose next character matches `ch`, pick the one with
+   * the highest `priority` (default 0). Ties break by registration order
+   * (earlier wins), so scenes can express "this gameplay target should beat
+   * the always-on Almanac target" without ordering ceremony.
+   */
+  private pickCandidate(ch: string): WordTarget | undefined {
+    let best: WordTarget | undefined;
+    let bestPriority = -Infinity;
+    for (const t of this.targets) {
+      if (t.isComplete()) continue;
+      if (t.remaining()[0] !== ch) continue;
+      const p = t.priority ?? 0;
+      if (p > bestPriority) {
+        best = t;
+        bestPriority = p;
+      }
+    }
+    return best;
+  }
+
+  private completeClaimed(): void {
+    if (!this.claimed) return;
+    const completed = this.claimed;
+    this.claimed = null;
+    this.dimOthers(false);
+    // Remove from the live target list before firing onComplete so the
+    // callback (which often registers new targets) sees a clean slate.
+    this.unregister(completed);
+    completed.onComplete();
   }
 
   private releaseClaim(): void {

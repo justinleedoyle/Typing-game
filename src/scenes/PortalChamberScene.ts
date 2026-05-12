@@ -84,6 +84,8 @@ export class PortalChamberScene extends Phaser.Scene {
     } else {
       this.askToWakeTypewriter();
     }
+
+    this.addAlmanacTarget();
   }
 
   private drawArchLabels(): void {
@@ -184,6 +186,34 @@ export class PortalChamberScene extends Phaser.Scene {
       Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
       () => {
         this.scene.start("WinterMountainScene", { store: this.store });
+      },
+    );
+  }
+
+  private addAlmanacTarget(): void {
+    // Always-available word target so Aiden can open the Almanac from the hub
+    // regardless of which step of the wake/portal flow he's on. Priority -1
+    // so the lit-up "the winter mountain" portal beats it on the shared
+    // first-letter 't' once the typewriter is awake.
+    const target = new TextWordTarget({
+      scene: this,
+      word: "the almanac",
+      x: 220,
+      y: this.scale.height - 80,
+      fontSize: 26,
+      priority: -1,
+      onComplete: () => this.openAlmanac(),
+    });
+    this.typingInput.register(target);
+  }
+
+  private openAlmanac(): void {
+    playChime();
+    this.cameras.main.fadeOut(350, 11, 10, 15);
+    this.cameras.main.once(
+      Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+      () => {
+        this.scene.start("AlmanacScene", { store: this.store });
       },
     );
   }

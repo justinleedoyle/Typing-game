@@ -15,6 +15,8 @@ export interface TextWordTargetOptions {
   x: number;
   y: number;
   fontSize?: number;
+  /** Higher wins on first-letter ties. Default 0. */
+  priority?: number;
   onComplete: () => void;
   /** Optional anchor sprite to flash/shake when the player misses. */
   anchor?: Phaser.GameObjects.GameObject & {
@@ -32,6 +34,8 @@ export class TextWordTarget implements WordTarget {
   private complete = false;
   private dimmed = false;
 
+  readonly priority: number;
+
   constructor(private readonly opts: TextWordTargetOptions) {
     const fontSize = opts.fontSize ?? 56;
     const style: Phaser.Types.GameObjects.Text.TextStyle = {
@@ -40,6 +44,7 @@ export class TextWordTarget implements WordTarget {
     };
 
     this.word = opts.word.toLowerCase();
+    this.priority = opts.priority ?? 0;
     this.typedText = opts.scene.add
       .text(0, 0, "", { ...style, color: PALETTE.brass })
       .setOrigin(0, 0.5);

@@ -2,8 +2,8 @@ import Phaser from "phaser";
 import { playClack } from "../audio/clack";
 import { PALETTE, SERIF } from "../game/palette";
 import {
-  LocalStorageBackend,
   SaveStore,
+  SyncedBackend,
   type SaveBackend,
 } from "../game/saveState";
 
@@ -61,7 +61,7 @@ export class TitleScene extends Phaser.Scene {
     // SupabaseBackend swap can override it from outside.
     const backend =
       (this.registry.get("saveBackend") as SaveBackend | undefined) ??
-      new LocalStorageBackend();
+      new SyncedBackend();
     this.storePromise = SaveStore.load(backend);
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);

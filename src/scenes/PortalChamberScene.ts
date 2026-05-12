@@ -4,6 +4,12 @@ import { playChime } from "../audio/chime";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { RELICS } from "../game/relics";
 import type { SaveStore } from "../game/saveState";
+import {
+  currentUserDisplayName,
+  signInWithGoogle,
+  signOut,
+  supabase,
+} from "../game/supabaseClient";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
 
@@ -86,6 +92,21 @@ export class PortalChamberScene extends Phaser.Scene {
     }
 
     this.addAlmanacTarget();
+    void this.addAuthTarget();
+
+    // Auth changes mid-session (user signs in, signs out, token refreshes
+    // to a new user) — easiest correct response is to restart the scene
+    // so the satchel/stamps/auth UI all re-render from the new save.
+    const { data: subscription } = supabase.auth.onAuthStateChange(
+      (event) => {
+        if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
+          this.scene.start("TitleScene");
+        }
+      },
+    );
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      subscription.subscription.unsubscribe();
+    });
   }
 
   private drawArchLabels(): void {
@@ -205,6 +226,60 @@ export class PortalChamberScene extends Phaser.Scene {
       onComplete: () => this.openAlmanac(),
     });
     this.typingInput.register(target);
+  }
+
+  private async addAuthTarget(): Promise<void> {
+    const name = await currentUserDisplayName();
+    if (name) {
+      this.add
+        .text(this.scale.width - 40, 40, `signed in as ${name}`, {
+          fontFamily: SERIF,
+          fontSize: "20px",
+          fontStyle: "italic",
+          color: PALETTE.dim,
+        })
+        .setOrigin(1, 0);
+      const target = new TextWordTarget({
+        scene: this,
+        word: "sign out",
+        x: this.scale.width - 130,
+        y: 90,
+        fontSize: 22,
+        priority: -1,
+        onComplete: () => {
+          void signOut();
+        },
+      });
+      this.typingInput.register(target);
+    } else {
+      this.add
+        .text(
+          this.scale.width - 40,
+          40,
+          "saves stay on this computer until you sign in",
+          {
+            fontFamily: SERIF,
+            fontSize: "20px",
+            fontStyle: "italic",
+            color: PALETTE.dim,
+          },
+        )
+        .setOrigin(1, 0);
+      const target = new TextWordTarget({
+        scene: this,
+        word: "sign in",
+        x: this.scale.width - 110,
+        y: 90,
+        fontSize: 22,
+        priority: -1,
+        onComplete: () => {
+          // Return to wherever the player is right now so the OAuth round-
+          // trip lands them back in the same browser context.
+          void signInWithGoogle(window.location.href);
+        },
+      });
+      this.typingInput.register(target);
+    }
   }
 
   private openAlmanac(): void {

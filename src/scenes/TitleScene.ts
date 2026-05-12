@@ -1,13 +1,19 @@
 import Phaser from "phaser";
 import { playClack } from "../audio/clack";
-
-const CREAM = "#f3ead2";
-const DIM = "#8a8275";
+import { PALETTE, SERIF } from "../game/palette";
+import {
+  LocalStorageBackend,
+  SaveStore,
+  type SaveBackend,
+} from "../game/saveState";
 
 export class TitleScene extends Phaser.Scene {
   private prompt!: Phaser.GameObjects.Text;
   private promptTween?: Phaser.Tweens.Tween;
+  private store?: SaveStore;
+  private storePromise?: Promise<SaveStore>;
   private hasTyped = false;
+  private transitioning = false;
 
   constructor() {
     super("TitleScene");
@@ -18,26 +24,26 @@ export class TitleScene extends Phaser.Scene {
 
     this.add
       .text(width / 2, height / 2 - 120, "The Portalwright's Almanac", {
-        fontFamily: '"Iowan Old Style", "Palatino Linotype", Georgia, serif',
+        fontFamily: SERIF,
         fontSize: "112px",
-        color: CREAM,
+        color: PALETTE.cream,
       })
       .setOrigin(0.5);
 
     this.add
       .text(width / 2, height / 2 + 20, "a typing adventure", {
-        fontFamily: '"Iowan Old Style", "Palatino Linotype", Georgia, serif',
+        fontFamily: SERIF,
         fontSize: "40px",
         fontStyle: "italic",
-        color: DIM,
+        color: PALETTE.dim,
       })
       .setOrigin(0.5);
 
     this.prompt = this.add
       .text(width / 2, height - 180, "press any key", {
-        fontFamily: '"Iowan Old Style", "Palatino Linotype", Georgia, serif',
+        fontFamily: SERIF,
         fontSize: "32px",
-        color: DIM,
+        color: PALETTE.dim,
       })
       .setOrigin(0.5);
 
@@ -50,29 +56,44 @@ export class TitleScene extends Phaser.Scene {
       ease: "Sine.easeInOut",
     });
 
+    // Kick off save loading immediately so the chamber transition doesn't
+    // wait on disk I/O. registry stores the backend so tests / future
+    // SupabaseBackend swap can override it from outside.
+    const backend =
+      (this.registry.get("saveBackend") as SaveBackend | undefined) ??
+      new LocalStorageBackend();
+    this.storePromise = SaveStore.load(backend);
+
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
+    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.keyboard?.off("keydown", this.onKeyDown, this);
+    });
   }
 
   private onKeyDown(event: KeyboardEvent): void {
-    // Ignore modifier-only presses (Shift, Ctrl, Alt, Meta) so the clack
-    // tracks intent to type, not "I'm setting up to type."
     if (event.key.length !== 1 && event.key !== "Enter" && event.key !== " ") {
       return;
     }
-
     playClack();
-
     if (!this.hasTyped) {
       this.hasTyped = true;
       this.promptTween?.stop();
-      this.tweens.add({
-        targets: this.prompt,
-        alpha: 1,
-        duration: 200,
-        onComplete: () => {
-          this.prompt.setText("the cartographer is waking up...");
-        },
-      });
+      this.prompt.setAlpha(1);
+      this.prompt.setText("the cartographer is waking up...");
     }
+    void this.beginTransition();
+  }
+
+  private async beginTransition(): Promise<void> {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    this.store = await this.storePromise;
+    this.cameras.main.fadeOut(600, 11, 10, 15);
+    this.cameras.main.once(
+      Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+      () => {
+        this.scene.start("PortalChamberScene", { store: this.store });
+      },
+    );
   }
 }

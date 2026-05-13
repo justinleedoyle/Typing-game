@@ -12,6 +12,7 @@ import { TextWordTarget } from "../game/wordTarget";
 
 interface ForgeSceneData {
   store: SaveStore;
+  revisit?: boolean;
 }
 
 // ─── Golem entity ─────────────────────────────────────────────────────────────
@@ -94,6 +95,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private fork2Choice: "peaceful" | "fought" | null = null;
   private companionAwarded = false;
   private ambientHandle?: AmbientHandle;
+  private revisit = false;
 
   constructor() {
     super("ClockworkForgeScene");
@@ -102,6 +104,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
   init(data: ForgeSceneData): void {
+    this.revisit = data.revisit === true;
     this.store = data.store;
     this.golems = [];
     this.activeTargets = [];
@@ -142,7 +145,67 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
     this.ambientHandle = playAmbientForge();
 
+    if (this.revisit) {
+      this.startRevisit();
+      return;
+    }
     this.startAct1Arrival();
+  }
+
+  // ─── Revisit mode ────────────────────────────────────────────────────────────
+
+  private startRevisit(): void {
+    const choices = this.store.get().realms["clockwork-forge"]?.choices ?? {};
+    const ending = choices["ending"] ?? "";
+    let narratorLine: string;
+    let words: string[];
+
+    if (ending.includes("peaceful")) {
+      narratorLine = "The Forge is quiet. Forn is still at the bellows.";
+      words = ["iron", "holds", "the", "heat"];
+    } else if (ending.includes("fought")) {
+      narratorLine = "The golem-heart you took left a silence in the core furnace.";
+      words = ["gears", "turn", "without", "orders"];
+    } else {
+      narratorLine = "The Forge runs on its own now. It always did, really.";
+      words = ["the", "forge", "remembers", "everything"];
+    }
+
+    this.setNarrator(narratorLine);
+    this.time.delayedCall(2400, () => this.deliverRevisitPassage(words));
+  }
+
+  private deliverRevisitPassage(words: string[]): void {
+    let idx = 0;
+    const advance = (): void => {
+      if (idx >= words.length) {
+        this.time.delayedCall(800, () => {
+          this.cameras.main.fadeOut(700, 26, 16, 8);
+          this.cameras.main.once(
+            Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+            () => this.scene.start("PortalChamberScene", { store: this.store }),
+          );
+        });
+        return;
+      }
+      const word = words[idx];
+      if (word === undefined) return;
+      const target = new TextWordTarget({
+        scene: this,
+        word,
+        x: this.scale.width / 2,
+        y: this.scale.height - 240,
+        fontSize: 44,
+        onComplete: () => {
+          playChime();
+          idx += 1;
+          this.typingInput.unregister(target);
+          this.time.delayedCall(200, advance);
+        },
+      });
+      this.typingInput.register(target);
+    };
+    advance();
   }
 
   // ─── ACT 1 — Descent into the Forge ─────────────────────────────────────────

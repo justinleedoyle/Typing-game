@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { type AmbientHandle, playAmbientForge } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -92,6 +93,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   /** fork2: "peaceful" | "fought" */
   private fork2Choice: "peaceful" | "fought" | null = null;
   private companionAwarded = false;
+  private ambientHandle?: AmbientHandle;
 
   constructor() {
     super("ClockworkForgeScene");
@@ -135,7 +137,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.input.keyboard?.off("keyup", this.onKeyUp, this);
+      this.ambientHandle?.stop();
     });
+
+    this.ambientHandle = playAmbientForge();
 
     this.startAct1Arrival();
   }

@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { type AmbientHandle, playAmbientWood } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -59,6 +60,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private companionChoice: "call" | "leave" | null = null;
 
   private mistTimer: Phaser.Time.TimerEvent | null = null;
+  private ambientHandle?: AmbientHandle;
 
   constructor() {
     super("HauntedWoodScene");
@@ -98,7 +100,10 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.typingInput.reset();
       this.mistTimer?.remove();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
+      this.ambientHandle?.stop();
     });
+
+    this.ambientHandle = playAmbientWood();
 
     this.startArrival();
   }

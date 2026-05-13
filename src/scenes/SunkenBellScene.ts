@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { type AmbientHandle, playAmbientBell } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -44,6 +45,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private fork1Choice: "chant" | "force" | null = null;
   private fork2Choice: "free-aurland" | "claim-tongue" | null = null;
 
+  private ambientHandle?: AmbientHandle;
 
   constructor() {
     super("SunkenBellScene");
@@ -82,7 +84,10 @@ export class SunkenBellScene extends Phaser.Scene {
       this.typingInput.reset();
       this.stopBeat();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
+      this.ambientHandle?.stop();
     });
+
+    this.ambientHandle = playAmbientBell();
 
     this.startArrival();
   }

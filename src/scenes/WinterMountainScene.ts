@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { type AmbientHandle, playAmbientWinter } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -130,6 +131,8 @@ export class WinterMountainScene extends Phaser.Scene {
   // Fork 2 result
   private fork2Choice: "bury" | "pelt" | null = null;
 
+  private ambientHandle?: AmbientHandle;
+
   constructor() {
     super("WinterMountainScene");
   }
@@ -181,7 +184,10 @@ export class WinterMountainScene extends Phaser.Scene {
       this.coldDecayTimer?.remove();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.input.keyboard?.off("keyup", this.onKeyUp, this);
+      this.ambientHandle?.stop();
     });
+
+    this.ambientHandle = playAmbientWinter();
 
     this.startAct1();
   }

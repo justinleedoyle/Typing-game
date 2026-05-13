@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { type AmbientHandle, playAmbientSkyIsland } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { PALETTE, SERIF } from "../game/palette";
@@ -118,6 +119,8 @@ export class SkyIslandScene extends Phaser.Scene {
   // Temple state — which temple are we on
   private templeIndex = 0;
 
+  private ambientHandle?: AmbientHandle;
+
   constructor() {
     super("SkyIslandScene");
   }
@@ -161,7 +164,10 @@ export class SkyIslandScene extends Phaser.Scene {
       this.typingInput.reset();
       this.bossRingTween?.stop();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
+      this.ambientHandle?.stop();
     });
+
+    this.ambientHandle = playAmbientSkyIsland();
 
     this.startAct1();
   }

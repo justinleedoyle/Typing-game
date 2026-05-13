@@ -4,6 +4,7 @@ import { playClack } from "../audio/clack";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
+import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
 
 interface WinterSceneData {
@@ -18,17 +19,49 @@ interface Wolf {
   word: string;
   defeated: boolean;
   advanceTween: Phaser.Tweens.Tween | null;
+  advanceMs: number;
 }
-
-const WOLF_WORD_BANK = ["snow", "claw", "howl", "fang", "frost", "den"];
 
 const HUNTRESS_PASSAGES = ["free her hands", "she gives you her horn"];
 const FIREFLY_PASSAGES = ["follow the lights", "take the lantern"];
 
 const WAVE_CANDLES = 3;
 const WAVE_CHARGES = 2;
-const WOLF_ADVANCE_MS = 14000;
 const WOLF_KNOCKBACK_PAUSE_MS = 1500;
+
+/** Four canonical spawn slots — earlier slots are closer to Wren. Each wave
+ *  picks `wolfCount` of these. */
+const SPAWN_SLOTS = [
+  { x: 320, y: 820 },
+  { x: 620, y: 850 },
+  { x: 1320, y: 850 },
+  { x: 1620, y: 820 },
+] as const;
+
+interface WaveConfig {
+  wolfCount: number;
+  advanceMs: number;
+  intro: string;
+}
+
+const WAVES: readonly WaveConfig[] = [
+  {
+    wolfCount: 3,
+    advanceMs: 14000,
+    intro:
+      "type the wolves' names to drive them back. hold Shift on the first letter to call a thunderclap.",
+  },
+  {
+    wolfCount: 3,
+    advanceMs: 11000,
+    intro: "more eyes glint in the dark. the pack tightens.",
+  },
+  {
+    wolfCount: 4,
+    advanceMs: 9000,
+    intro: "the snow shifts. they come faster now.",
+  },
+];
 
 export class WinterMountainScene extends Phaser.Scene {
   private store!: SaveStore;
@@ -46,6 +79,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private charges = WAVE_CHARGES;
   private shiftHeld = false;
   private waveActive = false;
+  private waveIndex = 0;
 
   constructor() {
     super("WinterMountainScene");
@@ -59,6 +93,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.charges = WAVE_CHARGES;
     this.shiftHeld = false;
     this.waveActive = false;
+    this.waveIndex = 0;
   }
 
   create(): void {
@@ -102,33 +137,31 @@ export class WinterMountainScene extends Phaser.Scene {
     this.setNarrator(
       "The portal closes behind you. Snow muffles the world. Something is moving in the dark...",
     );
-    this.time.delayedCall(2400, () => this.startWolves());
+    this.time.delayedCall(2400, () => this.startWave(0));
   }
 
-  // ─── Beat: wolf pack ──────────────────────────────────────────────────────
+  // ─── Beat: wolf pack (waves) ──────────────────────────────────────────────
 
-  private startWolves(): void {
+  private startWave(idx: number): void {
+    this.waveIndex = idx;
     this.waveActive = true;
-    this.candles = WAVE_CANDLES;
+    this.wolves = [];
     this.charges = WAVE_CHARGES;
-    this.redrawCandles();
     this.redrawCharges();
-    this.setNarrator(
-      "type the wolves' names to drive them back. hold Shift on the first letter to call a thunderclap.",
+    const config = WAVES[idx];
+    this.setNarrator(config.intro);
+
+    const slots = shuffle(SPAWN_SLOTS).slice(0, config.wolfCount);
+    const words = pickAdaptiveWords(
+      WINTER_WORD_BANK,
+      config.wolfCount,
+      this.store.get().keyStats,
     );
 
-    const positions = [
-      { x: 320, y: 820 },
-      { x: 620, y: 850 },
-      { x: 1320, y: 850 },
-      { x: 1620, y: 820 },
-    ];
-    const words = shuffle(WOLF_WORD_BANK).slice(0, positions.length);
-
-    positions.forEach((pos, i) => {
+    slots.forEach((pos, i) => {
       const fromLeft = pos.x < this.scale.width / 2;
       const startX = fromLeft ? -120 : this.scale.width + 120;
-      this.spawnWolf(startX, pos.x, pos.y, words[i], i * 200);
+      this.spawnWolf(startX, pos.x, pos.y, words[i], i * 200, config.advanceMs);
     });
   }
 
@@ -138,6 +171,7 @@ export class WinterMountainScene extends Phaser.Scene {
     targetY: number,
     word: string,
     delay: number,
+    advanceMs: number,
   ): void {
     const facingLeft = startX > this.scale.width / 2;
     const container = this.add.container(startX, targetY);
@@ -152,6 +186,7 @@ export class WinterMountainScene extends Phaser.Scene {
       word,
       defeated: false,
       advanceTween: null,
+      advanceMs,
     };
 
     this.tweens.add({
@@ -196,7 +231,7 @@ export class WinterMountainScene extends Phaser.Scene {
     const totalRange = Math.abs(wolf.spawnX - wrenX);
     // Scale duration by remaining distance so a wolf that was knocked back
     // partway still feels fair — closer wolves haven't "earned" full time.
-    const duration = WOLF_ADVANCE_MS * Math.max(0.3, remaining / totalRange);
+    const duration = wolf.advanceMs * Math.max(0.3, remaining / totalRange);
 
     wolf.advanceTween = this.tweens.add({
       targets: wolf.container,
@@ -248,8 +283,17 @@ export class WinterMountainScene extends Phaser.Scene {
 
     if (this.wolves.every((w) => w.defeated)) {
       this.waveActive = false;
-      this.time.delayedCall(900, () => this.startFork());
+      this.time.delayedCall(900, () => this.onWaveCleared());
     }
+  }
+
+  private onWaveCleared(): void {
+    const nextIdx = this.waveIndex + 1;
+    if (nextIdx >= WAVES.length) {
+      this.startFork();
+      return;
+    }
+    this.time.delayedCall(1800, () => this.startWave(nextIdx));
   }
 
   // ─── Stakes: wolf reaches Wren ───────────────────────────────────────────
@@ -322,7 +366,9 @@ export class WinterMountainScene extends Phaser.Scene {
     this.time.delayedCall(1600, () => {
       this.wolves = [];
       this.activeTargets = [];
-      this.startWolves();
+      this.candles = WAVE_CANDLES;
+      this.redrawCandles();
+      this.startWave(0);
     });
   }
 

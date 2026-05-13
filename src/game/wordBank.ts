@@ -75,6 +75,16 @@ function shuffle<T>(arr: readonly T[]): T[] {
   return out;
 }
 
+/** Sunken Bell word bank — rhythm-friendly, alternation-heavy, bigram-rich.
+ *  Shorter words for waves 1-2; all usable in beat-locked claiming. */
+export const SUNKEN_BELL_WORD_BANK = [
+  "tide", "salt", "still", "hush", "swell", "creep", "linger",
+  "deep", "bell", "toll", "hymn", "choir", "knell", "drown",
+  "sink", "slow", "drift", "murk", "brine", "ebb",
+  "kelp", "reef", "pool", "wave", "calm", "rest", "dark",
+  "hold", "keep", "heed", "fill",
+] as const;
+
 /** Winter-themed word bank for the wolf encounter. Short, lowercase,
  *  curriculum-friendly: spans the alphabet enough that adaptive selection
  *  has room to bias toward the player's struggle letters. */

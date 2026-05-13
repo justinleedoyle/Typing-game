@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { AlmanacScene } from "./scenes/AlmanacScene";
+import { OpeningScene } from "./scenes/OpeningScene";
 import { PortalChamberScene } from "./scenes/PortalChamberScene";
+import { SunkenBellScene } from "./scenes/SunkenBellScene";
 import { TitleScene } from "./scenes/TitleScene";
 import { WinterMountainScene } from "./scenes/WinterMountainScene";
 
@@ -17,5 +19,5 @@ new Phaser.Game({
     width: DESIGN_WIDTH,
     height: DESIGN_HEIGHT,
   },
-  scene: [TitleScene, PortalChamberScene, WinterMountainScene, AlmanacScene],
+  scene: [TitleScene, OpeningScene, PortalChamberScene, WinterMountainScene, SunkenBellScene, AlmanacScene],
 });

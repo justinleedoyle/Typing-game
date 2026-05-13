@@ -56,6 +56,11 @@ export class TypingInputController {
     this.targets = [];
   }
 
+  /** True when a target is currently claimed (first-letter matched, mid-word). */
+  hasClaim(): boolean {
+    return this.claimed !== null;
+  }
+
   /**
    * Process a single typed character. Returns true if it was consumed by
    * a target (right or wrong); false if no target was eligible (e.g. no

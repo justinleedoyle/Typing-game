@@ -1,9 +1,10 @@
-// First-letter-lock typing input, in the lineage of Z-Type and Touch Type Tale.
+// Prefix-match typing input — a target is claimed only once the typed prefix
+// uniquely identifies it among all live targets.  This resolves conflicts when
+// several targets share a first letter (e.g. "the winter mountain" vs
+// "the almanac") without the player having to think about priorities.
 //
-// The controller holds a list of WordTargets. The first matching keystroke
-// "claims" a target — every other target dims and stops accepting input until
-// the claim is released (by completion or cancellation). This keeps the
-// player's intent unambiguous when several typeable words are on screen.
+// Backspace (or Escape) either releases a mid-word claim (resetting that
+// target to its start) or trims the last character off the pre-claim buffer.
 
 import type { SaveStore } from "./saveState";
 
@@ -27,6 +28,12 @@ export interface WordTarget {
   /** Called when the controller wants to dim/un-dim non-claimed targets. */
   setDimmed(dimmed: boolean): void;
   /**
+   * Called to indicate whether this target is a live candidate for the current
+   * typed prefix (true) or has been ruled out (false). Optional — targets that
+   * don't implement it fall back to the standard dim/undim behaviour.
+   */
+  setCandidate?(candidate: boolean): void;
+  /**
    * Tiebreaker when two targets share a first letter. Higher wins. Default
    * 0; chrome/UI targets (the almanac, settings, etc.) should sit below
    * gameplay targets (a wolf, a portal, a choice).
@@ -37,6 +44,7 @@ export interface WordTarget {
 export class TypingInputController {
   private targets: WordTarget[] = [];
   private claimed: WordTarget | null = null;
+  private typingBuffer = "";
 
   constructor(private readonly store?: SaveStore) {}
 
@@ -54,26 +62,44 @@ export class TypingInputController {
   reset(): void {
     this.releaseClaim();
     this.targets = [];
+    this.typingBuffer = "";
   }
 
-  /** True when a target is currently claimed (first-letter matched, mid-word). */
+  /** True when a target is currently claimed (prefix matched, mid-word). */
   hasClaim(): boolean {
     return this.claimed !== null;
   }
 
+  /** Current unconfirmed typed prefix (before a target is claimed). */
+  getTypingBuffer(): string {
+    return this.typingBuffer;
+  }
+
   /**
-   * Process a single typed character. Returns true if it was consumed by
-   * a target (right or wrong); false if no target was eligible (e.g. no
-   * target starts with this letter and nothing is currently claimed).
-   *
-   * `mods.spell` only matters at claim time (the first matched letter).
-   * Once a target is claimed, the player can release Shift and keep typing
-   * normally — the spell flag is sticky to the claim.
+   * Process a single key from the keyboard. Handles printable characters,
+   * space, Backspace, and Escape. Returns true if consumed.
    */
   handleChar(char: string, mods?: { spell?: boolean }): boolean {
+    // Backspace / Escape: undo last action.
+    if (char === "Backspace" || char === "Escape") {
+      if (this.claimed) {
+        this.releaseClaim();
+        this.typingBuffer = "";
+        this.refreshCandidateDisplay();
+        return true;
+      }
+      if (this.typingBuffer.length > 0) {
+        this.typingBuffer = this.typingBuffer.slice(0, -1);
+        this.refreshCandidateDisplay();
+        return true;
+      }
+      return false;
+    }
+
     const ch = normalize(char);
     if (!ch) return false;
 
+    // ── Mid-claim: validate against the claimed target ───────────────────────
     if (this.claimed) {
       const expected = this.claimed.remaining()[0];
       if (ch === expected) {
@@ -89,44 +115,59 @@ export class TypingInputController {
       return true;
     }
 
-    const candidate = this.pickCandidate(ch);
-    if (!candidate) {
-      // No claim, no matching first-letter — count as a miss against the
-      // typed letter so the diagnostic still picks up wandering hands.
+    // ── Pre-claim: extend the prefix buffer and check candidates ─────────────
+    const newBuffer = this.typingBuffer + ch;
+    const candidates = this.findCandidates(newBuffer);
+
+    if (candidates.length === 0) {
+      // No target starts with this prefix.
       this.store?.recordKeystroke(ch, false);
       return false;
     }
 
-    this.claimed = candidate;
-    candidate.onClaim(mods?.spell === true);
-    candidate.advance();
-    this.dimOthers(true);
+    // Record the char as correct — it narrowed the field.
     this.store?.recordKeystroke(ch, true);
-    if (candidate.isComplete()) {
-      this.completeClaimed();
+    this.typingBuffer = newBuffer;
+
+    if (candidates.length === 1) {
+      // Unique match — claim it and fast-forward the cursor to buffer length.
+      const target = pickBest(candidates);
+      this.claimed = target;
+      target.onClaim(mods?.spell === true);
+      for (let i = 0; i < newBuffer.length; i++) {
+        target.advance();
+      }
+      this.typingBuffer = "";
+      for (const t of this.targets) t.setCandidate?.(false);
+      this.dimOthers(true);
+      if (target.isComplete()) {
+        this.completeClaimed();
+      }
+      return true;
     }
+
+    // Multiple candidates still — update the highlighting.
+    this.refreshCandidateDisplay();
     return true;
   }
 
-  /**
-   * Among all targets whose next character matches `ch`, pick the one with
-   * the highest `priority` (default 0). Ties break by registration order
-   * (earlier wins), so scenes can express "this gameplay target should beat
-   * the always-on Almanac target" without ordering ceremony.
-   */
-  private pickCandidate(ch: string): WordTarget | undefined {
-    let best: WordTarget | undefined;
-    let bestPriority = -Infinity;
+  // ── Private ─────────────────────────────────────────────────────────────────
+
+  private findCandidates(buffer: string): WordTarget[] {
+    return this.targets.filter(
+      (t) => !t.isComplete() && t.remaining().startsWith(buffer),
+    );
+  }
+
+  private refreshCandidateDisplay(): void {
+    const candidates =
+      this.typingBuffer.length > 0 ? this.findCandidates(this.typingBuffer) : [];
     for (const t of this.targets) {
-      if (t.isComplete()) continue;
-      if (t.remaining()[0] !== ch) continue;
-      const p = t.priority ?? 0;
-      if (p > bestPriority) {
-        best = t;
-        bestPriority = p;
-      }
+      if (t.isComplete() || t === this.claimed) continue;
+      const isCandidate = candidates.includes(t);
+      t.setCandidate?.(isCandidate);
+      t.setDimmed(this.typingBuffer.length > 0 && !isCandidate);
     }
-    return best;
   }
 
   private completeClaimed(): void {
@@ -134,8 +175,6 @@ export class TypingInputController {
     const completed = this.claimed;
     this.claimed = null;
     this.dimOthers(false);
-    // Remove from the live target list before firing onComplete so the
-    // callback (which often registers new targets) sees a clean slate.
     this.unregister(completed);
     completed.onComplete();
   }
@@ -155,9 +194,15 @@ export class TypingInputController {
   }
 }
 
+function pickBest(candidates: WordTarget[]): WordTarget {
+  return candidates.reduce((best, t) => {
+    const p = t.priority ?? 0;
+    const bp = best.priority ?? 0;
+    return p > bp ? t : best;
+  });
+}
+
 function normalize(char: string): string | null {
-  // Phaser hands us KeyboardEvent.key. We accept printable single chars and
-  // a literal space; everything else (Shift, Enter, F-keys, etc.) is ignored.
   if (char === " ") return " ";
   if (char.length !== 1) return null;
   const code = char.charCodeAt(0);

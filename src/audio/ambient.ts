@@ -1,15 +1,14 @@
 // Ambient music synthesized entirely with the Web Audio API.
-// Each exported function starts a looping ambient track suited to its scene
-// and returns an AmbientHandle whose stop() method fades out gracefully.
-//
-// Gain levels are kept in the 0.06–0.12 range so the ambient layer sits well
-// below the typing clacks and chimes.
+// Disabled for now — the drone oscillators are perceived as plain humming.
+// To re-enable, remove the early-return lines from each play function.
 
 import { getAudioContext } from "./context";
 
 export interface AmbientHandle {
   stop(): void;
 }
+
+const SILENT: AmbientHandle = { stop: () => {} };
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -90,6 +89,7 @@ function makeHandle(
 // Mood: quiet library, warmly lit, expectant.
 
 export function playAmbientHub(): AmbientHandle {
+  return SILENT;
   const ctx = getAudioContext();
   const masterGain = ctx.createGain();
   masterGain.gain.value = 0.1;
@@ -137,6 +137,7 @@ export function playAmbientHub(): AmbientHandle {
 // Mood: cold, vast, slow.
 
 export function playAmbientWinter(): AmbientHandle {
+  return SILENT;
   const ctx = getAudioContext();
   const masterGain = ctx.createGain();
   masterGain.gain.value = 0.09;
@@ -203,6 +204,7 @@ export function playAmbientWinter(): AmbientHandle {
 // Mood: underwater, slow, resonant.
 
 export function playAmbientBell(): AmbientHandle {
+  return SILENT;
   const ctx = getAudioContext();
   const masterGain = ctx.createGain();
   masterGain.gain.value = 0.1;
@@ -292,6 +294,7 @@ export function playAmbientBell(): AmbientHandle {
 // Mood: industrial, rhythmic heat, deep rumble.
 
 export function playAmbientForge(): AmbientHandle {
+  return SILENT;
   const ctx = getAudioContext();
   const masterGain = ctx.createGain();
   masterGain.gain.value = 0.1;
@@ -354,6 +357,7 @@ export function playAmbientForge(): AmbientHandle {
 // Mood: golden, airy, gentle.
 
 export function playAmbientSkyIsland(): AmbientHandle {
+  return SILENT;
   const ctx = getAudioContext();
   const masterGain = ctx.createGain();
   masterGain.gain.value = 0.09;
@@ -438,6 +442,7 @@ export function playAmbientSkyIsland(): AmbientHandle {
 // Mood: fog, distant, uneasy stillness.
 
 export function playAmbientWood(): AmbientHandle {
+  return SILENT;
   const ctx = getAudioContext();
   const masterGain = ctx.createGain();
   masterGain.gain.value = 0.1;
@@ -513,6 +518,7 @@ export function playAmbientWood(): AmbientHandle {
 // Mood: tense, building, ominous.
 
 export function playAmbientBattle(): AmbientHandle {
+  return SILENT;
   const ctx = getAudioContext();
   const masterGain = ctx.createGain();
   masterGain.gain.value = 0.12;

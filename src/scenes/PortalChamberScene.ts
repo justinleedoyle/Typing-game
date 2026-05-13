@@ -191,7 +191,23 @@ export class PortalChamberScene extends Phaser.Scene {
       this.zoneTargets.push(primary);
       this.hint.setText("type the glowing arch's name to step through");
     } else {
-      this.hint.setText("all realms cleared — type any arch to revisit it");
+      // All five realms cleared — show the final battle target.
+      const battleTarget = new TextWordTarget({
+        scene: this,
+        word: "defend hearthward",
+        x: this.scale.width / 2,
+        y: 460,
+        fontSize: 42,
+        onComplete: () => {
+          this.cameras.main.fadeOut(600, 10, 8, 15);
+          this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+            this.scene.start("GreatBattleScene", { store: this.store });
+          });
+        },
+      });
+      this.typingInput.register(battleTarget);
+      this.zoneTargets.push(battleTarget);
+      this.hint.setText("all realms cleared — hearthward needs you");
     }
 
     // Secondary targets — all cleared realms are revisitable at lower priority.

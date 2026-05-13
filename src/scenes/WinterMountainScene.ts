@@ -20,6 +20,9 @@ interface Wolf {
   defeated: boolean;
   advanceTween: Phaser.Tweens.Tween | null;
   advanceMs: number;
+  isBoss: boolean;
+  /** The eye sprite — brightened when the boss's ward releases. */
+  eye?: Phaser.GameObjects.Graphics;
 }
 
 const HUNTRESS_PASSAGES = ["free her hands", "she gives you her horn"];
@@ -28,6 +31,11 @@ const FIREFLY_PASSAGES = ["follow the lights", "take the lantern"];
 const WAVE_CANDLES = 3;
 const WAVE_CHARGES = 2;
 const WOLF_KNOCKBACK_PAUSE_MS = 1500;
+
+const BOSS_PHRASE = "the old one, stirring.";
+const BOSS_ADVANCE_MS = 17000;
+const BOSS_SPAWN_X = 1100;
+const BOSS_SPAWN_Y = 800;
 
 /** Four canonical spawn slots — earlier slots are closer to Wren. Each wave
  *  picks `wolfCount` of these. */
@@ -42,6 +50,7 @@ interface WaveConfig {
   wolfCount: number;
   advanceMs: number;
   intro: string;
+  hasBoss?: boolean;
 }
 
 const WAVES: readonly WaveConfig[] = [
@@ -59,7 +68,8 @@ const WAVES: readonly WaveConfig[] = [
   {
     wolfCount: 4,
     advanceMs: 9000,
-    intro: "the snow shifts. they come faster now.",
+    intro: "the snow shifts. they come faster now. something larger watches.",
+    hasBoss: true,
   },
 ];
 
@@ -163,6 +173,10 @@ export class WinterMountainScene extends Phaser.Scene {
       const startX = fromLeft ? -120 : this.scale.width + 120;
       this.spawnWolf(startX, pos.x, pos.y, words[i], i * 200, config.advanceMs);
     });
+
+    if (config.hasBoss) {
+      this.spawnBoss();
+    }
   }
 
   private spawnWolf(
@@ -187,6 +201,7 @@ export class WinterMountainScene extends Phaser.Scene {
       defeated: false,
       advanceTween: null,
       advanceMs,
+      isBoss: false,
     };
 
     this.tweens.add({
@@ -205,6 +220,57 @@ export class WinterMountainScene extends Phaser.Scene {
     });
 
     this.wolves.push(wolf);
+  }
+
+  private spawnBoss(): void {
+    const startX = -200;
+    const container = this.add.container(startX, BOSS_SPAWN_Y);
+    container.setScale(1.6);
+    const eye = this.drawBossInto(container);
+    container.setAlpha(0);
+
+    const boss: Wolf = {
+      container,
+      target: null,
+      spawnX: BOSS_SPAWN_X,
+      restY: BOSS_SPAWN_Y,
+      word: BOSS_PHRASE,
+      defeated: false,
+      advanceTween: null,
+      advanceMs: BOSS_ADVANCE_MS,
+      isBoss: true,
+      eye,
+    };
+
+    this.tweens.add({
+      targets: container,
+      x: BOSS_SPAWN_X,
+      alpha: 1,
+      duration: 1100,
+      delay: 600,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!this.waveActive || boss.defeated) return;
+        // The boss is "warded": it advances and can knock candles out, but
+        // its name can't be claimed until the pack around it is cleared.
+        this.idleBob(container);
+        this.startWolfAdvance(boss);
+      },
+    });
+
+    this.wolves.push(boss);
+  }
+
+  private releaseBossWard(boss: Wolf): void {
+    if (boss.target || boss.defeated) return;
+    this.setNarrator("the pack leader rises. type its name to fell it.");
+    if (boss.eye) {
+      boss.eye.clear();
+      boss.eye.fillStyle(0xffd277, 1);
+      boss.eye.fillCircle(36, -10, 4);
+    }
+    this.cameras.main.shake(180, 0.003);
+    this.attachWolfTarget(boss);
   }
 
   private attachWolfTarget(wolf: Wolf): void {
@@ -283,7 +349,25 @@ export class WinterMountainScene extends Phaser.Scene {
 
     if (this.wolves.every((w) => w.defeated)) {
       this.waveActive = false;
-      this.time.delayedCall(900, () => this.onWaveCleared());
+      if (wolf.isBoss) {
+        this.setNarrator("the old one slumps. the trail breathes again.");
+        this.time.delayedCall(2200, () => this.onWaveCleared());
+      } else {
+        this.time.delayedCall(900, () => this.onWaveCleared());
+      }
+      return;
+    }
+
+    // If a regular wolf just fell and the only thing left standing is the
+    // boss with its ward intact, release the ward.
+    const boss = this.wolves.find((w) => w.isBoss);
+    if (boss && !boss.defeated && !boss.target) {
+      const regularsAllDown = this.wolves
+        .filter((w) => !w.isBoss)
+        .every((w) => w.defeated);
+      if (regularsAllDown) {
+        this.releaseBossWard(boss);
+      }
     }
   }
 
@@ -792,6 +876,42 @@ export class WinterMountainScene extends Phaser.Scene {
     g.fillStyle(0xd6754a, 0.9);
     g.fillCircle(flip * 36, -10, 2.5);
     c.add(g);
+  }
+
+  /** The pack leader: face-left, larger silhouette built off the same shapes,
+   *  with a brass collar and a separate eye Graphics returned to the caller
+   *  so it can be brightened when the ward releases. */
+  private drawBossInto(
+    c: Phaser.GameObjects.Container,
+  ): Phaser.GameObjects.Graphics {
+    const g = this.add.graphics();
+    // Body — bigger, paler grey to read against the dark wolves
+    g.fillStyle(0x2a2832, 1);
+    g.fillEllipse(0, 0, 100, 38);
+    // Head
+    g.fillEllipse(36, -12, 38, 28);
+    // Ears
+    g.fillTriangle(28, -28, 36, -42, 44, -28);
+    g.fillTriangle(40, -28, 48, -42, 56, -28);
+    // Tail
+    g.fillEllipse(-46, -10, 28, 10);
+    // Legs
+    g.fillRect(-18, 16, 6, 18);
+    g.fillRect(12, 16, 6, 18);
+    // Mane streak — a brass slash along the back
+    g.fillStyle(PALETTE_HEX.brass, 0.7);
+    g.fillRect(-22, -16, 40, 3);
+    // Collar
+    g.lineStyle(2, PALETTE_HEX.brass, 0.85);
+    g.strokeCircle(30, -8, 16);
+    c.add(g);
+
+    // Eye on its own Graphics so we can brighten it when the ward drops.
+    const eye = this.add.graphics();
+    eye.fillStyle(0xd6754a, 0.85);
+    eye.fillCircle(36, -10, 3);
+    c.add(eye);
+    return eye;
   }
 }
 

@@ -895,12 +895,38 @@ export class WinterMountainScene extends Phaser.Scene {
     this.activeTargets.push(buryTarget, peltTarget);
   }
 
-  /** Snow-fox companion gate — only if Fork 1A (huntress) AND Fork 2A (bury) */
+  /** Snow-fox companion gate — only if all three kindness conditions met.
+   *  Two out of three gets a specific near-miss line from Runa so the player
+   *  understands what they'd change on a replay, without being punished. */
   private startFoxGate(): void {
-    const foxEarned = this.foxSpared && this.fork1Choice === "huntress" && this.fork2Choice === "bury";
+    const condFox      = this.foxSpared;
+    const condHuntress = this.fork1Choice === "huntress";
+    const condBury     = this.fork2Choice === "bury";
+    const foxEarned    = condFox && condHuntress && condBury;
 
     if (!foxEarned) {
-      this.startTrueNamePassage();
+      const metCount = [condFox, condHuntress, condBury].filter(Boolean).length;
+      if (metCount === 2) {
+        // Near-miss: acknowledge specifically what was one step away
+        let nearMissLine: string;
+        if (!condFox) {
+          // Fox was never spared — she can't return
+          nearMissLine =
+            "You made this place kinder than you found it. But there was a fox in the snow on the way up — she would have followed you home, if you had paused for her.";
+        } else if (!condHuntress) {
+          // Firefly branch taken — fox returns but looks for Sigrid
+          nearMissLine =
+            "The fox steps into the clearing, nose working. She looks past you — searching for something, or someone. She waits a long moment. Then turns back into the pines.";
+        } else {
+          // Pelt taken — fox sees what Wren carries and steps away
+          nearMissLine =
+            "The fox pads to the clearing's edge. Her eye finds the pelt in your hands. She holds very still. Then she steps back. She is gone.";
+        }
+        this.setNarrator(nearMissLine);
+        this.time.delayedCall(3200, () => this.startTrueNamePassage());
+      } else {
+        this.startTrueNamePassage();
+      }
       return;
     }
 

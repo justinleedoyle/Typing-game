@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { type AmbientHandle, playAmbientHub } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -66,6 +67,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private hint!: Phaser.GameObjects.Text;
   private wrenContainer!: Phaser.GameObjects.Container;
   private zoneTargets: TextWordTarget[] = [];
+  private ambientHandle?: AmbientHandle;
 
   constructor() {
     super("PortalChamberScene");
@@ -122,7 +124,10 @@ export class PortalChamberScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
+      this.ambientHandle?.stop();
     });
+
+    this.ambientHandle = playAmbientHub();
 
     // Persistent (non-zone) targets.
     this.addAlmanacTarget();

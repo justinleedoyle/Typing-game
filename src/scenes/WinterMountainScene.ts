@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { type AmbientHandle, playAmbientWinter } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -9,6 +10,7 @@ import { TextWordTarget } from "../game/wordTarget";
 
 interface WinterSceneData {
   store: SaveStore;
+  revisit?: boolean;
 }
 
 interface Wolf {
@@ -130,11 +132,15 @@ export class WinterMountainScene extends Phaser.Scene {
   // Fork 2 result
   private fork2Choice: "bury" | "pelt" | null = null;
 
+  private ambientHandle?: AmbientHandle;
+  private revisit = false;
+
   constructor() {
     super("WinterMountainScene");
   }
 
   init(data: WinterSceneData): void {
+    this.revisit = data.revisit === true;
     this.store = data.store;
     this.wolves = [];
     this.activeTargets = [];
@@ -181,9 +187,73 @@ export class WinterMountainScene extends Phaser.Scene {
       this.coldDecayTimer?.remove();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.input.keyboard?.off("keyup", this.onKeyUp, this);
+      this.ambientHandle?.stop();
     });
 
+    this.ambientHandle = playAmbientWinter();
+
+    if (this.revisit) {
+      this.startRevisit();
+      return;
+    }
     this.startAct1();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // REVISIT MODE
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  private startRevisit(): void {
+    const choices = this.store.get().realms["winter-mountain"]?.choices ?? {};
+    let narratorLine: string;
+    let words: string[];
+
+    if (choices["fork2"] === "bury") {
+      narratorLine = "The cairn is still standing.";
+      words = ["the", "snow", "keeps", "the", "quiet"];
+    } else if (choices["fork2"] === "pelt") {
+      narratorLine = "The mountain remembers the weight you carried.";
+      words = ["the", "old", "one", "rests", "now"];
+    } else {
+      narratorLine = "The mountain is quieter than you left it.";
+      words = ["cold,", "and", "still,", "and", "clean"];
+    }
+
+    this.setNarrator(narratorLine);
+    this.time.delayedCall(2400, () => this.deliverRevisitPassage(words));
+  }
+
+  private deliverRevisitPassage(words: string[]): void {
+    let idx = 0;
+    const advance = (): void => {
+      if (idx >= words.length) {
+        this.time.delayedCall(800, () => {
+          this.cameras.main.fadeOut(700, 11, 10, 15);
+          this.cameras.main.once(
+            Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+            () => this.scene.start("PortalChamberScene", { store: this.store }),
+          );
+        });
+        return;
+      }
+      const word = words[idx];
+      if (word === undefined) return;
+      const target = new TextWordTarget({
+        scene: this,
+        word,
+        x: this.scale.width / 2,
+        y: this.scale.height - 260,
+        fontSize: 44,
+        onComplete: () => {
+          playChime();
+          idx += 1;
+          this.typingInput.unregister(target);
+          this.time.delayedCall(200, advance);
+        },
+      });
+      this.typingInput.register(target);
+    };
+    advance();
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

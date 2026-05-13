@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { type AmbientHandle, playAmbientBell } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -9,6 +10,7 @@ import { TextWordTarget } from "../game/wordTarget";
 
 interface SunkenBellSceneData {
   store: SaveStore;
+  revisit?: boolean;
 }
 
 interface Ghost {
@@ -44,12 +46,15 @@ export class SunkenBellScene extends Phaser.Scene {
   private fork1Choice: "chant" | "force" | null = null;
   private fork2Choice: "free-aurland" | "claim-tongue" | null = null;
 
+  private ambientHandle?: AmbientHandle;
+  private revisit = false;
 
   constructor() {
     super("SunkenBellScene");
   }
 
   init(data: SunkenBellSceneData): void {
+    this.revisit = data.revisit === true;
     this.store = data.store;
     this.ghosts = [];
     this.activeTargets = [];
@@ -82,9 +87,74 @@ export class SunkenBellScene extends Phaser.Scene {
       this.typingInput.reset();
       this.stopBeat();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
+      this.ambientHandle?.stop();
     });
 
+    this.ambientHandle = playAmbientBell();
+
+    if (this.revisit) {
+      this.startRevisit();
+      return;
+    }
     this.startArrival();
+  }
+
+  // ─── Revisit mode ────────────────────────────────────────────────────────
+
+  private startRevisit(): void {
+    // Open claim window permanently so input flows without beat gating
+    this.claimWindowOpen = true;
+
+    const choices = this.store.get().realms["sunken-bell"]?.choices ?? {};
+    let narratorLine: string;
+    let words: string[];
+
+    if (choices["fork2"] === "free-aurland") {
+      narratorLine = "The water is clearer. King Aurland sent word.";
+      words = ["the", "deep", "is", "listening"];
+    } else if (choices["fork2"] === "claim-tongue") {
+      narratorLine = "The bell is silent. The tide has gone out further than it used to.";
+      words = ["silence", "holds", "its", "shape"];
+    } else {
+      narratorLine = "The tide is different now. You can hear it thinking.";
+      words = ["the", "bell", "remembers", "still"];
+    }
+
+    this.setNarrator(narratorLine);
+    this.time.delayedCall(2400, () => this.deliverRevisitPassage(words));
+  }
+
+  private deliverRevisitPassage(words: string[]): void {
+    let idx = 0;
+    const advance = (): void => {
+      if (idx >= words.length) {
+        this.time.delayedCall(800, () => {
+          this.cameras.main.fadeOut(700, 8, 24, 32);
+          this.cameras.main.once(
+            Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+            () => this.scene.start("PortalChamberScene", { store: this.store }),
+          );
+        });
+        return;
+      }
+      const word = words[idx];
+      if (word === undefined) return;
+      const target = new TextWordTarget({
+        scene: this,
+        word,
+        x: this.scale.width / 2,
+        y: this.scale.height / 2 + 100,
+        fontSize: 44,
+        onComplete: () => {
+          playChime();
+          idx += 1;
+          this.typingInput.unregister(target);
+          this.time.delayedCall(200, advance);
+        },
+      });
+      this.typingInput.register(target);
+    };
+    advance();
   }
 
   // ─── Beat mechanic ────────────────────────────────────────────────────────

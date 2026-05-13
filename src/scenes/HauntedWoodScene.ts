@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { type AmbientHandle, playAmbientWood } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -9,6 +10,7 @@ import { TextWordTarget } from "../game/wordTarget";
 
 interface HauntedWoodSceneData {
   store: SaveStore;
+  revisit?: boolean;
 }
 
 // ─── Ghost enemy ──────────────────────────────────────────────────────────────
@@ -59,12 +61,15 @@ export class HauntedWoodScene extends Phaser.Scene {
   private companionChoice: "call" | "leave" | null = null;
 
   private mistTimer: Phaser.Time.TimerEvent | null = null;
+  private ambientHandle?: AmbientHandle;
+  private revisit = false;
 
   constructor() {
     super("HauntedWoodScene");
   }
 
   init(data: HauntedWoodSceneData): void {
+    this.revisit = data.revisit === true;
     this.store = data.store;
     this.ghosts = [];
     this.activeTargets = [];
@@ -98,9 +103,71 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.typingInput.reset();
       this.mistTimer?.remove();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
+      this.ambientHandle?.stop();
     });
 
+    this.ambientHandle = playAmbientWood();
+
+    if (this.revisit) {
+      this.startRevisit();
+      return;
+    }
     this.startArrival();
+  }
+
+  // ─── Revisit mode ────────────────────────────────────────────────────────
+
+  private startRevisit(): void {
+    const choices = this.store.get().realms["haunted-wood"]?.choices ?? {};
+    let narratorLine: string;
+    let words: string[];
+
+    if (choices["fork2"] === "bargain") {
+      narratorLine = "The wood is quiet. The Ghost-King kept his promise.";
+      words = ["the", "remembered", "rest", "now"];
+    } else if (choices["fork1"] === "offering") {
+      narratorLine = "The crossroads shrine has a new candle. Someone else found it.";
+      words = ["we", "are", "not", "forgotten"];
+    } else {
+      narratorLine = "The wood is less haunted than it was. Not unhaunted. Just less.";
+      words = ["the", "quiet", "is", "not", "empty"];
+    }
+
+    this.setNarrator(narratorLine);
+    this.time.delayedCall(2400, () => this.deliverRevisitPassage(words));
+  }
+
+  private deliverRevisitPassage(words: string[]): void {
+    let idx = 0;
+    const advance = (): void => {
+      if (idx >= words.length) {
+        this.time.delayedCall(800, () => {
+          this.cameras.main.fadeOut(700, 14, 18, 14);
+          this.cameras.main.once(
+            Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+            () => this.scene.start("PortalChamberScene", { store: this.store }),
+          );
+        });
+        return;
+      }
+      const word = words[idx];
+      if (word === undefined) return;
+      const target = new TextWordTarget({
+        scene: this,
+        word,
+        x: this.scale.width / 2,
+        y: this.scale.height - 220,
+        fontSize: 44,
+        onComplete: () => {
+          playChime();
+          idx += 1;
+          this.typingInput.unregister(target);
+          this.time.delayedCall(200, advance);
+        },
+      });
+      this.typingInput.register(target);
+    };
+    advance();
   }
 
   // ─── Act 1 — Into the Wood ────────────────────────────────────────────────

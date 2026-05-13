@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { type AmbientHandle, playAmbientBattle } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -137,6 +138,8 @@ export class GreatBattleScene extends Phaser.Scene {
   private screenBrightnessOverlay!: Phaser.GameObjects.Graphics;
   private brightnessAlpha = 0;
 
+  private ambientHandle?: AmbientHandle;
+
   constructor() {
     super("GreatBattleScene");
   }
@@ -189,6 +192,8 @@ export class GreatBattleScene extends Phaser.Scene {
     this.input.keyboard?.on("keyup", this.onKeyUp, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, this.onShutdown, this);
 
+    this.ambientHandle = playAmbientBattle();
+
     // Begin
     this.time.delayedCall(800, () => this.startPhase1());
   }
@@ -197,6 +202,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.typingInput.reset();
     this.input.keyboard?.off("keydown", this.onKeyDown, this);
     this.input.keyboard?.off("keyup", this.onKeyUp, this);
+    this.ambientHandle?.stop();
   }
 
   // ─── Input ──────────────────────────────────────────────────────────────────

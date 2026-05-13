@@ -75,6 +75,121 @@ function shuffle<T>(arr: readonly T[]): T[] {
   return out;
 }
 
+/** Sunken Bell word bank — rhythm-friendly, alternation-heavy, bigram-rich.
+ *  Shorter words for waves 1-2; all usable in beat-locked claiming. */
+export const SUNKEN_BELL_WORD_BANK = [
+  "tide", "salt", "still", "hush", "swell", "creep", "linger",
+  "deep", "bell", "toll", "hymn", "choir", "knell", "drown",
+  "sink", "slow", "drift", "murk", "brine", "ebb",
+  "kelp", "reef", "pool", "wave", "calm", "rest", "dark",
+  "hold", "keep", "heed", "fill",
+] as const;
+
+/** Sky-Island word bank — longer words (5-10 chars), sky/lantern/scholar theme.
+ *  Used for the floating lantern-spirits and temple encounters. */
+export const SKY_ISLAND_WORD_BANK = [
+  "lantern",
+  "gilded",
+  "scroll",
+  "shimmer",
+  "beacon",
+  "scholar",
+  "breeze",
+  "parchment",
+  "kindling",
+  "devotion",
+  "ancient",
+  "floating",
+  "written",
+  "passage",
+  "glimmer",
+  "ember",
+  "tender",
+  "whisper",
+  "pillar",
+  "ascend",
+  "lofted",
+  "reading",
+  "canopy",
+  "radiant",
+  "twilight",
+  "lanterns",
+  "luminous",
+  "peaceful",
+  "drifting",
+  "temple",
+] as const;
+
+/** Clockwork Forge word bank — short mechanical words, uppercase-friendly,
+ *  good for shift/capital modifier curriculum. */
+export const FORGE_WORD_BANK = [
+  "forge",
+  "brass",
+  "iron",
+  "bolt",
+  "gear",
+  "crank",
+  "smelt",
+  "rivet",
+  "valve",
+  "press",
+  "shaft",
+  "coil",
+  "hinge",
+  "drill",
+  "brace",
+  "anvil",
+  "tong",
+  "lathe",
+  "wedge",
+  "mold",
+  "flux",
+  "pivot",
+  "grind",
+  "stamp",
+  "ratchet",
+  "piston",
+  "bellows",
+  "weld",
+  "ember",
+  "soot",
+] as const;
+
+/** Haunted Wood word bank — words with punctuation marks, atmospheric and eerie.
+ *  Used for ghost encounters; punctuation trains precision under pressure. */
+export const HAUNTED_WOOD_WORD_BANK = [
+  "howl,",
+  "drift.",
+  "pale?",
+  "wail!",
+  "cold;",
+  "linger.",
+  "grey,",
+  "hollow.",
+  "whisper,",
+  "fading?",
+  "ancient!",
+  "still:",
+  "hush,",
+  "mist.",
+  "dusk?",
+  "shade!",
+  "creep;",
+  "gloom,",
+  "haunt.",
+  "wisp?",
+  "eerie!",
+  "moan,",
+  "hollow;",
+  "dread.",
+  "silent?",
+  "shroud,",
+  "wander.",
+  "vanish!",
+  "echo;",
+  "lament:",
+] as const;
+
 /** Winter-themed word bank for the wolf encounter. Short, lowercase,
  *  curriculum-friendly: spans the alphabet enough that adaptive selection
  *  has room to bias toward the player's struggle letters. */

@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
     <title>The Portalwright's Almanac</title>
     <style>
       html,
@@ -21,14 +24,41 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        touch-action: manipulation;
       }
       canvas {
         display: block;
+      }
+      #mobile-keyboard-bridge {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+        border: 0;
+        padding: 0;
+        font-size: 16px;
+        background: transparent;
+        color: transparent;
+        caret-color: transparent;
       }
     </style>
   </head>
   <body>
     <div id="app"></div>
+    <input
+      id="mobile-keyboard-bridge"
+      type="text"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+      spellcheck="false"
+      inputmode="text"
+      aria-hidden="true"
+      tabindex="-1"
+    />
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

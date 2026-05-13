@@ -207,7 +207,7 @@ export class OpeningScene extends Phaser.Scene {
       this.cameras.main.once(
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
         () => {
-          this.scene.start("WinterMountainScene", { store: this.store });
+          this.scene.start("PortalChamberScene", { store: this.store });
         },
       );
     });

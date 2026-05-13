@@ -105,6 +105,18 @@ export class PortalChamberScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    // Fragment display — shows the accumulating Quiet Lord word in the upper-
+    // centre of the room, growing one letter per realm cleared.
+    this.add
+      .text(this.scale.width / 2, 52, this.buildFragment(), {
+        fontFamily: SERIF,
+        fontSize: "32px",
+        color: "#3a3060",
+        align: "center",
+      })
+      .setOrigin(0.5)
+      .setAlpha(0.7);
+
     this.typingInput = new TypingInputController(this.store);
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -268,6 +280,18 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   // ─── Navigation target helper ─────────────────────────────────────────────
+
+  /** Returns the current state of the accumulating Quiet Lord fragment.
+   *  Each cleared realm reveals one more letter: A→Ag→Aga→Agai→Again→Again. */
+  private buildFragment(): string {
+    const REALMS = ["winter-mountain", "sunken-bell", "clockwork-forge", "sky-island", "haunted-wood"] as const;
+    const LETTERS = ["~~A~~", "~~Ag~~", "~~Aga~~", "~~Agai~~", "~~Again~~", "Again."];
+    const state = this.store.get();
+    const cleared = REALMS.filter((id) => state.realms[id]?.cleared).length;
+    if (cleared === 0) return "";
+    if (cleared >= 5 && state.realms["great-battle"]?.cleared) return "Again.";
+    return LETTERS[Math.min(cleared, LETTERS.length - 1)];
+  }
 
   private registerNavTarget(
     word: string,

@@ -208,23 +208,40 @@ export class PortalChamberScene extends Phaser.Scene {
       this.zoneTargets.push(primary);
       this.hint.setText("type the glowing arch's name to step through");
     } else {
-      // All five realms cleared — show the final battle target.
-      const battleTarget = new TextWordTarget({
-        scene: this,
-        word: "defend hearthward",
-        x: this.scale.width / 2,
-        y: 460,
-        fontSize: 42,
-        onComplete: () => {
-          this.cameras.main.fadeOut(600, 10, 8, 15);
-          this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-            this.scene.start("GreatBattleScene", { store: this.store });
-          });
-        },
-      });
-      this.typingInput.register(battleTarget);
-      this.zoneTargets.push(battleTarget);
-      this.hint.setText("all realms cleared — hearthward needs you");
+      const battleCleared = !!state.realms["great-battle"]?.cleared;
+
+      if (!battleCleared) {
+        // All five realms cleared — show the final battle target.
+        const battleTarget = new TextWordTarget({
+          scene: this,
+          word: "defend hearthward",
+          x: this.scale.width / 2,
+          y: 460,
+          fontSize: 42,
+          onComplete: () => {
+            this.cameras.main.fadeOut(600, 10, 8, 15);
+            this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+              this.scene.start("GreatBattleScene", { store: this.store });
+            });
+          },
+        });
+        this.typingInput.register(battleTarget);
+        this.zoneTargets.push(battleTarget);
+        this.hint.setText("all realms cleared — hearthward needs you");
+      } else {
+        // Battle cleared — show begin again target (New Game+).
+        const ngPlusTarget = new TextWordTarget({
+          scene: this,
+          word: "begin again",
+          x: this.scale.width / 2,
+          y: 460,
+          fontSize: 38,
+          onComplete: () => this.startNewGame(),
+        });
+        this.typingInput.register(ngPlusTarget);
+        this.zoneTargets.push(ngPlusTarget);
+        this.hint.setText("the almanac is complete. type to begin a new run.");
+      }
     }
 
     // Secondary targets — all cleared realms are revisitable at lower priority.
@@ -668,6 +685,30 @@ export class PortalChamberScene extends Phaser.Scene {
         })
         .setOrigin(0.5);
     }
+  }
+
+  // ─── Wren character ───────────────────────────────────────────────────────
+
+  // ─── New Game+ ────────────────────────────────────────────────────────────
+
+  private startNewGame(): void {
+    // Preserve keystroke calibration so adaptive word selection carries over.
+    const oldStats = this.store.get().keyStats;
+    const oldName = this.store.get().profileName;
+    this.store.update((s) => {
+      // Reset everything...
+      s.typewriterAwakened = false;
+      s.realms = {};
+      s.satchel = [];
+      s.almanacLore = [];
+      // ...but keep the player's identity and typing stats
+      s.profileName = oldName;
+      s.keyStats = oldStats;
+    });
+    this.cameras.main.fadeOut(700, 10, 8, 15);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start("OpeningScene", { store: this.store });
+    });
   }
 
   // ─── Wren character ───────────────────────────────────────────────────────

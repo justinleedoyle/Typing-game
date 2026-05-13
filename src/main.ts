@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { AlmanacScene } from "./scenes/AlmanacScene";
 import { ClockworkForgeScene } from "./scenes/ClockworkForgeScene";
+import { GreatBattleScene } from "./scenes/GreatBattleScene";
 import { HauntedWoodScene } from "./scenes/HauntedWoodScene";
 import { OpeningScene } from "./scenes/OpeningScene";
 import { PortalChamberScene } from "./scenes/PortalChamberScene";
@@ -22,5 +23,5 @@ new Phaser.Game({
     width: DESIGN_WIDTH,
     height: DESIGN_HEIGHT,
   },
-  scene: [TitleScene, OpeningScene, PortalChamberScene, WinterMountainScene, SunkenBellScene, ClockworkForgeScene, SkyIslandScene, HauntedWoodScene, AlmanacScene],
+  scene: [TitleScene, OpeningScene, PortalChamberScene, WinterMountainScene, SunkenBellScene, ClockworkForgeScene, SkyIslandScene, HauntedWoodScene, GreatBattleScene, AlmanacScene],
 });

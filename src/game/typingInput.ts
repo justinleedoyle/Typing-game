@@ -16,8 +16,10 @@ export interface WordTarget {
   advance(): void;
   /** Called when the user types a wrong character mid-claim. */
   miss(): void;
-  /** Called when this target is claimed. */
-  onClaim(): void;
+  /** Called when this target is claimed. `spell` is true if the claim came in
+   *  while a modifier (Shift) was held — the target can react visually and
+   *  the controller will route completion to the spell variant. */
+  onClaim(spell: boolean): void;
   /** Called when this target is released (canceled or completed). */
   onRelease(): void;
   /** Called once on completion, after the final advance(). */
@@ -58,8 +60,12 @@ export class TypingInputController {
    * Process a single typed character. Returns true if it was consumed by
    * a target (right or wrong); false if no target was eligible (e.g. no
    * target starts with this letter and nothing is currently claimed).
+   *
+   * `mods.spell` only matters at claim time (the first matched letter).
+   * Once a target is claimed, the player can release Shift and keep typing
+   * normally — the spell flag is sticky to the claim.
    */
-  handleChar(char: string): boolean {
+  handleChar(char: string, mods?: { spell?: boolean }): boolean {
     const ch = normalize(char);
     if (!ch) return false;
 
@@ -87,7 +93,7 @@ export class TypingInputController {
     }
 
     this.claimed = candidate;
-    candidate.onClaim();
+    candidate.onClaim(mods?.spell === true);
     candidate.advance();
     this.dimOthers(true);
     this.store?.recordKeystroke(ch, true);

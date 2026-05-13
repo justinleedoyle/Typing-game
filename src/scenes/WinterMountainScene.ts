@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
-import { PALETTE, SERIF } from "../game/palette";
+import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
@@ -12,8 +12,12 @@ interface WinterSceneData {
 
 interface Wolf {
   container: Phaser.GameObjects.Container;
-  target: TextWordTarget;
+  target: TextWordTarget | null;
+  spawnX: number;
+  restY: number;
+  word: string;
   defeated: boolean;
+  advanceTween: Phaser.Tweens.Tween | null;
 }
 
 const WOLF_WORD_BANK = ["snow", "claw", "howl", "fang", "frost", "den"];
@@ -21,12 +25,27 @@ const WOLF_WORD_BANK = ["snow", "claw", "howl", "fang", "frost", "den"];
 const HUNTRESS_PASSAGES = ["free her hands", "she gives you her horn"];
 const FIREFLY_PASSAGES = ["follow the lights", "take the lantern"];
 
+const WAVE_CANDLES = 3;
+const WAVE_CHARGES = 2;
+const WOLF_ADVANCE_MS = 14000;
+const WOLF_KNOCKBACK_PAUSE_MS = 1500;
+
 export class WinterMountainScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narratorText!: Phaser.GameObjects.Text;
   private wolves: Wolf[] = [];
   private activeTargets: TextWordTarget[] = [];
+
+  private wrenContainer!: Phaser.GameObjects.Container;
+  private wrenGlow!: Phaser.GameObjects.Graphics;
+  private candleGroup!: Phaser.GameObjects.Container;
+  private chargeGroup!: Phaser.GameObjects.Container;
+
+  private candles = WAVE_CANDLES;
+  private charges = WAVE_CHARGES;
+  private shiftHeld = false;
+  private waveActive = false;
 
   constructor() {
     super("WinterMountainScene");
@@ -36,6 +55,10 @@ export class WinterMountainScene extends Phaser.Scene {
     this.store = data.store;
     this.wolves = [];
     this.activeTargets = [];
+    this.candles = WAVE_CANDLES;
+    this.charges = WAVE_CHARGES;
+    this.shiftHeld = false;
+    this.waveActive = false;
   }
 
   create(): void {
@@ -43,7 +66,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.drawSky();
     this.drawMountains();
     this.drawSnowfield();
-    this.drawWren(this.scale.width / 2, 880);
+    this.wrenContainer = this.drawWren(this.scale.width / 2, 880);
 
     this.narratorText = this.add
       .text(this.scale.width / 2, 160, "", {
@@ -56,11 +79,18 @@ export class WinterMountainScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    this.candleGroup = this.add.container(this.scale.width / 2 - 110, 880);
+    this.chargeGroup = this.add.container(this.scale.width / 2 + 110, 880);
+    this.redrawCandles();
+    this.redrawCharges();
+
     this.typingInput = new TypingInputController(this.store);
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
+    this.input.keyboard?.on("keyup", this.onKeyUp, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
+      this.input.keyboard?.off("keyup", this.onKeyUp, this);
     });
 
     this.startIntro();
@@ -69,7 +99,7 @@ export class WinterMountainScene extends Phaser.Scene {
   // ─── Beat: intro ──────────────────────────────────────────────────────────
 
   private startIntro(): void {
-this.setNarrator(
+    this.setNarrator(
       "The portal closes behind you. Snow muffles the world. Something is moving in the dark...",
     );
     this.time.delayedCall(2400, () => this.startWolves());
@@ -78,7 +108,14 @@ this.setNarrator(
   // ─── Beat: wolf pack ──────────────────────────────────────────────────────
 
   private startWolves(): void {
-    this.setNarrator("type the words above the wolves to drive them back");
+    this.waveActive = true;
+    this.candles = WAVE_CANDLES;
+    this.charges = WAVE_CHARGES;
+    this.redrawCandles();
+    this.redrawCharges();
+    this.setNarrator(
+      "type the wolves' names to drive them back. hold Shift on the first letter to call a thunderclap.",
+    );
 
     const positions = [
       { x: 320, y: 820 },
@@ -102,14 +139,19 @@ this.setNarrator(
     word: string,
     delay: number,
   ): void {
+    const facingLeft = startX > this.scale.width / 2;
     const container = this.add.container(startX, targetY);
-    this.drawWolfInto(container, startX > this.scale.width / 2);
+    this.drawWolfInto(container, facingLeft);
     container.setAlpha(0);
 
     const wolf: Wolf = {
       container,
-      target: null as unknown as TextWordTarget,
+      target: null,
+      spawnX: targetX,
+      restY: targetY,
+      word,
       defeated: false,
+      advanceTween: null,
     };
 
     this.tweens.add({
@@ -120,22 +162,57 @@ this.setNarrator(
       delay,
       ease: "Sine.easeOut",
       onComplete: () => {
-        const target = new TextWordTarget({
-          scene: this,
-          word,
-          x: targetX,
-          y: targetY - 90,
-          fontSize: 32,
-          onComplete: () => this.defeatWolf(wolf),
-        });
-        wolf.target = target;
-        this.typingInput.register(target);
-        this.activeTargets.push(target);
+        if (!this.waveActive || wolf.defeated) return;
+        this.attachWolfTarget(wolf);
         this.idleBob(container);
+        this.startWolfAdvance(wolf);
       },
     });
 
     this.wolves.push(wolf);
+  }
+
+  private attachWolfTarget(wolf: Wolf): void {
+    const target = new TextWordTarget({
+      scene: this,
+      word: wolf.word,
+      x: wolf.container.x,
+      y: wolf.restY - 90,
+      fontSize: 32,
+      onComplete: () => this.defeatWolf(wolf),
+      onSpellComplete: () => {
+        this.defeatWolf(wolf);
+        this.castThunderclap(wolf);
+      },
+    });
+    wolf.target = target;
+    this.typingInput.register(target);
+    this.activeTargets.push(target);
+  }
+
+  private startWolfAdvance(wolf: Wolf): void {
+    const wrenX = this.wrenContainer.x;
+    const remaining = Math.abs(wolf.container.x - wrenX);
+    const totalRange = Math.abs(wolf.spawnX - wrenX);
+    // Scale duration by remaining distance so a wolf that was knocked back
+    // partway still feels fair — closer wolves haven't "earned" full time.
+    const duration = WOLF_ADVANCE_MS * Math.max(0.3, remaining / totalRange);
+
+    wolf.advanceTween = this.tweens.add({
+      targets: wolf.container,
+      x: wrenX,
+      duration,
+      ease: "Linear",
+      onUpdate: () => {
+        if (wolf.target) wolf.target.setAnchorX(wolf.container.x);
+      },
+      onComplete: () => {
+        wolf.advanceTween = null;
+        if (!wolf.defeated && this.waveActive) {
+          this.wolfReachesWren(wolf);
+        }
+      },
+    });
   }
 
   private idleBob(c: Phaser.GameObjects.Container): void {
@@ -150,9 +227,15 @@ this.setNarrator(
   }
 
   private defeatWolf(wolf: Wolf): void {
+    if (wolf.defeated) return;
     playChime();
     wolf.defeated = true;
-    this.typingInput.unregister(wolf.target);
+    if (wolf.target) {
+      this.typingInput.unregister(wolf.target);
+      wolf.target = null;
+    }
+    wolf.advanceTween?.stop();
+    wolf.advanceTween = null;
     this.tweens.killTweensOf(wolf.container);
     this.tweens.add({
       targets: wolf.container,
@@ -164,7 +247,112 @@ this.setNarrator(
     });
 
     if (this.wolves.every((w) => w.defeated)) {
+      this.waveActive = false;
       this.time.delayedCall(900, () => this.startFork());
+    }
+  }
+
+  // ─── Stakes: wolf reaches Wren ───────────────────────────────────────────
+
+  private wolfReachesWren(wolf: Wolf): void {
+    this.cameras.main.shake(220, 0.005);
+    this.snuffCandle();
+
+    if (!this.waveActive) return;
+
+    // Push the wolf back to its spawn position and pause before re-engaging.
+    if (wolf.target) {
+      this.typingInput.unregister(wolf.target);
+      const idx = this.activeTargets.indexOf(wolf.target);
+      if (idx >= 0) this.activeTargets.splice(idx, 1);
+      wolf.target.destroy();
+      wolf.target = null;
+    }
+    this.tweens.killTweensOf(wolf.container);
+    this.tweens.add({
+      targets: wolf.container,
+      x: wolf.spawnX,
+      duration: 700,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (wolf.defeated || !this.waveActive) return;
+        this.time.delayedCall(WOLF_KNOCKBACK_PAUSE_MS, () => {
+          if (wolf.defeated || !this.waveActive) return;
+          this.idleBob(wolf.container);
+          this.attachWolfTarget(wolf);
+          this.startWolfAdvance(wolf);
+        });
+      },
+    });
+  }
+
+  private snuffCandle(): void {
+    this.candles = Math.max(0, this.candles - 1);
+    this.redrawCandles();
+    if (this.candles === 0) {
+      this.resetWave();
+    }
+  }
+
+  private resetWave(): void {
+    if (!this.waveActive) return;
+    this.waveActive = false;
+    this.setNarrator("the dark presses in. steady your hands and try again.");
+
+    // Sweep all wolves off-screen.
+    for (const w of this.wolves) {
+      if (w.target) {
+        this.typingInput.unregister(w.target);
+        w.target.destroy();
+        w.target = null;
+      }
+      w.advanceTween?.stop();
+      w.advanceTween = null;
+      this.tweens.killTweensOf(w.container);
+      this.tweens.add({
+        targets: w.container,
+        alpha: 0,
+        duration: 350,
+        onComplete: () => w.container.destroy(),
+      });
+      w.defeated = true;
+    }
+
+    this.cameras.main.flash(300, 20, 18, 30);
+    this.time.delayedCall(1600, () => {
+      this.wolves = [];
+      this.activeTargets = [];
+      this.startWolves();
+    });
+  }
+
+  // ─── Thunderclap (Shift spell) ────────────────────────────────────────────
+
+  private castThunderclap(source: Wolf): void {
+    this.charges = Math.max(0, this.charges - 1);
+    this.redrawCharges();
+    this.cameras.main.flash(220, 240, 230, 200);
+    playChime();
+
+    for (const w of this.wolves) {
+      if (w.defeated || w === source) continue;
+      w.advanceTween?.stop();
+      w.advanceTween = null;
+      this.tweens.killTweensOf(w.container);
+      this.tweens.add({
+        targets: w.container,
+        x: w.spawnX,
+        duration: 450,
+        ease: "Sine.easeOut",
+        onComplete: () => {
+          if (w.target) w.target.setAnchorX(w.container.x);
+          this.time.delayedCall(2500, () => {
+            if (w.defeated || !this.waveActive) return;
+            this.idleBob(w.container);
+            this.startWolfAdvance(w);
+          });
+        },
+      });
     }
   }
 
@@ -328,10 +516,30 @@ this.setNarrator(
   // ─── Input + helpers ─────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
+    if (event.key === "Shift") {
+      this.setShiftHeld(true);
+      return;
+    }
     if (event.key.length === 1 || event.key === " ") {
       playClack();
     }
-    this.typingInput.handleChar(event.key);
+    const spell = this.shiftHeld && this.charges > 0;
+    this.typingInput.handleChar(event.key, { spell });
+  }
+
+  private onKeyUp(event: KeyboardEvent): void {
+    if (event.key === "Shift") this.setShiftHeld(false);
+  }
+
+  private setShiftHeld(held: boolean): void {
+    if (this.shiftHeld === held) return;
+    this.shiftHeld = held;
+    this.updateWrenGlow();
+  }
+
+  private updateWrenGlow(): void {
+    const armed = this.shiftHeld && this.charges > 0 && this.waveActive;
+    this.wrenGlow.setAlpha(armed ? 0.55 : 0);
   }
 
   private setNarrator(text: string): void {
@@ -351,6 +559,55 @@ this.setNarrator(
       t.destroy();
     }
     this.activeTargets = [];
+  }
+
+  // ─── HUD: candles + charges ──────────────────────────────────────────────
+
+  private redrawCandles(): void {
+    this.candleGroup.removeAll(true);
+    for (let i = 0; i < WAVE_CANDLES; i++) {
+      const lit = i < this.candles;
+      const x = (i - (WAVE_CANDLES - 1) / 2) * 26;
+      const g = this.add.graphics();
+      // Candle stick
+      g.fillStyle(0xe8dcb5, 1);
+      g.fillRect(x - 4, -10, 8, 28);
+      // Wick
+      g.fillStyle(0x2a1f12, 1);
+      g.fillRect(x - 1, -16, 2, 6);
+      // Flame
+      if (lit) {
+        g.fillStyle(PALETTE_HEX.ember, 1);
+        g.fillEllipse(x, -22, 10, 16);
+        g.fillStyle(PALETTE_HEX.brass, 1);
+        g.fillEllipse(x, -22, 5, 10);
+      } else {
+        // Smoke wisp for out candles
+        g.fillStyle(0x8a8275, 0.45);
+        g.fillEllipse(x, -22, 6, 10);
+      }
+      this.candleGroup.add(g);
+    }
+  }
+
+  private redrawCharges(): void {
+    this.chargeGroup.removeAll(true);
+    for (let i = 0; i < WAVE_CHARGES; i++) {
+      const ready = i < this.charges;
+      const x = (i - (WAVE_CHARGES - 1) / 2) * 24;
+      const g = this.add.graphics();
+      if (ready) {
+        g.fillStyle(PALETTE_HEX.brass, 0.9);
+        g.fillCircle(x, -10, 8);
+        g.lineStyle(2, 0xf3ead2, 0.9);
+        g.strokeCircle(x, -10, 8);
+      } else {
+        g.lineStyle(2, 0x8a8275, 0.6);
+        g.strokeCircle(x, -10, 8);
+      }
+      this.chargeGroup.add(g);
+    }
+    this.updateWrenGlow();
   }
 
   // ─── Drawing ──────────────────────────────────────────────────────────────
@@ -426,6 +683,12 @@ this.setNarrator(
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {
     const c = this.add.container(x, y);
+    this.wrenGlow = this.add.graphics();
+    this.wrenGlow.fillStyle(PALETTE_HEX.brass, 1);
+    this.wrenGlow.fillCircle(0, -40, 60);
+    this.wrenGlow.setAlpha(0);
+    c.add(this.wrenGlow);
+
     const g = this.add.graphics();
     // Cloak
     g.fillStyle(0x6f8a5e, 1);

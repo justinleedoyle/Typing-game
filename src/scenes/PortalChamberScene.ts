@@ -38,7 +38,7 @@ const ARCHES: ArchSpec[] = [
     baseY: 820,
     label: "winter mountain",
   },
-  { id: "future-1", x: 760, width: 240, height: 400, baseY: 820, label: "" },
+  { id: "sunken-bell", x: 760, width: 240, height: 400, baseY: 820, label: "the sunken bell" },
   { id: "future-2", x: 1620, width: 240, height: 400, baseY: 820, label: "" },
 ];
 
@@ -84,12 +84,13 @@ export class PortalChamberScene extends Phaser.Scene {
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
     });
 
-    if (this.store.get().typewriterAwakened) {
-      this.setTypewriterAwake(true);
-      this.askForPortalName();
-    } else {
-      this.askToWakeTypewriter();
+    if (!this.store.get().typewriterAwakened) {
+      this.scene.start("OpeningScene", { store: this.store });
+      return;
     }
+
+    this.setTypewriterAwake(true);
+    this.askForPortalName();
 
     this.addAlmanacTarget();
     void this.addAuthTarget();
@@ -161,52 +162,62 @@ export class PortalChamberScene extends Phaser.Scene {
     });
   }
 
-  private askToWakeTypewriter(): void {
-    this.hint.setText(
-      "type the word above the brass typewriter to wake it",
-    );
-    this.currentTarget = new TextWordTarget({
-      scene: this,
-      word: "wake",
-      x: TYPEWRITER.x,
-      y: TYPEWRITER.y - 90,
-      onComplete: () => this.onTypewriterAwakened(),
-    });
-    this.typingInput.register(this.currentTarget);
-  }
-
-  private onTypewriterAwakened(): void {
-    playChime();
-    this.store.update((s) => {
-      s.typewriterAwakened = true;
-    });
-    this.setTypewriterAwake(true);
-    this.time.delayedCall(700, () => this.askForPortalName());
-  }
-
   private askForPortalName(): void {
-    const arch = ARCHES[0];
-    this.lightArch(arch.id, true);
-    this.hint.setText("an arch is glowing — type its name to step through");
-    this.currentTarget = new TextWordTarget({
+    const state = this.store.get();
+    const wmCleared = state.realms["winter-mountain"]?.cleared;
+
+    if (!wmCleared) {
+      // Winter Mountain is the only available portal
+      const arch = ARCHES.find((a) => a.id === "winter-mountain")!;
+      this.lightArch(arch.id, true);
+      this.hint.setText("an arch is glowing — type its name to step through");
+      this.currentTarget = new TextWordTarget({
+        scene: this,
+        word: "the winter mountain",
+        x: arch.x,
+        y: arch.baseY - arch.height - 60,
+        fontSize: 36,
+        onComplete: () => this.onEnterPortal("WinterMountainScene"),
+      });
+      this.typingInput.register(this.currentTarget);
+      return;
+    }
+
+    // Winter Mountain cleared — offer Sunken Bell (and re-entry to Winter Mountain)
+    const sbArch = ARCHES.find((a) => a.id === "sunken-bell")!;
+    const wmArch = ARCHES.find((a) => a.id === "winter-mountain")!;
+    this.lightArch(sbArch.id, true);
+    this.hint.setText("a new arch glows — type its name to enter");
+
+    const sbTarget = new TextWordTarget({
+      scene: this,
+      word: "the sunken bell",
+      x: sbArch.x,
+      y: sbArch.baseY - sbArch.height - 60,
+      fontSize: 36,
+      onComplete: () => this.onEnterPortal("SunkenBellScene"),
+    });
+    const wmTarget = new TextWordTarget({
       scene: this,
       word: "the winter mountain",
-      x: arch.x,
-      y: arch.baseY - arch.height - 60,
-      fontSize: 36,
-      onComplete: () => this.onEnterPortal(),
+      x: wmArch.x,
+      y: wmArch.baseY - wmArch.height - 60,
+      fontSize: 32,
+      priority: -1,
+      onComplete: () => this.onEnterPortal("WinterMountainScene"),
     });
-    this.typingInput.register(this.currentTarget);
+    this.typingInput.register(sbTarget);
+    this.typingInput.register(wmTarget);
   }
 
-  private onEnterPortal(): void {
+  private onEnterPortal(sceneKey: string): void {
     playChime();
     this.hint.setText("");
     this.cameras.main.fadeOut(500, 11, 10, 15);
     this.cameras.main.once(
       Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
       () => {
-        this.scene.start("WinterMountainScene", { store: this.store });
+        this.scene.start(sceneKey, { store: this.store });
       },
     );
   }

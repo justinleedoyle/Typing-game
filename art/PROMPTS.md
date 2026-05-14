@@ -99,7 +99,7 @@ deep shadow browns and blacks, cream paper. Quiet, personal.
 
 ### Winter Mountain
 
-References: `references/winter-mountain-a.png`, `references/winter-mountain-b.png`
+Reference: `references/winter-mountain.png`
 
 ```
 [STYLE ANCHOR]
@@ -222,8 +222,7 @@ Drop these files into `art/references/` (filenames are what `PROMPTS.md` expects
 - [ ] `runa-portrait.png` — seated scholar with quill, lamp, navy coat
 - [ ] `hub-portal-chamber.png` — 5 archways, Runa at desk, Wren center
 - [ ] `opening-typewriter-study.png` — Wren at typewriter desk
-- [ ] `winter-mountain-a.png` — aurora + ruined arch + cairns
-- [ ] `winter-mountain-b.png` — alt composition (snowy ridge variant)
+- [ ] `winter-mountain.png` — aurora + ruined arch + cairns
 - [ ] `sunken-bell.png` — massive bronze bell + jellyfish + columns
 - [ ] `clockwork-forge.png` — gear-heart mechanism + walkway
 - [ ] `sky-island.png` — floating stone platform at sunset with lanterns

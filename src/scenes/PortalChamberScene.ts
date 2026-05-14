@@ -109,15 +109,7 @@ export class PortalChamberScene extends Phaser.Scene {
 
     // Fragment display — shows the accumulating Quiet Lord word in the upper-
     // centre of the room, growing one letter per realm cleared.
-    this.add
-      .text(this.scale.width / 2, 52, this.buildFragment(), {
-        fontFamily: SERIF,
-        fontSize: "32px",
-        color: "#3a3060",
-        align: "center",
-      })
-      .setOrigin(0.5)
-      .setAlpha(0.7);
+    this.drawFragment();
 
     this.typingInput = new TypingInputController(this.store);
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
@@ -302,6 +294,56 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   // ─── Navigation target helper ─────────────────────────────────────────────
+
+  private drawFragment(): void {
+    const full = this.buildFragment();
+    if (!full) return;
+
+    const isFinal = full === "Again.";
+    const t = this.add
+      .text(this.scale.width / 2, 52, "", {
+        fontFamily: SERIF,
+        fontSize: isFinal ? "40px" : "34px",
+        color: isFinal ? PALETTE.brass : "#7a5cba",
+        align: "center",
+      })
+      .setOrigin(0.5)
+      .setAlpha(0);
+
+    let revealed = 0;
+    const revealNext = (): void => {
+      revealed++;
+      t.setText(full.slice(0, revealed));
+      const isLast = revealed === full.length;
+
+      if (isLast) {
+        t.setAlpha(1);
+        this.tweens.add({
+          targets: t,
+          alpha: isFinal ? 0.9 : 0.6,
+          duration: 700,
+          ease: "Sine.easeOut",
+        });
+        if (isFinal) {
+          this.time.delayedCall(800, () => {
+            this.tweens.add({
+              targets: t,
+              alpha: { from: 0.9, to: 0.4 },
+              duration: 2400,
+              yoyo: true,
+              repeat: -1,
+              ease: "Sine.easeInOut",
+            });
+          });
+        }
+      } else {
+        t.setAlpha(0.5);
+        this.time.delayedCall(120, revealNext);
+      }
+    };
+
+    this.time.delayedCall(500, revealNext);
+  }
 
   /** Returns the current state of the accumulating Quiet Lord fragment.
    *  Each cleared realm reveals one more letter: A→Ag→Aga→Agai→Again→Again. */

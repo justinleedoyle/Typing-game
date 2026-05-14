@@ -37,6 +37,7 @@ export class TextWordTarget implements WordTarget {
   private cursor = 0;
   private complete = false;
   private dimmed = false;
+  private candidate = false;
   private spellClaimed = false;
 
   readonly priority: number;
@@ -106,10 +107,9 @@ export class TextWordTarget implements WordTarget {
 
   onRelease(): void {
     if (this.complete) return;
-    // If released without completing (e.g. scene shutdown), reset state so
-    // the same target could be reclaimed later.
     this.cursor = 0;
     this.spellClaimed = false;
+    this.candidate = false;
     this.typedText.setColor(PALETTE.brass);
     this.remainingText.setColor(PALETTE.cream);
     this.relayout();
@@ -136,6 +136,11 @@ export class TextWordTarget implements WordTarget {
 
   setDimmed(dimmed: boolean): void {
     this.dimmed = dimmed;
+    this.applyDim();
+  }
+
+  setCandidate(candidate: boolean): void {
+    this.candidate = candidate;
     this.applyDim();
   }
 
@@ -166,7 +171,13 @@ export class TextWordTarget implements WordTarget {
   }
 
   private applyDim(): void {
-    const alpha = this.dimmed ? 0.25 : 1;
+    const alpha = this.dimmed ? 0.12 : 1;
     this.container.setAlpha(alpha);
+    // Candidates glow slightly so the player can see which words are still live.
+    if (!this.dimmed && this.candidate) {
+      this.remainingText.setColor(PALETTE.frost ?? PALETTE.cream);
+    } else if (!this.dimmed && !this.spellClaimed) {
+      this.remainingText.setColor(PALETTE.cream);
+    }
   }
 }

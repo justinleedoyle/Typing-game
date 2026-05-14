@@ -98,12 +98,12 @@ export class PortalChamberScene extends Phaser.Scene {
     this.wrenContainer = this.drawWren(ZONE_X.portals, WREN_Y);
 
     this.hint = this.add
-      .text(this.scale.width / 2, this.scale.height - 80, "", {
+      .text(this.scale.width / 2, this.scale.height - 68, "", {
         fontFamily: SERIF,
-        fontSize: "28px",
+        fontSize: "24px",
         color: PALETTE.dim,
         align: "center",
-        wordWrap: { width: 1400 },
+        wordWrap: { width: 1200 },
       })
       .setOrigin(0.5);
 
@@ -200,13 +200,13 @@ export class PortalChamberScene extends Phaser.Scene {
         scene: this,
         word: arch.label,
         x: arch.x,
-        y: arch.baseY - arch.height - 60,
-        fontSize: 36,
+        y: archTargetY(nextAvailableIdx),
+        fontSize: 30,
         onComplete: () => this.onEnterPortal(arch.sceneKey, false),
       });
       this.typingInput.register(primary);
       this.zoneTargets.push(primary);
-      this.hint.setText("type the glowing arch's name to step through");
+      this.hint.setText("type the glowing arch's name to step through  ·  backspace to cancel");
     } else {
       const battleCleared = !!state.realms["great-battle"]?.cleared;
 
@@ -251,8 +251,8 @@ export class PortalChamberScene extends Phaser.Scene {
         scene: this,
         word: arch.label,
         x: arch.x,
-        y: arch.baseY - arch.height - 60,
-        fontSize: 28,
+        y: archTargetY(i),
+        fontSize: 22,
         priority: -1,
         onComplete: () => this.onEnterPortal(arch.sceneKey, true),
       });
@@ -307,7 +307,7 @@ export class PortalChamberScene extends Phaser.Scene {
    *  Each cleared realm reveals one more letter: A→Ag→Aga→Agai→Again→Again. */
   private buildFragment(): string {
     const REALMS = ["winter-mountain", "sunken-bell", "clockwork-forge", "sky-island", "haunted-wood"] as const;
-    const LETTERS = ["~~A~~", "~~Ag~~", "~~Aga~~", "~~Agai~~", "~~Again~~", "Again."];
+    const LETTERS = ["A", "Ag", "Aga", "Agai", "Again", "Again."];
     const state = this.store.get();
     const cleared = REALMS.filter((id) => state.realms[id]?.cleared).length;
     if (cleared === 0) return "";
@@ -355,8 +355,8 @@ export class PortalChamberScene extends Phaser.Scene {
       scene: this,
       word: "the almanac",
       x: 220,
-      y: this.scale.height - 80,
-      fontSize: 26,
+      y: this.scale.height - 36,
+      fontSize: 24,
       priority: -1,
       onComplete: () => this.openAlmanac(),
     });
@@ -738,4 +738,13 @@ export class PortalChamberScene extends Phaser.Scene {
     c.add(g);
     return c;
   }
+}
+
+// Stagger arch typing-target Y positions so adjacent labels don't overlap.
+// Odd-indexed arches sit slightly higher than even-indexed ones.
+function archTargetY(archIndex: number): number {
+  const BASE_Y = 820; // arch.baseY
+  const HEIGHT = 360; // arch.height (typical)
+  const base = BASE_Y - HEIGHT - 50;
+  return archIndex % 2 === 0 ? base : base - 36;
 }

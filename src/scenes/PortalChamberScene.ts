@@ -33,11 +33,11 @@ interface ArchSpec {
 // Five arches, centre-left cluster — leaves room for desk (far left) and
 // shelf (far right) in the same room without crowding.
 const ARCHES: readonly ArchSpec[] = [
-  { id: "winter-mountain", x: 390,  width: 220, height: 380, baseY: 820, label: "the winter mountain", sceneKey: "WinterMountainScene"  },
-  { id: "sunken-bell",     x: 625,  width: 200, height: 360, baseY: 820, label: "the sunken bell",     sceneKey: "SunkenBellScene"      },
-  { id: "clockwork-forge", x: 850,  width: 200, height: 360, baseY: 820, label: "the clockwork forge", sceneKey: "ClockworkForgeScene"   },
-  { id: "sky-island",      x: 1075, width: 200, height: 360, baseY: 820, label: "the sky island",      sceneKey: "SkyIslandScene"        },
-  { id: "haunted-wood",    x: 1300, width: 200, height: 360, baseY: 820, label: "the haunted wood",    sceneKey: "HauntedWoodScene"      },
+  { id: "winter-mountain", x: 390,  width: 220, height: 380, baseY: 820, label: "winter mountain", sceneKey: "WinterMountainScene"  },
+  { id: "sunken-bell",     x: 625,  width: 200, height: 360, baseY: 820, label: "sunken bell",     sceneKey: "SunkenBellScene"      },
+  { id: "clockwork-forge", x: 850,  width: 200, height: 360, baseY: 820, label: "clockwork forge", sceneKey: "ClockworkForgeScene"   },
+  { id: "sky-island",      x: 1075, width: 200, height: 360, baseY: 820, label: "sky island",      sceneKey: "SkyIslandScene"        },
+  { id: "haunted-wood",    x: 1300, width: 200, height: 360, baseY: 820, label: "haunted wood",    sceneKey: "HauntedWoodScene"      },
 ] as const;
 
 const REALM_SEQUENCE = ARCHES.map((a) => a.id);
@@ -395,7 +395,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private addAlmanacTarget(): void {
     const target = new TextWordTarget({
       scene: this,
-      word: "the almanac",
+      word: "almanac",
       x: 220,
       y: this.scale.height - 36,
       fontSize: 24,

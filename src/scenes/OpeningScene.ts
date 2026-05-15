@@ -180,7 +180,7 @@ export class OpeningScene extends Phaser.Scene {
     const archTopY = ARCH.baseY - ARCH.height;
     const target = new TextWordTarget({
       scene: this,
-      word: "the winter mountain",
+      word: "winter mountain",
       x: ARCH.x,
       y: archTopY - 60,
       fontSize: 36,

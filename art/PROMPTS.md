@@ -384,19 +384,20 @@ For the in-game Wren sprite (composited over clean backgrounds), the existing
 Single Wren sprite, isolated on solid bright magenta background (#ff00ff)
 for chroma keying. [WREN DESCRIPTION]
 Pose: <PICK ONE: facing right standing idle | walking right mid-stride |
-standing with staff raised | facing camera straight-on | back view from behind>
+standing with staff raised | flinching and recoiling as if struck, head
+ducked, one arm raised | back view seen from behind>
 Centered in frame, full body visible head to toe with no cropping, no shadow
 on the magenta background. Same proportions and palette as attached
 character reference sheet.
 ```
 
-Required poses for v1:
+Required poses for v1 — each pose option above maps to one file:
 
-- [ ] `wren-idle-right.png` — standing facing right (default at scene entry)
-- [ ] `wren-walk-right.png` — mid-walking-stride facing right
-- [ ] `wren-cast.png` — staff raised (Shift-thunderclap, spell mode)
-- [ ] `wren-hurt.png` — flinch / candle-snuff reaction
-- [ ] `wren-back.png` — back view (used at typewriter, looking at portals)
+- [ ] `wren-idle-right.png` — facing right standing idle (default at scene entry)
+- [ ] `wren-walk-right.png` — walking right mid-stride
+- [ ] `wren-cast.png` — standing with staff raised (Shift-thunderclap, spell mode)
+- [ ] `wren-hurt.png` — flinching/recoiling as if struck (candle-snuff reaction)
+- [ ] `wren-back.png` — back view from behind (used at typewriter, facing portals)
 
 ---
 

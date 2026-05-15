@@ -201,6 +201,9 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Act 1: Arrival ───────────────────────────────────────────────────────
 
   private startArrival(): void {
+    // Act 1 pre-beat: input flows freely until Olin teaches the bell's rhythm
+    // and startBeat() hands claim-window gating over to onToll.
+    this.claimWindowOpen = true;
     this.setNarrator(
       "Wren, this place has been listening for a hundred years. Move slowly. The bell sets the pace.",
     );

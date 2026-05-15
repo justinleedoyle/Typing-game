@@ -36,11 +36,11 @@ interface ArchSpec {
 // width/height/baseY describe the portal-surface fill drawn inside the
 // painted stone frame (no programmatic surround).
 const ARCHES: readonly ArchSpec[] = [
-  { id: "winter-mountain", x: 617,  width: 135, height: 345, baseY: 635, label: "winter mountain", sceneKey: "WinterMountainScene"  },
-  { id: "sunken-bell",     x: 809,  width: 135, height: 345, baseY: 635, label: "sunken bell",     sceneKey: "SunkenBellScene"      },
-  { id: "clockwork-forge", x: 1000, width: 135, height: 345, baseY: 635, label: "clockwork forge", sceneKey: "ClockworkForgeScene"   },
-  { id: "sky-island",      x: 1192, width: 135, height: 345, baseY: 635, label: "sky island",      sceneKey: "SkyIslandScene"        },
-  { id: "haunted-wood",    x: 1383, width: 135, height: 345, baseY: 635, label: "haunted wood",    sceneKey: "HauntedWoodScene"      },
+  { id: "winter-mountain", x: 533,  width: 140, height: 265, baseY: 705, label: "winter mountain", sceneKey: "WinterMountainScene"  },
+  { id: "sunken-bell",     x: 762,  width: 140, height: 265, baseY: 705, label: "sunken bell",     sceneKey: "SunkenBellScene"      },
+  { id: "clockwork-forge", x: 990,  width: 140, height: 265, baseY: 705, label: "clockwork forge", sceneKey: "ClockworkForgeScene"   },
+  { id: "sky-island",      x: 1221, width: 140, height: 265, baseY: 705, label: "sky island",      sceneKey: "SkyIslandScene"        },
+  { id: "haunted-wood",    x: 1454, width: 140, height: 265, baseY: 705, label: "haunted wood",    sceneKey: "HauntedWoodScene"      },
 ] as const;
 
 const REALM_SEQUENCE = ARCHES.map((a) => a.id);
@@ -48,11 +48,11 @@ const REALM_SEQUENCE = ARCHES.map((a) => a.id);
 // Wren's X position when standing in each zone — aligned to the painted
 // desk (left), portal floor (centre) and display cabinet (right).
 const ZONE_X: Record<Zone, number> = {
-  desk:    350,
-  portals: 1000,
+  desk:    330,
+  portals: 990,
   shelf:   1660,
 };
-const WREN_Y = 875;
+const WREN_Y = 900;
 
 // Runa's desk contextual lines — one per last-cleared realm.
 const RUNA_LINES: Record<string, string> = {
@@ -502,21 +502,18 @@ export class PortalChamberScene extends Phaser.Scene {
     if (!g) return;
     g.clear();
 
+    // Sealed arches keep the painted dark opening — nothing drawn over them.
+    if (state === "locked" || state === "dark") return;
+
     const left     = spec.x - spec.width / 2;
     const right    = spec.x + spec.width / 2;
     const base     = spec.baseY;
     const archMidY = (base - spec.height) + spec.width / 2;
     const radius   = spec.width / 2;
 
-    // Portal surface, filled inside the painted stone frame (the backdrop art
-    // supplies the surround). Opaque enough to override whatever fixed state
-    // the art bakes into each arch.
-    let innerColor: number;
-    let innerAlpha: number;
-    if (state === "next")         { innerColor = PALETTE_HEX.frost;  innerAlpha = 0.9;  }
-    else if (state === "cleared") { innerColor = PALETTE_HEX.brass;  innerAlpha = 0.82; }
-    else if (state === "locked")  { innerColor = 0x0d0b14;           innerAlpha = 1;    }
-    else                          { innerColor = 0x0d0b14;           innerAlpha = 1;    }
+    // Glowing portal surface, filled inside the painted stone frame.
+    const innerColor = state === "next" ? PALETTE_HEX.frost : PALETTE_HEX.brass;
+    const innerAlpha = state === "next" ? 0.68 : 0.55;
 
     g.fillStyle(innerColor, innerAlpha);
     g.beginPath();
@@ -600,8 +597,8 @@ export class PortalChamberScene extends Phaser.Scene {
       color: "#3a3550",
       fontStyle: "italic",
     };
-    this.add.text(195, 905, "runa's desk", labelStyle).setOrigin(0.5);
-    this.add.text(1700, 905, "your shelf", labelStyle).setOrigin(0.5);
+    this.add.text(210, 958, "runa's desk", labelStyle).setOrigin(0.5);
+    this.add.text(1740, 958, "your shelf", labelStyle).setOrigin(0.5);
   }
 
   /** Relic icons displayed on the painted cabinet shelves (far right). */
@@ -610,9 +607,9 @@ export class PortalChamberScene extends Phaser.Scene {
 
     if (items.length === 0) {
       this.add
-        .text(1735, 470, "nothing yet", {
+        .text(1740, 535, "nothing yet", {
           fontFamily: SERIF,
-          fontSize: "18px",
+          fontSize: "17px",
           fontStyle: "italic",
           color: "#3a3550",
         })
@@ -623,8 +620,8 @@ export class PortalChamberScene extends Phaser.Scene {
     const g = this.add.graphics();
     items.forEach((id, i) => {
       if (!RELICS[id]) return;
-      const ix = 1690 + (i % 3) * 45;
-      const iy = 350 + Math.floor(i / 3) * 100;
+      const ix = 1702 + (i % 3) * 40;
+      const iy = 470 + Math.floor(i / 3) * 90;
       g.fillStyle(PALETTE_HEX.brass, 0.8);
       if (id.includes("horn") || id.includes("flute")) {
         g.fillEllipse(ix, iy, 24, 15);
@@ -681,8 +678,8 @@ export class PortalChamberScene extends Phaser.Scene {
 // Stagger arch typing-target Y positions so adjacent labels don't overlap.
 // Odd-indexed arches sit slightly higher than even-indexed ones.
 function archTargetY(archIndex: number): number {
-  const BASE_Y = 635; // arch.baseY
-  const HEIGHT = 345; // arch.height
+  const BASE_Y = 705; // arch.baseY
+  const HEIGHT = 265; // arch.height
   const base = BASE_Y - HEIGHT - 50;
   return archIndex % 2 === 0 ? base : base - 36;
 }

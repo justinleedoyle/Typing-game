@@ -7,6 +7,7 @@ import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, FORGE_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
+import { makeWrenSprite, preloadWren } from "../game/wren";
 import forgeBackdrop from "../../art/references/clockwork-forge-clean.png";
 
 // ─── Scene data ───────────────────────────────────────────────────────────────
@@ -118,6 +119,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image("forge-backdrop", forgeBackdrop);
+    preloadWren(this);
   }
 
   create(): void {
@@ -1437,23 +1439,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private drawWren(x: number, y: number): void {
     const c = this.add.container(x, y);
-    const g = this.add.graphics();
-    // Cloak — darker, forge-appropriate
-    g.fillStyle(0x5a4a38, 1);
-    g.fillTriangle(-28, 0, 28, 0, 0, -75);
-    // Hood
-    g.fillStyle(0x3a2a1a, 1);
-    g.fillCircle(0, -70, 17);
-    // Face
-    g.fillStyle(0xd6b88a, 1);
-    g.fillCircle(0, -63, 10);
-    // Satchel strap
-    g.lineStyle(2, 0x3a2a1a, 1);
-    g.beginPath();
-    g.moveTo(-20, -38);
-    g.lineTo(16, -10);
-    g.strokePath();
-    c.add(g);
+    c.add(makeWrenSprite(this));
   }
 
   /** Draw a standard golem into a container. Returns the eye graphics. */

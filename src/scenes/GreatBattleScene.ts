@@ -14,6 +14,7 @@ import {
   HAUNTED_WOOD_WORD_BANK,
 } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
+import greatBattleBackdrop from "../../art/references/great-battle-clean.png";
 
 // ─── Scene data ────────────────────────────────────────────────────────────────
 
@@ -159,10 +160,14 @@ export class GreatBattleScene extends Phaser.Scene {
     this.brightnessAlpha = 0;
   }
 
+  preload(): void {
+    this.load.image("great-battle-backdrop", greatBattleBackdrop);
+  }
+
   create(): void {
     this.cameras.main.fadeIn(700, 11, 10, 15);
 
-    this.drawCastleBackground();
+    this.add.image(0, 0, "great-battle-backdrop").setOrigin(0).setDepth(-100);
 
     // Narrator
     this.narratorText = this.add
@@ -1008,61 +1013,4 @@ export class GreatBattleScene extends Phaser.Scene {
 
   // ─── Drawing: Castle Background ─────────────────────────────────────────────
 
-  private drawCastleBackground(): void {
-    const w = this.scale.width;
-    const h = this.scale.height;
-
-    // Sky gradient: deep ink top (#0b0a0f) to #1a1020 bottom
-    const skyG = this.add.graphics().setDepth(0);
-    skyG.fillGradientStyle(0x0b0a0f, 0x0b0a0f, 0x1a1020, 0x1a1020, 1);
-    skyG.fillRect(0, 0, w, 680);
-
-    // Castle wall: dark grey stone band
-    const wallG = this.add.graphics().setDepth(1);
-    wallG.fillStyle(0x2a2830, 1);
-    wallG.fillRect(0, 680, w, 80);
-
-    // Battlements (crenellations) — rectangular cutouts from top of wall
-    const battlementW = 48;
-    const battlementH = 36;
-    const gapW = 32;
-    const totalUnit = battlementW + gapW;
-    const count = Math.ceil(w / totalUnit) + 2;
-    const merlonColor = 0x2a2830;
-    const skyColor = 0x0d0b14;
-    for (let i = 0; i < count; i++) {
-      const bx = i * totalUnit - gapW;
-      // Merlon (solid stone)
-      wallG.fillStyle(merlonColor, 1);
-      wallG.fillRect(bx, 680 - battlementH, battlementW, battlementH);
-      // Embrasure (open gap — draw sky color to "cut" into wall top)
-      wallG.fillStyle(skyColor, 1);
-      wallG.fillRect(bx + battlementW, 680 - battlementH, gapW, battlementH);
-    }
-
-    // Three amber torches on the wall
-    const torchXs = [w * 0.2, w * 0.5, w * 0.8];
-    for (const tx of torchXs) {
-      this.drawTorch(wallG, tx, 700);
-    }
-
-    // Courtyard below wall
-    const courtG = this.add.graphics().setDepth(1);
-    courtG.fillStyle(0x1a1820, 1);
-    courtG.fillRect(0, 760, w, h - 760);
-  }
-
-  private drawTorch(g: Phaser.GameObjects.Graphics, x: number, y: number): void {
-    // Torch bracket
-    g.fillStyle(0x4a4050, 1);
-    g.fillRect(x - 5, y - 20, 10, 30);
-    // Amber flame rect
-    g.fillStyle(0xd4823a, 0.9);
-    g.fillRect(x - 6, y - 36, 12, 18);
-    // Glow ellipse
-    g.fillStyle(0xd4823a, 0.18);
-    g.fillEllipse(x, y - 28, 48, 48);
-    g.fillStyle(0xd4823a, 0.1);
-    g.fillEllipse(x, y - 28, 80, 80);
-  }
 }

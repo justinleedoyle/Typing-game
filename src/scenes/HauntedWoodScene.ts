@@ -7,6 +7,7 @@ import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, HAUNTED_WOOD_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
+import hauntedWoodBackdrop from "../../art/references/haunted-wood-clean.png";
 
 interface HauntedWoodSceneData {
   store: SaveStore;
@@ -79,10 +80,13 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.mistTimer = null;
   }
 
+  preload(): void {
+    this.load.image("haunted-wood-backdrop", hauntedWoodBackdrop);
+  }
+
   create(): void {
     this.cameras.main.fadeIn(600, 14, 18, 14);
-    this.drawBackground();
-    this.drawTrees();
+    this.add.image(0, 0, "haunted-wood-backdrop").setOrigin(0).setDepth(-100);
     this.drawShrine();
     this.drawWren(WREN_X, WREN_Y);
 
@@ -1083,61 +1087,6 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   // ─── Drawing ──────────────────────────────────────────────────────────────
-
-  private drawBackground(): void {
-    const g = this.add.graphics();
-    // Sky gradient — deep grey-green
-    g.fillStyle(0x0e120e, 1);
-    g.fillRect(0, 0, this.scale.width, 500);
-    g.fillStyle(0x141a10, 1);
-    g.fillRect(0, 500, this.scale.width, 280);
-    // Ground
-    g.fillStyle(0x1a2016, 1);
-    g.fillRect(0, 780, this.scale.width, this.scale.height - 780);
-    // Horizon mist band
-    g.fillStyle(0xe8eee8, 0.06);
-    g.fillRect(0, 680, this.scale.width, 120);
-  }
-
-  private drawTrees(): void {
-    const g = this.add.graphics();
-    // Draw a set of dark tree silhouettes using tall thin rectangles + triangle tops
-    const treePositions = [
-      { x: 80, h: 520, w: 28 },
-      { x: 200, h: 460, w: 22 },
-      { x: 340, h: 580, w: 32 },
-      { x: 420, h: 400, w: 18 },
-      { x: 560, h: 500, w: 24 },
-      { x: 680, h: 440, w: 20 },
-      { x: 1240, h: 440, w: 20 },
-      { x: 1360, h: 500, w: 24 },
-      { x: 1500, h: 400, w: 18 },
-      { x: 1580, h: 580, w: 32 },
-      { x: 1720, h: 460, w: 22 },
-      { x: 1840, h: 520, w: 28 },
-    ];
-
-    g.fillStyle(0x0a0e0a, 1);
-    for (const tree of treePositions) {
-      const baseY = 780;
-      // Trunk
-      g.fillRect(tree.x - tree.w / 2, baseY - tree.h, tree.w, tree.h);
-      // Irregular top: two overlapping triangles to suggest a leafy silhouette
-      const tw = tree.w * 3.5;
-      const th = tree.h * 0.35;
-      const ty = baseY - tree.h;
-      g.fillTriangle(
-        tree.x - tw / 2, ty,
-        tree.x + tw / 2, ty,
-        tree.x, ty - th,
-      );
-      g.fillTriangle(
-        tree.x - tw * 0.4, ty + th * 0.3,
-        tree.x + tw * 0.4, ty + th * 0.3,
-        tree.x + tw * 0.08, ty - th * 0.4,
-      );
-    }
-  }
 
   private drawShrine(): void {
     // Stone rectangle with a candle glow on top

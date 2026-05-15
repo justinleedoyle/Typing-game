@@ -7,6 +7,7 @@ import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, SUNKEN_BELL_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
+import sunkenBellBackdrop from "../../art/references/sunken-bell-clean.png";
 
 interface SunkenBellSceneData {
   store: SaveStore;
@@ -65,9 +66,13 @@ export class SunkenBellScene extends Phaser.Scene {
     this.fork2Choice = null;
   }
 
+  preload(): void {
+    this.load.image("sunken-bell-backdrop", sunkenBellBackdrop);
+  }
+
   create(): void {
     this.cameras.main.fadeIn(600, 8, 24, 32);
-    this.drawBackground();
+    this.add.image(0, 0, "sunken-bell-backdrop").setOrigin(0).setDepth(-100);
     this.wrenContainer = this.drawWren(WREN_X, WREN_Y);
 
     this.narratorText = this.add
@@ -1247,39 +1252,6 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   // ─── Drawing ──────────────────────────────────────────────────────────────
-
-  private drawBackground(): void {
-    const g = this.add.graphics();
-    // Deep water ink — base layer
-    g.fillStyle(0x081820, 1);
-    g.fillRect(0, 0, 1920, 1080);
-    // Lighter water band (flooded nave floor suggestion)
-    g.fillStyle(0x0d2030, 1);
-    g.fillRect(0, 500, 1920, 580);
-
-    // Column suggestions
-    g.fillStyle(0x0e2438, 0.8);
-    for (const cx of [200, 600, 1000, 1400, 1800]) {
-      g.fillRect(cx - 20, 300, 40, 700);
-    }
-
-    // Faint water shimmer lines
-    g.lineStyle(1, 0x1a4060, 0.3);
-    for (let y = 520; y < 1080; y += 40) {
-      g.beginPath();
-      g.moveTo(0, y);
-      g.lineTo(1920, y + 10);
-      g.strokePath();
-    }
-
-    // Ceiling arches (very dim)
-    g.lineStyle(2, 0x0d2030, 0.6);
-    for (const cx of [400, 800, 1200, 1600]) {
-      g.beginPath();
-      g.arc(cx, 200, 180, 0, Math.PI, false);
-      g.strokePath();
-    }
-  }
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {
     const c = this.add.container(x, y);

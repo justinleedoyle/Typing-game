@@ -236,17 +236,22 @@ moves). Only Wren is removed. Same for the Almanac UI — no character, unchange
 
 Reference (when generated): `references/hub-portal-chamber-clean.png`
 
+IMPORTANT: the arches must all be IDENTICAL and NEUTRAL. The game lights
+each arch dynamically (sealed / active portal / cleared), so the backdrop
+must not bake in any portal glow or per-arch state, and must carry no
+numerals, labels, or annotation markings on the arches.
+
 ```
 [STYLE ANCHOR]
 Wide establishing shot, dark fantasy library portal chamber, side-view.
 Stone floor with faint inlaid brass circle. Six tall wooden bookshelves
-lining the back wall with books and candles. Five stone archways in a row
-center-stage: archway 1 filled with warm amber glow (cleared), archway 2
-filled with swirling ice-blue portal energy (active, glowing brightly),
-archways 3-5 sealed dark stone. Far left: heavy wooden scholar's desk,
-seated scholar in navy coat (Runa), oil lamp. Far right: tall glass display
-cabinet with brass trim. Empty stone floor center where a traveler would
-stand — no traveler figure present, no hooded character, empty playfield.
+lining the back wall with books and candles. Five identical stone archways
+in a row center-stage — all five sealed with dark empty stone, unlit, no
+portal energy, no glow, no numerals or markings on them, every arch the
+same. Far left: heavy wooden scholar's desk, seated scholar in navy coat
+(Runa), oil lamp. Far right: tall glass display cabinet with brass trim.
+Empty stone floor center where a traveler would stand — no traveler figure
+present, no hooded character, empty playfield.
 Deep navy background, warm brass and amber candlelight pools on stone floor.
 ```
 

@@ -7,6 +7,7 @@ import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, FORGE_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
+import forgeBackdrop from "../../art/references/clockwork-forge-clean.png";
 
 // ─── Scene data ───────────────────────────────────────────────────────────────
 
@@ -115,9 +116,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.companionAwarded = false;
   }
 
+  preload(): void {
+    this.load.image("forge-backdrop", forgeBackdrop);
+  }
+
   create(): void {
     this.cameras.main.fadeIn(600, 26, 16, 8);
-    this.drawBackground();
+    this.add.image(0, 0, "forge-backdrop").setOrigin(0).setDepth(-100);
     this.drawForgeGlow();
     this.drawCatwalk();
     this.drawWren(this.scale.width / 2, CATWALK_Y + 20);
@@ -1394,39 +1399,6 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   // ─── Drawing ──────────────────────────────────────────────────────────────────
-
-  private drawBackground(): void {
-    const g = this.add.graphics();
-    // Deep charcoal-orange gradient (top band → mid band → floor)
-    g.fillStyle(0x1a1008, 1);
-    g.fillRect(0, 0, this.scale.width, 500);
-    g.fillStyle(0x2a1a08, 1);
-    g.fillRect(0, 500, this.scale.width, 300);
-    // Floor
-    g.fillStyle(0x1c1208, 1);
-    g.fillRect(0, FLOOR_Y - 20, this.scale.width, this.scale.height - FLOOR_Y + 20);
-    // Brass floor trim
-    g.lineStyle(2, PALETTE_HEX.brass, 0.35);
-    g.beginPath();
-    g.moveTo(0, FLOOR_Y - 20);
-    g.lineTo(this.scale.width, FLOOR_Y - 20);
-    g.strokePath();
-
-    // Dark metal wall plates
-    g.fillStyle(0x221510, 1);
-    for (let i = 0; i < 5; i++) {
-      g.fillRect(i * 400, 0, 380, 420);
-    }
-    // Brass pipe horizontals
-    g.fillStyle(PALETTE_HEX.brass, 0.45);
-    g.fillRect(0, 180, this.scale.width, 6);
-    g.fillRect(0, 310, this.scale.width, 4);
-    // Vertical pipes
-    g.fillStyle(0x8a6a2a, 0.55);
-    for (const px of [220, 580, 940, 1300, 1660]) {
-      g.fillRect(px, 0, 14, 440);
-    }
-  }
 
   private drawForgeGlow(): void {
     this.forgeGlowGraphics = this.add.graphics();

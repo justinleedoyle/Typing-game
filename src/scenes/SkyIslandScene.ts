@@ -7,6 +7,7 @@ import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, SKY_ISLAND_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
+import skyIslandBackdrop from "../../art/references/sky-island-clean.png";
 
 interface SkyIslandSceneData {
   store: SaveStore;
@@ -142,10 +143,13 @@ export class SkyIslandScene extends Phaser.Scene {
     this.templeIndex = 0;
   }
 
+  preload(): void {
+    this.load.image("sky-island-backdrop", skyIslandBackdrop);
+  }
+
   create(): void {
     this.cameras.main.fadeIn(600, 26, 16, 8);
-    this.drawSky();
-    this.drawIslandGround();
+    this.add.image(0, 0, "sky-island-backdrop").setOrigin(0).setDepth(-100);
     this.drawTempleStones();
     this.drawAmbientLanterns();
     this.wrenContainer = this.drawWren(this.scale.width / 2, 900);
@@ -1274,35 +1278,6 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   // ─── Drawing ──────────────────────────────────────────────────────────────
-
-  private drawSky(): void {
-    const g = this.add.graphics();
-    // Deep amber sky fading downward
-    g.fillStyle(0x1a1008, 1);
-    g.fillRect(0, 0, this.scale.width, this.scale.height);
-    // Lighter warm band near horizon
-    g.fillStyle(0x2a1808, 0.85);
-    g.fillRect(0, 400, this.scale.width, this.scale.height - 400);
-    // Faint amber glow layer at the very horizon
-    g.fillStyle(0x3d2410, 0.5);
-    g.fillRect(0, 620, this.scale.width, 200);
-  }
-
-  private drawIslandGround(): void {
-    const g = this.add.graphics();
-    // Island ground — warm grey
-    g.fillStyle(0x4a3c2a, 1);
-    g.fillRect(0, 860, this.scale.width, this.scale.height - 860);
-    // Stone path line
-    g.fillStyle(0x5c4e3a, 1);
-    g.fillRect(this.scale.width / 2 - 80, 820, 160, 60);
-    // Edge glow — the island floats
-    g.lineStyle(3, 0xc9a14a, 0.35);
-    g.beginPath();
-    g.moveTo(0, 860);
-    g.lineTo(this.scale.width, 860);
-    g.strokePath();
-  }
 
   private drawTempleStones(): void {
     const g = this.add.graphics();

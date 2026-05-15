@@ -7,6 +7,7 @@ import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
+import winterBackdrop from "../../art/references/winter-mountain-clean.png";
 
 interface WinterSceneData {
   store: SaveStore;
@@ -156,11 +157,13 @@ export class WinterMountainScene extends Phaser.Scene {
     this.fork2Choice = null;
   }
 
+  preload(): void {
+    this.load.image("winter-backdrop", winterBackdrop);
+  }
+
   create(): void {
     this.cameras.main.fadeIn(500, 11, 10, 15);
-    this.drawSky();
-    this.drawMountains();
-    this.drawSnowfield();
+    this.add.image(0, 0, "winter-backdrop").setOrigin(0).setDepth(-100);
     this.wrenContainer = this.drawWren(this.scale.width / 2, 880);
 
     this.narratorText = this.add
@@ -1253,71 +1256,6 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   // ─── Drawing ──────────────────────────────────────────────────────────────
-
-  private drawSky(): void {
-    const g = this.add.graphics();
-    g.fillStyle(0x1a2230, 1);
-    g.fillRect(0, 0, this.scale.width, 700);
-    g.fillStyle(0x0e1018, 1);
-    g.fillRect(0, 0, this.scale.width, 200);
-  }
-
-  private drawMountains(): void {
-    const g = this.add.graphics();
-    g.fillStyle(0x2a3548, 1);
-    this.drawJaggedRange(g, 540, 720, [180, 320, 240, 380, 220, 300, 260]);
-    g.fillStyle(0x222b3c, 1);
-    this.drawJaggedRange(g, 620, 720, [260, 220, 360, 280, 320, 240]);
-  }
-
-  private drawJaggedRange(
-    g: Phaser.GameObjects.Graphics,
-    baseY: number,
-    bottomY: number,
-    peakHeights: number[],
-  ): void {
-    const segmentWidth = this.scale.width / (peakHeights.length - 1);
-    g.beginPath();
-    g.moveTo(0, bottomY);
-    g.lineTo(0, baseY);
-    for (let i = 0; i < peakHeights.length; i++) {
-      const x = i * segmentWidth;
-      const y = baseY - peakHeights[i];
-      g.lineTo(x, y);
-    }
-    g.lineTo(this.scale.width, baseY);
-    g.lineTo(this.scale.width, bottomY);
-    g.closePath();
-    g.fillPath();
-  }
-
-  private drawSnowfield(): void {
-    const g = this.add.graphics();
-    g.fillStyle(0xc8d4e0, 1);
-    g.fillRect(0, 720, this.scale.width, this.scale.height - 720);
-    for (const x of [220, 540, 1380, 1700]) {
-      this.drawPine(g, x, 720);
-    }
-  }
-
-  private drawPine(g: Phaser.GameObjects.Graphics, x: number, baseY: number): void {
-    const trunkW = 12;
-    const trunkH = 30;
-    g.fillStyle(0x2a1f12, 1);
-    g.fillRect(x - trunkW / 2, baseY - trunkH, trunkW, trunkH);
-    g.fillStyle(0x14181f, 1);
-    for (let i = 0; i < 3; i++) {
-      const w = 90 - i * 22;
-      const h = 60;
-      const y = baseY - trunkH - i * 38;
-      g.beginPath();
-      g.moveTo(x - w / 2, y);
-      g.lineTo(x + w / 2, y);
-      g.lineTo(x, y - h);
-      g.closePath();
-      g.fillPath();
-    }
-  }
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {
     const c = this.add.container(x, y);

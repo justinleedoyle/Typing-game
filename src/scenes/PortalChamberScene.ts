@@ -13,6 +13,7 @@ import {
 } from "../game/supabaseClient";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
+import { makeWrenSprite, preloadWren } from "../game/wren";
 
 interface ChamberSceneData {
   store: SaveStore;
@@ -77,6 +78,10 @@ export class PortalChamberScene extends Phaser.Scene {
     this.store = data.store;
     this.archGraphics = new Map();
     this.zoneTargets = [];
+  }
+
+  preload(): void {
+    preloadWren(this);
   }
 
   create(): void {
@@ -757,27 +762,7 @@ export class PortalChamberScene extends Phaser.Scene {
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {
     const c = this.add.container(x, y);
-    const g = this.add.graphics();
-    // Cloak.
-    g.fillStyle(0x6f8a5e, 1);
-    g.fillTriangle(-28, 0, 28, 0, 0, -78);
-    // Hood.
-    g.fillStyle(0x4f6440, 1);
-    g.fillCircle(0, -73, 17);
-    // Face.
-    g.fillStyle(0xd6b88a, 1);
-    g.fillCircle(0, -66, 10);
-    // Satchel strap.
-    g.lineStyle(2, 0x3a2a1a, 1);
-    g.beginPath();
-    g.moveTo(-20, -38);
-    g.lineTo(16, -10);
-    g.strokePath();
-    // Feet.
-    g.fillStyle(0x2a1f12, 1);
-    g.fillRect(-12, 0, 10, 14);
-    g.fillRect(2, 0, 10, 14);
-    c.add(g);
+    c.add(makeWrenSprite(this));
     return c;
   }
 }

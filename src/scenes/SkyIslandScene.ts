@@ -7,6 +7,7 @@ import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, SKY_ISLAND_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
+import { makeWrenSprite, preloadWren } from "../game/wren";
 import skyIslandBackdrop from "../../art/references/sky-island-clean.png";
 
 interface SkyIslandSceneData {
@@ -145,6 +146,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image("sky-island-backdrop", skyIslandBackdrop);
+    preloadWren(this);
   }
 
   create(): void {
@@ -1346,23 +1348,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {
     const c = this.add.container(x, y);
-    const g = this.add.graphics();
-    // Cloak
-    g.fillStyle(0x6f8a5e, 1);
-    g.fillTriangle(-30, 0, 30, 0, 0, -80);
-    // Hood
-    g.fillStyle(0x4f6440, 1);
-    g.fillCircle(0, -75, 18);
-    // Face
-    g.fillStyle(0xd6b88a, 1);
-    g.fillCircle(0, -68, 10);
-    // Satchel strap
-    g.lineStyle(2, 0x3a2a1a, 1);
-    g.beginPath();
-    g.moveTo(-22, -40);
-    g.lineTo(18, -10);
-    g.strokePath();
-    c.add(g);
+    c.add(makeWrenSprite(this));
     return c;
   }
 

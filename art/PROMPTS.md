@@ -406,6 +406,43 @@ Required poses for v1 — each pose option above maps to one file:
 
 ---
 
+### NPC sprites — Runa & the sibling
+
+Generate the same way as the Wren poses: isolated, full-body, on solid
+magenta (#ff00ff) for chroma keying. Pass `wren-character-sheet.png` as the
+style reference so proportions and palette match. Save the results as
+`references/runa-front.png` and `references/sibling-front.png`.
+
+Runa:
+
+```
+[STYLE ANCHOR]
+Single character sprite, isolated on solid bright magenta background
+(#ff00ff) for chroma keying. Chibi-proportioned royal cartographer:
+deep navy-blue long coat with small brass buttons, short dark hair, warm
+brown skin, small round brass spectacles, one eye clouded pale (half-blind),
+ink-stained hands, a small brass astrolabe at the belt. Standing calmly
+facing forward, full body visible head to toe with no cropping, no shadow
+on the magenta background. Same flat stylized illustration style,
+proportions and palette as the attached character reference sheet.
+```
+
+The sibling:
+
+```
+[STYLE ANCHOR]
+Single character sprite, isolated on solid bright magenta background
+(#ff00ff) for chroma keying. Small chibi-proportioned young child, younger
+and smaller than Wren, in a simple pale cream nightgown, bare feet, tousled
+dark hair, warm brown skin, holding a folded paper drawing pressed to the
+chest with both hands. Standing shyly facing forward, full body visible head
+to toe with no cropping, no shadow on the magenta background. Same flat
+stylized illustration style and palette as the attached character reference
+sheet.
+```
+
+---
+
 ## Reference image checklist
 
 Drop these files into `art/references/` (filenames are what `PROMPTS.md` expects above):

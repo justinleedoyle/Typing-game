@@ -5,26 +5,25 @@ import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
+import openingBackdrop from "../../art/references/opening-typewriter-study-clean.png";
 
 interface OpeningSceneData {
   store: SaveStore;
 }
 
-// The leftmost arch position — matches PortalChamberScene's winter-mountain arch.
-const ARCH = { x: 360, width: 280, height: 460, baseY: 820 };
+// The arched window — it blazes with cold portal light at Beat 7.
+const PORTAL = { x: 215, y: 180 };
 
-// Brass typewriter + desk layout, centred on the writing desk.
-const TYPEWRITER = { x: 960, y: 680, w: 200, h: 70 };
-const DESK = { x: 960, y: 750, w: 520, h: 50 };
+// Where the typed words float — just above the painted typewriter.
+const TYPE_TARGET = { x: 560, y: 350 };
 
 export class OpeningScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narratorText!: Phaser.GameObjects.Text;
 
-  // Graphics objects that need to be addressed after initial draw.
-  private almanacGraphics!: Phaser.GameObjects.Graphics;
-  private archGraphics!: Phaser.GameObjects.Graphics;
+  // Soft glow over the painted Almanac — pulsed in Beat 4.
+  private almanacGlow!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super("OpeningScene");
@@ -34,15 +33,25 @@ export class OpeningScene extends Phaser.Scene {
     this.store = data.store;
   }
 
+  preload(): void {
+    this.load.image("opening-backdrop", openingBackdrop);
+  }
+
   create(): void {
     const { width } = this.scale;
 
-    // ── Room ────────────────────────────────────────────────────────────────
-    this.drawRoom();
-    this.drawArch(false);
-    this.drawDesk();
-    this.drawTypewriter();
-    this.drawAlmanac();
+    // ── Painted study backdrop ───────────────────────────────────────────────
+    this.add
+      .image(0, 0, "opening-backdrop")
+      .setOrigin(0)
+      .setDisplaySize(width, this.scale.height)
+      .setDepth(-100);
+
+    // Soft glow over the Almanac on the desk — pulsed in Beat 4.
+    this.almanacGlow = this.add.graphics();
+    this.almanacGlow.fillStyle(PALETTE_HEX.brass, 1);
+    this.almanacGlow.fillCircle(475, 470, 70);
+    this.almanacGlow.setAlpha(0);
 
     // ── Narrator text ────────────────────────────────────────────────────────
     this.narratorText = this.add
@@ -104,8 +113,8 @@ export class OpeningScene extends Phaser.Scene {
     const target = new TextWordTarget({
       scene: this,
       word: "wren",
-      x: this.scale.width / 2,
-      y: 820,
+      x: TYPE_TARGET.x,
+      y: TYPE_TARGET.y,
       fontSize: 48,
       onComplete: () => this.onBeat4Complete(),
     });
@@ -114,16 +123,16 @@ export class OpeningScene extends Phaser.Scene {
 
   private onBeat4Complete(): void {
     playChime();
-    // Almanac alpha pulse: flash to 1 then back.
+    // Almanac shimmer: a soft glow swells and fades.
     this.tweens.add({
-      targets: this.almanacGraphics,
-      alpha: { from: 0.4, to: 1 },
-      duration: 180,
+      targets: this.almanacGlow,
+      alpha: { from: 0, to: 0.7 },
+      duration: 200,
       yoyo: true,
       repeat: 1,
       ease: "Sine.easeOut",
       onComplete: () => {
-        this.almanacGraphics.setAlpha(1);
+        this.almanacGlow.setAlpha(0);
         this.beat5();
       },
     });
@@ -138,8 +147,8 @@ export class OpeningScene extends Phaser.Scene {
     const target = new TextWordTarget({
       scene: this,
       word: "bjarn",
-      x: this.scale.width / 2,
-      y: 820,
+      x: TYPE_TARGET.x,
+      y: TYPE_TARGET.y,
       fontSize: 48,
       onComplete: () => this.onBeat5Complete(),
     });
@@ -161,12 +170,12 @@ export class OpeningScene extends Phaser.Scene {
     this.time.delayedCall(3000, () => this.beat7());
   }
 
-  /** Beat 7 — First arch wakes (2 s, no input). */
+  /** Beat 7 — First portal wakes (2 s, no input). */
   private beat7(): void {
     this.setNarrator(
       "Narrator: The nearest arch flickers. Pale cold light from beyond. A distant sound — wolves on a mountain.",
     );
-    this.drawArch(true);
+    this.wakePortal();
     this.time.delayedCall(2000, () => this.beat8());
   }
 
@@ -176,13 +185,11 @@ export class OpeningScene extends Phaser.Scene {
       'Runa: "The Winter Mountain has woken. Type its name when you are ready."',
     );
 
-    // The target floats at the lit arch position.
-    const archTopY = ARCH.baseY - ARCH.height;
     const target = new TextWordTarget({
       scene: this,
       word: "winter mountain",
-      x: ARCH.x,
-      y: archTopY - 60,
+      x: 410,
+      y: 250,
       fontSize: 36,
       onComplete: () => this.onBeat8Complete(),
     });
@@ -237,286 +244,82 @@ export class OpeningScene extends Phaser.Scene {
 
   // ── Drawing ────────────────────────────────────────────────────────────────
 
-  /** Dark ink library with bookshelves and five portal arches. */
-  private drawRoom(): void {
-    const { width } = this.scale;
-    const g = this.add.graphics();
-
-    // Background — deep ink.
-    g.fillStyle(0x0e0c14, 1);
-    g.fillRect(0, 0, width, this.scale.height);
-
-    // Back wall band.
-    g.fillStyle(0x14121a, 1);
-    g.fillRect(0, 0, width, 400);
-
-    // Bookshelves along the back wall (same style as PortalChamberScene).
-    g.fillStyle(0x2a2018, 1);
-    for (let i = 0; i < 6; i++) {
-      const x = 120 + i * 300;
-      g.fillRect(x, 100, 220, 260);
-    }
-
-    // Brass book spine slivers.
-    g.fillStyle(PALETTE_HEX.brass, 0.35);
-    for (let i = 0; i < 6; i++) {
-      const x = 120 + i * 300;
-      for (let j = 0; j < 8; j++) {
-        g.fillRect(x + 14 + j * 26, 116 + (j % 2) * 8, 6, 210);
-      }
-    }
-
-    // Brass skirting line where wall meets floor.
-    g.fillStyle(PALETTE_HEX.brass, 0.4);
-    g.fillRect(0, 400, width, 2);
-
-    // Floor.
-    g.fillStyle(0x0d0b11, 1);
-    g.fillRect(0, 402, width, this.scale.height - 402);
-
-    // Five dark arches set into the back wall.
-    // (The leftmost is redrawn by drawArch() to handle lit state.)
-    const archPositions = [760, 1160, 1560, 1860];
-    for (const ax of archPositions) {
-      this.drawStaticArch(g, ax, 110, 220, 360);
-    }
-  }
-
-  /** Draw a static (always-dark) arch directly into a graphics object. */
-  private drawStaticArch(
-    g: Phaser.GameObjects.Graphics,
-    cx: number,
-    top: number,
-    halfW: number,
-    fullH: number,
-  ): void {
-    const radius = halfW;
-    const archMidY = top + radius;
-    const base = top + fullH;
-    const left = cx - halfW;
-    const right = cx + halfW;
-
-    // Stone outline.
-    g.fillStyle(0x1c1a26, 1);
-    g.beginPath();
-    g.moveTo(left - 14, base);
-    g.lineTo(left - 14, archMidY);
-    g.arc(cx, archMidY, radius + 14, Math.PI, 0, false);
-    g.lineTo(right + 14, base);
-    g.closePath();
-    g.fillPath();
-
-    // Dark inner surface.
-    g.fillStyle(0x0e0c14, 1);
-    g.beginPath();
-    g.moveTo(left, base);
-    g.lineTo(left, archMidY);
-    g.arc(cx, archMidY, radius, Math.PI, 0, false);
-    g.lineTo(right, base);
-    g.closePath();
-    g.fillPath();
-  }
-
-  /**
-   * Draw (or redraw) the leftmost arch, which can be lit or dark.
-   * Replaces itself on the display list each call using a stored reference.
-   */
-  private drawArch(lit: boolean): void {
-    if (this.archGraphics) {
-      this.archGraphics.destroy();
-    }
-
-    const g = this.add.graphics();
-    this.archGraphics = g;
-
-    const cx = ARCH.x;
-    const halfW = ARCH.width / 2;
-    const radius = halfW;
-    const base = ARCH.baseY;
-    const archMidY = base - ARCH.height + radius;
-    const left = cx - halfW;
-    const right = cx + halfW;
-
-    // Stone outline.
-    g.fillStyle(0x1c1a26, 1);
-    g.beginPath();
-    g.moveTo(left - 14, base);
-    g.lineTo(left - 14, archMidY);
-    g.arc(cx, archMidY, radius + 14, Math.PI, 0, false);
-    g.lineTo(right + 14, base);
-    g.closePath();
-    g.fillPath();
-
-    // Inner surface.
-    const innerColor = lit ? PALETTE_HEX.frost : 0x0e0c14;
-    const innerAlpha = lit ? 0.85 : 1;
-    g.fillStyle(innerColor, innerAlpha);
-    g.beginPath();
-    g.moveTo(left, base);
-    g.lineTo(left, archMidY);
-    g.arc(cx, archMidY, radius, Math.PI, 0, false);
-    g.lineTo(right, base);
-    g.closePath();
-    g.fillPath();
-
-    if (lit) {
-      // Soft ripple suggesting the portal is open.
-      g.lineStyle(2, PALETTE_HEX.cream, 0.4);
-      g.beginPath();
-      g.arc(cx, archMidY + 60, radius * 0.6, 0, Math.PI * 2);
-      g.strokePath();
-      g.lineStyle(2, PALETTE_HEX.cream, 0.2);
-      g.beginPath();
-      g.arc(cx, archMidY + 120, radius * 0.5, 0, Math.PI * 2);
-      g.strokePath();
-    }
-  }
-
-  private drawDesk(): void {
-    const g = this.add.graphics();
-
-    // Tabletop.
-    g.fillStyle(0x3a2a1a, 1);
-    g.fillRect(DESK.x - DESK.w / 2, DESK.y, DESK.w, DESK.h);
-
-    // Legs.
-    g.fillStyle(0x2a1f12, 1);
-    g.fillRect(DESK.x - DESK.w / 2 + 20, DESK.y + DESK.h, 30, 200);
-    g.fillRect(DESK.x + DESK.w / 2 - 50, DESK.y + DESK.h, 30, 200);
-  }
-
-  private drawTypewriter(): void {
-    const g = this.add.graphics();
-    const tw = TYPEWRITER;
-
-    // Body — brass.
-    g.fillStyle(PALETTE_HEX.brass, 1);
-    g.fillRect(tw.x - tw.w / 2, tw.y - tw.h, tw.w, tw.h);
-
-    // Roller bar.
-    g.fillStyle(PALETTE_HEX.cream, 1);
-    g.fillRect(tw.x - tw.w / 2 - 6, tw.y - tw.h - 8, tw.w + 12, 8);
-
-    // Key dots (2 rows × 9).
-    g.fillStyle(PALETTE_HEX.cream, 0.8);
-    for (let row = 0; row < 2; row++) {
-      for (let col = 0; col < 9; col++) {
-        const kx = tw.x - tw.w / 2 + 16 + col * 20;
-        const ky = tw.y - tw.h + 18 + row * 16;
-        g.fillCircle(kx, ky, 4);
-      }
-    }
-
-    // A glow ring — the typewriter is already awake in this scene.
-    g.lineStyle(2, PALETTE_HEX.brass, 0.25);
-    g.strokeCircle(tw.x, tw.y - tw.h / 2, 110);
-    g.strokeCircle(tw.x, tw.y - tw.h / 2, 130);
-  }
-
-  /**
-   * Thick book on the desk beside the typewriter.
-   * Stored so the alpha-pulse in Beat 4 can target it.
-   */
-  private drawAlmanac(): void {
-    const g = this.add.graphics();
-    this.almanacGraphics = g;
-
-    const bx = DESK.x - 160;
-    const by = DESK.y - 30;
-
-    // Cover.
-    g.fillStyle(0x1c1620, 1);
-    g.fillRect(bx, by, 80, 100);
-
-    // Spine edge.
-    g.fillStyle(PALETTE_HEX.brass, 0.7);
-    g.fillRect(bx, by, 8, 100);
-
-    // Title scratch marks (three horizontal slivers).
-    g.fillStyle(PALETTE_HEX.brass, 0.5);
-    g.fillRect(bx + 14, by + 18, 50, 4);
-    g.fillRect(bx + 14, by + 28, 40, 3);
-    g.fillRect(bx + 14, by + 37, 30, 3);
-
-    // Page edges at bottom of book.
-    g.fillStyle(PALETTE_HEX.cream, 0.3);
-    g.fillRect(bx + 8, by + 96, 72, 6);
-  }
-
-  /** Runa silhouette descending stairs on the right side. */
-  private drawRuna(): void {
+  /** The arched window blazes with cold light from beyond. */
+  private wakePortal(): void {
     const g = this.add.graphics();
     g.setAlpha(0);
+    const { x, y } = PORTAL;
 
-    // Staircase suggestion: three descending steps on the right.
-    g.fillStyle(0x1c1a26, 1);
-    for (let i = 0; i < 3; i++) {
-      g.fillRect(1580 + i * 60, 500 + i * 60, 80, 12);
-    }
-
-    // Deep blue coat body — simple trapezoid.
-    g.fillStyle(0x1e2a4a, 1);
-    g.fillTriangle(1700, 920, 1760, 920, 1740, 680);
-
-    // Head circle.
-    g.fillStyle(0xb89870, 1);
-    g.fillCircle(1730, 660, 22);
-
-    // One eye suggestion (half-blind): a small cross mark.
-    g.fillStyle(0x0e0c14, 0.8);
-    g.fillRect(1722, 656, 10, 2);
-    g.fillRect(1726, 652, 2, 10);
-
-    // Astrolabe suggestion (a circle with a cross bar at the hip).
-    g.lineStyle(2, PALETTE_HEX.brass, 0.7);
-    g.strokeCircle(1760, 800, 20);
-    g.fillStyle(PALETTE_HEX.brass, 0.5);
-    g.fillRect(1748, 799, 24, 2);
-    g.fillRect(1759, 788, 2, 24);
-
-    // Ink-stained hand outstretched.
-    g.fillStyle(0xb89870, 1);
-    g.fillEllipse(1700, 760, 18, 10);
+    // Cold light spilling into the room.
+    g.fillStyle(PALETTE_HEX.frost, 0.16);
+    g.fillEllipse(x, y, 560, 580);
+    // The window blaze.
+    g.fillStyle(PALETTE_HEX.frost, 0.5);
+    g.fillEllipse(x, y, 250, 320);
+    // Bright core.
+    g.fillStyle(PALETTE_HEX.cream, 0.4);
+    g.fillEllipse(x, y, 130, 220);
 
     this.tweens.add({
       targets: g,
       alpha: 1,
-      duration: 400,
+      duration: 1100,
       ease: "Sine.easeOut",
     });
   }
 
-  /** Small sibling silhouette in the doorway on the left side. */
-  private drawSibling(): void {
+  /**
+   * Runa — a dim navy silhouette that fades in beside the desk.
+   * Placeholder until a painted character sprite exists.
+   */
+  private drawRuna(): void {
     const g = this.add.graphics();
     g.setAlpha(0);
+    const cx = 980;
+    const footY = 905;
 
-    // Doorway frame.
-    g.fillStyle(0x1c1a26, 1);
-    g.fillRect(80, 400, 20, 460);
-    g.fillRect(260, 400, 20, 460);
-    g.fillRect(80, 390, 200, 20);
-
-    // Small figure in nightclothes — pale triangle body.
-    g.fillStyle(0xe8dcc0, 0.85);
-    g.fillTriangle(170, 880, 210, 880, 190, 700);
-
+    // Deep blue coat — kept dark so it reads as a figure in the gloom.
+    g.fillStyle(0x232f4e, 1);
+    g.fillTriangle(cx - 44, footY, cx + 44, footY, cx, footY - 235);
     // Head.
-    g.fillStyle(0xd6b88a, 1);
-    g.fillCircle(190, 685, 16);
-
-    // Drawing pressed against chest — small dark rectangle.
-    g.fillStyle(0xf3ead2, 0.8);
-    g.fillRect(178, 760, 30, 38);
+    g.fillStyle(0x6a5a44, 1);
+    g.fillCircle(cx, footY - 256, 23);
+    // Astrolabe glint at the belt.
     g.fillStyle(PALETTE_HEX.brass, 0.6);
-    g.fillRect(182, 764, 22, 2);
-    g.fillRect(182, 770, 18, 2);
-    g.fillRect(182, 776, 20, 2);
+    g.fillCircle(cx + 28, footY - 110, 7);
 
     this.tweens.add({
       targets: g,
-      alpha: 1,
-      duration: 400,
+      alpha: 0.9,
+      duration: 500,
+      ease: "Sine.easeOut",
+    });
+  }
+
+  /**
+   * The sibling — a small dim figure that fades in at the left.
+   * Placeholder until a painted character sprite exists.
+   */
+  private drawSibling(): void {
+    const g = this.add.graphics();
+    g.setAlpha(0);
+    const cx = 250;
+    const footY = 930;
+
+    // Nightclothes body — muted so it sits in shadow.
+    g.fillStyle(0x6b6456, 1);
+    g.fillTriangle(cx - 30, footY, cx + 30, footY, cx, footY - 150);
+    // Head.
+    g.fillStyle(0x5c5040, 1);
+    g.fillCircle(cx, footY - 166, 16);
+    // Drawing held against the chest.
+    g.fillStyle(PALETTE_HEX.cream, 0.45);
+    g.fillRect(cx - 14, footY - 88, 28, 34);
+
+    this.tweens.add({
+      targets: g,
+      alpha: 0.85,
+      duration: 500,
       ease: "Sine.easeOut",
     });
   }

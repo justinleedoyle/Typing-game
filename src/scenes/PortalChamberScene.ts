@@ -14,6 +14,7 @@ import {
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
 import { makeWrenSprite, preloadWren } from "../game/wren";
+import hubBackdrop from "../../art/references/hub-portal-chamber-clean.png";
 
 interface ChamberSceneData {
   store: SaveStore;
@@ -31,25 +32,27 @@ interface ArchSpec {
   readonly sceneKey: string;
 }
 
-// Five arches, centre-left cluster — leaves room for desk (far left) and
-// shelf (far right) in the same room without crowding.
+// Geometry maps each arch onto a painted opening in the hub backdrop art.
+// width/height/baseY describe the portal-surface fill drawn inside the
+// painted stone frame (no programmatic surround).
 const ARCHES: readonly ArchSpec[] = [
-  { id: "winter-mountain", x: 390,  width: 220, height: 380, baseY: 820, label: "winter mountain", sceneKey: "WinterMountainScene"  },
-  { id: "sunken-bell",     x: 625,  width: 200, height: 360, baseY: 820, label: "sunken bell",     sceneKey: "SunkenBellScene"      },
-  { id: "clockwork-forge", x: 850,  width: 200, height: 360, baseY: 820, label: "clockwork forge", sceneKey: "ClockworkForgeScene"   },
-  { id: "sky-island",      x: 1075, width: 200, height: 360, baseY: 820, label: "sky island",      sceneKey: "SkyIslandScene"        },
-  { id: "haunted-wood",    x: 1300, width: 200, height: 360, baseY: 820, label: "haunted wood",    sceneKey: "HauntedWoodScene"      },
+  { id: "winter-mountain", x: 533,  width: 140, height: 265, baseY: 705, label: "winter mountain", sceneKey: "WinterMountainScene"  },
+  { id: "sunken-bell",     x: 762,  width: 140, height: 265, baseY: 705, label: "sunken bell",     sceneKey: "SunkenBellScene"      },
+  { id: "clockwork-forge", x: 990,  width: 140, height: 265, baseY: 705, label: "clockwork forge", sceneKey: "ClockworkForgeScene"   },
+  { id: "sky-island",      x: 1221, width: 140, height: 265, baseY: 705, label: "sky island",      sceneKey: "SkyIslandScene"        },
+  { id: "haunted-wood",    x: 1454, width: 140, height: 265, baseY: 705, label: "haunted wood",    sceneKey: "HauntedWoodScene"      },
 ] as const;
 
 const REALM_SEQUENCE = ARCHES.map((a) => a.id);
 
-// Wren's X position when standing in each zone.
+// Wren's X position when standing in each zone — aligned to the painted
+// desk (left), portal floor (centre) and display cabinet (right).
 const ZONE_X: Record<Zone, number> = {
-  desk:    160,
-  portals: 790,
-  shelf:   1750,
+  desk:    330,
+  portals: 990,
+  shelf:   1660,
 };
-const WREN_Y = 870;
+const WREN_Y = 900;
 
 // Runa's desk contextual lines — one per last-cleared realm.
 const RUNA_LINES: Record<string, string> = {
@@ -81,6 +84,7 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   preload(): void {
+    this.load.image("hub-backdrop", hubBackdrop);
     preloadWren(this);
   }
 
@@ -92,7 +96,6 @@ export class PortalChamberScene extends Phaser.Scene {
     }
 
     this.drawRoom();
-    this.drawRunaDesk();
     this.drawDisplayShelf();
     for (const arch of ARCHES) {
       this.drawArch(arch);
@@ -499,29 +502,18 @@ export class PortalChamberScene extends Phaser.Scene {
     if (!g) return;
     g.clear();
 
+    // Sealed arches keep the painted dark opening — nothing drawn over them.
+    if (state === "locked" || state === "dark") return;
+
     const left     = spec.x - spec.width / 2;
     const right    = spec.x + spec.width / 2;
     const base     = spec.baseY;
     const archMidY = (base - spec.height) + spec.width / 2;
     const radius   = spec.width / 2;
 
-    // Stone surround — always drawn.
-    g.fillStyle(0x1c1a26, 1);
-    g.beginPath();
-    g.moveTo(left - 14, base);
-    g.lineTo(left - 14, archMidY);
-    g.arc(spec.x, archMidY, radius + 14, Math.PI, 0, false);
-    g.lineTo(right + 14, base);
-    g.closePath();
-    g.fillPath();
-
-    // Inner portal surface.
-    let innerColor: number;
-    let innerAlpha: number;
-    if (state === "next")    { innerColor = PALETTE_HEX.frost;  innerAlpha = 0.85; }
-    else if (state === "cleared") { innerColor = PALETTE_HEX.brass;  innerAlpha = 0.55; }
-    else if (state === "locked")  { innerColor = 0x100e18;           innerAlpha = 1;    }
-    else                          { innerColor = 0x0e0c14;           innerAlpha = 1;    }
+    // Glowing portal surface, filled inside the painted stone frame.
+    const innerColor = state === "next" ? PALETTE_HEX.frost : PALETTE_HEX.brass;
+    const innerAlpha = state === "next" ? 0.68 : 0.55;
 
     g.fillStyle(innerColor, innerAlpha);
     g.beginPath();
@@ -592,146 +584,62 @@ export class PortalChamberScene extends Phaser.Scene {
   // ─── Drawing ──────────────────────────────────────────────────────────────
 
   private drawRoom(): void {
-    const g = this.add.graphics();
+    this.add
+      .image(0, 0, "hub-backdrop")
+      .setOrigin(0)
+      .setDisplaySize(this.scale.width, this.scale.height)
+      .setDepth(-100);
 
-    // Back wall — deep ink with slight warmth.
-    g.fillStyle(0x14121a, 1);
-    g.fillRect(0, 0, this.scale.width, 380);
-
-    // Bookshelves across the back (6 units).
-    g.fillStyle(0x2a2018, 1);
-    for (let i = 0; i < 6; i++) {
-      g.fillRect(120 + i * 300, 100, 220, 240);
-    }
-    // Book spines suggested with brass slivers.
-    g.fillStyle(PALETTE_HEX.brass, 0.35);
-    for (let i = 0; i < 6; i++) {
-      const sx = 120 + i * 300;
-      for (let j = 0; j < 8; j++) {
-        g.fillRect(sx + 14 + j * 26, 116 + (j % 2) * 8, 6, 200);
-      }
-    }
-
-    // Floor — dark warm stone with a faint brass line at the wall seam.
-    g.fillStyle(0x1a1714, 1);
-    g.fillRect(0, 380, this.scale.width, this.scale.height - 380);
-    g.fillStyle(PALETTE_HEX.brass, 0.4);
-    g.fillRect(0, 380, this.scale.width, 2);
-
-    // Ambient candlelight pools on the floor (three subtle ellipses).
-    for (const cx of [390, 850, 1300]) {
-      g.fillStyle(PALETTE_HEX.brass, 0.04);
-      g.fillEllipse(cx, 820, 340, 60);
-    }
-
-    // Zone indicator labels — small, dim, permanent.
-    const labelStyle = { fontFamily: SERIF, fontSize: "18px", color: "#3a3550", fontStyle: "italic" };
-    this.add.text(155, 790, "runa's desk", labelStyle).setOrigin(0.5);
-    this.add.text(1750, 790, "your shelf", labelStyle).setOrigin(0.5);
+    // Dim zone hints beneath the painted desk and display cabinet.
+    const labelStyle = {
+      fontFamily: SERIF,
+      fontSize: "18px",
+      color: "#3a3550",
+      fontStyle: "italic",
+    };
+    this.add.text(210, 958, "runa's desk", labelStyle).setOrigin(0.5);
+    this.add.text(1740, 958, "your shelf", labelStyle).setOrigin(0.5);
   }
 
-  private drawRunaDesk(): void {
-    const g = this.add.graphics();
-    const cx = 155;
-
-    // Desk surface.
-    g.fillStyle(0x3a2a1a, 1);
-    g.fillRect(cx - 120, 720, 240, 50);
-    // Legs.
-    g.fillStyle(0x2a1f12, 1);
-    g.fillRect(cx - 110, 770, 24, 200);
-    g.fillRect(cx + 86, 770, 24, 200);
-
-    // A quill in a pot.
-    g.fillStyle(0x2a1f12, 1);
-    g.fillCircle(cx - 60, 718, 10);
-    g.lineStyle(1, PALETTE_HEX.cream, 0.6);
-    g.beginPath();
-    g.moveTo(cx - 60, 708);
-    g.lineTo(cx - 52, 670);
-    g.strokePath();
-
-    // Runa silhouette — seated figure with blue coat.
-    g.fillStyle(0x1e2d5a, 1);     // coat
-    g.fillTriangle(cx + 30, 720, cx + 80, 720, cx + 55, 620);
-    g.fillStyle(0x1a2548, 1);
-    g.fillCircle(cx + 55, 615, 16); // head/hood
-    g.fillStyle(0xd6b88a, 1);
-    g.fillCircle(cx + 55, 610, 9);  // face
-    // Astrolabe glint at belt.
-    g.fillStyle(PALETTE_HEX.brass, 0.8);
-    g.fillCircle(cx + 48, 700, 5);
-
-    // A small open book on the desk.
-    g.fillStyle(0xe8dcb5, 1);
-    g.fillRect(cx - 10, 710, 50, 6);  // left page
-    g.fillRect(cx + 62, 710, 50, 6);  // right page
-    g.lineStyle(1, 0x3a2a1a, 0.5);
-    g.moveTo(cx + 60, 708); g.lineTo(cx + 60, 716); g.strokePath();
-  }
-
+  /** Relic icons displayed on the painted cabinet shelves (far right). */
   private drawDisplayShelf(): void {
-    const g = this.add.graphics();
-    const cx = 1750;
-    const state = this.store.get();
-
-    // Cabinet frame.
-    g.fillStyle(0x2a2018, 1);
-    g.fillRect(cx - 130, 480, 260, 340);
-    // Glass front (suggested with a slightly lighter rect).
-    g.fillStyle(0x1e1c28, 0.7);
-    g.fillRect(cx - 118, 492, 236, 316);
-    // Shelves.
-    g.fillStyle(0x3a2a18, 1);
-    g.fillRect(cx - 118, 590, 236, 6);
-    g.fillRect(cx - 118, 700, 236, 6);
-    // Cabinet top and leg feet.
-    g.fillStyle(PALETTE_HEX.brass, 0.5);
-    g.fillRect(cx - 134, 476, 268, 4);
-    g.fillRect(cx - 110, 820, 18, 30);
-    g.fillRect(cx + 92, 820, 18, 30);
-
-    // Items on shelves — drawn as small shaped icons in brass/cream.
-    const items = state.satchel;
-    items.forEach((id, i) => {
-      const row = Math.floor(i / 4);
-      const col = i % 4;
-      const ix = cx - 100 + col * 56;
-      const iy = 510 + row * 108;
-      // Small abstract icon (different shape per relic type).
-      const relic = RELICS[id];
-      if (!relic) return;
-      g.fillStyle(PALETTE_HEX.brass, 0.75);
-      if (id.includes("horn") || id.includes("flute")) {
-        // Crescent arc
-        g.fillEllipse(ix, iy, 28, 18);
-      } else if (id.includes("token") || id.includes("key") || id.includes("pelt")) {
-        // Round coin
-        g.fillCircle(ix, iy, 12);
-      } else if (id.includes("hammer") || id.includes("wrench") || id.includes("tongue")) {
-        // Rectangle tool
-        g.fillRect(ix - 6, iy - 14, 12, 28);
-      } else if (id.includes("cub") || id.includes("fish") || id.includes("bird") || id.includes("moth") || id.includes("cat")) {
-        // Star-ish companion dot with small petal marks
-        g.fillCircle(ix, iy, 10);
-        g.fillStyle(PALETTE_HEX.cream, 0.5);
-        g.fillCircle(ix, iy, 5);
-      } else {
-        // Generic scroll/lore shape
-        g.fillEllipse(ix, iy, 22, 30);
-      }
-    });
+    const items = this.store.get().satchel;
 
     if (items.length === 0) {
       this.add
-        .text(cx, 650, "nothing yet", {
+        .text(1740, 535, "nothing yet", {
           fontFamily: SERIF,
-          fontSize: "20px",
+          fontSize: "17px",
           fontStyle: "italic",
           color: "#3a3550",
         })
         .setOrigin(0.5);
+      return;
     }
+
+    const g = this.add.graphics();
+    items.forEach((id, i) => {
+      if (!RELICS[id]) return;
+      const ix = 1702 + (i % 3) * 40;
+      const iy = 470 + Math.floor(i / 3) * 90;
+      g.fillStyle(PALETTE_HEX.brass, 0.8);
+      if (id.includes("horn") || id.includes("flute")) {
+        g.fillEllipse(ix, iy, 24, 15);
+      } else if (id.includes("token") || id.includes("key") || id.includes("pelt")) {
+        g.fillCircle(ix, iy, 10);
+      } else if (id.includes("hammer") || id.includes("wrench") || id.includes("tongue")) {
+        g.fillRect(ix - 5, iy - 12, 10, 24);
+      } else if (
+        id.includes("cub") || id.includes("fish") || id.includes("bird") ||
+        id.includes("moth") || id.includes("cat")
+      ) {
+        g.fillCircle(ix, iy, 9);
+        g.fillStyle(PALETTE_HEX.cream, 0.5);
+        g.fillCircle(ix, iy, 4);
+      } else {
+        g.fillEllipse(ix, iy, 18, 26);
+      }
+    });
   }
 
   // ─── Wren character ───────────────────────────────────────────────────────
@@ -770,8 +678,8 @@ export class PortalChamberScene extends Phaser.Scene {
 // Stagger arch typing-target Y positions so adjacent labels don't overlap.
 // Odd-indexed arches sit slightly higher than even-indexed ones.
 function archTargetY(archIndex: number): number {
-  const BASE_Y = 820; // arch.baseY
-  const HEIGHT = 360; // arch.height (typical)
+  const BASE_Y = 705; // arch.baseY
+  const HEIGHT = 265; // arch.height
   const base = BASE_Y - HEIGHT - 50;
   return archIndex % 2 === 0 ? base : base - 36;
 }

@@ -249,7 +249,7 @@ export class WinterMountainScene extends Phaser.Scene {
         scene: this,
         word,
         x: this.scale.width / 2,
-        y: this.scale.height - 260,
+        y: this.scale.height / 2,
         fontSize: 44,
         onComplete: () => {
           playChime();
@@ -291,7 +291,7 @@ export class WinterMountainScene extends Phaser.Scene {
       scene: this,
       word: beat,
       x: this.scale.width / 2,
-      y: this.scale.height - 260,
+      y: this.scale.height / 2,
       fontSize: 44,
       onComplete: () => {
         playChime();
@@ -315,7 +315,7 @@ export class WinterMountainScene extends Phaser.Scene {
         scene: this,
         word: HELDUR_INSCRIPTION,
         x: this.scale.width / 2,
-        y: this.scale.height - 260,
+        y: this.scale.height / 2,
         fontSize: 30,
         onComplete: () => {
           playChime();
@@ -370,7 +370,7 @@ export class WinterMountainScene extends Phaser.Scene {
       scene: this,
       word: "kindle",
       x: this.scale.width / 2,
-      y: this.scale.height - 260,
+      y: this.scale.height / 2,
       fontSize: 40,
       onComplete: () => {
         playChime();
@@ -1056,7 +1056,7 @@ export class WinterMountainScene extends Phaser.Scene {
         scene: this,
         word: TRUE_NAME_PASSAGE,
         x: this.scale.width / 2,
-        y: this.scale.height - 260,
+        y: this.scale.height / 2,
         fontSize: 28,
         onComplete: () => {
           playChime();
@@ -1152,7 +1152,7 @@ export class WinterMountainScene extends Phaser.Scene {
         scene: this,
         word: passages[step],
         x: this.scale.width / 2,
-        y: this.scale.height - 240,
+        y: this.scale.height / 2,
         fontSize: 36,
         onComplete: () => {
           step += 1;

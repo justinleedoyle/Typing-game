@@ -7,7 +7,7 @@ import wrenHurt from "../../art/wren/wren-hurt.png";
 export type WrenPose = "front" | "walk" | "cast" | "hurt";
 
 /** On-screen height of the Wren sprite at the 1920x1080 design resolution. */
-const WREN_DISPLAY_HEIGHT = 160;
+const WREN_DISPLAY_HEIGHT = 240;
 
 const TEXTURE: Record<WrenPose, string> = {
   front: "wren-front",

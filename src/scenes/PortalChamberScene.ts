@@ -15,6 +15,7 @@ import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
 import { makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
 import hubBackdrop from "../../art/references/hub-portal-chamber-clean.png";
+import runaSprite from "../../art/runa/runa-front.png";
 
 interface ChamberSceneData {
   store: SaveStore;
@@ -86,6 +87,7 @@ export class PortalChamberScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image("hub-backdrop", hubBackdrop);
+    this.load.image("runa-sprite", runaSprite);
     preloadWren(this);
   }
 
@@ -97,6 +99,7 @@ export class PortalChamberScene extends Phaser.Scene {
     }
 
     this.drawRoom();
+    this.drawRuna();
     this.drawDisplayShelf();
     for (const arch of ARCHES) {
       this.drawArch(arch);
@@ -603,6 +606,14 @@ export class PortalChamberScene extends Phaser.Scene {
     };
     this.add.text(210, 958, "runa's desk", labelStyle).setOrigin(0.5);
     this.add.text(1740, 958, "your shelf", labelStyle).setOrigin(0.5);
+  }
+
+  /** Painted Runa stands at her desk on the far left of the hub. */
+  private drawRuna(): void {
+    const img = this.add
+      .image(420, 975, "runa-sprite")
+      .setOrigin(0.5, 1);
+    img.setScale(360 / img.height);
   }
 
   /** Relic icons displayed on the painted cabinet shelves (far right). */

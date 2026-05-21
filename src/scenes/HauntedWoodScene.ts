@@ -162,7 +162,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         scene: this,
         word,
         x: this.scale.width / 2,
-        y: this.scale.height - 220,
+        y: this.scale.height / 2,
         fontSize: 44,
         onComplete: () => {
           playChime();
@@ -204,7 +204,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         scene: this,
         word: beat.word,
         x: this.scale.width / 2,
-        y: this.scale.height - 220,
+        y: this.scale.height / 2,
         fontSize: 40,
         onComplete: () => {
           playChime();
@@ -624,7 +624,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         scene: this,
         word,
         x: this.scale.width / 2,
-        y: this.scale.height / 2 + 80,
+        y: this.scale.height / 2,
         fontSize: 48,
         onComplete: () => {
           playChime();

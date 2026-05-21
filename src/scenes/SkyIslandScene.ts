@@ -228,7 +228,7 @@ export class SkyIslandScene extends Phaser.Scene {
         scene: this,
         word,
         x: this.scale.width / 2,
-        y: this.scale.height - 280,
+        y: this.scale.height / 2,
         fontSize: 44,
         onComplete: () => {
           playChime();
@@ -270,7 +270,7 @@ export class SkyIslandScene extends Phaser.Scene {
       scene: this,
       word: beat,
       x: this.scale.width / 2,
-      y: this.scale.height - 280,
+      y: this.scale.height / 2,
       fontSize: 44,
       onComplete: () => {
         playChime();
@@ -294,7 +294,7 @@ export class SkyIslandScene extends Phaser.Scene {
           scene: this,
           word: WREN_RESPONSE,
           x: this.scale.width / 2,
-          y: this.scale.height - 260,
+          y: this.scale.height / 2,
           fontSize: 36,
           onComplete: () => {
             playChime();
@@ -481,7 +481,7 @@ export class SkyIslandScene extends Phaser.Scene {
         scene: this,
         word: ETTA_CHAIN_1,
         x: this.scale.width / 2,
-        y: this.scale.height - 260,
+        y: this.scale.height / 2,
         fontSize: 38,
         onComplete: () => {
           playChime();
@@ -492,7 +492,7 @@ export class SkyIslandScene extends Phaser.Scene {
               scene: this,
               word: ETTA_CHAIN_2,
               x: this.scale.width / 2,
-              y: this.scale.height - 260,
+              y: this.scale.height / 2,
               fontSize: 38,
               onComplete: () => {
                 playChime();
@@ -795,7 +795,7 @@ export class SkyIslandScene extends Phaser.Scene {
         scene: this,
         word: "you kept the light",
         x: this.scale.width / 2,
-        y: this.scale.height - 260,
+        y: this.scale.height / 2,
         fontSize: 36,
         onComplete: () => {
           playChime();
@@ -887,7 +887,7 @@ export class SkyIslandScene extends Phaser.Scene {
         scene: this,
         word: TRUE_NAME_PASSAGE,
         x: this.scale.width / 2,
-        y: this.scale.height - 270,
+        y: this.scale.height / 2,
         fontSize: 28,
         onComplete: () => {
           playChime();
@@ -1227,7 +1227,7 @@ export class SkyIslandScene extends Phaser.Scene {
         scene: this,
         word: passages[step] ?? "",
         x: this.scale.width / 2,
-        y: this.scale.height - 250,
+        y: this.scale.height / 2,
         fontSize: 36,
         onComplete: () => {
           step += 1;

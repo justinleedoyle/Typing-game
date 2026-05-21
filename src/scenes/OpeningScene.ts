@@ -6,6 +6,8 @@ import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
 import openingBackdrop from "../../art/references/opening-typewriter-study-clean.png";
+import runaSprite from "../../art/runa/runa-front.png";
+import siblingSprite from "../../art/sibling/sibling-front.png";
 
 interface OpeningSceneData {
   store: SaveStore;
@@ -35,6 +37,8 @@ export class OpeningScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image("opening-backdrop", openingBackdrop);
+    this.load.image("runa-sprite", runaSprite);
+    this.load.image("sibling-sprite", siblingSprite);
   }
 
   create(): void {
@@ -268,57 +272,31 @@ export class OpeningScene extends Phaser.Scene {
     });
   }
 
-  /**
-   * Runa — a dim navy silhouette that fades in beside the desk.
-   * Placeholder until a painted character sprite exists.
-   */
+  /** Runa — the painted royal cartographer, fades in across the room. */
   private drawRuna(): void {
-    const g = this.add.graphics();
-    g.setAlpha(0);
-    const cx = 980;
-    const footY = 905;
-
-    // Deep blue coat — kept dark so it reads as a figure in the gloom.
-    g.fillStyle(0x232f4e, 1);
-    g.fillTriangle(cx - 44, footY, cx + 44, footY, cx, footY - 235);
-    // Head.
-    g.fillStyle(0x6a5a44, 1);
-    g.fillCircle(cx, footY - 256, 23);
-    // Astrolabe glint at the belt.
-    g.fillStyle(PALETTE_HEX.brass, 0.6);
-    g.fillCircle(cx + 28, footY - 110, 7);
-
+    const img = this.add
+      .image(1130, 950, "runa-sprite")
+      .setOrigin(0.5, 1);
+    img.setScale(360 / img.height);
+    img.setAlpha(0);
     this.tweens.add({
-      targets: g,
-      alpha: 0.9,
+      targets: img,
+      alpha: 1,
       duration: 500,
       ease: "Sine.easeOut",
     });
   }
 
-  /**
-   * The sibling — a small dim figure that fades in at the left.
-   * Placeholder until a painted character sprite exists.
-   */
+  /** The sibling — the painted small child, fades in at the left. */
   private drawSibling(): void {
-    const g = this.add.graphics();
-    g.setAlpha(0);
-    const cx = 250;
-    const footY = 930;
-
-    // Nightclothes body — muted so it sits in shadow.
-    g.fillStyle(0x6b6456, 1);
-    g.fillTriangle(cx - 30, footY, cx + 30, footY, cx, footY - 150);
-    // Head.
-    g.fillStyle(0x5c5040, 1);
-    g.fillCircle(cx, footY - 166, 16);
-    // Drawing held against the chest.
-    g.fillStyle(PALETTE_HEX.cream, 0.45);
-    g.fillRect(cx - 14, footY - 88, 28, 34);
-
+    const img = this.add
+      .image(270, 955, "sibling-sprite")
+      .setOrigin(0.5, 1);
+    img.setScale(235 / img.height);
+    img.setAlpha(0);
     this.tweens.add({
-      targets: g,
-      alpha: 0.85,
+      targets: img,
+      alpha: 1,
       duration: 500,
       ease: "Sine.easeOut",
     });

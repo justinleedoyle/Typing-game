@@ -53,11 +53,12 @@ Generate after Wren; pass the Wren sheet as style reference for consistency.
 ```
 [STYLE ANCHOR]
 Character design, single pose, isolated on deep navy background.
-Seated scholar: chibi-proportioned figure in a deep navy-blue coat with
-brass buttons, short dark hair, warm brown skin, small round spectacles.
+Seated scholar: chibi-proportioned adult woman in a deep navy-blue coat with
+brass buttons, long wavy honey-blonde hair, fair skin with a warm tone,
+light blue-green eyes, gentle warm expression, small round spectacles.
 Seated at a heavy wooden desk, leaning slightly forward over an open book,
-quill in hand, small oil lamp to one side casting warm amber glow.
-Same flat stylized illustration style as attached reference. Full figure visible.
+quill in hand, small oil lamp to one side casting warm amber glow. Same
+flat stylized illustration style as attached reference. Full figure visible.
 ```
 
 ---
@@ -236,10 +237,11 @@ moves). Only Wren is removed. Same for the Almanac UI — no character, unchange
 
 Reference (when generated): `references/hub-portal-chamber-clean.png`
 
-IMPORTANT: the arches must all be IDENTICAL and NEUTRAL. The game lights
-each arch dynamically (sealed / active portal / cleared), so the backdrop
-must not bake in any portal glow or per-arch state, and must carry no
-numerals, labels, or annotation markings on the arches.
+IMPORTANT: the arches must all be IDENTICAL and NEUTRAL and the desk must
+be EMPTY. The game lights each arch dynamically (sealed / active portal /
+cleared) and overlays the painted Runa sprite at her desk, so the backdrop
+must not bake in any portal glow, per-arch state, numerals/annotations, or
+any figure at the desk.
 
 ```
 [STYLE ANCHOR]
@@ -248,10 +250,12 @@ Stone floor with faint inlaid brass circle. Six tall wooden bookshelves
 lining the back wall with books and candles. Five identical stone archways
 in a row center-stage — all five sealed with dark empty stone, unlit, no
 portal energy, no glow, no numerals or markings on them, every arch the
-same. Far left: heavy wooden scholar's desk, seated scholar in navy coat
-(Runa), oil lamp. Far right: tall glass display cabinet with brass trim.
-Empty stone floor center where a traveler would stand — no traveler figure
-present, no hooded character, empty playfield.
+same. Far left: heavy wooden scholar's desk with an oil lamp, open books,
+papers and a quill on it, an empty wooden chair pulled up — no character at
+the desk, no figure present, no person, no scholar. Far right: tall glass
+display cabinet with brass trim. Empty stone floor center where a traveler
+would stand — no traveler figure present, no hooded character, empty
+playfield.
 Deep navy background, warm brass and amber candlelight pools on stone floor.
 ```
 
@@ -403,6 +407,46 @@ Required poses for v1 — each pose option above maps to one file:
 - [ ] `wren-cast.png` — standing with staff raised (Shift-thunderclap, spell mode)
 - [ ] `wren-hurt.png` — flinching/recoiling as if struck (candle-snuff reaction)
 - [ ] `wren-back.png` — back view from behind (used at typewriter, facing portals)
+
+---
+
+### NPC sprites — Runa & the sibling
+
+Generate the same way as the Wren poses: isolated, full-body, on solid
+magenta (#ff00ff) for chroma keying. Pass `wren-character-sheet.png` as the
+style reference so proportions and palette match. Save the results as
+`references/runa-front.png` and `references/sibling-front.png`.
+
+Runa:
+
+```
+[STYLE ANCHOR]
+Single character sprite, isolated on solid bright magenta background
+(#ff00ff) for chroma keying. Chibi-proportioned adult royal cartographer,
+a woman: deep navy-blue long coat with small brass buttons, long wavy
+honey-blonde hair, fair skin with a warm tone, light blue-green eyes,
+gentle warm expression, small round brass spectacles, one eye clouded
+pale (half-blind), ink-stained hands, a small brass astrolabe at the belt.
+Standing calmly facing forward, full body visible head to toe with no
+cropping, no shadow on the magenta background. Same flat stylized
+illustration style, proportions and palette as the attached character
+reference sheet.
+```
+
+The sibling:
+
+```
+[STYLE ANCHOR]
+Single character sprite, isolated on solid bright magenta background
+(#ff00ff) for chroma keying. Very small chibi-proportioned young child,
+about three years old, much smaller than Wren: very platinum-blonde
+straight hair slightly tousled, fair pale skin with rosy cheeks, bright
+blue eyes, wide joyful smile. Wearing a simple pale cream nightgown, bare
+feet, holding a folded paper drawing pressed to the chest with both hands.
+Standing shyly facing forward, full body visible head to toe with no
+cropping, no shadow on the magenta background. Same flat stylized
+illustration style and palette as the attached character reference sheet.
+```
 
 ---
 

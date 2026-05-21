@@ -150,7 +150,7 @@ export class SunkenBellScene extends Phaser.Scene {
         scene: this,
         word,
         x: this.scale.width / 2,
-        y: this.scale.height / 2 + 100,
+        y: this.scale.height / 2,
         fontSize: 44,
         onComplete: () => {
           playChime();
@@ -871,7 +871,7 @@ export class SunkenBellScene extends Phaser.Scene {
         scene: this,
         word: trueName,
         x: this.scale.width / 2,
-        y: this.scale.height / 2 + 100,
+        y: this.scale.height / 2,
         fontSize: 28,
         onComplete: () => {
           this.clearActiveTargets();

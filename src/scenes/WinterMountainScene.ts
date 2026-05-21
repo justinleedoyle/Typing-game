@@ -7,7 +7,7 @@ import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
-import { makeWrenSprite, preloadWren } from "../game/wren";
+import { makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
 import winterBackdrop from "../../art/references/winter-mountain-clean.png";
 
 interface WinterSceneData {
@@ -112,6 +112,8 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenGlow!: Phaser.GameObjects.Graphics;
+  private wrenSprite!: Phaser.GameObjects.Image;
+  private hurtPoseTimer: Phaser.Time.TimerEvent | null = null;
   private candleGroup!: Phaser.GameObjects.Container;
   private chargeGroup!: Phaser.GameObjects.Container;
 
@@ -247,7 +249,7 @@ export class WinterMountainScene extends Phaser.Scene {
         scene: this,
         word,
         x: this.scale.width / 2,
-        y: this.scale.height - 260,
+        y: this.scale.height / 2,
         fontSize: 44,
         onComplete: () => {
           playChime();
@@ -289,7 +291,7 @@ export class WinterMountainScene extends Phaser.Scene {
       scene: this,
       word: beat,
       x: this.scale.width / 2,
-      y: this.scale.height - 260,
+      y: this.scale.height / 2,
       fontSize: 44,
       onComplete: () => {
         playChime();
@@ -313,7 +315,7 @@ export class WinterMountainScene extends Phaser.Scene {
         scene: this,
         word: HELDUR_INSCRIPTION,
         x: this.scale.width / 2,
-        y: this.scale.height - 260,
+        y: this.scale.height / 2,
         fontSize: 30,
         onComplete: () => {
           playChime();
@@ -368,7 +370,7 @@ export class WinterMountainScene extends Phaser.Scene {
       scene: this,
       word: "kindle",
       x: this.scale.width / 2,
-      y: this.scale.height - 260,
+      y: this.scale.height / 2,
       fontSize: 40,
       onComplete: () => {
         playChime();
@@ -810,6 +812,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private snuffCandle(combat: boolean): void {
     this.candles = Math.max(0, this.candles - 1);
     this.redrawCandles();
+    this.flashHurt();
     if (combat && this.candles === 0) {
       this.resetWave();
     }
@@ -1053,7 +1056,7 @@ export class WinterMountainScene extends Phaser.Scene {
         scene: this,
         word: TRUE_NAME_PASSAGE,
         x: this.scale.width / 2,
-        y: this.scale.height - 260,
+        y: this.scale.height / 2,
         fontSize: 28,
         onComplete: () => {
           playChime();
@@ -1149,7 +1152,7 @@ export class WinterMountainScene extends Phaser.Scene {
         scene: this,
         word: passages[step],
         x: this.scale.width / 2,
-        y: this.scale.height - 240,
+        y: this.scale.height / 2,
         fontSize: 36,
         onComplete: () => {
           step += 1;
@@ -1191,6 +1194,20 @@ export class WinterMountainScene extends Phaser.Scene {
   private updateWrenGlow(): void {
     const armed = this.shiftHeld && this.charges > 0 && this.waveActive;
     this.wrenGlow.setAlpha(armed ? 0.55 : 0);
+    // Don't overwrite a hurt pose mid-flash; the timer restores from there.
+    if (this.hurtPoseTimer) return;
+    setWrenPose(this.wrenSprite, armed ? "cast" : "front");
+  }
+
+  /** Briefly flash the hurt pose, then restore the resting pose. */
+  private flashHurt(): void {
+    if (!this.wrenSprite) return;
+    this.hurtPoseTimer?.remove();
+    setWrenPose(this.wrenSprite, "hurt");
+    this.hurtPoseTimer = this.time.delayedCall(420, () => {
+      this.hurtPoseTimer = null;
+      this.updateWrenGlow();
+    });
   }
 
   private setNarrator(text: string): void {
@@ -1267,7 +1284,8 @@ export class WinterMountainScene extends Phaser.Scene {
     this.wrenGlow.setAlpha(0);
     c.add(this.wrenGlow);
 
-    c.add(makeWrenSprite(this));
+    this.wrenSprite = makeWrenSprite(this);
+    c.add(this.wrenSprite);
     return c;
   }
 

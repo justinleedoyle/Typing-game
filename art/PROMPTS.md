@@ -450,6 +450,48 @@ illustration style and palette as the attached character reference sheet.
 
 ---
 
+### Enemy sprites — Winter Mountain wolves
+
+The Winter Mountain Act 2 wolf pack: regular wolves (waves 1–3) and a
+larger pack-leader boss in wave 3. In code: `WinterMountainScene.drawWolfInto`
+and `drawBossInto`. They're drawn in side profile and mirrored to face left
+when spawning on Wren's right, so the painted sprite faces right by default.
+
+Pack wolf:
+
+```
+[STYLE ANCHOR]
+Single creature sprite, isolated on solid bright magenta background
+(#ff00ff) for chroma keying. Chibi-proportioned dire wolf in side profile
+facing right: dark slate-grey fur with paler grey underbelly, lean predator
+silhouette stalking low to the ground, ears pricked forward, single amber-
+orange glinting eye visible, faint frost on the shoulders. Tail held low.
+Full body visible nose to tail with no cropping, no shadow on the magenta
+background. Same flat stylized illustration style and palette as the
+attached character reference sheet.
+```
+
+Pack leader (the "old one"):
+
+```
+[STYLE ANCHOR]
+Single creature sprite, isolated on solid bright magenta background
+(#ff00ff) for chroma keying. Larger older dire wolf — the pack leader —
+in side profile facing right: scarred slate fur with grey muzzle and
+matted ruff, weather-worn brass collar with rune-etched plates running
+across the spine, glowing amber eye, hunched powerful frame, ancient and
+watchful. Visibly bigger and heavier-built than a regular pack wolf, with
+ice clinging to the brass plates. Full body visible nose to tail with no
+cropping, no shadow on the magenta background. Same flat stylized
+illustration style and palette as the attached character reference sheet.
+```
+
+Save the keyed results as `art/wolf/wolf-pack.png` and `art/wolf/wolf-leader.png`.
+Run `python3 scripts/key_wolf.py` after dropping the raw renders into
+`art/references/wolf-pack.png` and `art/references/wolf-leader.png`.
+
+---
+
 ## Reference image checklist
 
 Drop these files into `art/references/` (filenames are what `PROMPTS.md` expects above):
@@ -476,6 +518,11 @@ Drop these files into `art/references/` (filenames are what `PROMPTS.md` expects
 - [ ] `sky-island-clean.png`
 - [ ] `haunted-wood-clean.png`
 - [ ] `great-battle-clean.png`
+
+### Enemy sprites (regenerate after backgrounds)
+
+- [ ] `wolf-pack.png` — regular dire wolf, magenta-keyed, facing right
+- [ ] `wolf-leader.png` — pack-leader boss, magenta-keyed, facing right
 
 ### Wren sprites (crop from sheet OR regenerate)
 

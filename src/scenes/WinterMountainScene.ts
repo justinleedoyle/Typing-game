@@ -7,6 +7,7 @@ import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
+import { makeWolfSprite, preloadWolves } from "../game/wolf";
 import { makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
 import winterBackdrop from "../../art/references/winter-mountain-clean.png";
 
@@ -25,7 +26,7 @@ interface Wolf {
   advanceTween: Phaser.Tweens.Tween | null;
   advanceMs: number;
   isBoss: boolean;
-  eye?: Phaser.GameObjects.Graphics;
+  bodySprite?: Phaser.GameObjects.Image;
 }
 
 // ─── Act 1 constants ──────────────────────────────────────────────────────────
@@ -163,6 +164,7 @@ export class WinterMountainScene extends Phaser.Scene {
   preload(): void {
     this.load.image("winter-backdrop", winterBackdrop);
     preloadWren(this);
+    preloadWolves(this);
   }
 
   create(): void {
@@ -475,8 +477,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private spawnBoss(): void {
     const startX = -200;
     const container = this.add.container(startX, BOSS_SPAWN_Y);
-    container.setScale(1.6);
-    const eye = this.drawBossInto(container);
+    const bodySprite = this.drawBossInto(container);
     container.setAlpha(0);
 
     const boss: Wolf = {
@@ -489,7 +490,7 @@ export class WinterMountainScene extends Phaser.Scene {
       advanceTween: null,
       advanceMs: BOSS_ADVANCE_MS,
       isBoss: true,
-      eye,
+      bodySprite,
     };
 
     this.tweens.add({
@@ -514,10 +515,9 @@ export class WinterMountainScene extends Phaser.Scene {
     // Snow-drift sensory beat: 2s of falling snow obscures words briefly
     this.triggerSnowDrift(() => {
       this.setNarrator("the pack leader rises. type its name to fell it.");
-      if (boss.eye) {
-        boss.eye.clear();
-        boss.eye.fillStyle(0xffd277, 1);
-        boss.eye.fillCircle(36, -10, 4);
+      if (boss.bodySprite) {
+        boss.bodySprite.setTintFill(0xffd277);
+        this.time.delayedCall(140, () => boss.bodySprite?.clearTint());
       }
       this.cameras.main.shake(180, 0.003);
       this.attachWolfTarget(boss);
@@ -1290,42 +1290,13 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private drawWolfInto(c: Phaser.GameObjects.Container, facingLeft: boolean): void {
-    const g = this.add.graphics();
-    const flip = facingLeft ? -1 : 1;
-    g.fillStyle(0x1a1a22, 1);
-    g.fillEllipse(0, 0, 80, 30);
-    g.fillEllipse(flip * 30, -10, 30, 22);
-    g.fillTriangle(flip * 24, -22, flip * 30, -32, flip * 36, -22);
-    g.fillTriangle(flip * 32, -22, flip * 38, -32, flip * 44, -22);
-    g.fillEllipse(flip * -36, -10, 22, 8);
-    g.fillRect(-14, 12, 5, 14);
-    g.fillRect(10, 12, 5, 14);
-    g.fillStyle(0xd6754a, 0.9);
-    g.fillCircle(flip * 36, -10, 2.5);
-    c.add(g);
+    c.add(makeWolfSprite(this, false, facingLeft));
   }
 
-  private drawBossInto(c: Phaser.GameObjects.Container): Phaser.GameObjects.Graphics {
-    const g = this.add.graphics();
-    g.fillStyle(0x2a2832, 1);
-    g.fillEllipse(0, 0, 100, 38);
-    g.fillEllipse(36, -12, 38, 28);
-    g.fillTriangle(28, -28, 36, -42, 44, -28);
-    g.fillTriangle(40, -28, 48, -42, 56, -28);
-    g.fillEllipse(-46, -10, 28, 10);
-    g.fillRect(-18, 16, 6, 18);
-    g.fillRect(12, 16, 6, 18);
-    g.fillStyle(PALETTE_HEX.brass, 0.7);
-    g.fillRect(-22, -16, 40, 3);
-    g.lineStyle(2, PALETTE_HEX.brass, 0.85);
-    g.strokeCircle(30, -8, 16);
-    c.add(g);
-
-    const eye = this.add.graphics();
-    eye.fillStyle(0xd6754a, 0.85);
-    eye.fillCircle(36, -10, 3);
-    c.add(eye);
-    return eye;
+  private drawBossInto(c: Phaser.GameObjects.Container): Phaser.GameObjects.Image {
+    const sprite = makeWolfSprite(this, true, false);
+    c.add(sprite);
+    return sprite;
   }
 }
 

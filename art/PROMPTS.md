@@ -53,12 +53,12 @@ Generate after Wren; pass the Wren sheet as style reference for consistency.
 ```
 [STYLE ANCHOR]
 Character design, single pose, isolated on deep navy background.
-Seated scholar: chibi-proportioned figure in a deep navy-blue coat with
-brass buttons, shoulder-length straight blonde hair, fair freckled skin,
-bright blue eyes, small round spectacles. Seated at a heavy wooden desk,
-leaning slightly forward over an open book, quill in hand, small oil lamp
-to one side casting warm amber glow. Same flat stylized illustration style
-as attached reference. Full figure visible.
+Seated scholar: chibi-proportioned adult woman in a deep navy-blue coat with
+brass buttons, long wavy honey-blonde hair, fair skin with a warm tone,
+light blue-green eyes, gentle warm expression, small round spectacles.
+Seated at a heavy wooden desk, leaning slightly forward over an open book,
+quill in hand, small oil lamp to one side casting warm amber glow. Same
+flat stylized illustration style as attached reference. Full figure visible.
 ```
 
 ---
@@ -419,14 +419,15 @@ Runa:
 ```
 [STYLE ANCHOR]
 Single character sprite, isolated on solid bright magenta background
-(#ff00ff) for chroma keying. Chibi-proportioned royal cartographer:
-deep navy-blue long coat with small brass buttons, shoulder-length straight
-blonde hair, fair freckled skin, bright blue eyes, small round brass
-spectacles, one eye clouded pale (half-blind), ink-stained hands, a small
-brass astrolabe at the belt. Standing calmly facing forward, full body
-visible head to toe with no cropping, no shadow on the magenta background.
-Same flat stylized illustration style, proportions and palette as the
-attached character reference sheet.
+(#ff00ff) for chroma keying. Chibi-proportioned adult royal cartographer,
+a woman: deep navy-blue long coat with small brass buttons, long wavy
+honey-blonde hair, fair skin with a warm tone, light blue-green eyes,
+gentle warm expression, small round brass spectacles, one eye clouded
+pale (half-blind), ink-stained hands, a small brass astrolabe at the belt.
+Standing calmly facing forward, full body visible head to toe with no
+cropping, no shadow on the magenta background. Same flat stylized
+illustration style, proportions and palette as the attached character
+reference sheet.
 ```
 
 The sibling:
@@ -434,13 +435,14 @@ The sibling:
 ```
 [STYLE ANCHOR]
 Single character sprite, isolated on solid bright magenta background
-(#ff00ff) for chroma keying. Small chibi-proportioned young child, younger
-and smaller than Wren, in a simple pale cream nightgown, bare feet, tousled
-dark hair, warm brown skin, holding a folded paper drawing pressed to the
-chest with both hands. Standing shyly facing forward, full body visible head
-to toe with no cropping, no shadow on the magenta background. Same flat
-stylized illustration style and palette as the attached character reference
-sheet.
+(#ff00ff) for chroma keying. Very small chibi-proportioned young child,
+about three years old, much smaller than Wren: very platinum-blonde
+straight hair slightly tousled, fair pale skin with rosy cheeks, bright
+blue eyes, wide joyful smile. Wearing a simple pale cream nightgown, bare
+feet, holding a folded paper drawing pressed to the chest with both hands.
+Standing shyly facing forward, full body visible head to toe with no
+cropping, no shadow on the magenta background. Same flat stylized
+illustration style and palette as the attached character reference sheet.
 ```
 
 ---

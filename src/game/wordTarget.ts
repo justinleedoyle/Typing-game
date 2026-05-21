@@ -18,6 +18,10 @@ export interface TextWordTargetOptions {
   /** Higher wins on first-letter ties. Default 0. */
   priority?: number;
   onComplete: () => void;
+  /** Fired instead of onComplete when the target was claimed in spell mode
+   *  (first letter typed with Shift held). If omitted, onComplete runs
+   *  normally and spell mode is purely cosmetic. */
+  onSpellComplete?: () => void;
   /** Optional anchor sprite to flash/shake when the player misses. */
   anchor?: Phaser.GameObjects.GameObject & {
     setTint?: (tint: number) => void;
@@ -33,6 +37,8 @@ export class TextWordTarget implements WordTarget {
   private cursor = 0;
   private complete = false;
   private dimmed = false;
+  private candidate = false;
+  private spellClaimed = false;
 
   readonly priority: number;
 
@@ -89,20 +95,28 @@ export class TextWordTarget implements WordTarget {
     });
   }
 
-  onClaim(): void {
+  onClaim(spell: boolean): void {
     this.dimmed = false;
+    this.spellClaimed = spell;
+    if (spell) {
+      this.typedText.setColor(PALETTE.ember);
+      this.remainingText.setColor(PALETTE.ember);
+    }
     this.applyDim();
   }
 
   onRelease(): void {
     if (this.complete) return;
-    // If released without completing (e.g. scene shutdown), reset state so
-    // the same target could be reclaimed later.
     this.cursor = 0;
+    this.spellClaimed = false;
+    this.candidate = false;
+    this.typedText.setColor(PALETTE.brass);
+    this.remainingText.setColor(PALETTE.cream);
     this.relayout();
   }
 
   onComplete(): void {
+    const spell = this.spellClaimed;
     this.opts.scene.tweens.add({
       targets: this.container,
       alpha: { from: 1, to: 0 },
@@ -110,7 +124,11 @@ export class TextWordTarget implements WordTarget {
       duration: 320,
       ease: "Sine.easeOut",
       onComplete: () => {
-        this.opts.onComplete();
+        if (spell && this.opts.onSpellComplete) {
+          this.opts.onSpellComplete();
+        } else {
+          this.opts.onComplete();
+        }
         this.destroy();
       },
     });
@@ -119,6 +137,21 @@ export class TextWordTarget implements WordTarget {
   setDimmed(dimmed: boolean): void {
     this.dimmed = dimmed;
     this.applyDim();
+  }
+
+  setCandidate(candidate: boolean): void {
+    this.candidate = candidate;
+    this.applyDim();
+  }
+
+  /** Reposition the floating word — used to keep it pinned above a moving
+   *  enemy. */
+  setAnchorX(x: number): void {
+    this.container.x = x;
+  }
+
+  setAnchorY(y: number): void {
+    this.container.y = y;
   }
 
   destroy(): void {
@@ -138,7 +171,13 @@ export class TextWordTarget implements WordTarget {
   }
 
   private applyDim(): void {
-    const alpha = this.dimmed ? 0.25 : 1;
+    const alpha = this.dimmed ? 0.12 : 1;
     this.container.setAlpha(alpha);
+    // Candidates glow slightly so the player can see which words are still live.
+    if (!this.dimmed && this.candidate) {
+      this.remainingText.setColor(PALETTE.frost ?? PALETTE.cream);
+    } else if (!this.dimmed && !this.spellClaimed) {
+      this.remainingText.setColor(PALETTE.cream);
+    }
   }
 }

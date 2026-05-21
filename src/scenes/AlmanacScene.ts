@@ -110,19 +110,34 @@ export class AlmanacScene extends Phaser.Scene {
     );
 
     // Right page: ending + satchel
-    const endingKey = realmProgress.choices?.ending;
-    const endingText =
-      (endingKey && lore.endings[endingKey]) ?? "His path remains unwritten.";
+    const choices = realmProgress.choices as Record<string, string> | undefined;
+    const primaryKey = this.resolveEndingKey(realmId, choices);
+    const secondaryKey = this.resolveSecondaryEndingKey(realmId, choices);
+    const primaryText =
+      (primaryKey && lore.endings[primaryKey]) ?? "His path remains unwritten.";
+    const secondaryText =
+      secondaryKey ? (lore.endings[secondaryKey] ?? undefined) : undefined;
+
     this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y, "His path:", {
       fontSize: "30px",
       fontStyle: "italic",
       color: PAGE_INK_DIM,
     });
-    this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 60, endingText, {
+    this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 60, primaryText, {
       fontSize: "26px",
       color: PAGE_INK,
       wordWrap: { width: PAGE_TEXT_WIDTH },
     });
+
+    if (secondaryText) {
+      this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 180, secondaryText, {
+        fontSize: "26px",
+        color: PAGE_INK,
+        wordWrap: { width: PAGE_TEXT_WIDTH },
+      });
+    }
+
+    const relicsY = secondaryText ? TOP_TEXT_Y + 420 : TOP_TEXT_Y + 320;
 
     const realmRelics = state.satchel
       .map((id) => RELICS[id])
@@ -131,7 +146,7 @@ export class AlmanacScene extends Phaser.Scene {
     if (realmRelics.length > 0) {
       this.addPageText(
         RIGHT_PAGE_X,
-        TOP_TEXT_Y + 320,
+        relicsY,
         "He carried away:",
         {
           fontSize: "26px",
@@ -142,7 +157,7 @@ export class AlmanacScene extends Phaser.Scene {
       realmRelics.forEach((r, i) => {
         this.addPageText(
           RIGHT_PAGE_X,
-          TOP_TEXT_Y + 360 + i * 40,
+          relicsY + 40 + i * 40,
           `• ${r.name}`,
           { fontSize: "26px", color: PAGE_INK },
         );
@@ -163,6 +178,64 @@ export class AlmanacScene extends Phaser.Scene {
       },
       { centerX: true },
     );
+  }
+
+  /** Returns the primary (fork1) lore ending key for a realm. */
+  private resolveEndingKey(
+    realmId: string,
+    choices: Record<string, string> | undefined,
+  ): string | undefined {
+    if (!choices) return undefined;
+    switch (realmId) {
+      case "winter-mountain":
+        // fork1: "huntress" | "firefly" — both match lore keys directly
+        return choices["fork1"];
+      case "sunken-bell":
+        // fork1: "chant" | "force"; lore only has "chant" for this arm
+        return choices["fork1"] === "chant" ? "chant" : undefined;
+      case "clockwork-forge":
+        // choices.ending is e.g. "forn-peaceful" — extract the fork1 part
+        return choices["ending"]?.split("-")[0]; // "forn" | "cabal"
+      case "sky-island":
+        // fork1: "help-etta" → lore "help-etta"; "steal-flame" → lore "beacon"
+        if (choices["fork1"] === "help-etta") return "help-etta";
+        if (choices["fork1"] === "steal-flame") return "beacon";
+        return choices["fork1"];
+      case "haunted-wood":
+        // fork1: "offering" | "bone-flute" — both match lore keys directly
+        return choices["fork1"];
+      default:
+        return choices["ending"];
+    }
+  }
+
+  /** Returns the secondary (fork2) lore ending key for a realm, or undefined if none. */
+  private resolveSecondaryEndingKey(
+    realmId: string,
+    choices: Record<string, string> | undefined,
+  ): string | undefined {
+    if (!choices) return undefined;
+    switch (realmId) {
+      case "winter-mountain":
+        // fork2: "bury" | "pelt" — both match lore keys directly
+        return choices["fork2"];
+      case "sunken-bell":
+        // fork2: "free-aurland" → lore "free-king"; "claim-tongue" → lore "claim-tongue"
+        if (choices["fork2"] === "free-aurland") return "free-king";
+        return choices["fork2"]; // "claim-tongue"
+      case "clockwork-forge":
+        // choices.ending second part: "peaceful" | "fought" — both match lore keys
+        return choices["ending"]?.split("-")[1];
+      case "sky-island":
+        // fork2: "answer-kindly" | "cut-tether" — both match lore keys directly
+        return choices["fork2"];
+      case "haunted-wood":
+        // fork2: "bargain" → lore "bargain"; "force" → lore "light-grove"
+        if (choices["fork2"] === "force") return "light-grove";
+        return choices["fork2"]; // "bargain"
+      default:
+        return undefined;
+    }
   }
 
   private renderEmptyPages(): void {

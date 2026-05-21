@@ -1,11 +1,20 @@
 import Phaser from "phaser";
+import { installMobileKeyboardBridge } from "./mobileInput";
 import { AlmanacScene } from "./scenes/AlmanacScene";
+import { ClockworkForgeScene } from "./scenes/ClockworkForgeScene";
+import { GreatBattleScene } from "./scenes/GreatBattleScene";
+import { HauntedWoodScene } from "./scenes/HauntedWoodScene";
+import { OpeningScene } from "./scenes/OpeningScene";
 import { PortalChamberScene } from "./scenes/PortalChamberScene";
+import { SkyIslandScene } from "./scenes/SkyIslandScene";
+import { SunkenBellScene } from "./scenes/SunkenBellScene";
 import { TitleScene } from "./scenes/TitleScene";
 import { WinterMountainScene } from "./scenes/WinterMountainScene";
 
 const DESIGN_WIDTH = 1920;
 const DESIGN_HEIGHT = 1080;
+
+installMobileKeyboardBridge();
 
 new Phaser.Game({
   type: Phaser.AUTO,
@@ -17,5 +26,5 @@ new Phaser.Game({
     width: DESIGN_WIDTH,
     height: DESIGN_HEIGHT,
   },
-  scene: [TitleScene, PortalChamberScene, WinterMountainScene, AlmanacScene],
+  scene: [TitleScene, OpeningScene, PortalChamberScene, WinterMountainScene, SunkenBellScene, ClockworkForgeScene, SkyIslandScene, HauntedWoodScene, GreatBattleScene, AlmanacScene],
 });

@@ -26,6 +26,7 @@ export interface SaveState {
   realms: Record<string, RealmProgress>;
   satchel: string[];
   keyStats: Record<string, KeyStat>;
+  almanacLore: string[];
   updatedAt: number;
 }
 
@@ -36,6 +37,7 @@ export function emptySave(profileName = "Wren"): SaveState {
     realms: {},
     satchel: [],
     keyStats: {},
+    almanacLore: [],
     updatedAt: Date.now(),
   };
 }

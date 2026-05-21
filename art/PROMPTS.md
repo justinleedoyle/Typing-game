@@ -237,10 +237,11 @@ moves). Only Wren is removed. Same for the Almanac UI — no character, unchange
 
 Reference (when generated): `references/hub-portal-chamber-clean.png`
 
-IMPORTANT: the arches must all be IDENTICAL and NEUTRAL. The game lights
-each arch dynamically (sealed / active portal / cleared), so the backdrop
-must not bake in any portal glow or per-arch state, and must carry no
-numerals, labels, or annotation markings on the arches.
+IMPORTANT: the arches must all be IDENTICAL and NEUTRAL and the desk must
+be EMPTY. The game lights each arch dynamically (sealed / active portal /
+cleared) and overlays the painted Runa sprite at her desk, so the backdrop
+must not bake in any portal glow, per-arch state, numerals/annotations, or
+any figure at the desk.
 
 ```
 [STYLE ANCHOR]
@@ -249,10 +250,12 @@ Stone floor with faint inlaid brass circle. Six tall wooden bookshelves
 lining the back wall with books and candles. Five identical stone archways
 in a row center-stage — all five sealed with dark empty stone, unlit, no
 portal energy, no glow, no numerals or markings on them, every arch the
-same. Far left: heavy wooden scholar's desk, seated scholar in navy coat
-(Runa), oil lamp. Far right: tall glass display cabinet with brass trim.
-Empty stone floor center where a traveler would stand — no traveler figure
-present, no hooded character, empty playfield.
+same. Far left: heavy wooden scholar's desk with an oil lamp, open books,
+papers and a quill on it, an empty wooden chair pulled up — no character at
+the desk, no figure present, no person, no scholar. Far right: tall glass
+display cabinet with brass trim. Empty stone floor center where a traveler
+would stand — no traveler figure present, no hooded character, empty
+playfield.
 Deep navy background, warm brass and amber candlelight pools on stone floor.
 ```
 

@@ -1,8 +1,10 @@
 import Phaser from "phaser";
 import wrenFront from "../../art/wren/wren-front.png";
 import wrenWalk from "../../art/wren/wren-walk-right.png";
+import wrenCast from "../../art/wren/wren-cast.png";
+import wrenHurt from "../../art/wren/wren-hurt.png";
 
-export type WrenPose = "front" | "walk";
+export type WrenPose = "front" | "walk" | "cast" | "hurt";
 
 /** On-screen height of the Wren sprite at the 1920x1080 design resolution. */
 const WREN_DISPLAY_HEIGHT = 160;
@@ -10,10 +12,14 @@ const WREN_DISPLAY_HEIGHT = 160;
 const TEXTURE: Record<WrenPose, string> = {
   front: "wren-front",
   walk: "wren-walk",
+  cast: "wren-cast",
+  hurt: "wren-hurt",
 };
 const SOURCE: Record<string, string> = {
   "wren-front": wrenFront,
   "wren-walk": wrenWalk,
+  "wren-cast": wrenCast,
+  "wren-hurt": wrenHurt,
 };
 
 /** Loads every Wren pose texture. Call from a scene's preload(). */

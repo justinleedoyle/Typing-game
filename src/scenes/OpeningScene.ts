@@ -272,12 +272,12 @@ export class OpeningScene extends Phaser.Scene {
     });
   }
 
-  /** Runa — the painted royal cartographer, fades in beside the desk. */
+  /** Runa — the painted royal cartographer, fades in across the room. */
   private drawRuna(): void {
     const img = this.add
-      .image(980, 905, "runa-sprite")
+      .image(1130, 950, "runa-sprite")
       .setOrigin(0.5, 1);
-    img.setScale(170 / img.height);
+    img.setScale(360 / img.height);
     img.setAlpha(0);
     this.tweens.add({
       targets: img,
@@ -290,9 +290,9 @@ export class OpeningScene extends Phaser.Scene {
   /** The sibling — the painted small child, fades in at the left. */
   private drawSibling(): void {
     const img = this.add
-      .image(250, 935, "sibling-sprite")
+      .image(270, 955, "sibling-sprite")
       .setOrigin(0.5, 1);
-    img.setScale(130 / img.height);
+    img.setScale(235 / img.height);
     img.setAlpha(0);
     this.tweens.add({
       targets: img,

@@ -124,7 +124,11 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.fadeIn(600, 26, 16, 8);
-    this.add.image(0, 0, "forge-backdrop").setOrigin(0).setDepth(-100);
+    this.add
+      .image(0, 0, "forge-backdrop")
+      .setOrigin(0)
+      .setDisplaySize(this.scale.width, this.scale.height)
+      .setDepth(-100);
     this.drawForgeGlow();
     this.drawCatwalk();
     this.drawWren(this.scale.width / 2, CATWALK_Y + 20);

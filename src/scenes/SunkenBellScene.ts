@@ -74,7 +74,11 @@ export class SunkenBellScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.fadeIn(600, 8, 24, 32);
-    this.add.image(0, 0, "sunken-bell-backdrop").setOrigin(0).setDepth(-100);
+    this.add
+      .image(0, 0, "sunken-bell-backdrop")
+      .setOrigin(0)
+      .setDisplaySize(this.scale.width, this.scale.height)
+      .setDepth(-100);
     this.wrenContainer = this.drawWren(WREN_X, WREN_Y);
 
     this.narratorText = this.add

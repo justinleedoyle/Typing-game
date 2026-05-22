@@ -227,6 +227,22 @@ export class WinterMountainScene extends Phaser.Scene {
     this.redrawCandles();
     this.redrawCharges();
 
+    // Small italic labels under each HUD cluster so it's obvious what they
+    // are. "candles" mirrors the narrator's language ("Keep your candles
+    // lit"); "thunder" matches the thunderclap spell.
+    const hudLabelStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: SERIF,
+      fontSize: "16px",
+      fontStyle: "italic",
+      color: PALETTE.dim,
+    };
+    this.add
+      .text(this.scale.width / 2 - 110, 920, "candles", hudLabelStyle)
+      .setOrigin(0.5);
+    this.add
+      .text(this.scale.width / 2 + 110, 920, "thunder", hudLabelStyle)
+      .setOrigin(0.5);
+
     this.typingInput = new TypingInputController(this.store);
     this.typingInput.setKeystrokeHooks({
       onCorrect: () => bobWrenSprite(this.wrenSprite),

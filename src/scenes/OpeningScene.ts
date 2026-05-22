@@ -14,13 +14,9 @@ interface OpeningSceneData {
   store: SaveStore;
 }
 
-// The doorway on the right of the new study backdrop — already painted with
-// a faint blue portal visible through it; Beat 7 brightens it into a wake.
-const PORTAL = { x: 1500, y: 540 };
-
-// Where the typed words float — just above the painted typewriter which now
-// sits in the lower-left of the study.
-const TYPE_TARGET = { x: 530, y: 580 };
+// Where the typed words float — just above the painted typewriter, which
+// sits at roughly (420, 600) in the lower-left of the study.
+const TYPE_TARGET = { x: 420, y: 500 };
 
 export class OpeningScene extends Phaser.Scene {
   private store!: SaveStore;
@@ -62,8 +58,8 @@ export class OpeningScene extends Phaser.Scene {
     // Soft glow over the Almanac on the desk — pulsed in Beat 4.
     this.almanacGlow = this.add.graphics();
     this.almanacGlow.fillStyle(PALETTE_HEX.brass, 1);
-    // The Almanac sits among the papers/books on the desk in the lower-left.
-    this.almanacGlow.fillCircle(560, 740, 70);
+    // The Almanac sits among the books on the desk; centered at ≈(300, 660).
+    this.almanacGlow.fillCircle(300, 660, 60);
     this.almanacGlow.setAlpha(0);
 
     // ── Narrator text ────────────────────────────────────────────────────────
@@ -297,35 +293,36 @@ export class OpeningScene extends Phaser.Scene {
 
   // ── Drawing ────────────────────────────────────────────────────────────────
 
-  /** The arched window blazes with cold light from beyond. */
+  /** Beat 7 visual cue — a soft cream pulse over the painted portal in the
+   *  doorway. The doorway is already painted with a glowing portal, so we
+   *  just brighten it rather than drawing new geometric shapes on top. */
   private wakePortal(): void {
     const g = this.add.graphics();
     g.setAlpha(0);
-    const { x, y } = PORTAL;
-
-    // Cold light spilling into the room.
-    g.fillStyle(PALETTE_HEX.frost, 0.16);
-    g.fillEllipse(x, y, 560, 580);
-    // The window blaze.
-    g.fillStyle(PALETTE_HEX.frost, 0.5);
-    g.fillEllipse(x, y, 250, 320);
-    // Bright core.
-    g.fillStyle(PALETTE_HEX.cream, 0.4);
-    g.fillEllipse(x, y, 130, 220);
+    // Single soft glow centered on the painted doorway portal (≈x=1500, y=540)
+    // with a wide low-alpha bloom so it reads as "the portal stirs" without
+    // overlaying hard-edged ellipses on the painted art.
+    g.fillStyle(PALETTE_HEX.frost, 0.18);
+    g.fillCircle(1500, 540, 220);
+    g.setBlendMode(Phaser.BlendModes.ADD);
 
     this.tweens.add({
       targets: g,
-      alpha: 1,
-      duration: 1100,
-      ease: "Sine.easeOut",
+      alpha: { from: 0, to: 1 },
+      duration: 900,
+      yoyo: true,
+      hold: 600,
+      ease: "Sine.easeInOut",
+      onComplete: () => g.destroy(),
     });
   }
 
-  /** Runa — the painted royal cartographer, fades in beside her desk on
-   *  the left of the new study backdrop. */
+  /** Runa — the painted royal cartographer, fades in in front of the desk
+   *  on the left. Positioned left of the painted chair (which sits at ≈x=900)
+   *  so she doesn't appear to stand on it. */
   private drawRuna(): void {
     const img = this.add
-      .image(700, 945, "runa-sprite")
+      .image(480, 945, "runa-sprite")
       .setOrigin(0.5, 1);
     img.setScale(360 / img.height);
     img.setAlpha(0);
@@ -337,12 +334,12 @@ export class OpeningScene extends Phaser.Scene {
     });
   }
 
-  /** The sibling — fades in just left of the doorway on the right of the
-   *  study. Leaves the doorway frame clear so the Quiet Lord (Beat 6) and
-   *  the painted portal-through-the-doorway both remain visible. */
+  /** The sibling — fades in just left of the doorway. Doorway center is
+   *  ≈x=1521; she sits at x=1180 so the doorway frame, the painted portal
+   *  through it, and the Quiet Lord (Beat 6) all stay visible past her. */
   private drawSibling(): void {
     const img = this.add
-      .image(1250, 950, "sibling-sprite")
+      .image(1180, 950, "sibling-sprite")
       .setOrigin(0.5, 1);
     img.setScale(235 / img.height);
     img.setAlpha(0);

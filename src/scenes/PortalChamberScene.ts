@@ -15,6 +15,7 @@ import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
 import { bobWrenSprite, makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
 import hubBackdrop from "../../art/references/hub-portal-chamber-clean.png";
+import portalActiveSheet from "../../art/portal/portal-active-sheet.png";
 import runaSprite from "../../art/runa/runa-front.png";
 
 interface ChamberSceneData {
@@ -69,8 +70,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private archGraphics = new Map<string, Phaser.GameObjects.Graphics>();
-  private archBreathTweens = new Map<string, Phaser.Tweens.Tween>();
-  private archRingEmitters = new Map<string, Phaser.Time.TimerEvent>();
+  private archSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private hint!: Phaser.GameObjects.Text;
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
@@ -84,14 +84,19 @@ export class PortalChamberScene extends Phaser.Scene {
   init(data: ChamberSceneData): void {
     this.store = data.store;
     this.archGraphics = new Map();
-    this.archBreathTweens = new Map();
-    this.archRingEmitters = new Map();
+    this.archSprites = new Map();
     this.zoneTargets = [];
   }
 
   preload(): void {
     this.load.image("hub-backdrop", hubBackdrop);
     this.load.image("runa-sprite", runaSprite);
+    // 8-frame portal swirl: 1672x941 sheet, 8 frames spread horizontally,
+    // so each frame is 209x941 (mostly transparent above the arch).
+    this.load.spritesheet("portal-active", portalActiveSheet, {
+      frameWidth: 209,
+      frameHeight: 941,
+    });
     preloadWren(this);
   }
 
@@ -100,6 +105,15 @@ export class PortalChamberScene extends Phaser.Scene {
     if (!this.store.get().typewriterAwakened) {
       this.scene.start("OpeningScene", { store: this.store });
       return;
+    }
+
+    if (!this.anims.exists("portal-spin")) {
+      this.anims.create({
+        key: "portal-spin",
+        frames: this.anims.generateFrameNumbers("portal-active", { start: 0, end: 7 }),
+        frameRate: 10,
+        repeat: -1,
+      });
     }
 
     this.drawRoom();
@@ -136,9 +150,6 @@ export class PortalChamberScene extends Phaser.Scene {
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
-      for (const id of [...this.archBreathTweens.keys()]) {
-        this.stopPortalAnimation(id);
-      }
     });
 
     this.ambientHandle = playAmbientHub();
@@ -507,8 +518,24 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private drawArch(spec: ArchSpec): void {
+    // Graphics for the warm-amber cleared-realm ring (static).
     const g = this.add.graphics();
     this.archGraphics.set(spec.id, g);
+
+    // Animated portal sprite — invisible until the arch becomes "next" or
+    // "cleared". The sprite frame is 209x941; the painted arch within
+    // sits from ~30%..86% of the frame height. Anchor at y=0.86 puts the
+    // arch's painted bottom right at spec.baseY when scaled.
+    const sprite = this.add
+      .sprite(spec.x, spec.baseY, "portal-active", 0)
+      .setOrigin(0.5, 0.86)
+      .setVisible(false);
+    // Uniform 0.50 scale lands the painted-arch height at ≈264 px
+    // (matching the painted hub arch height of 265). Width ends up
+    // narrower than the painted stone frame, which is fine — the dark
+    // painted void shows around the swirl edge instead of overflowing.
+    sprite.setScale(0.5);
+    this.archSprites.set(spec.id, sprite);
   }
 
   private renderArch(
@@ -516,116 +543,37 @@ export class PortalChamberScene extends Phaser.Scene {
     state: "next" | "cleared" | "dark" | "locked",
   ): void {
     const g = this.archGraphics.get(spec.id);
-    if (!g) return;
+    const sprite = this.archSprites.get(spec.id);
+    if (!g || !sprite) return;
     g.clear();
 
-    // Sealed arches keep the painted dark opening — nothing drawn over them.
-    if (state === "locked" || state === "dark") return;
+    if (state === "locked" || state === "dark") {
+      sprite.setVisible(false);
+      sprite.stop();
+      return;
+    }
 
-    const left     = spec.x - spec.width / 2;
-    const right    = spec.x + spec.width / 2;
-    const base     = spec.baseY;
-    const archMidY = (base - spec.height) + spec.width / 2;
-    const radius   = spec.width / 2;
-
-    // Glowing portal surface, filled inside the painted stone frame.
-    const innerColor = state === "next" ? PALETTE_HEX.frost : PALETTE_HEX.brass;
-    const innerAlpha = state === "next" ? 0.68 : 0.55;
-
-    g.fillStyle(innerColor, innerAlpha);
-    g.beginPath();
-    g.moveTo(left, base);
-    g.lineTo(left, archMidY);
-    g.arc(spec.x, archMidY, radius, Math.PI, 0, false);
-    g.lineTo(right, base);
-    g.closePath();
-    g.fillPath();
-
-    // Static cleared-realm ripple — animated rings only fire for "next".
     if (state === "cleared") {
+      // Warm amber ring under the painted arch — revisitable cue.
+      const archMidY = spec.baseY - spec.height + spec.width / 2;
+      const radius = spec.width / 2;
       g.lineStyle(2, PALETTE_HEX.brass, 0.35);
       g.beginPath();
       g.arc(spec.x, archMidY + 60, radius * 0.55, 0, Math.PI * 2);
       g.strokePath();
+      // Painted swirl plays in warm tint to read as "cleared" not "next".
+      sprite.setVisible(true);
+      sprite.setTint(0xc9a14a);
+      sprite.setAlpha(0.55);
+      if (!sprite.anims.isPlaying) sprite.play("portal-spin");
+      return;
     }
 
-    if (state === "next") {
-      this.startPortalAnimation(spec);
-    } else {
-      this.stopPortalAnimation(spec.id);
-    }
-  }
-
-  /** Active portals breathe (alpha pulse) and emit ripple rings outward to
-   *  feel alive instead of looking like a flat blue shape. */
-  private startPortalAnimation(spec: ArchSpec): void {
-    const g = this.archGraphics.get(spec.id);
-    if (!g) return;
-
-    if (!this.archBreathTweens.has(spec.id)) {
-      this.archBreathTweens.set(
-        spec.id,
-        this.tweens.add({
-          targets: g,
-          alpha: { from: 0.6, to: 1.0 },
-          duration: 1400,
-          yoyo: true,
-          repeat: -1,
-          ease: "Sine.easeInOut",
-        }),
-      );
-    }
-
-    if (!this.archRingEmitters.has(spec.id)) {
-      // Fire a ring immediately, then every ~1.1s.
-      this.spawnPortalRing(spec);
-      this.archRingEmitters.set(
-        spec.id,
-        this.time.addEvent({
-          delay: 1100,
-          loop: true,
-          callback: () => this.spawnPortalRing(spec),
-        }),
-      );
-    }
-  }
-
-  private stopPortalAnimation(archId: string): void {
-    const tween = this.archBreathTweens.get(archId);
-    if (tween) {
-      tween.stop();
-      const g = this.archGraphics.get(archId);
-      if (g) g.alpha = 1;
-      this.archBreathTweens.delete(archId);
-    }
-    const emitter = this.archRingEmitters.get(archId);
-    if (emitter) {
-      emitter.remove();
-      this.archRingEmitters.delete(archId);
-    }
-  }
-
-  /** Spawns a single ring inside the painted arch frame that expands and
-   *  fades outward, like portal energy rolling toward the viewer. */
-  private spawnPortalRing(spec: ArchSpec): void {
-    const archMidY = spec.baseY - spec.height + spec.width / 2;
-    const innerCentreY = (archMidY + spec.baseY) / 2;
-    const radius = spec.width / 2;
-    const ring = this.add.graphics();
-    ring.setPosition(spec.x, innerCentreY);
-    ring.setDepth(-50);
-    ring.lineStyle(3, PALETTE_HEX.cream, 0.7);
-    ring.beginPath();
-    ring.arc(0, 0, radius * 0.35, 0, Math.PI * 2);
-    ring.strokePath();
-    this.tweens.add({
-      targets: ring,
-      scale: 2.2,
-      alpha: 0,
-      duration: 1500,
-      ease: "Sine.easeOut",
-      onComplete: () => ring.destroy(),
-    });
+    // state === "next": full-strength painted swirl.
+    sprite.setVisible(true);
+    sprite.clearTint();
+    sprite.setAlpha(1);
+    if (!sprite.anims.isPlaying) sprite.play("portal-spin");
   }
 
   private drawArchLabels(): void {

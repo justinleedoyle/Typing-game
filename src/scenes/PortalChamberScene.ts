@@ -37,12 +37,15 @@ interface ArchSpec {
 // Geometry maps each arch onto a painted opening in the hub backdrop art.
 // width/height/baseY describe the portal-surface fill drawn inside the
 // painted stone frame (no programmatic surround).
+// Painted arch positions in the hub-portal-chamber-clean backdrop, measured
+// from the source 1672×941 image scaled to the 1920×1080 game canvas. Each
+// arch ≈220 wide × 290 tall in the painting; baseY=658 is the arch bottom.
 const ARCHES: readonly ArchSpec[] = [
-  { id: "winter-mountain", x: 533,  width: 140, height: 265, baseY: 705, label: "Winter Mountain", sceneKey: "WinterMountainScene"  },
-  { id: "sunken-bell",     x: 762,  width: 140, height: 265, baseY: 705, label: "Sunken Bell",     sceneKey: "SunkenBellScene"      },
-  { id: "clockwork-forge", x: 990,  width: 140, height: 265, baseY: 705, label: "Clockwork Forge", sceneKey: "ClockworkForgeScene"   },
-  { id: "sky-island",      x: 1221, width: 140, height: 265, baseY: 705, label: "Sky Island",      sceneKey: "SkyIslandScene"        },
-  { id: "haunted-wood",    x: 1454, width: 140, height: 265, baseY: 705, label: "Haunted Wood",    sceneKey: "HauntedWoodScene"      },
+  { id: "winter-mountain", x: 655,  width: 220, height: 290, baseY: 658, label: "Winter Mountain", sceneKey: "WinterMountainScene"  },
+  { id: "sunken-bell",     x: 913,  width: 220, height: 290, baseY: 658, label: "Sunken Bell",     sceneKey: "SunkenBellScene"      },
+  { id: "clockwork-forge", x: 1147, width: 220, height: 290, baseY: 658, label: "Clockwork Forge", sceneKey: "ClockworkForgeScene"   },
+  { id: "sky-island",      x: 1381, width: 220, height: 290, baseY: 658, label: "Sky Island",      sceneKey: "SkyIslandScene"        },
+  { id: "haunted-wood",    x: 1638, width: 220, height: 290, baseY: 658, label: "Haunted Wood",    sceneKey: "HauntedWoodScene"      },
 ] as const;
 
 const REALM_SEQUENCE = ARCHES.map((a) => a.id);
@@ -523,14 +526,16 @@ export class PortalChamberScene extends Phaser.Scene {
     const g = this.add.graphics();
     this.archGraphics.set(spec.id, g);
 
-    // Painted portal sprite — frames are now 168x338, arch fills the frame
-    // top-to-bottom. Anchor bottom-center, scale to ≈match the painted
-    // hub arch (140 wide × 265 tall in game coords).
+    // Painted portal sprite — 168x338 frames, arch fills the frame top to
+    // bottom. Anchored bottom-center on the painted arch bottom (baseY).
+    // The painted hub arches are wide-and-short (≈220×290) while the source
+    // swirl is narrow-and-tall (168×338, aspect 1:2), so we scale non-
+    // uniformly: x to match arch width, y to match arch height.
     const sprite = this.add
       .sprite(spec.x, spec.baseY, "portal-active", 0)
       .setOrigin(0.5, 1)
       .setVisible(false);
-    sprite.setScale(0.78);
+    sprite.setScale(spec.width / 168, spec.height / 338);
     this.archSprites.set(spec.id, sprite);
   }
 

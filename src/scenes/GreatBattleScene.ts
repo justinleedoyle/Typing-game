@@ -167,7 +167,11 @@ export class GreatBattleScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.fadeIn(700, 11, 10, 15);
 
-    this.add.image(0, 0, "great-battle-backdrop").setOrigin(0).setDepth(-100);
+    this.add
+      .image(0, 0, "great-battle-backdrop")
+      .setOrigin(0)
+      .setDisplaySize(this.scale.width, this.scale.height)
+      .setDepth(-100);
 
     // Narrator
     this.narratorText = this.add

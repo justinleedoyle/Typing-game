@@ -88,7 +88,11 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.fadeIn(600, 14, 18, 14);
-    this.add.image(0, 0, "haunted-wood-backdrop").setOrigin(0).setDepth(-100);
+    this.add
+      .image(0, 0, "haunted-wood-backdrop")
+      .setOrigin(0)
+      .setDisplaySize(this.scale.width, this.scale.height)
+      .setDepth(-100);
     this.drawShrine();
     this.drawWren(WREN_X, WREN_Y);
 

@@ -204,7 +204,11 @@ export class WinterMountainScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.fadeIn(500, 11, 10, 15);
-    this.add.image(0, 0, "winter-backdrop").setOrigin(0).setDepth(-100);
+    this.add
+      .image(0, 0, "winter-backdrop")
+      .setOrigin(0)
+      .setDisplaySize(this.scale.width, this.scale.height)
+      .setDepth(-100);
     this.wrenContainer = this.drawWren(this.scale.width / 2, 880);
 
     this.narratorText = this.add

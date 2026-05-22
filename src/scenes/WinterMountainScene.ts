@@ -42,7 +42,7 @@ const RIVER_BEATS = ["lift", "step", "duck"] as const;
 /** Wren's side of the Heldur exchange — short prompts the player types as
  *  Wren's question/word, not Heldur's words. Each pairs with a narrator
  *  cue and a spoken response that surfaces above the knight. */
-const HELDUR_QUESTIONS = ["name", "story", "holdfast"] as const;
+const HELDUR_QUESTIONS = ["name", "story", "Holdfast"] as const;
 
 /** Narrator prompt that precedes each typed question, framing what Wren is
  *  about to ask. */
@@ -73,7 +73,7 @@ const WAVE_CANDLES = 3;
 const WAVE_CHARGES = 2;
 const WOLF_KNOCKBACK_PAUSE_MS = 1500;
 
-const BOSS_PHRASE = "the old one, stirring.";
+const BOSS_PHRASE = "The Old One, Stirring.";
 const BOSS_ADVANCE_MS = 17_000;
 const BOSS_SPAWN_X = 1100;
 const BOSS_SPAWN_Y = 800;

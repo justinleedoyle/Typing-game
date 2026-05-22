@@ -38,14 +38,15 @@ interface ArchSpec {
 // width/height/baseY describe the portal-surface fill drawn inside the
 // painted stone frame (no programmatic surround).
 // Painted arch positions in the hub-portal-chamber-clean backdrop, measured
-// from the source 1672×941 image scaled to the 1920×1080 game canvas. Each
-// arch ≈220 wide × 290 tall in the painting; baseY=658 is the arch bottom.
+// from the source 1672×941 image scaled to the 1920×1080 game canvas.
+// width × height ≈ painted arch silhouette so the portal sprite fills the
+// painted stone frame instead of floating inside it.
 const ARCHES: readonly ArchSpec[] = [
-  { id: "winter-mountain", x: 655,  width: 220, height: 290, baseY: 658, label: "Winter Mountain", sceneKey: "WinterMountainScene"  },
-  { id: "sunken-bell",     x: 913,  width: 220, height: 290, baseY: 658, label: "Sunken Bell",     sceneKey: "SunkenBellScene"      },
-  { id: "clockwork-forge", x: 1147, width: 220, height: 290, baseY: 658, label: "Clockwork Forge", sceneKey: "ClockworkForgeScene"   },
-  { id: "sky-island",      x: 1381, width: 220, height: 290, baseY: 658, label: "Sky Island",      sceneKey: "SkyIslandScene"        },
-  { id: "haunted-wood",    x: 1638, width: 220, height: 290, baseY: 658, label: "Haunted Wood",    sceneKey: "HauntedWoodScene"      },
+  { id: "winter-mountain", x: 655,  width: 280, height: 360, baseY: 680, label: "Winter Mountain", sceneKey: "WinterMountainScene"  },
+  { id: "sunken-bell",     x: 913,  width: 280, height: 360, baseY: 680, label: "Sunken Bell",     sceneKey: "SunkenBellScene"      },
+  { id: "clockwork-forge", x: 1147, width: 280, height: 360, baseY: 680, label: "Clockwork Forge", sceneKey: "ClockworkForgeScene"   },
+  { id: "sky-island",      x: 1381, width: 280, height: 360, baseY: 680, label: "Sky Island",      sceneKey: "SkyIslandScene"        },
+  { id: "haunted-wood",    x: 1638, width: 280, height: 360, baseY: 680, label: "Haunted Wood",    sceneKey: "HauntedWoodScene"      },
 ] as const;
 
 const REALM_SEQUENCE = ARCHES.map((a) => a.id);

@@ -13,7 +13,7 @@ import {
 } from "../game/supabaseClient";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
-import { makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
+import { bobWrenSprite, makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
 import hubBackdrop from "../../art/references/hub-portal-chamber-clean.png";
 import runaSprite from "../../art/runa/runa-front.png";
 
@@ -124,6 +124,9 @@ export class PortalChamberScene extends Phaser.Scene {
     this.drawFragment();
 
     this.typingInput = new TypingInputController(this.store);
+    this.typingInput.setKeystrokeHooks({
+      onCorrect: () => bobWrenSprite(this.wrenSprite),
+    });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();

@@ -641,8 +641,14 @@ export class WinterMountainScene extends Phaser.Scene {
       x: wolf.container.x,
       y: wolf.restY - 90,
       fontSize: 32,
-      onComplete: () => this.defeatWolf(wolf),
+      onClaim: () => this.leanWrenToward(wolf.container.x),
+      onRelease: () => this.returnWrenToRest(),
+      onComplete: () => {
+        this.returnWrenToRest();
+        this.defeatWolf(wolf);
+      },
       onSpellComplete: () => {
+        this.returnWrenToRest();
         this.defeatWolf(wolf);
         this.castThunderclap(wolf);
       },
@@ -652,15 +658,44 @@ export class WinterMountainScene extends Phaser.Scene {
     this.activeTargets.push(target);
   }
 
+  /** While the player is typing this wolf's name, Wren leans toward it —
+   *  enough lateral travel to read as action, not so much that he leaves
+   *  centre stage. */
+  private leanWrenToward(targetX: number): void {
+    const restX = this.scale.width / 2;
+    const direction = targetX < restX ? -1 : 1;
+    const lean = 90 * direction;
+    this.tweens.killTweensOf(this.wrenContainer);
+    this.tweens.add({
+      targets: this.wrenContainer,
+      x: restX + lean,
+      duration: 240,
+      ease: "Sine.easeOut",
+    });
+  }
+
+  private returnWrenToRest(): void {
+    if (this.wrenContainer.x === this.scale.width / 2) return;
+    this.tweens.killTweensOf(this.wrenContainer);
+    this.tweens.add({
+      targets: this.wrenContainer,
+      x: this.scale.width / 2,
+      duration: 280,
+      ease: "Sine.easeOut",
+    });
+  }
+
   private startWolfAdvance(wolf: Wolf): void {
-    const wrenX = this.wrenContainer.x;
-    const remaining = Math.abs(wolf.container.x - wrenX);
-    const totalRange = Math.abs(wolf.spawnX - wrenX);
+    // Wolves advance toward Wren's rest position, not his current position —
+    // otherwise typing-driven lean would pull them off-course.
+    const restX = this.scale.width / 2;
+    const remaining = Math.abs(wolf.container.x - restX);
+    const totalRange = Math.abs(wolf.spawnX - restX);
     const duration = wolf.advanceMs * Math.max(0.3, remaining / totalRange);
 
     wolf.advanceTween = this.tweens.add({
       targets: wolf.container,
-      x: wrenX,
+      x: restX,
       duration,
       ease: "Linear",
       onUpdate: () => {

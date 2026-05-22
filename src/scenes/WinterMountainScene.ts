@@ -13,7 +13,7 @@ import {
   preloadWinterNpcs,
 } from "../game/winterNpcs";
 import { makeWolfSprite, preloadWolves } from "../game/wolf";
-import { makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
+import { bobWrenSprite, makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
 import winterBackdrop from "../../art/references/winter-mountain-clean.png";
 
 interface WinterSceneData {
@@ -224,6 +224,9 @@ export class WinterMountainScene extends Phaser.Scene {
     this.redrawCharges();
 
     this.typingInput = new TypingInputController(this.store);
+    this.typingInput.setKeystrokeHooks({
+      onCorrect: () => bobWrenSprite(this.wrenSprite),
+    });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.input.keyboard?.on("keyup", this.onKeyUp, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {

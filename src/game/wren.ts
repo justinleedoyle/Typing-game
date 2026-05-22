@@ -56,3 +56,24 @@ export function setWrenPose(
   img.setScale(scale);
   img.scaleX = faceLeft ? -scale : scale;
 }
+
+/**
+ * Tiny squat-stretch on the Wren sprite for per-keystroke feedback. Tween is
+ * cheap (~60ms) and uses scaleY against the feet anchor (origin 0.5, 1) so the
+ * sprite compresses toward the ground and springs back without shifting
+ * position. Safe to call rapidly — each call cancels the prior bob tween.
+ */
+export function bobWrenSprite(img: Phaser.GameObjects.Image): void {
+  const baseScale = WREN_DISPLAY_HEIGHT / img.height;
+  img.scene.tweens.killTweensOf(img);
+  img.scene.tweens.add({
+    targets: img,
+    scaleY: baseScale * 0.95,
+    duration: 60,
+    yoyo: true,
+    ease: "Sine.out",
+    onComplete: () => {
+      img.scaleY = baseScale;
+    },
+  });
+}

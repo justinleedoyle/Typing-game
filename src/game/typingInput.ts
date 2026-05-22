@@ -45,8 +45,22 @@ export class TypingInputController {
   private targets: WordTarget[] = [];
   private claimed: WordTarget | null = null;
   private typingBuffer = "";
+  private onCorrectChar?: () => void;
+  private onMissChar?: () => void;
 
   constructor(private readonly store?: SaveStore) {}
+
+  /** Wire per-keystroke feedback hooks. `onCorrect` fires for every keystroke
+   *  that lands a matching character (mid-claim or pre-claim narrowing).
+   *  `onMiss` fires for every keystroke that does not. Scenes use this to bob
+   *  Wren, flash a UI element, etc. */
+  setKeystrokeHooks(hooks: {
+    onCorrect?: () => void;
+    onMiss?: () => void;
+  }): void {
+    this.onCorrectChar = hooks.onCorrect;
+    this.onMissChar = hooks.onMiss;
+  }
 
   register(target: WordTarget): void {
     this.targets.push(target);
@@ -105,6 +119,7 @@ export class TypingInputController {
       if (ch === expected) {
         this.claimed.advance();
         this.store?.recordKeystroke(ch, true);
+        this.onCorrectChar?.();
         if (this.claimed.isComplete()) {
           this.completeClaimed();
         }
@@ -112,6 +127,7 @@ export class TypingInputController {
       }
       this.claimed.miss();
       this.store?.recordKeystroke(ch, false);
+      this.onMissChar?.();
       return true;
     }
 
@@ -122,11 +138,13 @@ export class TypingInputController {
     if (candidates.length === 0) {
       // No target starts with this prefix.
       this.store?.recordKeystroke(ch, false);
+      this.onMissChar?.();
       return false;
     }
 
     // Record the char as correct — it narrowed the field.
     this.store?.recordKeystroke(ch, true);
+    this.onCorrectChar?.();
     this.typingBuffer = newBuffer;
 
     if (candidates.length === 1) {

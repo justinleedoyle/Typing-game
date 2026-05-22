@@ -7,6 +7,11 @@ import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
+import {
+  makeHeldurSprite,
+  makeHuntressSprite,
+  preloadWinterNpcs,
+} from "../game/winterNpcs";
 import { makeWolfSprite, preloadWolves } from "../game/wolf";
 import { makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
 import winterBackdrop from "../../art/references/winter-mountain-clean.png";
@@ -115,6 +120,8 @@ export class WinterMountainScene extends Phaser.Scene {
   private wrenGlow!: Phaser.GameObjects.Graphics;
   private wrenSprite!: Phaser.GameObjects.Image;
   private hurtPoseTimer: Phaser.Time.TimerEvent | null = null;
+  private heldurSprite: Phaser.GameObjects.Image | null = null;
+  private huntressSprite: Phaser.GameObjects.Image | null = null;
   private candleGroup!: Phaser.GameObjects.Container;
   private chargeGroup!: Phaser.GameObjects.Container;
 
@@ -147,6 +154,10 @@ export class WinterMountainScene extends Phaser.Scene {
   init(data: WinterSceneData): void {
     this.revisit = data.revisit === true;
     this.store = data.store;
+    // Stale sprite references from a previous visit point at destroyed
+    // GameObjects; clear them so fadeInHeldur/fadeInHuntress create fresh ones.
+    this.heldurSprite = null;
+    this.huntressSprite = null;
     this.wolves = [];
     this.activeTargets = [];
     this.candles = WAVE_CANDLES;
@@ -165,6 +176,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.load.image("winter-backdrop", winterBackdrop);
     preloadWren(this);
     preloadWolves(this);
+    preloadWinterNpcs(this);
   }
 
   create(): void {
@@ -309,6 +321,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.setNarrator(
       "An old wayshrine. A knight stands frozen over it, armored in frost.",
     );
+    this.fadeInHeldur();
     this.time.delayedCall(2200, () => {
       this.setNarrator(
         "Words are carved into the stone. Type them, and he will hear you.",
@@ -334,13 +347,47 @@ export class WinterMountainScene extends Phaser.Scene {
     this.setNarrator(
       "The knight's eyes open. He tells you of a hundred years without a Portalwright. Then the frost returns.",
     );
+    // Brief amber flash on Heldur as his consciousness surfaces, then fade out
+    // as the scene moves on to cold-decay.
+    if (this.heldurSprite) {
+      this.heldurSprite.setTintFill(0xffd277);
+      this.time.delayedCall(180, () => this.heldurSprite?.clearTint());
+    }
     // Almanac lore page 1 unlocked
     this.store.update((s) => {
       if (!s.almanacLore.includes("the-hundred-quiet-years")) {
         s.almanacLore.push("the-hundred-quiet-years");
       }
     });
+    this.time.delayedCall(2400, () => this.fadeOutHeldur());
     this.time.delayedCall(3000, () => this.startColdDecay());
+  }
+
+  private fadeInHeldur(): void {
+    if (this.heldurSprite) return;
+    this.heldurSprite = makeHeldurSprite(this).setAlpha(0);
+    // Place Heldur on the path to the left of where Wren stands, near the
+    // ruined wayshrine arch in the painted backdrop.
+    this.heldurSprite.setPosition(420, 920);
+    this.tweens.add({
+      targets: this.heldurSprite,
+      alpha: 1,
+      duration: 700,
+      ease: "Sine.easeOut",
+    });
+  }
+
+  private fadeOutHeldur(): void {
+    if (!this.heldurSprite) return;
+    const sprite = this.heldurSprite;
+    this.heldurSprite = null;
+    this.tweens.add({
+      targets: sprite,
+      alpha: 0,
+      duration: 600,
+      ease: "Sine.easeIn",
+      onComplete: () => sprite.destroy(),
+    });
   }
 
   /** Edge of the Dark Wood — cold-decay candle mechanic begins */
@@ -745,6 +792,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private startHuntressBranch(nextWave: number): void {
     this.clearActiveTargets();
     this.setNarrator("A woman, half-buried in snow, lifts her head as you approach.");
+    this.fadeInHuntress();
     this.time.delayedCall(1800, () => {
       this.runPassageChain(
         HUNTRESS_PASSAGES,
@@ -752,8 +800,37 @@ export class WinterMountainScene extends Phaser.Scene {
           "She speaks a few words in the wolf-tongue. The howls behind you fade.",
           "She presses a spiral horn into your hand and gestures uphill.",
         ],
-        () => this.startWave(nextWave),
+        () => {
+          this.fadeOutHuntress();
+          this.time.delayedCall(600, () => this.startWave(nextWave));
+        },
       );
+    });
+  }
+
+  private fadeInHuntress(): void {
+    if (this.huntressSprite) return;
+    this.huntressSprite = makeHuntressSprite(this).setAlpha(0);
+    // Half-buried in the drift to Wren's left.
+    this.huntressSprite.setPosition(560, 960);
+    this.tweens.add({
+      targets: this.huntressSprite,
+      alpha: 1,
+      duration: 700,
+      ease: "Sine.easeOut",
+    });
+  }
+
+  private fadeOutHuntress(): void {
+    if (!this.huntressSprite) return;
+    const sprite = this.huntressSprite;
+    this.huntressSprite = null;
+    this.tweens.add({
+      targets: sprite,
+      alpha: 0,
+      duration: 600,
+      ease: "Sine.easeIn",
+      onComplete: () => sprite.destroy(),
     });
   }
 

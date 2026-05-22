@@ -450,6 +450,52 @@ illustration style and palette as the attached character reference sheet.
 
 ---
 
+### NPC sprites — Winter Mountain (Heldur & the huntress)
+
+Two narrative NPCs in Winter Mountain who are currently described only in
+narration. Painting them gives Aiden a visual to anchor the typed dialogue.
+
+Heldur the Wayshrine Knight (Act 1, frozen over a stone wayshrine, awakens
+briefly when the player types the inscription):
+
+```
+[STYLE ANCHOR]
+Single character sprite, isolated on solid bright magenta background
+(#ff00ff) for chroma keying. Chibi-proportioned old armored knight standing
+guard, frozen mid-vigil: weathered iron plate armor with brass-rim edging,
+heavy fur-trimmed cloak, simple closed helm with a narrow eye-slit, gloved
+hands resting on the pommel of a long broadsword grounded point-down in
+front of him. A pale blue-white frost rime crusts the shoulders, helm,
+and cloak hem — clearly ancient, motionless, half-statue. Faint warm amber
+glow visible through the helm's eye-slit (his consciousness, still there).
+Full body visible head to toe with no cropping, no shadow on the magenta
+background. Same flat stylized illustration style and palette as the
+attached character reference sheet.
+```
+
+The trapped huntress (Act 3 CYOA, half-buried in a snowdrift, gives Wren
+a spiral horn when freed):
+
+```
+[STYLE ANCHOR]
+Single character sprite, isolated on solid bright magenta background
+(#ff00ff) for chroma keying. Chibi-proportioned young adult woman hunter
+kneeling low in a snowdrift, one arm propped on the snow as if just lifting
+her head: heavy fur-lined hooded cloak in muted forest-green and grey-brown,
+braided dark-auburn hair, wind-burned cheeks, warm hazel eyes, a small
+spiral antler horn at her belt. Snow caked along her cloak and one
+shoulder. Posture is half-trapped but alert — looking up and toward the
+viewer as if Wren has just arrived. Full body visible with no cropping,
+no shadow on the magenta background. Same flat stylized illustration style
+and palette as the attached character reference sheet.
+```
+
+Save the keyed results as `art/winter/heldur.png` and `art/winter/huntress.png`.
+Run `python3 scripts/key_winter_npcs.py` after dropping the raw renders
+into `art/references/heldur.png` and `art/references/huntress.png`.
+
+---
+
 ### Enemy sprites — Winter Mountain wolves
 
 The Winter Mountain Act 2 wolf pack: regular wolves (waves 1–3) and a
@@ -523,6 +569,11 @@ Drop these files into `art/references/` (filenames are what `PROMPTS.md` expects
 
 - [ ] `wolf-pack.png` — regular dire wolf, magenta-keyed, facing right
 - [ ] `wolf-leader.png` — pack-leader boss, magenta-keyed, facing right
+
+### NPC sprites (Winter Mountain)
+
+- [ ] `heldur.png` — old armored knight, frost-rimed, sword grounded
+- [ ] `huntress.png` — kneeling hunter in fur cloak, half-buried in snow
 
 ### Wren sprites (crop from sheet OR regenerate)
 

@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
-import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
+import { PALETTE, SERIF } from "../game/palette";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
@@ -14,17 +14,16 @@ interface OpeningSceneData {
   store: SaveStore;
 }
 
-// Where the typed words float — just above the painted typewriter, which
-// sits at roughly (420, 600) in the lower-left of the study.
-const TYPE_TARGET = { x: 420, y: 500 };
+// Where the typed words float — centered above the action, between Runa
+// on the left and the sibling on the right. Keeps the eye on the centre
+// of the screen rather than tucked over the typewriter.
+const TYPE_TARGET = { x: 960, y: 540 };
 
 export class OpeningScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narratorText!: Phaser.GameObjects.Text;
 
-  // Soft glow over the painted Almanac — pulsed in Beat 4.
-  private almanacGlow!: Phaser.GameObjects.Graphics;
   // The Quiet Lord's first foreshadowing — faint silhouette during Beat 6.
   private quietLordSprite: Phaser.GameObjects.Image | null = null;
 
@@ -54,13 +53,6 @@ export class OpeningScene extends Phaser.Scene {
       .setOrigin(0)
       .setDisplaySize(width, this.scale.height)
       .setDepth(-100);
-
-    // Soft glow over the Almanac on the desk — pulsed in Beat 4.
-    this.almanacGlow = this.add.graphics();
-    this.almanacGlow.fillStyle(PALETTE_HEX.brass, 1);
-    // The Almanac sits among the books on the desk; centered at ≈(300, 660).
-    this.almanacGlow.fillCircle(300, 660, 60);
-    this.almanacGlow.setAlpha(0);
 
     // ── Narrator text ────────────────────────────────────────────────────────
     this.narratorText = this.add
@@ -121,7 +113,7 @@ export class OpeningScene extends Phaser.Scene {
 
     const target = new TextWordTarget({
       scene: this,
-      word: "wren",
+      word: "Wren",
       x: TYPE_TARGET.x,
       y: TYPE_TARGET.y,
       fontSize: 48,
@@ -132,19 +124,7 @@ export class OpeningScene extends Phaser.Scene {
 
   private onBeat4Complete(): void {
     playChime();
-    // Almanac shimmer: a soft glow swells and fades.
-    this.tweens.add({
-      targets: this.almanacGlow,
-      alpha: { from: 0, to: 0.7 },
-      duration: 200,
-      yoyo: true,
-      repeat: 1,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        this.almanacGlow.setAlpha(0);
-        this.beat5();
-      },
-    });
+    this.time.delayedCall(500, () => this.beat5());
   }
 
   /** Beat 5 — Type the typewriter's name. */
@@ -155,7 +135,7 @@ export class OpeningScene extends Phaser.Scene {
 
     const target = new TextWordTarget({
       scene: this,
-      word: "bjarn",
+      word: "Bjarn",
       x: TYPE_TARGET.x,
       y: TYPE_TARGET.y,
       fontSize: 48,
@@ -171,18 +151,20 @@ export class OpeningScene extends Phaser.Scene {
     this.time.delayedCall(400, () => this.beat6());
   }
 
-  /** Beat 6 — The Almanac speech (3 s, no input). */
+  /** Beat 6 — The Almanac speech. Quiet Lord lingers visibly through the
+   *  doorway so the player has time to notice him while reading the line. */
   private beat6(): void {
     this.setNarrator(
       'Runa: "The Quiet Lord has been waking up. Across the Realms Beyond he is gathering an army that hates language and loves silence. This is the Almanac. It records everywhere you go, everyone you save, everything you bring home. It is yours now."',
     );
     this.fadeInQuietLord();
-    // Fade him out partway through, before the portal wakes.
-    this.time.delayedCall(2200, () => this.fadeOutQuietLord());
-    this.time.delayedCall(3000, () => this.beat7());
+    // Hold him at peak longer (2.4s) so he registers, then fade out cleanly.
+    this.time.delayedCall(4200, () => this.fadeOutQuietLord());
+    this.time.delayedCall(5400, () => this.beat7());
   }
 
-  /** First foreshadowing — a faint silhouette behind Runa as she names him. */
+  /** First foreshadowing — a faint silhouette through the open doorway as
+   *  Runa names him. Slower fade-in so the eye catches the change. */
   private fadeInQuietLord(): void {
     if (this.quietLordSprite) return;
     this.quietLordSprite = makeQuietLordSprite(this)
@@ -191,8 +173,8 @@ export class OpeningScene extends Phaser.Scene {
       .setAlpha(0);
     this.tweens.add({
       targets: this.quietLordSprite,
-      alpha: 0.45,
-      duration: 1100,
+      alpha: 0.55,
+      duration: 1800,
       ease: "Sine.easeOut",
     });
   }
@@ -204,19 +186,20 @@ export class OpeningScene extends Phaser.Scene {
     this.tweens.add({
       targets: sprite,
       alpha: 0,
-      duration: 900,
+      duration: 1100,
       ease: "Sine.easeIn",
       onComplete: () => sprite.destroy(),
     });
   }
 
-  /** Beat 7 — First portal wakes (2 s, no input). */
+  /** Beat 7 — First portal wakes. The doorway already paints a glowing
+   *  portal, so the narrator beat sells the awakening on its own — no
+   *  extra overlay circles. */
   private beat7(): void {
     this.setNarrator(
       "Narrator: The nearest arch flickers. Pale cold light from beyond. A distant sound — wolves on a mountain.",
     );
-    this.wakePortal();
-    this.time.delayedCall(2000, () => this.beat8());
+    this.time.delayedCall(2400, () => this.beat8());
   }
 
   /** Beat 8 — Type the portal name. */
@@ -227,10 +210,10 @@ export class OpeningScene extends Phaser.Scene {
 
     const target = new TextWordTarget({
       scene: this,
-      word: "winter mountain",
-      x: 410,
-      y: 250,
-      fontSize: 36,
+      word: "Winter Mountain",
+      x: TYPE_TARGET.x,
+      y: TYPE_TARGET.y,
+      fontSize: 44,
       onComplete: () => this.onBeat8Complete(),
     });
     this.typingInput.register(target);
@@ -293,30 +276,6 @@ export class OpeningScene extends Phaser.Scene {
 
   // ── Drawing ────────────────────────────────────────────────────────────────
 
-  /** Beat 7 visual cue — a soft cream pulse over the painted portal in the
-   *  doorway. The doorway is already painted with a glowing portal, so we
-   *  just brighten it rather than drawing new geometric shapes on top. */
-  private wakePortal(): void {
-    const g = this.add.graphics();
-    g.setAlpha(0);
-    // Single soft glow centered on the painted doorway portal (≈x=1500, y=540)
-    // with a wide low-alpha bloom so it reads as "the portal stirs" without
-    // overlaying hard-edged ellipses on the painted art.
-    g.fillStyle(PALETTE_HEX.frost, 0.18);
-    g.fillCircle(1500, 540, 220);
-    g.setBlendMode(Phaser.BlendModes.ADD);
-
-    this.tweens.add({
-      targets: g,
-      alpha: { from: 0, to: 1 },
-      duration: 900,
-      yoyo: true,
-      hold: 600,
-      ease: "Sine.easeInOut",
-      onComplete: () => g.destroy(),
-    });
-  }
-
   /** Runa — the painted royal cartographer, fades in in front of the desk
    *  on the left. Positioned left of the painted chair (which sits at ≈x=900)
    *  so she doesn't appear to stand on it. */
@@ -324,7 +283,8 @@ export class OpeningScene extends Phaser.Scene {
     const img = this.add
       .image(480, 945, "runa-sprite")
       .setOrigin(0.5, 1);
-    img.setScale(360 / img.height);
+    // 420px tall — matches painted desk + chair proportions in this study.
+    img.setScale(420 / img.height);
     img.setAlpha(0);
     this.tweens.add({
       targets: img,
@@ -341,7 +301,11 @@ export class OpeningScene extends Phaser.Scene {
     const img = this.add
       .image(1180, 950, "sibling-sprite")
       .setOrigin(0.5, 1);
-    img.setScale(235 / img.height);
+    img.setScale(260 / img.height);
+    // Tint multiplier to soften the bright nightgown+pale skin against the
+    // dim study palette. 0xbfb0a0 ≈ 75% brightness with a warm bias so she
+    // sits in the lamplight rather than glowing in it.
+    img.setTint(0xbfb0a0);
     img.setAlpha(0);
     this.tweens.add({
       targets: img,

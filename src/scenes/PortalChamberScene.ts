@@ -38,11 +38,11 @@ interface ArchSpec {
 // width/height/baseY describe the portal-surface fill drawn inside the
 // painted stone frame (no programmatic surround).
 const ARCHES: readonly ArchSpec[] = [
-  { id: "winter-mountain", x: 533,  width: 140, height: 265, baseY: 705, label: "winter mountain", sceneKey: "WinterMountainScene"  },
-  { id: "sunken-bell",     x: 762,  width: 140, height: 265, baseY: 705, label: "sunken bell",     sceneKey: "SunkenBellScene"      },
-  { id: "clockwork-forge", x: 990,  width: 140, height: 265, baseY: 705, label: "clockwork forge", sceneKey: "ClockworkForgeScene"   },
-  { id: "sky-island",      x: 1221, width: 140, height: 265, baseY: 705, label: "sky island",      sceneKey: "SkyIslandScene"        },
-  { id: "haunted-wood",    x: 1454, width: 140, height: 265, baseY: 705, label: "haunted wood",    sceneKey: "HauntedWoodScene"      },
+  { id: "winter-mountain", x: 533,  width: 140, height: 265, baseY: 705, label: "Winter Mountain", sceneKey: "WinterMountainScene"  },
+  { id: "sunken-bell",     x: 762,  width: 140, height: 265, baseY: 705, label: "Sunken Bell",     sceneKey: "SunkenBellScene"      },
+  { id: "clockwork-forge", x: 990,  width: 140, height: 265, baseY: 705, label: "Clockwork Forge", sceneKey: "ClockworkForgeScene"   },
+  { id: "sky-island",      x: 1221, width: 140, height: 265, baseY: 705, label: "Sky Island",      sceneKey: "SkyIslandScene"        },
+  { id: "haunted-wood",    x: 1454, width: 140, height: 265, baseY: 705, label: "Haunted Wood",    sceneKey: "HauntedWoodScene"      },
 ] as const;
 
 const REALM_SEQUENCE = ARCHES.map((a) => a.id);
@@ -91,14 +91,12 @@ export class PortalChamberScene extends Phaser.Scene {
   preload(): void {
     this.load.image("hub-backdrop", hubBackdrop);
     this.load.image("runa-sprite", runaSprite);
-    // 8-frame portal swirl source. Loaded as a spritesheet so we can pick
-    // a single canonical frame to render — the 8 frames don't all align
-    // their arches at the same x within their cell, so cycling them
-    // produces a horizontal jitter. A single frame + slow rotation tween
-    // gives the "alive portal" feel without the slide.
+    // 8-frame portal swirl, re-aligned by scripts/key_portal_sheet.py so each
+    // frame's arch sits at the exact same x/y within its cell — no slide
+    // when cycling.
     this.load.spritesheet("portal-active", portalActiveSheet, {
-      frameWidth: 209,
-      frameHeight: 941,
+      frameWidth: 168,
+      frameHeight: 338,
     });
     preloadWren(this);
   }
@@ -108,6 +106,15 @@ export class PortalChamberScene extends Phaser.Scene {
     if (!this.store.get().typewriterAwakened) {
       this.scene.start("OpeningScene", { store: this.store });
       return;
+    }
+
+    if (!this.anims.exists("portal-spin")) {
+      this.anims.create({
+        key: "portal-spin",
+        frames: this.anims.generateFrameNumbers("portal-active", { start: 0, end: 7 }),
+        frameRate: 10,
+        repeat: -1,
+      });
     }
 
     this.drawRoom();
@@ -516,15 +523,14 @@ export class PortalChamberScene extends Phaser.Scene {
     const g = this.add.graphics();
     this.archGraphics.set(spec.id, g);
 
-    // Single-frame painted portal sprite. Frame 0 picked deliberately —
-    // see preload() for why we don't cycle frames. Slow rotation tween
-    // (added in renderArch when the arch becomes active) gives the
-    // swirling feel without the per-frame jitter.
+    // Painted portal sprite — frames are now 168x338, arch fills the frame
+    // top-to-bottom. Anchor bottom-center, scale to ≈match the painted
+    // hub arch (140 wide × 265 tall in game coords).
     const sprite = this.add
       .sprite(spec.x, spec.baseY, "portal-active", 0)
-      .setOrigin(0.5, 0.86)
+      .setOrigin(0.5, 1)
       .setVisible(false);
-    sprite.setScale(0.5);
+    sprite.setScale(0.78);
     this.archSprites.set(spec.id, sprite);
   }
 
@@ -539,8 +545,7 @@ export class PortalChamberScene extends Phaser.Scene {
 
     if (state === "locked" || state === "dark") {
       sprite.setVisible(false);
-      this.tweens.killTweensOf(sprite);
-      sprite.setRotation(0);
+      if (sprite.anims.isPlaying) sprite.stop();
       return;
     }
 
@@ -552,35 +557,18 @@ export class PortalChamberScene extends Phaser.Scene {
       g.beginPath();
       g.arc(spec.x, archMidY + 60, radius * 0.55, 0, Math.PI * 2);
       g.strokePath();
-      // Painted swirl in warm tint, slow rotation to read as "cleared" not "next".
       sprite.setVisible(true);
       sprite.setTint(0xc9a14a);
       sprite.setAlpha(0.55);
-      this.startPortalSpin(sprite, 14000);
+      if (!sprite.anims.isPlaying) sprite.play("portal-spin");
       return;
     }
 
-    // state === "next": full-strength painted swirl, faster rotation.
+    // state === "next": full-strength painted swirl, animated.
     sprite.setVisible(true);
     sprite.clearTint();
     sprite.setAlpha(1);
-    this.startPortalSpin(sprite, 8000);
-  }
-
-  /** Slow continuous rotation on the portal sprite — gives the swirl
-   *  motion without the per-frame x-jitter of the source spritesheet. */
-  private startPortalSpin(
-    sprite: Phaser.GameObjects.Sprite,
-    durationMs: number,
-  ): void {
-    this.tweens.killTweensOf(sprite);
-    this.tweens.add({
-      targets: sprite,
-      rotation: sprite.rotation + Math.PI * 2,
-      duration: durationMs,
-      repeat: -1,
-      ease: "Linear",
-    });
+    if (!sprite.anims.isPlaying) sprite.play("portal-spin");
   }
 
   private drawArchLabels(): void {

@@ -22,6 +22,13 @@ export interface TextWordTargetOptions {
    *  (first letter typed with Shift held). If omitted, onComplete runs
    *  normally and spell mode is purely cosmetic. */
   onSpellComplete?: () => void;
+  /** Called when this target locks in to the typing controller (first matching
+   *  letter typed). Use for character-facing reactions like Wren leaning toward
+   *  the target. */
+  onClaim?: (spell: boolean) => void;
+  /** Called when a mid-claim target is released without completing — e.g. the
+   *  player backspaced out of it. */
+  onRelease?: () => void;
   /** Optional anchor sprite to flash/shake when the player misses. */
   anchor?: Phaser.GameObjects.GameObject & {
     setTint?: (tint: number) => void;
@@ -103,6 +110,7 @@ export class TextWordTarget implements WordTarget {
       this.remainingText.setColor(PALETTE.ember);
     }
     this.applyDim();
+    this.opts.onClaim?.(spell);
   }
 
   onRelease(): void {
@@ -113,6 +121,7 @@ export class TextWordTarget implements WordTarget {
     this.typedText.setColor(PALETTE.brass);
     this.remainingText.setColor(PALETTE.cream);
     this.relayout();
+    this.opts.onRelease?.();
   }
 
   onComplete(): void {

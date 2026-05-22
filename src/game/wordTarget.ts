@@ -41,6 +41,7 @@ export class TextWordTarget implements WordTarget {
   private readonly remainingText: Phaser.GameObjects.Text;
   private readonly container: Phaser.GameObjects.Container;
   private readonly word: string;
+  private readonly displayWord: string;
   private cursor = 0;
   private complete = false;
   private dimmed = false;
@@ -56,13 +57,17 @@ export class TextWordTarget implements WordTarget {
       fontSize: `${fontSize}px`,
     };
 
+    // Two views: `displayWord` keeps the original case for the UI; `word`
+    // is lowercase so the typing controller's lowercased input compares
+    // directly. Typed words can now be capitalized as proper nouns.
+    this.displayWord = opts.word;
     this.word = opts.word.toLowerCase();
     this.priority = opts.priority ?? 0;
     this.typedText = opts.scene.add
       .text(0, 0, "", { ...style, color: PALETTE.brass })
       .setOrigin(0, 0.5);
     this.remainingText = opts.scene.add
-      .text(0, 0, this.word, { ...style, color: PALETTE.cream })
+      .text(0, 0, this.displayWord, { ...style, color: PALETTE.cream })
       .setOrigin(0, 0.5);
 
     this.container = opts.scene.add
@@ -168,8 +173,9 @@ export class TextWordTarget implements WordTarget {
   }
 
   private relayout(): void {
-    const typed = this.word.slice(0, this.cursor);
-    const remaining = this.word.slice(this.cursor);
+    // Display uses the original case; matching uses the lowercased word.
+    const typed = this.displayWord.slice(0, this.cursor);
+    const remaining = this.displayWord.slice(this.cursor);
     this.typedText.setText(typed);
     this.remainingText.setText(remaining);
     this.remainingText.x = this.typedText.width;

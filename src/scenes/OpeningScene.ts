@@ -14,11 +14,13 @@ interface OpeningSceneData {
   store: SaveStore;
 }
 
-// The arched window — it blazes with cold portal light at Beat 7.
-const PORTAL = { x: 215, y: 180 };
+// The doorway on the right of the new study backdrop — already painted with
+// a faint blue portal visible through it; Beat 7 brightens it into a wake.
+const PORTAL = { x: 1500, y: 540 };
 
-// Where the typed words float — just above the painted typewriter.
-const TYPE_TARGET = { x: 560, y: 350 };
+// Where the typed words float — just above the painted typewriter which now
+// sits in the lower-left of the study.
+const TYPE_TARGET = { x: 530, y: 580 };
 
 export class OpeningScene extends Phaser.Scene {
   private store!: SaveStore;
@@ -60,7 +62,8 @@ export class OpeningScene extends Phaser.Scene {
     // Soft glow over the Almanac on the desk — pulsed in Beat 4.
     this.almanacGlow = this.add.graphics();
     this.almanacGlow.fillStyle(PALETTE_HEX.brass, 1);
-    this.almanacGlow.fillCircle(475, 470, 70);
+    // The Almanac sits among the papers/books on the desk in the lower-left.
+    this.almanacGlow.fillCircle(560, 740, 70);
     this.almanacGlow.setAlpha(0);
 
     // ── Narrator text ────────────────────────────────────────────────────────
@@ -318,10 +321,11 @@ export class OpeningScene extends Phaser.Scene {
     });
   }
 
-  /** Runa — the painted royal cartographer, fades in across the room. */
+  /** Runa — the painted royal cartographer, fades in beside her desk on
+   *  the left of the new study backdrop. */
   private drawRuna(): void {
     const img = this.add
-      .image(1130, 950, "runa-sprite")
+      .image(700, 945, "runa-sprite")
       .setOrigin(0.5, 1);
     img.setScale(360 / img.height);
     img.setAlpha(0);
@@ -333,10 +337,12 @@ export class OpeningScene extends Phaser.Scene {
     });
   }
 
-  /** The sibling — the painted small child, fades in at the left. */
+  /** The sibling — fades in just left of the doorway on the right of the
+   *  study. Leaves the doorway frame clear so the Quiet Lord (Beat 6) and
+   *  the painted portal-through-the-doorway both remain visible. */
   private drawSibling(): void {
     const img = this.add
-      .image(270, 955, "sibling-sprite")
+      .image(1250, 950, "sibling-sprite")
       .setOrigin(0.5, 1);
     img.setScale(235 / img.height);
     img.setAlpha(0);

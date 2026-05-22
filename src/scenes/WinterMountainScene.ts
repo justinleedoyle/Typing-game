@@ -39,21 +39,25 @@ interface Wolf {
 /** Frozen river exploration beats */
 const RIVER_BEATS = ["lift", "step", "duck"] as const;
 
-/** Heldur's typed inscription — broken into three short statements so the
- *  player gets a "knight responds" beat after each line instead of a single
- *  20–30s typing block. */
-const HELDUR_LINES = [
-  "i am called heldur",
-  "i held this pass once",
-  "tell me of holdfast",
+/** Wren's side of the Heldur exchange — short prompts the player types as
+ *  Wren's question/word, not Heldur's words. Each pairs with a narrator
+ *  cue and a spoken response that surfaces above the knight. */
+const HELDUR_QUESTIONS = ["name", "story", "holdfast"] as const;
+
+/** Narrator prompt that precedes each typed question, framing what Wren is
+ *  about to ask. */
+const HELDUR_NARRATOR_PROMPTS = [
+  "Ask his name.",
+  "Ask his story.",
+  "Speak the name he last guarded.",
 ] as const;
 
-/** Narrator beat after each Heldur line — short on purpose so the line-to-line
- *  cadence stays tight. The third one lingers because the realm transitions. */
-const HELDUR_REACTIONS = [
-  "His helm tilts.",
-  "Frost cracks. A century, told.",
-  "His eyes open. A hundred years without a Portalwright. Then the frost returns.",
+/** Heldur's spoken responses — appear in dialog above the knight after each
+ *  question is typed. Proper capitalization + quotes because they're speech. */
+const HELDUR_RESPONSES = [
+  "I am called Heldur.",
+  "I held this pass once. A hundred years now.",
+  "Holdfast...",
 ] as const;
 
 /** Runa's cold-decay candle warning (Acts 1→2 transition) */
@@ -144,6 +148,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private wrenSprite!: Phaser.GameObjects.Image;
   private hurtPoseTimer: Phaser.Time.TimerEvent | null = null;
   private heldurSprite: Phaser.GameObjects.Image | null = null;
+  private heldurDialogText: Phaser.GameObjects.Text | null = null;
   private huntressSprite: Phaser.GameObjects.Image | null = null;
   private candleGroup!: Phaser.GameObjects.Container;
   private chargeGroup!: Phaser.GameObjects.Container;
@@ -180,6 +185,7 @@ export class WinterMountainScene extends Phaser.Scene {
     // Stale sprite references from a previous visit point at destroyed
     // GameObjects; clear them so fadeInHeldur/fadeInHuntress create fresh ones.
     this.heldurSprite = null;
+    this.heldurDialogText = null;
     this.huntressSprite = null;
     this.wolves = [];
     this.activeTargets = [];
@@ -368,44 +374,81 @@ export class WinterMountainScene extends Phaser.Scene {
       "An old wayshrine. A knight stands frozen over it, armored in frost.",
     );
     this.fadeInHeldur();
-    this.time.delayedCall(1500, () => {
-      this.setNarrator(
-        "Words are carved into the stone. Speak them line by line.",
-      );
-      this.time.delayedCall(700, () => this.runHeldurLine(0));
-    });
+    this.time.delayedCall(1800, () => this.runHeldurExchange(0));
   }
 
-  /** One Heldur line at a time. Each typed line gets a short narrator
-   *  reaction; the third triggers the eye-open flash. */
-  private runHeldurLine(idx: number): void {
-    if (idx >= HELDUR_LINES.length) {
-      this.onHeldurSpoken();
+  /** A back-and-forth where Wren types a short question and Heldur answers
+   *  in dialog above him. After the third exchange, the eye-open flash
+   *  fires and the scene moves on to cold-decay. */
+  private runHeldurExchange(idx: number): void {
+    if (idx >= HELDUR_QUESTIONS.length) {
+      this.setNarrator("His eyes open.");
+      if (this.heldurSprite) {
+        this.heldurSprite.setTintFill(0xffd277);
+        this.time.delayedCall(180, () => this.heldurSprite?.clearTint());
+      }
+      this.time.delayedCall(1800, () => {
+        this.clearHeldurDialog();
+        this.onHeldurSpoken();
+      });
       return;
     }
-    const isLast = idx === HELDUR_LINES.length - 1;
+
+    this.setNarrator(HELDUR_NARRATOR_PROMPTS[idx]);
+    this.clearHeldurDialog();
+
     const target = new TextWordTarget({
       scene: this,
-      word: HELDUR_LINES[idx],
+      word: HELDUR_QUESTIONS[idx],
       x: this.scale.width / 2,
-      y: this.scale.height / 2,
-      fontSize: 36,
+      y: this.scale.height / 2 + 40,
+      fontSize: 44,
       onComplete: () => {
         playClack();
         this.clearActiveTargets();
-        this.setNarrator(HELDUR_REACTIONS[idx]);
-        if (isLast && this.heldurSprite) {
-          this.heldurSprite.setTintFill(0xffd277);
-          this.time.delayedCall(180, () => this.heldurSprite?.clearTint());
-        }
-        this.time.delayedCall(
-          isLast ? 2000 : 900,
-          () => this.runHeldurLine(idx + 1),
-        );
+        this.setHeldurDialog(HELDUR_RESPONSES[idx]);
+        this.time.delayedCall(1800, () => this.runHeldurExchange(idx + 1));
       },
     });
     this.typingInput.register(target);
     this.activeTargets.push(target);
+  }
+
+  /** Heldur's spoken line floats over his head with quotes so it reads as
+   *  speech, not narration. Replaces any prior dialog cleanly. */
+  private setHeldurDialog(text: string): void {
+    if (!this.heldurSprite) return;
+    if (!this.heldurDialogText) {
+      this.heldurDialogText = this.add
+        .text(this.heldurSprite.x, 540, "", {
+          fontFamily: SERIF,
+          fontSize: "28px",
+          color: PALETTE.cream,
+          align: "center",
+          wordWrap: { width: 520 },
+        })
+        .setOrigin(0.5, 1);
+    }
+    this.heldurDialogText.setText(`"${text}"`).setAlpha(0);
+    this.tweens.add({
+      targets: this.heldurDialogText,
+      alpha: 1,
+      duration: 400,
+      ease: "Sine.easeOut",
+    });
+  }
+
+  private clearHeldurDialog(): void {
+    if (!this.heldurDialogText) return;
+    const t = this.heldurDialogText;
+    this.heldurDialogText = null;
+    this.tweens.add({
+      targets: t,
+      alpha: 0,
+      duration: 350,
+      ease: "Sine.easeIn",
+      onComplete: () => t.destroy(),
+    });
   }
 
   private onHeldurSpoken(): void {

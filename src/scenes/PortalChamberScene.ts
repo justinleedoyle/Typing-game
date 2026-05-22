@@ -69,6 +69,8 @@ export class PortalChamberScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private archGraphics = new Map<string, Phaser.GameObjects.Graphics>();
+  private archBreathTweens = new Map<string, Phaser.Tweens.Tween>();
+  private archRingEmitters = new Map<string, Phaser.Time.TimerEvent>();
   private hint!: Phaser.GameObjects.Text;
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
@@ -82,6 +84,8 @@ export class PortalChamberScene extends Phaser.Scene {
   init(data: ChamberSceneData): void {
     this.store = data.store;
     this.archGraphics = new Map();
+    this.archBreathTweens = new Map();
+    this.archRingEmitters = new Map();
     this.zoneTargets = [];
   }
 
@@ -132,6 +136,9 @@ export class PortalChamberScene extends Phaser.Scene {
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
+      for (const id of [...this.archBreathTweens.keys()]) {
+        this.stopPortalAnimation(id);
+      }
     });
 
     this.ambientHandle = playAmbientHub();
@@ -534,17 +541,91 @@ export class PortalChamberScene extends Phaser.Scene {
     g.closePath();
     g.fillPath();
 
-    // Ripple rings for lit arches.
-    if (state === "next") {
-      g.lineStyle(2, PALETTE_HEX.cream, 0.4);
-      g.beginPath(); g.arc(spec.x, archMidY + 60, radius * 0.6, 0, Math.PI * 2); g.strokePath();
-      g.lineStyle(2, PALETTE_HEX.cream, 0.2);
-      g.beginPath(); g.arc(spec.x, archMidY + 120, radius * 0.5, 0, Math.PI * 2); g.strokePath();
-    } else if (state === "cleared") {
-      // Warm amber ripple for revisitable realms.
+    // Static cleared-realm ripple — animated rings only fire for "next".
+    if (state === "cleared") {
       g.lineStyle(2, PALETTE_HEX.brass, 0.35);
-      g.beginPath(); g.arc(spec.x, archMidY + 60, radius * 0.55, 0, Math.PI * 2); g.strokePath();
+      g.beginPath();
+      g.arc(spec.x, archMidY + 60, radius * 0.55, 0, Math.PI * 2);
+      g.strokePath();
     }
+
+    if (state === "next") {
+      this.startPortalAnimation(spec);
+    } else {
+      this.stopPortalAnimation(spec.id);
+    }
+  }
+
+  /** Active portals breathe (alpha pulse) and emit ripple rings outward to
+   *  feel alive instead of looking like a flat blue shape. */
+  private startPortalAnimation(spec: ArchSpec): void {
+    const g = this.archGraphics.get(spec.id);
+    if (!g) return;
+
+    if (!this.archBreathTweens.has(spec.id)) {
+      this.archBreathTweens.set(
+        spec.id,
+        this.tweens.add({
+          targets: g,
+          alpha: { from: 0.6, to: 1.0 },
+          duration: 1400,
+          yoyo: true,
+          repeat: -1,
+          ease: "Sine.easeInOut",
+        }),
+      );
+    }
+
+    if (!this.archRingEmitters.has(spec.id)) {
+      // Fire a ring immediately, then every ~1.1s.
+      this.spawnPortalRing(spec);
+      this.archRingEmitters.set(
+        spec.id,
+        this.time.addEvent({
+          delay: 1100,
+          loop: true,
+          callback: () => this.spawnPortalRing(spec),
+        }),
+      );
+    }
+  }
+
+  private stopPortalAnimation(archId: string): void {
+    const tween = this.archBreathTweens.get(archId);
+    if (tween) {
+      tween.stop();
+      const g = this.archGraphics.get(archId);
+      if (g) g.alpha = 1;
+      this.archBreathTweens.delete(archId);
+    }
+    const emitter = this.archRingEmitters.get(archId);
+    if (emitter) {
+      emitter.remove();
+      this.archRingEmitters.delete(archId);
+    }
+  }
+
+  /** Spawns a single ring inside the painted arch frame that expands and
+   *  fades outward, like portal energy rolling toward the viewer. */
+  private spawnPortalRing(spec: ArchSpec): void {
+    const archMidY = spec.baseY - spec.height + spec.width / 2;
+    const innerCentreY = (archMidY + spec.baseY) / 2;
+    const radius = spec.width / 2;
+    const ring = this.add.graphics();
+    ring.setPosition(spec.x, innerCentreY);
+    ring.setDepth(-50);
+    ring.lineStyle(3, PALETTE_HEX.cream, 0.7);
+    ring.beginPath();
+    ring.arc(0, 0, radius * 0.35, 0, Math.PI * 2);
+    ring.strokePath();
+    this.tweens.add({
+      targets: ring,
+      scale: 2.2,
+      alpha: 0,
+      duration: 1500,
+      ease: "Sine.easeOut",
+      onComplete: () => ring.destroy(),
+    });
   }
 
   private drawArchLabels(): void {
@@ -560,20 +641,26 @@ export class PortalChamberScene extends Phaser.Scene {
       const isCleared = state.realms[arch.id]?.cleared === true;
       const isLocked  = i > nextIdx;
 
-      const labelColor = isNext ? PALETTE.cream : isCleared ? PALETTE.brass : isLocked ? "#3a3550" : PALETTE.dim;
+      // For active and cleared arches the typing target above already shows
+      // the realm name — skip the under-arch label so it doesn't appear twice.
+      // Locked arches have no typing target, so they keep their name.
+      if (!isNext && !isCleared) {
+        this.add
+          .text(arch.x, arch.baseY + 30, arch.label, {
+            fontFamily: SERIF,
+            fontSize: "22px",
+            fontStyle: "italic",
+            color: isLocked ? "#3a3550" : PALETTE.dim,
+          })
+          .setOrigin(0.5);
+      }
 
-      this.add
-        .text(arch.x, arch.baseY + 30, arch.label, {
-          fontFamily: SERIF,
-          fontSize: "22px",
-          fontStyle: "italic",
-          color: labelColor,
-        })
-        .setOrigin(0.5);
-
+      // Status row sits 30px below where the name would be — or 30px below
+      // the arch baseY when the name is suppressed.
+      const statusY = !isNext && !isCleared ? arch.baseY + 58 : arch.baseY + 32;
       if (isCleared) {
         this.add
-          .text(arch.x, arch.baseY + 58, "✓ stamped", {
+          .text(arch.x, statusY, "✓ stamped", {
             fontFamily: SERIF,
             fontSize: "17px",
             color: PALETTE.brass,
@@ -581,7 +668,7 @@ export class PortalChamberScene extends Phaser.Scene {
           .setOrigin(0.5);
       } else if (isLocked) {
         this.add
-          .text(arch.x, arch.baseY + 58, "sealed", {
+          .text(arch.x, statusY, "sealed", {
             fontFamily: SERIF,
             fontSize: "17px",
             color: "#3a3550",

@@ -39,9 +39,22 @@ interface Wolf {
 /** Frozen river exploration beats */
 const RIVER_BEATS = ["lift", "step", "duck"] as const;
 
-/** Heldur's typed inscription */
-const HELDUR_INSCRIPTION =
-  "i am called heldur. i held this pass once. tell me of holdfast.";
+/** Heldur's typed inscription — broken into three short statements so the
+ *  player gets a "knight responds" beat after each line instead of a single
+ *  20–30s typing block. */
+const HELDUR_LINES = [
+  "i am called heldur",
+  "i held this pass once",
+  "tell me of holdfast",
+] as const;
+
+/** Narrator beat after each Heldur line — short on purpose so the line-to-line
+ *  cadence stays tight. The third one lingers because the realm transitions. */
+const HELDUR_REACTIONS = [
+  "His helm tilts.",
+  "Frost cracks. A century, told.",
+  "His eyes open. A hundred years without a Portalwright. Then the frost returns.",
+] as const;
 
 /** Runa's cold-decay candle warning (Acts 1→2 transition) */
 const COLD_DECAY_NARRATOR =
@@ -105,9 +118,19 @@ const BURY_PASSAGES = ["carry the stones", "let him rest here"];
 /** Passage typed after pelt-fork choice */
 const PELT_PASSAGES = ["claim the pelt", "carry it home"];
 
-/** 70-char realm true-name passage */
-const TRUE_NAME_PASSAGE =
-  "the winter mountain settles. its old breath warms. the snow rests.";
+/** Realm-clear true-name passage — three short lines instead of one
+ *  65-char block. The mountain "settles" line by line as Wren names it. */
+const TRUE_NAME_LINES = [
+  "the winter mountain settles",
+  "its old breath warms",
+  "the snow rests",
+] as const;
+
+const TRUE_NAME_REACTIONS = [
+  "The wind drops by half.",
+  "Color creeps back into the stones.",
+  "",
+] as const;
 
 export class WinterMountainScene extends Phaser.Scene {
   private store!: SaveStore;
@@ -324,43 +347,55 @@ export class WinterMountainScene extends Phaser.Scene {
     this.fadeInHeldur();
     this.time.delayedCall(2200, () => {
       this.setNarrator(
-        "Words are carved into the stone. Type them, and he will hear you.",
+        "Words are carved into the stone. Speak them line by line.",
       );
-      const target = new TextWordTarget({
-        scene: this,
-        word: HELDUR_INSCRIPTION,
-        x: this.scale.width / 2,
-        y: this.scale.height / 2,
-        fontSize: 30,
-        onComplete: () => {
-          playChime();
-          this.onHeldurSpoken();
-        },
-      });
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.time.delayedCall(900, () => this.runHeldurLine(0));
     });
+  }
+
+  /** One Heldur line at a time. Each typed line gets a short narrator
+   *  reaction; the third triggers the eye-open flash. */
+  private runHeldurLine(idx: number): void {
+    if (idx >= HELDUR_LINES.length) {
+      this.onHeldurSpoken();
+      return;
+    }
+    const isLast = idx === HELDUR_LINES.length - 1;
+    const target = new TextWordTarget({
+      scene: this,
+      word: HELDUR_LINES[idx],
+      x: this.scale.width / 2,
+      y: this.scale.height / 2,
+      fontSize: 36,
+      onComplete: () => {
+        playClack();
+        this.clearActiveTargets();
+        this.setNarrator(HELDUR_REACTIONS[idx]);
+        if (isLast && this.heldurSprite) {
+          this.heldurSprite.setTintFill(0xffd277);
+          this.time.delayedCall(180, () => this.heldurSprite?.clearTint());
+        }
+        this.time.delayedCall(
+          isLast ? 2000 : 900,
+          () => this.runHeldurLine(idx + 1),
+        );
+      },
+    });
+    this.typingInput.register(target);
+    this.activeTargets.push(target);
   }
 
   private onHeldurSpoken(): void {
     this.clearActiveTargets();
-    this.setNarrator(
-      "The knight's eyes open. He tells you of a hundred years without a Portalwright. Then the frost returns.",
-    );
-    // Brief amber flash on Heldur as his consciousness surfaces, then fade out
-    // as the scene moves on to cold-decay.
-    if (this.heldurSprite) {
-      this.heldurSprite.setTintFill(0xffd277);
-      this.time.delayedCall(180, () => this.heldurSprite?.clearTint());
-    }
     // Almanac lore page 1 unlocked
     this.store.update((s) => {
       if (!s.almanacLore.includes("the-hundred-quiet-years")) {
         s.almanacLore.push("the-hundred-quiet-years");
       }
     });
-    this.time.delayedCall(2400, () => this.fadeOutHeldur());
-    this.time.delayedCall(3000, () => this.startColdDecay());
+    playChime();
+    this.time.delayedCall(800, () => this.fadeOutHeldur());
+    this.time.delayedCall(1400, () => this.startColdDecay());
   }
 
   private fadeInHeldur(): void {
@@ -1123,25 +1158,19 @@ export class WinterMountainScene extends Phaser.Scene {
     this.activeTargets.push(whisperTarget, letGoTarget);
   }
 
-  /** The realm's true-name passage — 70-char long-form climax */
+  /** The realm's true-name passage — three short lines, the mountain
+   *  settling one line at a time. */
   private startTrueNamePassage(): void {
-    this.setNarrator(
-      "The mountain speaks. Listen, and type back what it says.",
-    );
-    this.time.delayedCall(1800, () => {
-      const target = new TextWordTarget({
-        scene: this,
-        word: TRUE_NAME_PASSAGE,
-        x: this.scale.width / 2,
-        y: this.scale.height / 2,
-        fontSize: 28,
-        onComplete: () => {
+    this.setNarrator("The mountain speaks. Type back what it says.");
+    this.time.delayedCall(900, () => {
+      this.runPassageChain(
+        [...TRUE_NAME_LINES],
+        [...TRUE_NAME_REACTIONS],
+        () => {
           playChime();
-          this.time.delayedCall(800, () => this.startEnding());
+          this.time.delayedCall(600, () => this.startEnding());
         },
-      });
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      );
     });
   }
 

@@ -242,12 +242,21 @@ export class OpeningScene extends Phaser.Scene {
     this.beat9();
   }
 
-  /** Beat 9 — Sibling farewell then transition. */
+  /** Beat 9 — Sibling farewell. */
   private beat9(): void {
     this.setNarrator(
       "Narrator: At the doorway, she presses the drawing a little tighter. ‘Wren. I made you something.’",
     );
-    this.time.delayedCall(2000, () => {
+    this.time.delayedCall(2400, () => this.beat10());
+  }
+
+  /** Beat 10 — Bridge to the Portal Chamber. Frames the hub as the next room
+   *  Wren walks into, not a redundant second scene. */
+  private beat10(): void {
+    this.setNarrator(
+      "Narrator: Runa rises and beckons. You follow her down the hall to the Portal Chamber.",
+    );
+    this.time.delayedCall(2400, () => {
       this.store.update((s) => {
         s.typewriterAwakened = true;
       });

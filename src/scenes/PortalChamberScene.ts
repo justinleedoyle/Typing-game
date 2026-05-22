@@ -91,8 +91,11 @@ export class PortalChamberScene extends Phaser.Scene {
   preload(): void {
     this.load.image("hub-backdrop", hubBackdrop);
     this.load.image("runa-sprite", runaSprite);
-    // 8-frame portal swirl: 1672x941 sheet, 8 frames spread horizontally,
-    // so each frame is 209x941 (mostly transparent above the arch).
+    // 8-frame portal swirl source. Loaded as a spritesheet so we can pick
+    // a single canonical frame to render — the 8 frames don't all align
+    // their arches at the same x within their cell, so cycling them
+    // produces a horizontal jitter. A single frame + slow rotation tween
+    // gives the "alive portal" feel without the slide.
     this.load.spritesheet("portal-active", portalActiveSheet, {
       frameWidth: 209,
       frameHeight: 941,
@@ -105,15 +108,6 @@ export class PortalChamberScene extends Phaser.Scene {
     if (!this.store.get().typewriterAwakened) {
       this.scene.start("OpeningScene", { store: this.store });
       return;
-    }
-
-    if (!this.anims.exists("portal-spin")) {
-      this.anims.create({
-        key: "portal-spin",
-        frames: this.anims.generateFrameNumbers("portal-active", { start: 0, end: 7 }),
-        frameRate: 10,
-        repeat: -1,
-      });
     }
 
     this.drawRoom();
@@ -522,18 +516,14 @@ export class PortalChamberScene extends Phaser.Scene {
     const g = this.add.graphics();
     this.archGraphics.set(spec.id, g);
 
-    // Animated portal sprite — invisible until the arch becomes "next" or
-    // "cleared". The sprite frame is 209x941; the painted arch within
-    // sits from ~30%..86% of the frame height. Anchor at y=0.86 puts the
-    // arch's painted bottom right at spec.baseY when scaled.
+    // Single-frame painted portal sprite. Frame 0 picked deliberately —
+    // see preload() for why we don't cycle frames. Slow rotation tween
+    // (added in renderArch when the arch becomes active) gives the
+    // swirling feel without the per-frame jitter.
     const sprite = this.add
       .sprite(spec.x, spec.baseY, "portal-active", 0)
       .setOrigin(0.5, 0.86)
       .setVisible(false);
-    // Uniform 0.50 scale lands the painted-arch height at ≈264 px
-    // (matching the painted hub arch height of 265). Width ends up
-    // narrower than the painted stone frame, which is fine — the dark
-    // painted void shows around the swirl edge instead of overflowing.
     sprite.setScale(0.5);
     this.archSprites.set(spec.id, sprite);
   }
@@ -549,7 +539,8 @@ export class PortalChamberScene extends Phaser.Scene {
 
     if (state === "locked" || state === "dark") {
       sprite.setVisible(false);
-      sprite.stop();
+      this.tweens.killTweensOf(sprite);
+      sprite.setRotation(0);
       return;
     }
 
@@ -561,19 +552,35 @@ export class PortalChamberScene extends Phaser.Scene {
       g.beginPath();
       g.arc(spec.x, archMidY + 60, radius * 0.55, 0, Math.PI * 2);
       g.strokePath();
-      // Painted swirl plays in warm tint to read as "cleared" not "next".
+      // Painted swirl in warm tint, slow rotation to read as "cleared" not "next".
       sprite.setVisible(true);
       sprite.setTint(0xc9a14a);
       sprite.setAlpha(0.55);
-      if (!sprite.anims.isPlaying) sprite.play("portal-spin");
+      this.startPortalSpin(sprite, 14000);
       return;
     }
 
-    // state === "next": full-strength painted swirl.
+    // state === "next": full-strength painted swirl, faster rotation.
     sprite.setVisible(true);
     sprite.clearTint();
     sprite.setAlpha(1);
-    if (!sprite.anims.isPlaying) sprite.play("portal-spin");
+    this.startPortalSpin(sprite, 8000);
+  }
+
+  /** Slow continuous rotation on the portal sprite — gives the swirl
+   *  motion without the per-frame x-jitter of the source spritesheet. */
+  private startPortalSpin(
+    sprite: Phaser.GameObjects.Sprite,
+    durationMs: number,
+  ): void {
+    this.tweens.killTweensOf(sprite);
+    this.tweens.add({
+      targets: sprite,
+      rotation: sprite.rotation + Math.PI * 2,
+      duration: durationMs,
+      repeat: -1,
+      ease: "Linear",
+    });
   }
 
   private drawArchLabels(): void {

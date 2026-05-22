@@ -345,11 +345,11 @@ export class WinterMountainScene extends Phaser.Scene {
       "An old wayshrine. A knight stands frozen over it, armored in frost.",
     );
     this.fadeInHeldur();
-    this.time.delayedCall(2200, () => {
+    this.time.delayedCall(1500, () => {
       this.setNarrator(
         "Words are carved into the stone. Speak them line by line.",
       );
-      this.time.delayedCall(900, () => this.runHeldurLine(0));
+      this.time.delayedCall(700, () => this.runHeldurLine(0));
     });
   }
 
@@ -828,7 +828,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.clearActiveTargets();
     this.setNarrator("A woman, half-buried in snow, lifts her head as you approach.");
     this.fadeInHuntress();
-    this.time.delayedCall(1800, () => {
+    this.time.delayedCall(1100, () => {
       this.runPassageChain(
         HUNTRESS_PASSAGES,
         [
@@ -872,7 +872,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private startFireflyBranch(nextWave: number): void {
     this.clearActiveTargets();
     this.setNarrator("Three fireflies hover at eye level, then dart up the slope.");
-    this.time.delayedCall(1800, () => {
+    this.time.delayedCall(1100, () => {
       this.runPassageChain(
         FIREFLY_PASSAGES,
         [
@@ -1251,7 +1251,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
     const advance = (): void => {
       if (step >= passages.length) {
-        this.time.delayedCall(1400, onDone);
+        this.time.delayedCall(900, onDone);
         return;
       }
       const target = new TextWordTarget({
@@ -1263,7 +1263,7 @@ export class WinterMountainScene extends Phaser.Scene {
         onComplete: () => {
           step += 1;
           this.setNarrator(narratorLines[step - 1] ?? "");
-          this.time.delayedCall(1400, advance);
+          this.time.delayedCall(900, advance);
         },
       });
       this.typingInput.register(target);

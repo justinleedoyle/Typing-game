@@ -6,6 +6,7 @@ import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
 import openingBackdrop from "../../art/references/opening-typewriter-study-clean.png";
+import { makeQuietLordSprite, preloadQuietLord } from "../game/quietLord";
 import runaSprite from "../../art/runa/runa-front.png";
 import siblingSprite from "../../art/sibling/sibling-front.png";
 
@@ -26,6 +27,8 @@ export class OpeningScene extends Phaser.Scene {
 
   // Soft glow over the painted Almanac — pulsed in Beat 4.
   private almanacGlow!: Phaser.GameObjects.Graphics;
+  // The Quiet Lord's first foreshadowing — faint silhouette during Beat 6.
+  private quietLordSprite: Phaser.GameObjects.Image | null = null;
 
   constructor() {
     super("OpeningScene");
@@ -33,12 +36,15 @@ export class OpeningScene extends Phaser.Scene {
 
   init(data: OpeningSceneData): void {
     this.store = data.store;
+    // Stale sprite reference from a previous run; clear before Beat 6.
+    this.quietLordSprite = null;
   }
 
   preload(): void {
     this.load.image("opening-backdrop", openingBackdrop);
     this.load.image("runa-sprite", runaSprite);
     this.load.image("sibling-sprite", siblingSprite);
+    preloadQuietLord(this);
   }
 
   create(): void {
@@ -171,7 +177,38 @@ export class OpeningScene extends Phaser.Scene {
     this.setNarrator(
       'Runa: "The Quiet Lord has been waking up. Across the Realms Beyond he is gathering an army that hates language and loves silence. This is the Almanac. It records everywhere you go, everyone you save, everything you bring home. It is yours now."',
     );
+    this.fadeInQuietLord();
+    // Fade him out partway through, before the portal wakes.
+    this.time.delayedCall(2200, () => this.fadeOutQuietLord());
     this.time.delayedCall(3000, () => this.beat7());
+  }
+
+  /** First foreshadowing — a faint silhouette behind Runa as she names him. */
+  private fadeInQuietLord(): void {
+    if (this.quietLordSprite) return;
+    this.quietLordSprite = makeQuietLordSprite(this)
+      .setPosition(1500, 980)
+      .setDepth(-10)
+      .setAlpha(0);
+    this.tweens.add({
+      targets: this.quietLordSprite,
+      alpha: 0.45,
+      duration: 1100,
+      ease: "Sine.easeOut",
+    });
+  }
+
+  private fadeOutQuietLord(): void {
+    if (!this.quietLordSprite) return;
+    const sprite = this.quietLordSprite;
+    this.quietLordSprite = null;
+    this.tweens.add({
+      targets: sprite,
+      alpha: 0,
+      duration: 900,
+      ease: "Sine.easeIn",
+      onComplete: () => sprite.destroy(),
+    });
   }
 
   /** Beat 7 — First portal wakes (2 s, no input). */

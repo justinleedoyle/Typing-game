@@ -450,6 +450,38 @@ illustration style and palette as the attached character reference sheet.
 
 ---
 
+### Villain sprite — The Quiet Lord
+
+The big-bad of *The Portalwright's Almanac*. He doesn't need a face in
+Phase 1 — by Phase 4 he needs a recognizable silhouette and a way of
+"speaking." This sprite locks the silhouette so every realm can foreshadow
+him consistently. First use: a faint fade-in behind Runa in the Opening
+Scene when she names him.
+
+```
+[STYLE ANCHOR]
+Single character sprite, isolated on solid bright magenta background
+(#ff00ff) for chroma keying. Chibi-proportioned but unusually tall, gaunt
+robed figure — distinctly taller than Runa: long sweeping hooded robe in
+deep midnight-charcoal with very dark muted-violet undertones, frayed
+ragged hem, no skin or face visible — only impenetrable shadow inside the
+deep hood where a face should be. Long sleeves hide his hands. Posture is
+still, upright, expressionless, watchful, faintly imposing but not
+overtly menacing — the embodiment of a quiet absence rather than active
+threat. A faint dust of small dark scratched-out paper fragments drifts
+near the hem of the robe, suggesting words being dissolved. Limited dark
+palette, soft flat illustration. Full body visible head to hem with no
+cropping, no shadow on the magenta background. Same flat stylized
+illustration style and proportions as the attached character reference
+sheet.
+```
+
+Save the keyed result as `art/quiet-lord/quiet-lord.png`. Run
+`python3 scripts/key_quiet_lord.py` after dropping the raw render into
+`art/references/quiet-lord.png`.
+
+---
+
 ### NPC sprites — Winter Mountain (Heldur & the huntress)
 
 Two narrative NPCs in Winter Mountain who are currently described only in
@@ -574,6 +606,10 @@ Drop these files into `art/references/` (filenames are what `PROMPTS.md` expects
 
 - [ ] `heldur.png` — old armored knight, frost-rimed, sword grounded
 - [ ] `huntress.png` — kneeling hunter in fur cloak, half-buried in snow
+
+### Villain sprite
+
+- [ ] `quiet-lord.png` — tall hooded figure, faceless, frayed robe — the big-bad
 
 ### Wren sprites (crop from sheet OR regenerate)
 

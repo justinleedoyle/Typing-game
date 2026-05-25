@@ -27,6 +27,9 @@ export interface SaveState {
   satchel: string[];
   keyStats: Record<string, KeyStat>;
   almanacLore: string[];
+  /** Opt-in "purist" mode — typos reset the claimed word to the start.
+   *  Off by default (kid-friendly). Toggled in-game via Ctrl+Shift+P. */
+  purist: boolean;
   updatedAt: number;
 }
 
@@ -38,6 +41,7 @@ export function emptySave(profileName = "Wren"): SaveState {
     satchel: [],
     keyStats: {},
     almanacLore: [],
+    purist: false,
     updatedAt: Date.now(),
   };
 }

@@ -6,8 +6,9 @@
 // effect (open the portal, defeat the wolf, light the lantern, etc.).
 
 import Phaser from "phaser";
-import { PALETTE, SERIF } from "./palette";
+import { PALETTE, PALETTE_HEX, SERIF } from "./palette";
 import type { WordTarget } from "./typingInput";
+import { playWordCompleteBurst } from "./vfx";
 
 export interface TextWordTargetOptions {
   scene: Phaser.Scene;
@@ -22,6 +23,10 @@ export interface TextWordTargetOptions {
    *  (first letter typed with Shift held). If omitted, onComplete runs
    *  normally and spell mode is purely cosmetic. */
   onSpellComplete?: () => void;
+  /** Color (hex) for the radial burst when the word completes. Defaults to
+   *  brass. Pass `null` to suppress the burst entirely (e.g. for very
+   *  small text where the burst would feel oversized). */
+  burstColor?: number | null;
   /** Called when this target locks in to the typing controller (first matching
    *  letter typed). Use for character-facing reactions like Wren leaning toward
    *  the target. */
@@ -47,6 +52,7 @@ export class TextWordTarget implements WordTarget {
   private dimmed = false;
   private candidate = false;
   private spellClaimed = false;
+  private danger = 0;
 
   readonly priority: number;
 
@@ -107,6 +113,30 @@ export class TextWordTarget implements WordTarget {
     return true;
   }
 
+  /**
+   * Snap the cursor back to the word's start without releasing the claim.
+   * Used by purist mode — a typo wipes typing progress on the claimed word
+   * but the target stays selected, so the player doesn't have to re-find it.
+   */
+  resetCursor(): void {
+    if (this.cursor === 0) return;
+    this.cursor = 0;
+    this.complete = false;
+    this.relayout();
+  }
+
+  /**
+   * Drive the word's color toward "danger" as a wolf advances on Wren.
+   * `level` is 0..1 — at 0 the word stays cream, at 1 it's full ember-red.
+   * Plays cleanly with the dim/candidate/spell color rules in applyDim().
+   */
+  setDanger(level: number): void {
+    const clamped = Math.max(0, Math.min(1, level));
+    if (Math.abs(clamped - this.danger) < 0.01) return;
+    this.danger = clamped;
+    this.applyDim();
+  }
+
   miss(): void {
     const anchor = this.opts.anchor;
     if (anchor?.setTint) {
@@ -145,6 +175,19 @@ export class TextWordTarget implements WordTarget {
 
   onComplete(): void {
     const spell = this.spellClaimed;
+
+    // Burst on completion — turns "text fades" into "you hit the thing."
+    // Default brass; scenes pass frost for wolves, etc. `null` opts out.
+    const burstColor = this.opts.burstColor;
+    if (burstColor !== null) {
+      playWordCompleteBurst(
+        this.opts.scene,
+        this.container.x,
+        this.container.y,
+        { color: burstColor ?? PALETTE_HEX.brass },
+      );
+    }
+
     this.opts.scene.tweens.add({
       targets: this.container,
       alpha: { from: 1, to: 0 },
@@ -202,11 +245,30 @@ export class TextWordTarget implements WordTarget {
   private applyDim(): void {
     const alpha = this.dimmed ? 0.12 : 1;
     this.container.setAlpha(alpha);
-    // Candidates glow slightly so the player can see which words are still live.
-    if (!this.dimmed && this.candidate) {
+    if (this.dimmed) return;
+    // Color priority: spell > candidate > danger > default.
+    if (this.spellClaimed) return; // ember, set in onClaim
+    if (this.candidate) {
       this.remainingText.setColor(PALETTE.frost ?? PALETTE.cream);
-    } else if (!this.dimmed && !this.spellClaimed) {
-      this.remainingText.setColor(PALETTE.cream);
+      return;
     }
+    if (this.danger > 0) {
+      this.remainingText.setColor(this.dangerColor());
+      return;
+    }
+    this.remainingText.setColor(PALETTE.cream);
+  }
+
+  /** Linear interpolation between cream and ember by the current danger level.
+   *  Returns a CSS hex string suitable for Phaser Text.setColor. */
+  private dangerColor(): string {
+    const t = this.danger;
+    const lerp = (a: number, b: number): number =>
+      Math.round(a + (b - a) * t);
+    const r = lerp(0xf3, 0xd6);
+    const g = lerp(0xea, 0x75);
+    const b = lerp(0xd2, 0x4a);
+    const hex = (n: number): string => n.toString(16).padStart(2, "0");
+    return `#${hex(r)}${hex(g)}${hex(b)}`;
   }
 }

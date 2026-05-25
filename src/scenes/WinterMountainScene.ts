@@ -3,7 +3,13 @@ import { type AmbientHandle, playAmbientWinter } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
+import { playWaveSting } from "../audio/waveSting";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
+import { isPuristToggleKey, togglePuristMode } from "../game/purist";
+// Danger ramps in over the LAST 60% of a wolf's advance — earlier portion
+// stays cream so players can read the word, then it shifts red as the wolf
+// closes. Tweak this constant to make the warning earlier or later.
+const DANGER_RAMP_START = 0.4;
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
@@ -567,6 +573,11 @@ export class WinterMountainScene extends Phaser.Scene {
     const config = WAVES[idx];
     this.setNarrator(config.intro);
 
+    // Wave-start bookend — audio sting + screen shake so each wave feels
+    // like an event, not just "more text appears."
+    playWaveSting();
+    this.cameras.main.shake(220, 0.005);
+
     const slots = shuffle(SPAWN_SLOTS).slice(0, config.wolfCount);
     const words = pickAdaptiveWords(
       WINTER_WORD_BANK,
@@ -713,6 +724,9 @@ export class WinterMountainScene extends Phaser.Scene {
       x: wolf.container.x,
       y: wolf.restY - 90,
       fontSize: 32,
+      // Frost burst on completion — wolves go "down in snow," not "down in
+      // brass." Reads as a hit, not a UI dismissal.
+      burstColor: PALETTE_HEX.frost,
       onClaim: () => this.leanWrenToward(wolf.container.x),
       onRelease: () => this.returnWrenToRest(),
       onComplete: () => {
@@ -770,8 +784,17 @@ export class WinterMountainScene extends Phaser.Scene {
       x: restX,
       duration,
       ease: "Linear",
-      onUpdate: () => {
-        if (wolf.target) wolf.target.setAnchorX(wolf.container.x);
+      onUpdate: (tween) => {
+        if (!wolf.target) return;
+        wolf.target.setAnchorX(wolf.container.x);
+        // Danger pulse — as the wolf crosses DANGER_RAMP_START of its
+        // advance, the floating word shifts cream → ember. Communicates
+        // "this one is about to land on you" without needing UI chrome.
+        const dangerLevel = Math.max(
+          0,
+          (tween.progress - DANGER_RAMP_START) / (1 - DANGER_RAMP_START),
+        );
+        wolf.target.setDanger(dangerLevel);
       },
       onComplete: () => {
         wolf.advanceTween = null;
@@ -1383,6 +1406,11 @@ export class WinterMountainScene extends Phaser.Scene {
   // ─── Input ────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
+    // Ctrl+Shift+P: toggle purist mode.
+    if (isPuristToggleKey(event)) {
+      togglePuristMode(this, this.store);
+      return;
+    }
     if (event.key === "Shift") {
       this.setShiftHeld(true);
       return;

@@ -21,6 +21,10 @@ export interface WordTarget {
    *  false if the cursor is already at the word's start (caller should
    *  release the claim entirely). */
   reverse?(): boolean;
+  /** Snap the cursor back to the word's start (no-op if already there).
+   *  Used by purist mode — wipes typing progress without releasing the
+   *  claim. */
+  resetCursor?(): void;
   /** Called when the user types a wrong character mid-claim. */
   miss(): void;
   /** Called when this target is claimed. `spell` is true if the claim came in
@@ -161,6 +165,11 @@ export class TypingInputController {
       this.claimed.miss();
       this.store?.recordKeystroke(ch, false);
       this.onMissChar?.();
+      // Purist mode: typo wipes typing progress on the claimed word, but
+      // the target stays claimed so the player doesn't have to re-find it.
+      if (this.store?.get().purist) {
+        this.claimed.resetCursor?.();
+      }
       return true;
     }
 

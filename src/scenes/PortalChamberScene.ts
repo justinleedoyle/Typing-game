@@ -14,6 +14,7 @@ import {
 } from "../game/supabaseClient";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
+import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
 import hubBackdrop from "../../art/references/hub-portal-chamber-clean.png";
 import portalActiveSheet from "../../art/portal/portal-active-sheet.png";
@@ -507,6 +508,11 @@ export class PortalChamberScene extends Phaser.Scene {
   // ─── Input ────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
+    // Ctrl+Shift+P: toggle purist mode from the hub too.
+    if (isPuristToggleKey(event)) {
+      togglePuristMode(this, this.store);
+      return;
+    }
     if (event.key.length === 1 || event.key === " ") playClack();
     this.typingInput.handleChar(event.key);
   }

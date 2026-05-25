@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
+import { playClaim } from "../audio/claim";
 import { PALETTE, SERIF } from "../game/palette";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
@@ -69,6 +70,11 @@ export class OpeningScene extends Phaser.Scene {
 
     // ── Input ────────────────────────────────────────────────────────────────
     this.typingInput = new TypingInputController(this.store);
+    // No Wren in the opening study; miss feedback is camera-only.
+    this.typingInput.setKeystrokeHooks({
+      onMiss: () => this.cameras.main.shake(80, 0.002),
+      onClaim: () => playClaim(),
+    });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();

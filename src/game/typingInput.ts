@@ -3,8 +3,10 @@
 // several targets share a first letter (e.g. "the winter mountain" vs
 // "the almanac") without the player having to think about priorities.
 //
-// Backspace (or Escape) either releases a mid-word claim (resetting that
-// target to its start) or trims the last character off the pre-claim buffer.
+// Backspace reverses one character mid-claim (the target stays claimed; only
+// the typed prefix shrinks). If you backspace past the start of the claimed
+// word, the target releases entirely and you're back to free buffer typing.
+// Escape always releases the claim entirely (panic abort).
 
 import type { SaveStore } from "./saveState";
 
@@ -15,6 +17,10 @@ export interface WordTarget {
   isComplete(): boolean;
   /** Advance the cursor by one matched character. */
   advance(): void;
+  /** Reverse the cursor by one matched character. Returns true on success;
+   *  false if the cursor is already at the word's start (caller should
+   *  release the claim entirely). */
+  reverse?(): boolean;
   /** Called when the user types a wrong character mid-claim. */
   miss(): void;
   /** Called when this target is claimed. `spell` is true if the claim came in
@@ -47,19 +53,24 @@ export class TypingInputController {
   private typingBuffer = "";
   private onCorrectChar?: () => void;
   private onMissChar?: () => void;
+  private onClaimChar?: (spell: boolean) => void;
 
   constructor(private readonly store?: SaveStore) {}
 
-  /** Wire per-keystroke feedback hooks. `onCorrect` fires for every keystroke
-   *  that lands a matching character (mid-claim or pre-claim narrowing).
-   *  `onMiss` fires for every keystroke that does not. Scenes use this to bob
-   *  Wren, flash a UI element, etc. */
+  /** Wire per-keystroke feedback hooks.
+   *  - `onCorrect` fires for every keystroke that lands a matching character
+   *    (mid-claim or pre-claim narrowing).
+   *  - `onMiss` fires for every keystroke that does not.
+   *  - `onClaim` fires once when the prefix uniquely identifies a target and
+   *    the controller locks onto it. Use for the "lock-on" sting. */
   setKeystrokeHooks(hooks: {
     onCorrect?: () => void;
     onMiss?: () => void;
+    onClaim?: (spell: boolean) => void;
   }): void {
     this.onCorrectChar = hooks.onCorrect;
     this.onMissChar = hooks.onMiss;
+    this.onClaimChar = hooks.onClaim;
   }
 
   register(target: WordTarget): void {
@@ -94,9 +105,15 @@ export class TypingInputController {
    * space, Backspace, and Escape. Returns true if consumed.
    */
   handleChar(char: string, mods?: { spell?: boolean }): boolean {
-    // Backspace / Escape: undo last action.
-    if (char === "Backspace" || char === "Escape") {
+    // Backspace: reverse one character if mid-claim; otherwise trim the
+    // pre-claim buffer. Falls through to a full release only when the
+    // claimed target is already at its start.
+    if (char === "Backspace") {
       if (this.claimed) {
+        if (this.claimed.reverse?.()) {
+          return true;
+        }
+        // At the start of the claimed word — release entirely.
         this.releaseClaim();
         this.typingBuffer = "";
         this.refreshCandidateDisplay();
@@ -104,6 +121,22 @@ export class TypingInputController {
       }
       if (this.typingBuffer.length > 0) {
         this.typingBuffer = this.typingBuffer.slice(0, -1);
+        this.refreshCandidateDisplay();
+        return true;
+      }
+      return false;
+    }
+
+    // Escape: panic abort — always release claim and clear buffer.
+    if (char === "Escape") {
+      if (this.claimed) {
+        this.releaseClaim();
+        this.typingBuffer = "";
+        this.refreshCandidateDisplay();
+        return true;
+      }
+      if (this.typingBuffer.length > 0) {
+        this.typingBuffer = "";
         this.refreshCandidateDisplay();
         return true;
       }
@@ -150,8 +183,10 @@ export class TypingInputController {
     if (candidates.length === 1) {
       // Unique match — claim it and fast-forward the cursor to buffer length.
       const target = pickBest(candidates);
+      const spell = mods?.spell === true;
       this.claimed = target;
-      target.onClaim(mods?.spell === true);
+      target.onClaim(spell);
+      this.onClaimChar?.(spell);
       for (let i = 0; i < newBuffer.length; i++) {
         target.advance();
       }

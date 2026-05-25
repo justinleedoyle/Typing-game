@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { type AmbientHandle, playAmbientHub } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
+import { playClaim } from "../audio/claim";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { RELICS } from "../game/relics";
 import type { SaveStore } from "../game/saveState";
@@ -13,7 +14,7 @@ import {
 } from "../game/supabaseClient";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
-import { bobWrenSprite, makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
+import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
 import hubBackdrop from "../../art/references/hub-portal-chamber-clean.png";
 import portalActiveSheet from "../../art/portal/portal-active-sheet.png";
 import runaSprite from "../../art/runa/runa-front.png";
@@ -149,6 +150,11 @@ export class PortalChamberScene extends Phaser.Scene {
     this.typingInput = new TypingInputController(this.store);
     this.typingInput.setKeystrokeHooks({
       onCorrect: () => bobWrenSprite(this.wrenSprite),
+      onMiss: () => {
+        flashWrenMiss(this.wrenSprite);
+        this.cameras.main.shake(80, 0.002);
+      },
+      onClaim: () => playClaim(),
     });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {

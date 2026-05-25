@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { type AmbientHandle, playAmbientWinter } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
+import { playClaim } from "../audio/claim";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
@@ -13,7 +14,7 @@ import {
   preloadWinterNpcs,
 } from "../game/winterNpcs";
 import { makeWolfSprite, preloadWolves } from "../game/wolf";
-import { bobWrenSprite, makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
+import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
 import winterBackdrop from "../../art/references/winter-mountain-clean.png";
 
 interface WinterSceneData {
@@ -252,6 +253,11 @@ export class WinterMountainScene extends Phaser.Scene {
     this.typingInput = new TypingInputController(this.store);
     this.typingInput.setKeystrokeHooks({
       onCorrect: () => bobWrenSprite(this.wrenSprite),
+      onMiss: () => {
+        flashWrenMiss(this.wrenSprite);
+        this.cameras.main.shake(80, 0.002);
+      },
+      onClaim: () => playClaim(),
     });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.input.keyboard?.on("keyup", this.onKeyUp, this);

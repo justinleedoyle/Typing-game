@@ -93,6 +93,20 @@ export class TextWordTarget implements WordTarget {
     this.relayout();
   }
 
+  /**
+   * Reverse the cursor by one character. Returns true on success; false if
+   * we're already at the word's start (caller should fall through to release
+   * the claim entirely). The target stays claimed and stays visible — only
+   * the typed prefix shrinks by one letter.
+   */
+  reverse(): boolean {
+    if (this.cursor === 0) return false;
+    this.cursor -= 1;
+    this.complete = false;
+    this.relayout();
+    return true;
+  }
+
   miss(): void {
     const anchor = this.opts.anchor;
     if (anchor?.setTint) {

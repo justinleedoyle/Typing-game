@@ -58,23 +58,41 @@ export function setWrenPose(
 }
 
 /**
- * Subtle per-keystroke feedback on the Wren sprite — a 2% scaleY squat,
- * 50ms each way, against the feet anchor (origin 0.5, 1) so the sprite
- * doesn't shift position. Tuned to barely show on a still frame; a rapid
- * type still produces a noticeable cadence without making Wren visibly
- * shrink and grow.
+ * Per-keystroke feedback on the Wren sprite — a 5% Y squat paired with a
+ * 2% X widen (classic squash-stretch), 60ms each way against the feet
+ * anchor (origin 0.5, 1) so the sprite doesn't shift position. Big enough
+ * to read at a glance while typing; small enough that rapid keystrokes
+ * read as a *cadence* rather than a distracting bounce.
+ *
+ * Preserves the sign of scaleX so left-facing Wren stays left-facing
+ * through the bob.
  */
 export function bobWrenSprite(img: Phaser.GameObjects.Image): void {
   const baseScale = WREN_DISPLAY_HEIGHT / img.height;
+  const facingLeft = img.scaleX < 0;
+  const baseScaleX = facingLeft ? -baseScale : baseScale;
   img.scene.tweens.killTweensOf(img);
   img.scene.tweens.add({
     targets: img,
-    scaleY: baseScale * 0.98,
-    duration: 50,
+    scaleY: baseScale * 0.95,
+    scaleX: baseScaleX * 1.02,
+    duration: 60,
     yoyo: true,
     ease: "Sine.out",
     onComplete: () => {
       img.scaleY = baseScale;
+      img.scaleX = baseScaleX;
     },
   });
+}
+
+/**
+ * Per-mistyped-keystroke feedback. A brief red-ember tint flash on Wren
+ * (80ms) — visible enough that the player feels the typo land without
+ * being punishing. Composes safely with the hurt-pose system; the tint
+ * clears on its own timer and doesn't disturb the underlying texture.
+ */
+export function flashWrenMiss(img: Phaser.GameObjects.Image): void {
+  img.setTintFill(0x8a3a2a);
+  img.scene.time.delayedCall(80, () => img.clearTint());
 }

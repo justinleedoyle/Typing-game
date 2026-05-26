@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { type AmbientHandle, playAmbientBattle } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
+import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
@@ -112,7 +113,7 @@ interface Enemy {
 export class GreatBattleScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
-  private narratorText!: Phaser.GameObjects.Text;
+  private narration!: NarrationManager;
   private activeTargets: TextWordTarget[] = [];
 
   // HUD
@@ -174,17 +175,7 @@ export class GreatBattleScene extends Phaser.Scene {
       .setDepth(-100);
 
     // Narrator
-    this.narratorText = this.add
-      .text(this.scale.width / 2, 90, "", {
-        fontFamily: SERIF,
-        fontSize: "32px",
-        color: PALETTE.cream,
-        fontStyle: "italic",
-        align: "center",
-        wordWrap: { width: 1500 },
-      })
-      .setOrigin(0.5)
-      .setDepth(5);
+    this.narration = new NarrationManager(this, { y: 90, wordWrapWidth: 1500, depth: 5 });
 
     // Candle & charge HUD
     this.candleGroup = this.add.container(this.scale.width / 2 - 120, 990).setDepth(6);
@@ -233,14 +224,7 @@ export class GreatBattleScene extends Phaser.Scene {
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
   private setNarrator(text: string): void {
-    this.narratorText.setText(text);
-    this.narratorText.setAlpha(0);
-    this.tweens.add({
-      targets: this.narratorText,
-      alpha: 1,
-      duration: 400,
-      ease: "Sine.easeOut",
-    });
+    this.narration.sayRaw(text);
   }
 
   private clearActiveTargets(): void {

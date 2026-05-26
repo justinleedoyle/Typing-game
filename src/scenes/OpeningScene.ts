@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
-import { PALETTE, SERIF } from "../game/palette";
+import { NarrationManager } from "../game/narrationManager";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
@@ -23,7 +23,7 @@ const TYPE_TARGET = { x: 960, y: 540 };
 export class OpeningScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
-  private narratorText!: Phaser.GameObjects.Text;
+  private narration!: NarrationManager;
 
   // The Quiet Lord's first foreshadowing — faint silhouette during Beat 6.
   private quietLordSprite: Phaser.GameObjects.Image | null = null;
@@ -56,17 +56,7 @@ export class OpeningScene extends Phaser.Scene {
       .setDepth(-100);
 
     // ── Narrator text ────────────────────────────────────────────────────────
-    this.narratorText = this.add
-      .text(width / 2, 120, "", {
-        fontFamily: SERIF,
-        fontSize: "32px",
-        color: PALETTE.cream,
-        fontStyle: "italic",
-        align: "center",
-        wordWrap: { width: 1400 },
-      })
-      .setOrigin(0.5)
-      .setAlpha(0);
+    this.narration = new NarrationManager(this, { y: 120 });
 
     // ── Input ────────────────────────────────────────────────────────────────
     this.typingInput = new TypingInputController(this.store);
@@ -270,14 +260,7 @@ export class OpeningScene extends Phaser.Scene {
   // ── Narrator helper ────────────────────────────────────────────────────────
 
   private setNarrator(text: string): void {
-    this.narratorText.setText(text);
-    this.narratorText.setAlpha(0);
-    this.tweens.add({
-      targets: this.narratorText,
-      alpha: 1,
-      duration: 400,
-      ease: "Sine.easeOut",
-    });
+    this.narration.sayRaw(text);
   }
 
   // ── Drawing ────────────────────────────────────────────────────────────────

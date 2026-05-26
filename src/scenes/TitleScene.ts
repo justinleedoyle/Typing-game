@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { playClack } from "../audio/clack";
+import { setAudioLevel } from "../audio/context";
 import { PALETTE, SERIF } from "../game/palette";
 import {
   SaveStore,
@@ -63,6 +64,9 @@ export class TitleScene extends Phaser.Scene {
       (this.registry.get("saveBackend") as SaveBackend | undefined) ??
       new SyncedBackend();
     this.storePromise = SaveStore.load(backend);
+    // Apply the saved audio level the moment the store resolves, so even the
+    // first title-screen clack respects "off" / "quiet".
+    void this.storePromise.then((s) => setAudioLevel(s.get().audioLevel));
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {

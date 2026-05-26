@@ -5,7 +5,7 @@
 // crowding it. Reads as "lock-on" — the moment the player knows which
 // word they're committed to.
 
-import { getAudioContext } from "./context";
+import { getAudioContext, getMasterGain } from "./context";
 
 export function playClaim(): void {
   const audio = getAudioContext();
@@ -23,7 +23,7 @@ export function playClaim(): void {
   gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
   osc.connect(gain);
-  gain.connect(audio.destination);
+  gain.connect(getMasterGain());
 
   osc.start(now);
   osc.stop(now + duration);

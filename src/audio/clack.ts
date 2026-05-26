@@ -6,7 +6,7 @@
 // envelope. Slight randomization on every call keeps repeated keystrokes
 // from sounding mechanical.
 
-import { getAudioContext } from "./context";
+import { getAudioContext, getMasterGain } from "./context";
 
 export function playClack(): void {
   const audio = getAudioContext();
@@ -37,7 +37,7 @@ export function playClack(): void {
 
   source.connect(filter);
   filter.connect(gain);
-  gain.connect(audio.destination);
+  gain.connect(getMasterGain());
 
   source.start(now);
   source.stop(now + duration);

@@ -4,7 +4,7 @@
 // brace." Distinct from playClack (per-key), playClaim (lock-on, high),
 // playChime (word-complete, bright). Wave-sting lives at the low end.
 
-import { getAudioContext } from "./context";
+import { getAudioContext, getMasterGain } from "./context";
 
 export function playWaveSting(): void {
   const audio = getAudioContext();
@@ -15,7 +15,7 @@ export function playWaveSting(): void {
   gain.gain.setValueAtTime(0, now);
   gain.gain.linearRampToValueAtTime(0.14, now + 0.02);
   gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  gain.connect(audio.destination);
+  gain.connect(getMasterGain());
 
   // 165 Hz (E3) and 196 Hz (G3) — a minor third, slightly ominous.
   for (const freq of [165, 196]) {

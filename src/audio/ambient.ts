@@ -2,7 +2,7 @@
 // Disabled for now — the drone oscillators are perceived as plain humming.
 // To re-enable, remove the early-return lines from each play function.
 
-import { getAudioContext } from "./context";
+import { getAudioContext, getMasterGain } from "./context";
 
 export interface AmbientHandle {
   stop(): void;
@@ -93,7 +93,7 @@ export function playAmbientHub(): AmbientHandle {
   const ctx = getAudioContext();
   const masterGain = ctx.createGain();
   masterGain.gain.value = 0.1;
-  masterGain.connect(ctx.destination);
+  masterGain.connect(getMasterGain());
 
   const nodes: Array<OscillatorNode | AudioBufferSourceNode> = [];
 
@@ -141,7 +141,7 @@ export function playAmbientWinter(): AmbientHandle {
   const ctx = getAudioContext();
   const masterGain = ctx.createGain();
   masterGain.gain.value = 0.09;
-  masterGain.connect(ctx.destination);
+  masterGain.connect(getMasterGain());
 
   const nodes: Array<OscillatorNode | AudioBufferSourceNode> = [];
 
@@ -208,7 +208,7 @@ export function playAmbientBell(): AmbientHandle {
   const ctx = getAudioContext();
   const masterGain = ctx.createGain();
   masterGain.gain.value = 0.1;
-  masterGain.connect(ctx.destination);
+  masterGain.connect(getMasterGain());
 
   const nodes: Array<OscillatorNode | AudioBufferSourceNode> = [];
 
@@ -276,7 +276,7 @@ export function playAmbientBell(): AmbientHandle {
       shimmerGain.gain.linearRampToValueAtTime(0.05, now + 0.01);
       shimmerGain.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
       shimmerOsc.connect(shimmerGain);
-      shimmerGain.connect(ctx.destination);
+      shimmerGain.connect(getMasterGain());
       shimmerOsc.start(now);
       shimmerOsc.stop(now + 2.1);
       scheduleShimmer();
@@ -298,7 +298,7 @@ export function playAmbientForge(): AmbientHandle {
   const ctx = getAudioContext();
   const masterGain = ctx.createGain();
   masterGain.gain.value = 0.1;
-  masterGain.connect(ctx.destination);
+  masterGain.connect(getMasterGain());
 
   const nodes: Array<OscillatorNode | AudioBufferSourceNode> = [];
 
@@ -361,7 +361,7 @@ export function playAmbientSkyIsland(): AmbientHandle {
   const ctx = getAudioContext();
   const masterGain = ctx.createGain();
   masterGain.gain.value = 0.09;
-  masterGain.connect(ctx.destination);
+  masterGain.connect(getMasterGain());
 
   const nodes: Array<OscillatorNode | AudioBufferSourceNode> = [];
 
@@ -424,7 +424,7 @@ export function playAmbientSkyIsland(): AmbientHandle {
       chimeGain.gain.linearRampToValueAtTime(0.05, now + 0.01);
       chimeGain.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
       chimeOsc.connect(chimeGain);
-      chimeGain.connect(ctx.destination);
+      chimeGain.connect(getMasterGain());
       chimeOsc.start(now);
       chimeOsc.stop(now + 2.1);
       scheduleChime();
@@ -446,7 +446,7 @@ export function playAmbientWood(): AmbientHandle {
   const ctx = getAudioContext();
   const masterGain = ctx.createGain();
   masterGain.gain.value = 0.1;
-  masterGain.connect(ctx.destination);
+  masterGain.connect(getMasterGain());
 
   const nodes: Array<OscillatorNode | AudioBufferSourceNode> = [];
 
@@ -522,7 +522,7 @@ export function playAmbientBattle(): AmbientHandle {
   const ctx = getAudioContext();
   const masterGain = ctx.createGain();
   masterGain.gain.value = 0.12;
-  masterGain.connect(ctx.destination);
+  masterGain.connect(getMasterGain());
 
   const nodes: Array<OscillatorNode | AudioBufferSourceNode> = [];
 

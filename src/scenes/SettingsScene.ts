@@ -16,6 +16,7 @@ import Phaser from "phaser";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
+import { setAudioLevel } from "../audio/context";
 import { PALETTE, SERIF } from "../game/palette";
 import { togglePuristMode } from "../game/purist";
 import {
@@ -217,6 +218,7 @@ export class SettingsScene extends Phaser.Scene {
     this.store.update((s) => {
       s.audioLevel = next;
     });
+    setAudioLevel(next);
     this.setNarrator(`Sound: ${next}.`);
     this.renderMenu();
   }

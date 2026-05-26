@@ -2,7 +2,7 @@
 // tones a fifth apart, with a quick attack and an exponential decay. Quiet
 // enough to layer on top of the typewriter clacks without crowding them.
 
-import { getAudioContext } from "./context";
+import { getAudioContext, getMasterGain } from "./context";
 
 export function playChime(): void {
   const audio = getAudioContext();
@@ -13,7 +13,7 @@ export function playChime(): void {
   gain.gain.setValueAtTime(0, now);
   gain.gain.linearRampToValueAtTime(0.18, now + 0.015);
   gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  gain.connect(audio.destination);
+  gain.connect(getMasterGain());
 
   for (const freq of [880, 1318.5]) {
     const osc = audio.createOscillator();

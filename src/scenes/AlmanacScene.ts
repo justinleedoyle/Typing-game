@@ -15,6 +15,29 @@ interface AlmanacSceneData {
 const PAGE_INK = "#2a1f12";
 const PAGE_INK_DIM = "#6a543a";
 
+// Companion creature IDs, one per realm. Stored in `satchel` alongside relics
+// but called out separately on the overview page (they're the kindness-gated
+// collectibles, not just souvenirs). Order matches REALM_ORDER.
+const COMPANION_IDS: readonly string[] = [
+  "snow-fox-cub",
+  "glass-fish",
+  "brass-songbird",
+  "lantern-moth",
+  "wisp-cat",
+];
+
+// Quiet Lord's fragment per cleared-realm count, per §5.5.10. The period
+// only clicks in at the finale, not at the 5th realm boss — so count=5 is
+// "Again", not "Again."
+const QUIET_LORD_FRAGMENTS: readonly string[] = [
+  "",
+  "A",
+  "Ag",
+  "Aga",
+  "Agai",
+  "Again",
+];
+
 export class AlmanacScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
@@ -67,17 +90,19 @@ export class AlmanacScene extends Phaser.Scene {
     for (const t of this.pageTexts) t.destroy();
     this.pageTexts = [];
 
-    if (this.clearedRealms.length === 0) {
-      this.renderEmptyPages();
+    if (this.currentPage === 0) {
+      this.renderOverviewPage();
       return;
     }
 
-    const realmId = this.clearedRealms[this.currentPage];
-    const lore = REALM_LORE[realmId];
+    const realmId = this.clearedRealms[this.currentPage - 1];
+    const lore = realmId ? REALM_LORE[realmId] : undefined;
     const state = this.store.get();
-    const realmProgress = state.realms[realmId];
+    const realmProgress = realmId ? state.realms[realmId] : undefined;
     if (!lore || !realmProgress) {
-      this.renderEmptyPages();
+      // Fell off the end of the realm list — clamp back to overview.
+      this.currentPage = 0;
+      this.renderOverviewPage();
       return;
     }
 
@@ -164,8 +189,8 @@ export class AlmanacScene extends Phaser.Scene {
       });
     }
 
-    // Footer: page number
-    const total = this.clearedRealms.length;
+    // Footer: page number. Overview is page 1; realm pages are 2..N+1.
+    const total = this.clearedRealms.length + 1;
     this.addPageText(
       this.scale.width / 2,
       PAGE_BOTTOM_Y - 30,
@@ -238,17 +263,129 @@ export class AlmanacScene extends Phaser.Scene {
     }
   }
 
-  private renderEmptyPages(): void {
+  private renderOverviewPage(): void {
+    const state = this.store.get();
+    const cleared = this.clearedRealms.length;
+
+    // ─── Left page — title + realm strip ────────────────────────────────────
+
+    this.addPageText(LEFT_PAGE_X, TOP_TEXT_Y, `${state.profileName}'s Almanac`, {
+      fontSize: "44px",
+      color: PAGE_INK,
+    });
     this.addPageText(
       LEFT_PAGE_X,
-      TOP_TEXT_Y + 160,
-      "The Almanac is still mostly empty. Step through a portal and write a new page.",
+      TOP_TEXT_Y + 64,
+      `${cleared} of ${REALM_ORDER.length} realms beyond Holdfast`,
+      {
+        fontSize: "22px",
+        fontStyle: "italic",
+        color: PAGE_INK_DIM,
+      },
+    );
+
+    this.addPageText(LEFT_PAGE_X, TOP_TEXT_Y + 170, "Realms Beyond", {
+      fontSize: "28px",
+      fontStyle: "italic",
+      color: PAGE_INK_DIM,
+    });
+
+    REALM_ORDER.forEach((realmId, i) => {
+      const lore = REALM_LORE[realmId];
+      const isCleared = state.realms[realmId]?.cleared === true;
+      const y = TOP_TEXT_Y + 230 + i * 46;
+      const glyph = isCleared ? "✦" : "·";
+      const color = isCleared ? PAGE_INK : PAGE_INK_DIM;
+      this.addPageText(LEFT_PAGE_X, y, `${glyph}  ${lore?.title ?? realmId}`, {
+        fontSize: "26px",
+        color,
+        fontStyle: isCleared ? "normal" : "italic",
+      });
+      if (isCleared) {
+        this.addPageText(LEFT_PAGE_X + 480, y, "stamped", {
+          fontSize: "20px",
+          fontStyle: "italic",
+          color: PAGE_INK_DIM,
+        });
+      }
+    });
+
+    // ─── Right page — companions + Quiet Lord fragment + tally ──────────────
+
+    this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y, "Companions", {
+      fontSize: "30px",
+      fontStyle: "italic",
+      color: PAGE_INK_DIM,
+    });
+
+    const collectedCompanions = COMPANION_IDS.map((id) => RELICS[id]).filter(
+      (r): r is NonNullable<typeof r> => !!r && state.satchel.includes(r.id),
+    );
+
+    if (collectedCompanions.length === 0) {
+      this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 60, "(none yet)", {
+        fontSize: "24px",
+        fontStyle: "italic",
+        color: PAGE_INK_DIM,
+      });
+    } else {
+      collectedCompanions.forEach((c, i) => {
+        this.addPageText(
+          RIGHT_PAGE_X,
+          TOP_TEXT_Y + 60 + i * 44,
+          `✦  ${c.name}`,
+          { fontSize: "26px", color: PAGE_INK },
+        );
+      });
+    }
+
+    // Quiet Lord fragment — scratched-style italic, low contrast.
+    this.addPageText(
+      RIGHT_PAGE_X,
+      TOP_TEXT_Y + 360,
+      "The Quiet Lord whispers",
       {
         fontSize: "26px",
-        color: PAGE_INK,
         fontStyle: "italic",
-        wordWrap: { width: PAGE_TEXT_WIDTH },
+        color: PAGE_INK_DIM,
       },
+    );
+    const fragment = QUIET_LORD_FRAGMENTS[cleared] ?? "";
+    const fragmentText = fragment ? `~${fragment}~` : "...quiet, for now";
+    this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 410, fragmentText, {
+      fontSize: fragment ? "44px" : "26px",
+      fontStyle: "italic",
+      color: fragment ? PAGE_INK : PAGE_INK_DIM,
+    });
+
+    // Tally — relics carried + lore pages stamped. Small, painterly-italic.
+    const realmRelicCount = state.satchel.filter(
+      (id) => !COMPANION_IDS.includes(id),
+    ).length;
+    this.addPageText(
+      RIGHT_PAGE_X,
+      TOP_TEXT_Y + 530,
+      `${realmRelicCount} relics carried  ·  ${state.almanacLore.length} lore pages`,
+      {
+        fontSize: "22px",
+        fontStyle: "italic",
+        color: PAGE_INK_DIM,
+      },
+    );
+
+    // Footer: page number. Overview is page 1; realm pages are 2..N+1.
+    const total = this.clearedRealms.length + 1;
+    this.addPageText(
+      this.scale.width / 2,
+      PAGE_BOTTOM_Y - 30,
+      `page 1 of ${total}`,
+      {
+        fontSize: "20px",
+        fontStyle: "italic",
+        color: PAGE_INK_DIM,
+        align: "center",
+      },
+      { centerX: true },
     );
   }
 
@@ -272,7 +409,7 @@ export class AlmanacScene extends Phaser.Scene {
   private placeNavigationTargets(): void {
     this.clearNavigationTargets();
     const hasPrev = this.currentPage > 0;
-    const hasNext = this.currentPage < this.clearedRealms.length - 1;
+    const hasNext = this.currentPage < this.clearedRealms.length;
 
     if (hasPrev) {
       this.prevTarget = new TextWordTarget({

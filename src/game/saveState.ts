@@ -30,8 +30,14 @@ export interface SaveState {
   /** Opt-in "purist" mode — typos reset the claimed word to the start.
    *  Off by default (kid-friendly). Toggled in-game via Ctrl+Shift+P. */
   purist: boolean;
+  /** Player-chosen audio level. Stored as a coarse step so the Settings UI
+   *  can cycle through fixed labels; the actual volume scaling is wired
+   *  separately in the audio modules. Defaults to "medium". */
+  audioLevel: AudioLevel;
   updatedAt: number;
 }
+
+export type AudioLevel = "loud" | "medium" | "quiet" | "off";
 
 export function emptySave(profileName = "Wren"): SaveState {
   return {
@@ -42,6 +48,7 @@ export function emptySave(profileName = "Wren"): SaveState {
     keyStats: {},
     almanacLore: [],
     purist: false,
+    audioLevel: "medium",
     updatedAt: Date.now(),
   };
 }

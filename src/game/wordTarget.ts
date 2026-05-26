@@ -23,6 +23,10 @@ export interface TextWordTargetOptions {
    *  (first letter typed with Shift held). If omitted, onComplete runs
    *  normally and spell mode is purely cosmetic. */
   onSpellComplete?: () => void;
+  /** Fired instead of onComplete/onSpellComplete when the claim landed with
+   *  Alt held (the "wild" variant — Forge spark-chain, etc.). If omitted,
+   *  Alt claims fall back to onSpellComplete or onComplete. */
+  onAltSpellComplete?: () => void;
   /** Color (hex) for the radial burst when the word completes. Defaults to
    *  brass. Pass `null` to suppress the burst entirely (e.g. for very
    *  small text where the burst would feel oversized). */
@@ -37,7 +41,7 @@ export interface TextWordTargetOptions {
   /** Called when this target locks in to the typing controller (first matching
    *  letter typed). Use for character-facing reactions like Wren leaning toward
    *  the target. */
-  onClaim?: (spell: boolean) => void;
+  onClaim?: (mods: { spell: boolean; alt: boolean }) => void;
   /** Called when a mid-claim target is released without completing — e.g. the
    *  player backspaced out of it. */
   onRelease?: () => void;
@@ -60,6 +64,7 @@ export class TextWordTarget implements WordTarget {
   private dimmed = false;
   private candidate = false;
   private spellClaimed = false;
+  private altClaimed = false;
   private danger = 0;
 
   readonly priority: number;
@@ -173,21 +178,27 @@ export class TextWordTarget implements WordTarget {
     });
   }
 
-  onClaim(spell: boolean): void {
+  onClaim(mods: { spell: boolean; alt: boolean }): void {
     this.dimmed = false;
-    this.spellClaimed = spell;
-    if (spell) {
+    this.spellClaimed = mods.spell;
+    this.altClaimed = mods.alt;
+    if (mods.alt) {
+      // Alt = wild — brass tint reads as electric, distinct from ember spell.
+      this.typedText.setColor(PALETTE.brass);
+      this.remainingText.setColor(PALETTE.brass);
+    } else if (mods.spell) {
       this.typedText.setColor(PALETTE.ember);
       this.remainingText.setColor(PALETTE.ember);
     }
     this.applyDim();
-    this.opts.onClaim?.(spell);
+    this.opts.onClaim?.(mods);
   }
 
   onRelease(): void {
     if (this.complete) return;
     this.cursor = 0;
     this.spellClaimed = false;
+    this.altClaimed = false;
     this.candidate = false;
     this.typedText.setColor(PALETTE.brass);
     this.remainingText.setColor(PALETTE.cream);
@@ -197,6 +208,7 @@ export class TextWordTarget implements WordTarget {
 
   onComplete(): void {
     const spell = this.spellClaimed;
+    const alt = this.altClaimed;
 
     // Burst on completion — turns "text fades" into "you hit the thing."
     // Default brass; scenes pass frost for wolves, etc. `null` opts out.
@@ -217,7 +229,10 @@ export class TextWordTarget implements WordTarget {
       duration: 320,
       ease: "Sine.easeOut",
       onComplete: () => {
-        if (spell && this.opts.onSpellComplete) {
+        // Alt has priority over Shift when both were held.
+        if (alt && this.opts.onAltSpellComplete) {
+          this.opts.onAltSpellComplete();
+        } else if (spell && this.opts.onSpellComplete) {
           this.opts.onSpellComplete();
         } else {
           this.opts.onComplete();
@@ -268,7 +283,8 @@ export class TextWordTarget implements WordTarget {
     const alpha = this.dimmed ? 0.12 : 1;
     this.container.setAlpha(alpha);
     if (this.dimmed) return;
-    // Color priority: spell > candidate > danger > default.
+    // Color priority: alt > spell > candidate > danger > default.
+    if (this.altClaimed) return; // brass, set in onClaim
     if (this.spellClaimed) return; // ember, set in onClaim
     if (this.candidate) {
       this.remainingText.setColor(PALETTE.frost ?? PALETTE.cream);

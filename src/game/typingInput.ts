@@ -11,6 +11,14 @@
 import type { SaveStore } from "./saveState";
 import { SessionStats } from "./sessionStats";
 
+export interface ClaimMods {
+  /** Shift was held when the first letter of this claim landed. */
+  spell: boolean;
+  /** Alt was held when the first letter of this claim landed. Alt has
+   *  priority over Shift in the completion routing. */
+  alt: boolean;
+}
+
 export interface WordTarget {
   /** Lowercase characters yet to be typed. */
   remaining(): string;
@@ -37,10 +45,12 @@ export interface WordTarget {
   resetCursor?(): void;
   /** Called when the user types a wrong character mid-claim. */
   miss(): void;
-  /** Called when this target is claimed. `spell` is true if the claim came in
-   *  while a modifier (Shift) was held — the target can react visually and
-   *  the controller will route completion to the spell variant. */
-  onClaim(spell: boolean): void;
+  /** Called when this target is claimed. `mods.spell` is true if Shift was
+   *  held; `mods.alt` is true if Alt was held. Targets can react visually
+   *  and the controller routes completion to the matching variant
+   *  (onSpellComplete / onAltSpellComplete / onComplete). Alt has priority
+   *  over Shift when both are held — Alt is the "wild" variant. */
+  onClaim(mods: ClaimMods): void;
   /** Called when this target is released (canceled or completed). */
   onRelease(): void;
   /** Called once on completion, after the final advance(). */
@@ -131,7 +141,7 @@ export class TypingInputController {
    * Process a single key from the keyboard. Handles printable characters,
    * space, Backspace, and Escape. Returns true if consumed.
    */
-  handleChar(char: string, mods?: { spell?: boolean }): boolean {
+  handleChar(char: string, mods?: { spell?: boolean; alt?: boolean }): boolean {
     // Backspace: reverse one character if mid-claim; otherwise trim the
     // pre-claim buffer. Falls through to a full release only when the
     // claimed target is already at its start.
@@ -235,10 +245,16 @@ export class TypingInputController {
     if (candidates.length === 1) {
       // Unique match — claim it and fast-forward the cursor to buffer length.
       const target = pickBest(candidates);
-      const spell = mods?.spell === true;
+      const claimMods: ClaimMods = {
+        spell: mods?.spell === true,
+        alt: mods?.alt === true,
+      };
       this.claimed = target;
-      target.onClaim(spell);
-      this.onClaimChar?.(spell);
+      target.onClaim(claimMods);
+      // The onClaim hook only fires when a spell-variant lock-on happens —
+      // the audio sting cue. Alt also counts here so the spark zap can
+      // play on Alt-claims too.
+      this.onClaimChar?.(claimMods.spell || claimMods.alt);
       for (let i = 0; i < newBuffer.length; i++) {
         target.advance();
       }

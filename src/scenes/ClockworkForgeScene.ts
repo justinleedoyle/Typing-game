@@ -4,7 +4,9 @@ import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
 import { pickLowHeartLine } from "../audio/runaLines";
+import { playSparkZap } from "../audio/sparkZap";
 import { playWaveSting } from "../audio/waveSting";
+import { playChainSpark } from "../game/vfx";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -98,6 +100,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private wrenSprite!: Phaser.GameObjects.Image;
 
   private shiftHeld = false;
+  private altHeld = false;
   private waveActive = false;
 
   /** Forge glow pools drawn on the floor. */
@@ -1217,10 +1220,51 @@ export class ClockworkForgeScene extends Phaser.Scene {
         this.defeatGolem(golem);
         this.commandEffect(golem);
       },
+      onAltSpellComplete: () => this.chainSparkEffect(golem),
     });
     golem.target = target;
     this.typingInput.register(target);
     this.activeTargets.push(target);
+  }
+
+  /** Alt-spell variant: chain spark. The golem whose word was typed with
+   *  Alt held is defeated as usual; the spark arcs to the nearest live
+   *  golem and defeats it too. If no other golems are alive, the spell is
+   *  still a defeat — just no arc target. */
+  private chainSparkEffect(golem: Golem): void {
+    playSparkZap();
+    this.defeatGolem(golem);
+    const nearest = this.findNearestLiveGolem(golem);
+    if (!nearest) return;
+    playChainSpark(
+      this,
+      golem.container.x,
+      golem.restY - 80,
+      nearest.container.x,
+      nearest.restY - 80,
+      PALETTE_HEX.brass,
+    );
+    // Brief delay before the chain target falls — gives the arc time to
+    // visually land before the second defeat fires its own burst.
+    this.time.delayedCall(140, () => {
+      if (!nearest.defeated) this.defeatGolem(nearest);
+    });
+  }
+
+  private findNearestLiveGolem(from: Golem): Golem | null {
+    let best: Golem | null = null;
+    let bestDist = Infinity;
+    for (const g of this.golems) {
+      if (g === from || g.defeated) continue;
+      const dx = g.container.x - from.container.x;
+      const dy = g.container.y - from.container.y;
+      const d = Math.hypot(dx, dy);
+      if (d < bestDist) {
+        bestDist = d;
+        best = g;
+      }
+    }
+    return best;
   }
 
   private startGolemAdvance(golem: Golem): void {
@@ -1414,14 +1458,25 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.shiftHeld = true;
       return;
     }
+    if (event.key === "Alt") {
+      this.altHeld = true;
+      // Browser default for Alt is to focus the menu bar — preventDefault
+      // so Alt doesn't steal focus mid-spell.
+      event.preventDefault();
+      return;
+    }
     if (event.key.length === 1 || event.key === " ") {
       playClack();
     }
-    this.typingInput.handleChar(event.key, { spell: this.shiftHeld });
+    this.typingInput.handleChar(event.key, {
+      spell: this.shiftHeld,
+      alt: this.altHeld,
+    });
   }
 
   private onKeyUp(event: KeyboardEvent): void {
     if (event.key === "Shift") this.shiftHeld = false;
+    if (event.key === "Alt") this.altHeld = false;
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────────

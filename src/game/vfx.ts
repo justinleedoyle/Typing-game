@@ -56,3 +56,61 @@ export function playWordCompleteBurst(
     });
   }
 }
+
+/** Crackling brass-colored arc between two points — the Alt-spell chain
+ *  effect in the Clockwork Forge. Renders a jagged polyline that briefly
+ *  jitters then fades. The arc is ~6 segments with random midpoint
+ *  perpendicular offsets, redrawn twice during its lifetime to feel like
+ *  active electricity rather than a static line. */
+export function playChainSpark(
+  scene: Phaser.Scene,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  color: number = 0xc9a14a,
+): void {
+  const segments = 6;
+  const lifetime = 360;
+
+  const arc = scene.add.graphics().setDepth(60);
+
+  const draw = (): void => {
+    arc.clear();
+    arc.lineStyle(3, color, 1);
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const length = Math.hypot(dx, dy) || 1;
+    // Unit perpendicular to (dx, dy) — used to offset midpoints sideways
+    // by a random jitter, producing the lightning crackle.
+    const perpX = -dy / length;
+    const perpY = dx / length;
+    const points: Array<{ x: number; y: number }> = [{ x: fromX, y: fromY }];
+    for (let i = 1; i < segments; i++) {
+      const t = i / segments;
+      const baseX = fromX + dx * t;
+      const baseY = fromY + dy * t;
+      const jitter = (Math.random() - 0.5) * 28;
+      points.push({ x: baseX + perpX * jitter, y: baseY + perpY * jitter });
+    }
+    points.push({ x: toX, y: toY });
+    arc.beginPath();
+    arc.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+      arc.lineTo(points[i].x, points[i].y);
+    }
+    arc.strokePath();
+  };
+
+  draw();
+  // Redraw once mid-life so the bolt visibly flickers.
+  scene.time.delayedCall(lifetime / 3, draw);
+
+  scene.tweens.add({
+    targets: arc,
+    alpha: 0,
+    duration: lifetime,
+    ease: "Cubic.easeOut",
+    onComplete: () => arc.destroy(),
+  });
+}

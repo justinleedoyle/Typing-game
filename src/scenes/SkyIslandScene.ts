@@ -8,6 +8,7 @@ import { playWaveSting } from "../audio/waveSting";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, SERIF } from "../game/palette";
+import { ScrollingPhrase } from "../game/scrollingPhrase";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 // Danger ramps in over the LAST 60% of a spirit's advance — earlier portion
 // stays cream so players can read the word, then it shifts red as the spirit
@@ -15,7 +16,11 @@ import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 const DANGER_RAMP_START = 0.4;
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
-import { pickAdaptiveWords, SKY_ISLAND_WORD_BANK } from "../game/wordBank";
+import {
+  pickAdaptiveWords,
+  SKY_ISLAND_PHRASE_BANK,
+  SKY_ISLAND_WORD_BANK,
+} from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
 import skyIslandBackdrop from "../../art/references/sky-island-clean.png";
@@ -55,27 +60,20 @@ const LIGHTER_LINE_3 = "i will light the way if you choose well.";
 // ─── Act 2 constants ───────────────────────────────────────────────────────────
 
 /** Temple encounter configs: [spiritCount, minLen, maxLen] */
-const TEMPLE_CONFIGS = [
-  { count: 2, minLen: 6, maxLen: 7 },
-  { count: 2, minLen: 7, maxLen: 8 },
-  { count: 3, minLen: 8, maxLen: 9 },
-  { count: 3, minLen: 0, maxLen: 99, hasPhraseSpirit: true },
-  { count: 3, minLen: 0, maxLen: 99, allPhrases: true },
+/** Per-temple scrolling-phrase config: count = banners in this temple,
+ *  durationMs = how long each banner takes to cross the screen (lower =
+ *  harder), staggerMs = delay between sibling banner spawns. */
+const TEMPLE_PHRASE_CONFIGS = [
+  { count: 1, durationMs: 14000, staggerMs: 0 },
+  { count: 2, durationMs: 12500, staggerMs: 2400 },
+  { count: 2, durationMs: 11000, staggerMs: 2000 },
+  { count: 3, durationMs: 9500, staggerMs: 1600 },
+  { count: 3, durationMs: 8000, staggerMs: 1300 },
 ] as const;
 
-/** Two-word phrases used in Temple 4 and 5 */
-const TEMPLE_PHRASES = [
-  "still water",
-  "warm light",
-  "slow flame",
-  "bright path",
-  "old stone",
-  "pale dusk",
-  "soft ash",
-  "thin smoke",
-  "faint glow",
-  "clear sky",
-] as const;
+/** Y positions for stacked banners — keeps multiple in a temple from
+ *  overlapping while leaving the narration row (y=150) untouched. */
+const PHRASE_BANNER_Y_SLOTS = [320, 430, 540] as const;
 
 /** Scholar Etta interaction */
 const ETTA_LINE = "my last unburned book. help me place it.";
@@ -101,13 +99,6 @@ const TRUE_NAME_PASSAGE =
 
 // ─── Spawn positions ───────────────────────────────────────────────────────────
 
-const SPIRIT_SLOTS = [
-  { x: 340, y: 780 },
-  { x: 640, y: 810 },
-  { x: 960, y: 790 },
-  { x: 1280, y: 810 },
-  { x: 1580, y: 780 },
-] as const;
 
 export class SkyIslandScene extends Phaser.Scene {
   private store!: SaveStore;
@@ -115,6 +106,9 @@ export class SkyIslandScene extends Phaser.Scene {
   private narration!: NarrationManager;
   private spirits: LanternSpirit[] = [];
   private activeTargets: TextWordTarget[] = [];
+  /** Temple scrolling-phrase banners currently in flight. */
+  private activePhrases: ScrollingPhrase[] = [];
+  private templePhrasesRemaining = 0;
 
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
@@ -388,61 +382,61 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private startTemple(idx: number): void {
     this.templeIndex = idx;
-    const cfg = TEMPLE_CONFIGS[idx];
+    const cfg = TEMPLE_PHRASE_CONFIGS[idx];
     if (!cfg) return;
 
     // Wave-start bookend — audio sting + screen shake so each temple feels
-    // like an event, not just "more text appears." Mirrors Winter Mountain.
+    // like an event, not just "more text appears."
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
 
     const templeNames = [
-      "The first temple gate. Lanterns flicker here.",
-      "The second gate. The lanterns grow larger and brighter.",
-      "The third chamber. Three spirits circle the altar stone.",
-      "The fourth chamber. The path narrows.",
-      "The fifth and final chamber. Three spirits, two words each.",
+      "The first temple gate. A scroll unrolls in the wind — read it aloud.",
+      "The second gate. The wind is faster here.",
+      "The third chamber. Two scrolls at once now.",
+      "The fourth chamber. They pass quicker. Three this time.",
+      "The fifth and final chamber. They fly. Type before they leave you.",
     ];
     this.setNarrator(templeNames[idx] ?? "");
 
-    this.spirits = [];
-    let words: string[];
+    // Pick `cfg.count` distinct phrases from the long-phrase bank.
+    const phrases = shuffleArr(
+      SKY_ISLAND_PHRASE_BANK as readonly string[],
+    ).slice(0, cfg.count);
 
-    if ("allPhrases" in cfg && cfg.allPhrases) {
-      // Temple 5: all spirits get 2-word phrases
-      words = shuffleArr(TEMPLE_PHRASES as readonly string[]).slice(0, cfg.count);
-    } else if ("hasPhraseSpirit" in cfg && cfg.hasPhraseSpirit) {
-      // Temple 4: first N-1 get single words, last gets a phrase
-      const singleWords = pickAdaptiveWords(
-        filterWordsByLength(SKY_ISLAND_WORD_BANK, cfg.minLen, cfg.maxLen),
-        cfg.count - 1,
-        this.store.get().keyStats,
-      );
-      const phrase = shuffleArr(TEMPLE_PHRASES as readonly string[])[0] ?? "still water";
-      words = [...singleWords, phrase];
-    } else {
-      words = pickAdaptiveWords(
-        filterWordsByLength(SKY_ISLAND_WORD_BANK, cfg.minLen, cfg.maxLen),
-        cfg.count,
-        this.store.get().keyStats,
-      );
-    }
+    this.activePhrases = [];
+    this.templePhrasesRemaining = phrases.length;
 
-    const slots = shuffleArr(SPIRIT_SLOTS as readonly { x: number; y: number }[]).slice(
-      0,
-      cfg.count,
-    );
-
-    slots.forEach((pos, i) => {
-      this.spawnSpirit(
-        pos.x < this.scale.width / 2 ? -120 : this.scale.width + 120,
-        pos.x,
-        pos.y,
-        words[i] ?? "lantern",
-        i * 350,
-        18000 - idx * 1000,
-      );
+    phrases.forEach((phrase, i) => {
+      const phraseObj = new ScrollingPhrase({
+        scene: this,
+        typingInput: this.typingInput,
+        phrase,
+        fromSide: i % 2 === 0 ? "left" : "right",
+        y: PHRASE_BANNER_Y_SLOTS[i] ?? PHRASE_BANNER_Y_SLOTS[0],
+        durationMs: cfg.durationMs,
+        delayMs: i * cfg.staggerMs,
+        onComplete: () => this.onPhraseResolved(true),
+        onMiss: () => this.onPhraseResolved(false),
+      });
+      this.activePhrases.push(phraseObj);
     });
+  }
+
+  /** Called when a scrolling phrase finishes — either typed (`success=true`)
+   *  or scrolled off the far side (`success=false`). Either way it counts
+   *  against the temple's remaining-phrases count; a miss also costs Heart
+   *  and shakes Wren. */
+  private onPhraseResolved(success: boolean): void {
+    if (!success) {
+      flashWrenMiss(this.wrenSprite);
+      this.cameras.main.shake(180, 0.004);
+      this.typingInput.getStats().record(false);
+    }
+    this.templePhrasesRemaining -= 1;
+    if (this.templePhrasesRemaining <= 0) {
+      this.onTempleCleared();
+    }
   }
 
   private onTempleCleared(): void {
@@ -454,7 +448,7 @@ export class SkyIslandScene extends Phaser.Scene {
       return;
     }
 
-    if (nextIdx < TEMPLE_CONFIGS.length) {
+    if (nextIdx < TEMPLE_PHRASE_CONFIGS.length) {
       this.time.delayedCall(1400, () => this.startTemple(nextIdx));
     } else {
       // All 5 temples cleared → Fork 1

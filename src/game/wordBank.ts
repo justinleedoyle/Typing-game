@@ -87,6 +87,26 @@ export const SUNKEN_BELL_WORD_BANK = [
 
 /** Sky-Island word bank — longer words (5-10 chars), sky/lantern/scholar theme.
  *  Used for the floating lantern-spirits and temple encounters. */
+/** Sky-Island scrolling-phrase bank — full sentences (4–8 words) that
+ *  ride on parchment banners drifting across the screen. Themed around
+ *  the realm's signatures: lantern, sky, paper, scholar, beacon. Used by
+ *  the 5 Temple encounters. The first encounter (Act 1) still uses
+ *  short SKY_ISLAND_WORD_BANK words as a gentle ramp into phrase typing. */
+export const SKY_ISLAND_PHRASE_BANK = [
+  "the lantern remembers every page that ever lit",
+  "soft light travels farther than loud thunder",
+  "every book is a window to the sky",
+  "the scholar's lamp burns long after dawn",
+  "paper holds what stone forgets",
+  "a quiet word can warm a cold tower",
+  "the beacon waits for those still reading",
+  "ink dries but the meaning stays",
+  "old scrolls remember every reader's hand",
+  "the wind carries names of those who listened",
+  "kindness lights more lanterns than fire",
+  "a page turned slowly outlasts a page burned fast",
+] as const;
+
 export const SKY_ISLAND_WORD_BANK = [
   "lantern",
   "gilded",

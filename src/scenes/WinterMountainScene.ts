@@ -100,25 +100,45 @@ interface WaveConfig {
   advanceMs: number;
   intro: string;
   hasBoss?: boolean;
+  /** Spawn all wolves at the same instant (no stagger). Used by the paired
+   *  Wave 2 — both wolves arrive together so the player must split
+   *  attention between two targets instead of handling them one at a time. */
+  simultaneous?: boolean;
+  /** Boss spawn delay (ms) override. Default 600 — used by Wave 3 to make
+   *  the alpha visible from the moment the pack arrives, not after. */
+  bossSpawnDelayMs?: number;
 }
 
+// Three waves, three distinct encounter shapes (not "more wolves faster"):
+//
+//   Wave 1 — Solo. One wolf, slow advance. The player learns the verb
+//            without panic. Long word so adaptive picking can stretch.
+//   Wave 2 — Paired alternation. Two wolves arrive at the same instant,
+//            forcing the player to split attention between two
+//            advancing targets at once.
+//   Wave 3 — Pack with alpha. Three regular wolves plus the named
+//            alpha (Pack-Leader) visible from the start of the wave —
+//            the alpha lurks unclaimable until the pack falls, then
+//            engages with its long titled phrase.
 const WAVES: readonly WaveConfig[] = [
   {
-    wolfCount: 3,
-    advanceMs: 14_000,
+    wolfCount: 1,
+    advanceMs: 16_000,
     intro:
-      "type the wolves' names to drive them back. hold Shift on the first letter to call a thunderclap.",
+      "one wolf, alone in the trees. type its name to drive it back. hold Shift on the first letter for a thunderclap.",
+  },
+  {
+    wolfCount: 2,
+    advanceMs: 12_500,
+    intro: "two more — together, this time. they come as a pair.",
+    simultaneous: true,
   },
   {
     wolfCount: 3,
-    advanceMs: 11_000,
-    intro: "more eyes glint in the dark. the pack tightens.",
-  },
-  {
-    wolfCount: 4,
-    advanceMs: 9_000,
-    intro: "the snow shifts. they come faster now. something larger watches.",
+    advanceMs: 9_500,
+    intro: "the pack closes. something larger watches from behind them.",
     hasBoss: true,
+    bossSpawnDelayMs: 200,
   },
 ];
 
@@ -587,11 +607,15 @@ export class WinterMountainScene extends Phaser.Scene {
     slots.forEach((pos, i) => {
       const fromLeft = pos.x < this.scale.width / 2;
       const startX = fromLeft ? -120 : this.scale.width + 120;
-      this.spawnWolf(startX, pos.x, pos.y, words[i], i * 200, config.advanceMs);
+      // Wave 2 (paired alternation) spawns both wolves at the same instant
+      // — `simultaneous` zeroes the per-wolf stagger so they arrive
+      // together and force split-attention typing.
+      const delay = config.simultaneous ? 0 : i * 200;
+      this.spawnWolf(startX, pos.x, pos.y, words[i], delay, config.advanceMs);
     });
 
     if (config.hasBoss) {
-      this.spawnBoss();
+      this.spawnBoss(config.bossSpawnDelayMs);
     }
   }
 
@@ -638,7 +662,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.wolves.push(wolf);
   }
 
-  private spawnBoss(): void {
+  private spawnBoss(delayMs: number = 600): void {
     const startX = -200;
     const container = this.add.container(startX, BOSS_SPAWN_Y);
     const bodySprite = this.drawBossInto(container);
@@ -662,7 +686,7 @@ export class WinterMountainScene extends Phaser.Scene {
       x: BOSS_SPAWN_X,
       alpha: 1,
       duration: 1100,
-      delay: 600,
+      delay: delayMs,
       ease: "Sine.easeOut",
       onComplete: () => {
         if (!this.waveActive || boss.defeated) return;

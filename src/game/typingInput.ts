@@ -9,6 +9,7 @@
 // Escape always releases the claim entirely (panic abort).
 
 import type { SaveStore } from "./saveState";
+import { SessionStats } from "./sessionStats";
 
 export interface WordTarget {
   /** Lowercase characters yet to be typed. */
@@ -71,8 +72,15 @@ export class TypingInputController {
   private onCorrectChar?: () => void;
   private onMissChar?: () => void;
   private onClaimChar?: (spell: boolean) => void;
+  private readonly stats = new SessionStats();
 
   constructor(private readonly store?: SaveStore) {}
+
+  /** Rolling Heart/Soul telemetry, ticked on every keystroke regardless of
+   *  scene-level hooks. Scenes read this each frame to drive the HUD. */
+  getStats(): SessionStats {
+    return this.stats;
+  }
 
   /** Wire per-keystroke feedback hooks.
    *  - `onCorrect` fires for every keystroke that lands a matching character
@@ -106,6 +114,7 @@ export class TypingInputController {
     this.targets = [];
     this.typingBuffer = "";
     this.rawTypingBuffer = "";
+    this.stats.reset();
   }
 
   /** True when a target is currently claimed (prefix matched, mid-word). */
@@ -184,6 +193,7 @@ export class TypingInputController {
       if (inputChar === expected) {
         this.claimed.advance();
         this.store?.recordKeystroke(ch, true);
+        this.stats.record(true);
         this.onCorrectChar?.();
         if (this.claimed.isComplete()) {
           this.completeClaimed();
@@ -192,6 +202,7 @@ export class TypingInputController {
       }
       this.claimed.miss();
       this.store?.recordKeystroke(ch, false);
+      this.stats.record(false);
       this.onMissChar?.();
       // Purist mode: typo wipes typing progress on the claimed word, but
       // the target stays claimed so the player doesn't have to re-find it.
@@ -209,12 +220,14 @@ export class TypingInputController {
     if (candidates.length === 0) {
       // No target starts with this prefix.
       this.store?.recordKeystroke(ch, false);
+      this.stats.record(false);
       this.onMissChar?.();
       return false;
     }
 
     // Record the char as correct — it narrowed the field.
     this.store?.recordKeystroke(ch, true);
+    this.stats.record(true);
     this.onCorrectChar?.();
     this.typingBuffer = newBuffer;
     this.rawTypingBuffer = newRawBuffer;

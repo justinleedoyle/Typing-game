@@ -3,7 +3,9 @@ import { type AmbientHandle, playAmbientWinter } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
+import { pickLowHeartLine } from "../audio/runaLines";
 import { playWaveSting } from "../audio/waveSting";
+import { HeartSoulHud } from "../game/heartSoulHud";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 // Danger ramps in over the LAST 60% of a wolf's advance — earlier portion
@@ -264,6 +266,11 @@ export class WinterMountainScene extends Phaser.Scene {
         this.cameras.main.shake(80, 0.002);
       },
       onClaim: () => playClaim(),
+    });
+    new HeartSoulHud(this, {
+      getHeart: () => this.typingInput.getStats().getHeart(),
+      getSoul: () => this.typingInput.getStats().getSoul(),
+      onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
     });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.input.keyboard?.on("keyup", this.onKeyUp, this);

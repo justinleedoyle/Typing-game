@@ -33,7 +33,7 @@ export type RunaTone =
   | "wonder"
   | "tender";
 
-export type RunaScene = "title" | "opening" | "hub" | "winter";
+export type RunaScene = "title" | "opening" | "hub" | "winter" | "ambient";
 
 export interface RunaLine {
   /** Stable ID; becomes `runa_${id}.mp3` filename. */
@@ -594,6 +594,39 @@ const WINTER_LINES: readonly RunaLine[] = [
   },
 ];
 
+// ─── AMBIENT (realm-agnostic combat support) ──────────────────────────────────
+//
+// These fire from any realm when the player needs gentle support — currently
+// the Heart meter sustained low. Tender by design; never urgent. Cycled at
+// random so the same line doesn't repeat across realms in one session.
+
+const AMBIENT_LINES: readonly RunaLine[] = [
+  {
+    id: "ambient_low_heart_steady",
+    scene: "ambient",
+    trigger: "Heart meter sustained below threshold during combat",
+    text: "Steady your hands, Wren. The letters will wait for you.",
+    tone: "tender",
+    isNew: true,
+  },
+  {
+    id: "ambient_low_heart_breathe",
+    scene: "ambient",
+    trigger: "Heart meter sustained below threshold during combat",
+    text: "Breathe. There is time.",
+    tone: "tender",
+    isNew: true,
+  },
+  {
+    id: "ambient_low_heart_kind",
+    scene: "ambient",
+    trigger: "Heart meter sustained below threshold during combat",
+    text: "Easy now. Even Runa was new to the keys once.",
+    tone: "tender",
+    isNew: true,
+  },
+];
+
 // ─── EXPORT ───────────────────────────────────────────────────────────────────
 
 export const RUNA_LINES: readonly RunaLine[] = [
@@ -601,7 +634,16 @@ export const RUNA_LINES: readonly RunaLine[] = [
   ...OPENING_LINES,
   ...HUB_LINES,
   ...WINTER_LINES,
+  ...AMBIENT_LINES,
 ];
+
+/** Pick a random low-Heart ambient line, for the scene to render as a caption. */
+export function pickLowHeartLine(): RunaLine {
+  const pool = AMBIENT_LINES.filter((l) =>
+    l.id.startsWith("ambient_low_heart_"),
+  );
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 /** Lookup a Runa line by ID. Returns undefined if not found. */
 export function getRunaLine(id: string): RunaLine | undefined {

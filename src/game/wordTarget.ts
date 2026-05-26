@@ -27,6 +27,13 @@ export interface TextWordTargetOptions {
    *  brass. Pass `null` to suppress the burst entirely (e.g. for very
    *  small text where the burst would feel oversized). */
   burstColor?: number | null;
+  /** When true, matching is case-sensitive — uppercase characters require
+   *  Shift, lowercase forbids it. The controller compares the raw keystroke
+   *  against the preserved-case word both for pre-claim prefix narrowing
+   *  and mid-claim advancement. Off by default; most targets are case-
+   *  insensitive. Used by the Clockwork Forge's capital-as-command
+   *  curriculum mechanic. */
+  caseSensitive?: boolean;
   /** Called when this target locks in to the typing controller (first matching
    *  letter typed). Use for character-facing reactions like Wren leaning toward
    *  the target. */
@@ -46,6 +53,7 @@ export class TextWordTarget implements WordTarget {
   private readonly remainingText: Phaser.GameObjects.Text;
   private readonly container: Phaser.GameObjects.Container;
   private readonly word: string;
+  private readonly caseWord: string;
   private readonly displayWord: string;
   private cursor = 0;
   private complete = false;
@@ -66,8 +74,12 @@ export class TextWordTarget implements WordTarget {
     // Two views: `displayWord` keeps the original case for the UI; `word`
     // is lowercase so the typing controller's lowercased input compares
     // directly. Typed words can now be capitalized as proper nouns.
+    // `caseWord` mirrors displayWord and is consumed by case-sensitive
+    // matching via rawRemaining() — it's the preserved-case equivalent of
+    // `word`.
     this.displayWord = opts.word;
     this.word = opts.word.toLowerCase();
+    this.caseWord = opts.word;
     this.priority = opts.priority ?? 0;
     this.typedText = opts.scene.add
       .text(0, 0, "", { ...style, color: PALETTE.brass })
@@ -85,6 +97,16 @@ export class TextWordTarget implements WordTarget {
 
   remaining(): string {
     return this.word.slice(this.cursor);
+  }
+
+  /** Preserved-case version of remaining(). Used by the typing controller
+   *  for case-sensitive prefix matching and mid-claim advancement. */
+  rawRemaining(): string {
+    return this.caseWord.slice(this.cursor);
+  }
+
+  caseSensitive(): boolean {
+    return this.opts.caseSensitive === true;
   }
 
   isComplete(): boolean {

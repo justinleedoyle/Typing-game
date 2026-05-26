@@ -2,13 +2,21 @@ import Phaser from "phaser";
 import { type AmbientHandle, playAmbientForge } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
+import { playClaim } from "../audio/claim";
+import { playWaveSting } from "../audio/waveSting";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
+import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, FORGE_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
-import { makeWrenSprite, preloadWren } from "../game/wren";
+import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
 import forgeBackdrop from "../../art/references/clockwork-forge-clean.png";
+
+// Danger ramps in over the LAST 60% of a golem's advance — earlier portion
+// stays cream so players can read the word, then it shifts ember as the
+// golem closes. Mirrors Winter Mountain.
+const DANGER_RAMP_START = 0.4;
 
 // ─── Scene data ───────────────────────────────────────────────────────────────
 
@@ -84,6 +92,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private narratorText!: Phaser.GameObjects.Text;
   private golems: Golem[] = [];
   private activeTargets: TextWordTarget[] = [];
+  private wrenSprite!: Phaser.GameObjects.Image;
 
   private shiftHeld = false;
   private waveActive = false;
@@ -145,6 +154,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.typingInput = new TypingInputController(this.store);
+    this.typingInput.setKeystrokeHooks({
+      onCorrect: () => bobWrenSprite(this.wrenSprite),
+      onMiss: () => {
+        flashWrenMiss(this.wrenSprite);
+        this.cameras.main.shake(80, 0.002);
+      },
+      onClaim: () => playClaim(),
+    });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.input.keyboard?.on("keyup", this.onKeyUp, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -317,6 +334,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
       x: this.scale.width / 2,
       y: this.scale.height - 240,
       fontSize: 36,
+      // Capital tutorial: must actually be typed with Shift now.
+      caseSensitive: true,
       onComplete: () => {
         this.golemTurnHead(tutorialGolem);
         this.setNarrator(
@@ -398,6 +417,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private startWave1(): void {
     this.waveActive = true;
     this.golems = [];
+    playWaveSting();
+    this.cameras.main.shake(220, 0.005);
     this.setNarrator(
       "Three golems stir. Type their words to redirect them.",
     );
@@ -429,6 +450,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private startWave2(): void {
     this.waveActive = true;
     this.golems = [];
+    playWaveSting();
+    this.cameras.main.shake(220, 0.005);
     this.setNarrator(
       "The golems press forward — one with a word that demands a command.",
     );
@@ -588,6 +611,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private startBossPhase1(): void {
     this.spawnBossVisual();
+    playWaveSting();
+    this.cameras.main.shake(220, 0.005);
     this.setNarrator(
       "The Command-Golem — massive, iron-crowned, its eye burning orange. Phase one begins.",
     );
@@ -651,6 +676,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
         x: this.bossContainer.x,
         y: this.bossContainer.y - 220,
         fontSize: 38,
+        // BOSS_PHASE2_WORDS are all-caps — enforce case so the player
+        // actually has to hold Shift.
+        caseSensitive: true,
         onComplete: () => {
           playChime();
           this.cameras.main.shake(140, 0.003);
@@ -705,6 +733,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
               x: this.bossContainer.x + 120,
               y: this.bossContainer.y - 220,
               fontSize: 38,
+              caseSensitive: true,
               onComplete: () => {
                 playChime();
                 this.cameras.main.shake(180, 0.004);
@@ -748,6 +777,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
               x: this.bossContainer.x + 120,
               y: this.bossContainer.y - 220,
               fontSize: 38,
+              caseSensitive: true,
               onComplete: () => {
                 playChime();
                 this.cameras.main.shake(200, 0.005);
@@ -888,6 +918,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
       x: this.scale.width / 2,
       y: this.scale.height - 240,
       fontSize: 40,
+      // The peaceful-branch finale demands the full capitalized order.
+      caseSensitive: true,
       onComplete: () => {
         this.setNarrator("The last golems lower their arms. The forge grows quiet.");
         this.time.delayedCall(1800, () => this.afterFork2("peaceful", "master-key"));
@@ -1173,6 +1205,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
       x: golem.container.x,
       y: golem.restY - 100,
       fontSize: 32,
+      // Capitalized golems enforce case — lowercase typing now misses, so
+      // Gregor's tutorial line ("Lowercase moves them. CAPITALS command
+      // them.") finally describes a real mechanic instead of a cosmetic
+      // VFX gate. Lowercase-word golems remain case-insensitive.
+      caseSensitive: golem.isCapitalized,
+      // Forge-fire burst on completion. Reads as "ember bloom" rather
+      // than the default brass.
+      burstColor: PALETTE_HEX.ember,
       onComplete: () => this.defeatGolem(golem),
       onSpellComplete: () => {
         this.defeatGolem(golem);
@@ -1196,8 +1236,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
       x: wrenX,
       duration,
       ease: "Linear",
-      onUpdate: () => {
-        if (golem.target) golem.target.setAnchorX(golem.container.x);
+      onUpdate: (tween) => {
+        if (!golem.target) return;
+        golem.target.setAnchorX(golem.container.x);
+        // Danger pulse — the floating word reddens as the golem closes,
+        // ramping in over the last 60% of its advance.
+        const dangerLevel = Math.max(
+          0,
+          (tween.progress - DANGER_RAMP_START) / (1 - DANGER_RAMP_START),
+        );
+        golem.target.setDanger(dangerLevel);
       },
       onComplete: () => {
         golem.advanceTween = null;
@@ -1358,6 +1406,11 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── Input ────────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
+    // Ctrl+Shift+P: toggle purist mode from inside the realm.
+    if (isPuristToggleKey(event)) {
+      togglePuristMode(this, this.store);
+      return;
+    }
     if (event.key === "Shift") {
       this.shiftHeld = true;
       return;
@@ -1443,7 +1496,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private drawWren(x: number, y: number): void {
     const c = this.add.container(x, y);
-    c.add(makeWrenSprite(this));
+    this.wrenSprite = makeWrenSprite(this);
+    c.add(this.wrenSprite);
   }
 
   /** Draw a standard golem into a container. Returns the eye graphics. */

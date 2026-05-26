@@ -2,12 +2,19 @@ import Phaser from "phaser";
 import { type AmbientHandle, playAmbientSkyIsland } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
+import { playClaim } from "../audio/claim";
+import { playWaveSting } from "../audio/waveSting";
 import { PALETTE, SERIF } from "../game/palette";
+import { isPuristToggleKey, togglePuristMode } from "../game/purist";
+// Danger ramps in over the LAST 60% of a spirit's advance — earlier portion
+// stays cream so players can read the word, then it shifts red as the spirit
+// closes. Mirrors the Winter Mountain ramp so the typing feel is consistent.
+const DANGER_RAMP_START = 0.4;
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, SKY_ISLAND_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
-import { makeWrenSprite, preloadWren } from "../game/wren";
+import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
 import skyIslandBackdrop from "../../art/references/sky-island-clean.png";
 
 interface SkyIslandSceneData {
@@ -107,6 +114,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private activeTargets: TextWordTarget[] = [];
 
   private wrenContainer!: Phaser.GameObjects.Container;
+  private wrenSprite!: Phaser.GameObjects.Image;
 
   // Fork / companion flags
   private fork1Choice: "help-etta" | "steal-flame" | null = null;
@@ -172,6 +180,14 @@ export class SkyIslandScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.typingInput = new TypingInputController(this.store);
+    this.typingInput.setKeystrokeHooks({
+      onCorrect: () => bobWrenSprite(this.wrenSprite),
+      onMiss: () => {
+        flashWrenMiss(this.wrenSprite);
+        this.cameras.main.shake(80, 0.002);
+      },
+      onClaim: () => playClaim(),
+    });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
@@ -329,6 +345,11 @@ export class SkyIslandScene extends Phaser.Scene {
   // ─── First lantern-spirit encounter ──────────────────────────────────────
 
   private startFirstSpiritEncounter(): void {
+    // Wave-start bookend — same audio + shake pattern as the temple waves so
+    // the first spirit encounter lands with the same weight.
+    playWaveSting();
+    this.cameras.main.shake(220, 0.005);
+
     this.setNarrator("Two lantern-spirits drift from the tower path, pale and unhurried.");
     const words = pickAdaptiveWords(
       filterWordsByLength(SKY_ISLAND_WORD_BANK, 6, 8),
@@ -370,6 +391,11 @@ export class SkyIslandScene extends Phaser.Scene {
     this.templeIndex = idx;
     const cfg = TEMPLE_CONFIGS[idx];
     if (!cfg) return;
+
+    // Wave-start bookend — audio sting + screen shake so each temple feels
+    // like an event, not just "more text appears." Mirrors Winter Mountain.
+    playWaveSting();
+    this.cameras.main.shake(220, 0.005);
 
     const templeNames = [
       "The first temple gate. Lanterns flicker here.",
@@ -613,6 +639,10 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private startBossPhase1(): void {
+    // Boss-phase bookend — audio sting + shake so each riddle phase lands
+    // with the same event-weight as a wave.
+    playWaveSting();
+    this.cameras.main.shake(220, 0.005);
     this.setNarrator(`The spirit speaks: "${RIDDLE_1_DISPLAY}"`);
     this.time.delayedCall(1200, () => {
       // Two sequential word targets: "a" then "portal"
@@ -629,6 +659,8 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private startBossPhase2(): void {
+    playWaveSting();
+    this.cameras.main.shake(220, 0.005);
     this.setNarrator(`The spirit asks again: "${RIDDLE_2_DISPLAY}"`);
     this.time.delayedCall(1200, () => {
       this.runSequentialWords(
@@ -656,6 +688,8 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private startBossPhase3(): void {
+    playWaveSting();
+    this.cameras.main.shake(220, 0.005);
     this.setNarrator(`The spirit speaks its last riddle: "${RIDDLE_3_DISPLAY}"`);
     this.time.delayedCall(1400, () => {
       this.runSequentialWords(
@@ -1053,6 +1087,9 @@ export class SkyIslandScene extends Phaser.Scene {
       x: spirit.container.x,
       y: spirit.restY - 80,
       fontSize: 32,
+      // Lantern-amber burst on completion — spirits "bloom out" in their own
+      // light, matching the theme rather than the default brass.
+      burstColor: 0xf5c842,
       onComplete: () => this.defeatSpirit(spirit),
     });
     spirit.target = target;
@@ -1072,8 +1109,17 @@ export class SkyIslandScene extends Phaser.Scene {
       x: wrenX,
       duration,
       ease: "Linear",
-      onUpdate: () => {
-        if (spirit.target) spirit.target.setAnchorX(spirit.container.x);
+      onUpdate: (tween) => {
+        if (!spirit.target) return;
+        spirit.target.setAnchorX(spirit.container.x);
+        // Danger pulse — as the spirit crosses DANGER_RAMP_START of its
+        // advance, the floating word shifts cream → ember. Communicates
+        // urgency without needing additional UI chrome.
+        const dangerLevel = Math.max(
+          0,
+          (tween.progress - DANGER_RAMP_START) / (1 - DANGER_RAMP_START),
+        );
+        spirit.target.setDanger(dangerLevel);
       },
       onComplete: () => {
         spirit.advanceTween = null;
@@ -1260,6 +1306,11 @@ export class SkyIslandScene extends Phaser.Scene {
   // ─── Input ────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
+    // Ctrl+Shift+P: toggle purist mode from inside the realm.
+    if (isPuristToggleKey(event)) {
+      togglePuristMode(this, this.store);
+      return;
+    }
     if (event.key.length === 1 || event.key === " ") playClack();
     this.typingInput.handleChar(event.key);
   }
@@ -1352,7 +1403,8 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {
     const c = this.add.container(x, y);
-    c.add(makeWrenSprite(this));
+    this.wrenSprite = makeWrenSprite(this);
+    c.add(this.wrenSprite);
     return c;
   }
 

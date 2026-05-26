@@ -13,6 +13,15 @@ import type { SaveStore } from "./saveState";
 export interface WordTarget {
   /** Lowercase characters yet to be typed. */
   remaining(): string;
+  /** Case-preserved characters yet to be typed. Optional — only required
+   *  when the target opts into case-sensitive matching via caseSensitive().
+   *  Targets that don't implement this method are matched case-insensitively. */
+  rawRemaining?(): string;
+  /** True if this target enforces case in matching. When true, the controller
+   *  compares raw (case-preserved) keystrokes against rawRemaining()[0] both
+   *  for pre-claim prefix narrowing and mid-claim advancement. Default false —
+   *  targets that don't implement this method behave case-insensitively. */
+  caseSensitive?(): boolean;
   /** True when there are no more characters to type. */
   isComplete(): boolean;
   /** Advance the cursor by one matched character. */
@@ -55,6 +64,10 @@ export class TypingInputController {
   private targets: WordTarget[] = [];
   private claimed: WordTarget | null = null;
   private typingBuffer = "";
+  /** Parallel to typingBuffer but case-preserved. Used to narrow against
+   *  case-sensitive targets via rawRemaining(). Always kept in sync with
+   *  typingBuffer length. */
+  private rawTypingBuffer = "";
   private onCorrectChar?: () => void;
   private onMissChar?: () => void;
   private onClaimChar?: (spell: boolean) => void;
@@ -92,6 +105,7 @@ export class TypingInputController {
     this.releaseClaim();
     this.targets = [];
     this.typingBuffer = "";
+    this.rawTypingBuffer = "";
   }
 
   /** True when a target is currently claimed (prefix matched, mid-word). */
@@ -120,11 +134,13 @@ export class TypingInputController {
         // At the start of the claimed word — release entirely.
         this.releaseClaim();
         this.typingBuffer = "";
+        this.rawTypingBuffer = "";
         this.refreshCandidateDisplay();
         return true;
       }
       if (this.typingBuffer.length > 0) {
         this.typingBuffer = this.typingBuffer.slice(0, -1);
+        this.rawTypingBuffer = this.rawTypingBuffer.slice(0, -1);
         this.refreshCandidateDisplay();
         return true;
       }
@@ -136,11 +152,13 @@ export class TypingInputController {
       if (this.claimed) {
         this.releaseClaim();
         this.typingBuffer = "";
+        this.rawTypingBuffer = "";
         this.refreshCandidateDisplay();
         return true;
       }
       if (this.typingBuffer.length > 0) {
         this.typingBuffer = "";
+        this.rawTypingBuffer = "";
         this.refreshCandidateDisplay();
         return true;
       }
@@ -152,8 +170,18 @@ export class TypingInputController {
 
     // ── Mid-claim: validate against the claimed target ───────────────────────
     if (this.claimed) {
-      const expected = this.claimed.remaining()[0];
-      if (ch === expected) {
+      // Case-sensitive targets compare the RAW keystroke against the raw
+      // expected char (preserves case). Non-case-sensitive targets compare
+      // the lowercased forms (existing behavior; default for all targets
+      // that don't opt in).
+      const isCaseSensitive =
+        this.claimed.caseSensitive?.() === true && !!this.claimed.rawRemaining;
+      const expected = isCaseSensitive
+        ? this.claimed.rawRemaining!()[0]
+        : this.claimed.remaining()[0];
+      const inputChar = isCaseSensitive ? char : ch;
+
+      if (inputChar === expected) {
         this.claimed.advance();
         this.store?.recordKeystroke(ch, true);
         this.onCorrectChar?.();
@@ -175,7 +203,8 @@ export class TypingInputController {
 
     // ── Pre-claim: extend the prefix buffer and check candidates ─────────────
     const newBuffer = this.typingBuffer + ch;
-    const candidates = this.findCandidates(newBuffer);
+    const newRawBuffer = this.rawTypingBuffer + char;
+    const candidates = this.findCandidates(newBuffer, newRawBuffer);
 
     if (candidates.length === 0) {
       // No target starts with this prefix.
@@ -188,6 +217,7 @@ export class TypingInputController {
     this.store?.recordKeystroke(ch, true);
     this.onCorrectChar?.();
     this.typingBuffer = newBuffer;
+    this.rawTypingBuffer = newRawBuffer;
 
     if (candidates.length === 1) {
       // Unique match — claim it and fast-forward the cursor to buffer length.
@@ -200,6 +230,7 @@ export class TypingInputController {
         target.advance();
       }
       this.typingBuffer = "";
+      this.rawTypingBuffer = "";
       for (const t of this.targets) t.setCandidate?.(false);
       this.dimOthers(true);
       if (target.isComplete()) {
@@ -215,15 +246,27 @@ export class TypingInputController {
 
   // ── Private ─────────────────────────────────────────────────────────────────
 
-  private findCandidates(buffer: string): WordTarget[] {
-    return this.targets.filter(
-      (t) => !t.isComplete() && t.remaining().startsWith(buffer),
-    );
+  /** Narrow the live targets to those whose remaining string starts with
+   *  the current buffer. Case-sensitive targets are matched against the
+   *  raw (case-preserved) buffer; all others use the normalized buffer. */
+  private findCandidates(
+    normBuffer: string,
+    rawBuffer: string,
+  ): WordTarget[] {
+    return this.targets.filter((t) => {
+      if (t.isComplete()) return false;
+      if (t.caseSensitive?.() === true && t.rawRemaining) {
+        return t.rawRemaining().startsWith(rawBuffer);
+      }
+      return t.remaining().startsWith(normBuffer);
+    });
   }
 
   private refreshCandidateDisplay(): void {
     const candidates =
-      this.typingBuffer.length > 0 ? this.findCandidates(this.typingBuffer) : [];
+      this.typingBuffer.length > 0
+        ? this.findCandidates(this.typingBuffer, this.rawTypingBuffer)
+        : [];
     for (const t of this.targets) {
       if (t.isComplete() || t === this.claimed) continue;
       const isCandidate = candidates.includes(t);

@@ -2,12 +2,15 @@ import Phaser from "phaser";
 import { type AmbientHandle, playAmbientWood } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
+import { playClaim } from "../audio/claim";
+import { playWaveSting } from "../audio/waveSting";
 import { PALETTE, SERIF } from "../game/palette";
+import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, HAUNTED_WOOD_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
-import { makeWrenSprite, preloadWren } from "../game/wren";
+import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
 import hauntedWoodBackdrop from "../../art/references/haunted-wood-clean.png";
 
 interface HauntedWoodSceneData {
@@ -41,6 +44,15 @@ const GHOST_ADVANCE_FAST = 11000;
 // Mist roll fires every 30 s
 const MIST_INTERVAL_MS = 30000;
 
+// Danger ramps in over the LAST 50% of a ghost's advance — later than wolves
+// (WM uses 0.4) because Haunted Wood ghost words are shorter punctuated
+// fragments that resolve quickly; a later ramp keeps the warning readable.
+const DANGER_RAMP_START = 0.5;
+
+// Wisp-themed pale gray-green burst — frame ghost defeats as "down in mist,"
+// not the default brass. Matches the ghost body tint.
+const GHOST_BURST_COLOR = 0xdde8dd;
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** True if the word contains any of . , ? ! ; : */
@@ -54,6 +66,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narratorText!: Phaser.GameObjects.Text;
+  private wrenSprite!: Phaser.GameObjects.Image;
   private ghosts: HauntedGhost[] = [];
   private activeTargets: TextWordTarget[] = [];
 
@@ -108,6 +121,14 @@ export class HauntedWoodScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.typingInput = new TypingInputController(this.store);
+    this.typingInput.setKeystrokeHooks({
+      onCorrect: () => bobWrenSprite(this.wrenSprite),
+      onMiss: () => {
+        flashWrenMiss(this.wrenSprite);
+        this.cameras.main.shake(80, 0.002);
+      },
+      onClaim: () => playClaim(),
+    });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
@@ -272,6 +293,11 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   // Encounter 1: 3 ghosts — left, right, top-centre
   private startCrossroads1(): void {
+    // Wave-start bookend — audio sting + screen shake so each encounter feels
+    // like an event, not just "more text appears."
+    playWaveSting();
+    this.cameras.main.shake(220, 0.005);
+
     const words = pickAdaptiveWords(
       HAUNTED_WOOD_WORD_BANK,
       3,
@@ -304,6 +330,8 @@ export class HauntedWoodScene extends Phaser.Scene {
   // Encounter 2: 4 ghosts
   private startCrossroads2(): void {
     this.setNarrator("The cold deepens.");
+    playWaveSting();
+    this.cameras.main.shake(220, 0.005);
     const words = pickAdaptiveWords(
       HAUNTED_WOOD_WORD_BANK,
       4,
@@ -330,6 +358,8 @@ export class HauntedWoodScene extends Phaser.Scene {
   // Encounter 3: 4 ghosts with longer punctuated words
   private startCrossroads3(): void {
     this.setNarrator("Older things stir. The shrine pulses faintly.");
+    playWaveSting();
+    this.cameras.main.shake(220, 0.005);
     const words = pickAdaptiveWords(
       HAUNTED_WOOD_WORD_BANK,
       4,
@@ -555,6 +585,8 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private spawnBossWaveA(): void {
+    playWaveSting();
+    this.cameras.main.shake(220, 0.005);
     // Wave A: lost; cold, forgotten.
     const words = ["lost;", "cold,", "forgotten."];
     const positions: Array<{ startX: number; restX: number; restY: number }> = [
@@ -578,6 +610,8 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private spawnBossWaveB(): void {
+    playWaveSting();
+    this.cameras.main.shake(220, 0.005);
     // Wave B: hollow! ancient: silence?
     const words = ["hollow!", "ancient:", "silence?"];
     const positions: Array<{ startX: number; restX: number; restY: number }> = [
@@ -856,6 +890,9 @@ export class HauntedWoodScene extends Phaser.Scene {
       x: ghost.container.x,
       y: ghost.restY - 80,
       fontSize: 32,
+      // Wisp-themed pale gray-green burst on defeat — reads as a ghost going
+      // down in mist, not the default brass.
+      burstColor: GHOST_BURST_COLOR,
       onComplete: () => this.defeatGhost(ghost),
     });
     ghost.target = target;
@@ -874,8 +911,17 @@ export class HauntedWoodScene extends Phaser.Scene {
       x: WREN_X,
       duration,
       ease: "Linear",
-      onUpdate: () => {
-        if (ghost.target) ghost.target.setAnchorX(ghost.container.x);
+      onUpdate: (tween) => {
+        if (!ghost.target) return;
+        ghost.target.setAnchorX(ghost.container.x);
+        // Danger pulse — as the ghost crosses DANGER_RAMP_START of its
+        // advance, the floating word shifts cream → ember. Communicates
+        // "this one is about to land on you" without needing UI chrome.
+        const dangerLevel = Math.max(
+          0,
+          (tween.progress - DANGER_RAMP_START) / (1 - DANGER_RAMP_START),
+        );
+        ghost.target.setDanger(dangerLevel);
       },
       onComplete: () => {
         ghost.advanceTween = null;
@@ -1065,6 +1111,11 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Input ────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
+    // Ctrl+Shift+P: toggle purist mode.
+    if (isPuristToggleKey(event)) {
+      togglePuristMode(this, this.store);
+      return;
+    }
     if (event.key.length === 1 || event.key === " ") {
       playClack();
     }
@@ -1119,7 +1170,8 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {
     const c = this.add.container(x, y);
-    c.add(makeWrenSprite(this));
+    this.wrenSprite = makeWrenSprite(this);
+    c.add(this.wrenSprite);
     return c;
   }
 

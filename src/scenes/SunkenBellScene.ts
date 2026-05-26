@@ -2,13 +2,26 @@ import Phaser from "phaser";
 import { type AmbientHandle, playAmbientBell } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
+import { playClaim } from "../audio/claim";
+import { playWaveSting } from "../audio/waveSting";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
+import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, SUNKEN_BELL_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
-import { makeWrenSprite, preloadWren } from "../game/wren";
+import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
 import sunkenBellBackdrop from "../../art/references/sunken-bell-clean.png";
+
+// Danger ramps in over the LAST 60% of a ghost's advance — earlier portion
+// stays cream so players can read the word, then it shifts red as the ghost
+// closes. Mirrors Winter Mountain.
+const DANGER_RAMP_START = 0.4;
+
+// Sea-green burst on ghost defeats — matches the Bell-Warden's open-eye
+// hue used elsewhere in the scene. Reads as "ghost dissolves in deep water"
+// rather than the default brass.
+const BELL_BURST_COLOR = 0x4ab8d6;
 
 interface SunkenBellSceneData {
   store: SaveStore;
@@ -40,6 +53,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private ghosts: Ghost[] = [];
   private activeTargets: TextWordTarget[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
+  private wrenSprite!: Phaser.GameObjects.Image;
 
   private beatMs = 2000;
   private claimWindowOpen = false;
@@ -93,6 +107,16 @@ export class SunkenBellScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.typingInput = new TypingInputController(this.store);
+    // Bell is "quiet listening" — softer per-keystroke feedback than the
+    // Winter Mountain default. 120ms / 0.002 shake instead of 80ms / 0.002.
+    this.typingInput.setKeystrokeHooks({
+      onCorrect: () => bobWrenSprite(this.wrenSprite),
+      onMiss: () => {
+        flashWrenMiss(this.wrenSprite);
+        this.cameras.main.shake(120, 0.002);
+      },
+      onClaim: () => playClaim(),
+    });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
@@ -198,6 +222,11 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Input ────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
+    // Ctrl+Shift+P: toggle purist mode from inside the realm.
+    if (isPuristToggleKey(event)) {
+      togglePuristMode(this, this.store);
+      return;
+    }
     if (event.key.length === 1 || event.key === " ") playClack();
     if (this.typingInput.hasClaim() || this.claimWindowOpen) {
       this.typingInput.handleChar(event.key);
@@ -345,6 +374,12 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Act 1: First ghost encounter ────────────────────────────────────────
 
   private startFirstGhostEncounter(): void {
+    // Encounter bookend — softer than Winter Mountain's 220/0.005 to match
+    // the Bell's "quiet listening" tone. Skipped in the truly reverent
+    // moments earlier in Act 1 (descent, Olin); fires here because this is
+    // where the realm tips into combat.
+    playWaveSting();
+    this.cameras.main.shake(140, 0.003);
     this.ghosts = [];
     const words = ["tide", "salt", "still"];
     const positions = [
@@ -372,6 +407,8 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private startWave1(): void {
+    playWaveSting();
+    this.cameras.main.shake(140, 0.003);
     this.setNarrator("The nave stretches ahead. Shapes drift between the columns.");
     const words = pickAdaptiveWords(
       SUNKEN_BELL_WORD_BANK,
@@ -396,6 +433,8 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private startWave2(): void {
+    playWaveSting();
+    this.cameras.main.shake(140, 0.003);
     this.setNarrator("More come. One of them is different — restless, doubled.");
     // Pick 4 adaptive words for the regular ghosts; the 5th (splitting) ghost
     // always gets "sink" from the bank for thematic weight.
@@ -567,6 +606,8 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private startAct3(): void {
+    playWaveSting();
+    this.cameras.main.shake(140, 0.003);
     this.ghosts = [];
     const wardenGraphics = this.drawWarden();
     // Phase 1
@@ -1026,6 +1067,8 @@ export class SunkenBellScene extends Phaser.Scene {
       x: ghost.container.x,
       y: ghost.restY - 80,
       fontSize: 32,
+      // Sea-green burst — ghost dissolves into deep water, not brass.
+      burstColor: BELL_BURST_COLOR,
       onComplete: () => this.defeatGhost(ghost),
     });
     ghost.target = target;
@@ -1045,8 +1088,17 @@ export class SunkenBellScene extends Phaser.Scene {
       x: wrenX,
       duration,
       ease: "Linear",
-      onUpdate: () => {
-        if (ghost.target) ghost.target.setAnchorX(ghost.container.x);
+      onUpdate: (tween) => {
+        if (!ghost.target) return;
+        ghost.target.setAnchorX(ghost.container.x);
+        // Danger pulse — ramps over the last 60% of the advance so the
+        // word reads cream while readable, then shifts ember as the ghost
+        // closes. Communicates urgency without UI chrome.
+        const dangerLevel = Math.max(
+          0,
+          (tween.progress - DANGER_RAMP_START) / (1 - DANGER_RAMP_START),
+        );
+        ghost.target.setDanger(dangerLevel);
       },
       onComplete: () => {
         ghost.advanceTween = null;
@@ -1263,8 +1315,11 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Drawing ──────────────────────────────────────────────────────────────
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {
+    // Retains the inner sprite reference on this.wrenSprite so the keystroke
+    // hooks can bob / flash the actual image (not just the container).
     const c = this.add.container(x, y);
-    c.add(makeWrenSprite(this));
+    this.wrenSprite = makeWrenSprite(this);
+    c.add(this.wrenSprite);
     return c;
   }
 

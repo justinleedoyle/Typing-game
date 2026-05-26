@@ -5,6 +5,7 @@ import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
 import { pickLowHeartLine } from "../audio/runaLines";
 import { playWaveSting } from "../audio/waveSting";
+import { BeatClock } from "../game/beatClock";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -58,9 +59,8 @@ export class SunkenBellScene extends Phaser.Scene {
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
 
-  private beatMs = 2000;
-  private claimWindowOpen = false;
-  private beatTimer: Phaser.Time.TimerEvent | null = null;
+  private beatClock!: BeatClock;
+  private beatRing!: Phaser.GameObjects.Graphics;
 
   private fork1Choice: "chant" | "force" | null = null;
   private fork2Choice: "free-aurland" | "claim-tongue" | null = null;
@@ -77,9 +77,6 @@ export class SunkenBellScene extends Phaser.Scene {
     this.store = data.store;
     this.ghosts = [];
     this.activeTargets = [];
-    this.beatMs = 2000;
-    this.claimWindowOpen = false;
-    this.beatTimer = null;
     this.fork1Choice = null;
     this.fork2Choice = null;
   }
@@ -116,10 +113,24 @@ export class SunkenBellScene extends Phaser.Scene {
       getSoul: () => this.typingInput.getStats().getSoul(),
       onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
     });
+
+    // Beat ring — bottom-center sonar pulse that emanates outward on each
+    // bell toll. Bright + tight on the beat, fades + expands across the
+    // claim window, then disappears until the next toll. Player sees this
+    // and learns "type now" without anyone having to say it.
+    this.beatRing = this.add.graphics().setDepth(10).setAlpha(0);
+    this.beatRing.x = WREN_X;
+    this.beatRing.y = 960;
+
+    this.beatClock = new BeatClock(this, {
+      tempoMs: 2000,
+      onBeat: () => this.pulseBeatRing(),
+    });
+
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
-      this.stopBeat();
+      this.beatClock.stop();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
     });
@@ -136,8 +147,8 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Revisit mode ────────────────────────────────────────────────────────
 
   private startRevisit(): void {
-    // Open claim window permanently so input flows without beat gating
-    this.claimWindowOpen = true;
+    // Revisit mode: don't start the BeatClock at all — isInWindow() returns
+    // true when the clock isn't running, so input flows freely.
 
     const choices = this.store.get().realms["sunken-bell"]?.choices ?? {};
     let narratorLine: string;
@@ -193,29 +204,23 @@ export class SunkenBellScene extends Phaser.Scene {
 
   // ─── Beat mechanic ────────────────────────────────────────────────────────
 
-  private startBeat(): void {
-    this.beatTimer = this.time.addEvent({
-      delay: this.beatMs,
-      callback: this.onToll,
-      callbackScope: this,
-      loop: true,
+  /** Visible "type now" pulse — bright ring at the moment of the toll,
+   *  expanding and fading across the claim window so the player sees
+   *  exactly when their input is welcome. */
+  private pulseBeatRing(): void {
+    const ring = this.beatRing;
+    ring.clear();
+    ring.lineStyle(4, PALETTE_HEX.frost, 1);
+    ring.strokeCircle(0, 0, 32);
+    ring.setAlpha(1).setScale(1);
+    this.tweens.add({
+      targets: ring,
+      alpha: 0,
+      scale: 1.8,
+      duration: 600,
+      ease: "Sine.easeOut",
     });
-  }
-
-  private stopBeat(): void {
-    this.beatTimer?.remove();
-    this.beatTimer = null;
-    this.claimWindowOpen = false;
-  }
-
-  private onToll(): void {
-    // Brief dark flash: dims slightly for ~600ms
-    this.cameras.main.flash(600, 0, 0, 0, false);
-    // Open claim window for 400ms
-    this.claimWindowOpen = true;
-    this.time.delayedCall(400, () => {
-      this.claimWindowOpen = false;
-    });
+    this.cameras.main.flash(300, 0, 0, 0, false);
   }
 
   // ─── Input ────────────────────────────────────────────────────────────────
@@ -227,17 +232,34 @@ export class SunkenBellScene extends Phaser.Scene {
       return;
     }
     if (event.key.length === 1 || event.key === " ") playClack();
-    if (this.typingInput.hasClaim() || this.claimWindowOpen) {
+
+    // Mid-word typing flows freely — once a target is claimed, letters
+    // within the word aren't beat-gated (per §5.5.7: "letters within a
+    // word flow freely"). Only new claims must land on a beat.
+    if (this.typingInput.hasClaim()) {
       this.typingInput.handleChar(event.key);
+      return;
     }
+
+    // No claim yet — gate by the beat window.
+    if (this.beatClock.isInWindow()) {
+      this.typingInput.handleChar(event.key);
+      return;
+    }
+
+    // Offbeat new-claim attempt: punished as a miss. Heart drops, Wren
+    // flinches, camera shakes — teaches the player to wait for the toll.
+    flashWrenMiss(this.wrenSprite);
+    this.cameras.main.shake(80, 0.0025);
+    this.typingInput.getStats().record(false);
   }
 
   // ─── Act 1: Arrival ───────────────────────────────────────────────────────
 
   private startArrival(): void {
-    // Act 1 pre-beat: input flows freely until Olin teaches the bell's rhythm
-    // and startBeat() hands claim-window gating over to onToll.
-    this.claimWindowOpen = true;
+    // Act 1 pre-beat: input flows freely until Olin teaches the bell's rhythm.
+    // BeatClock stays not-running here; gating engages only once start() is
+    // called at the end of Olin's exchange.
     this.setNarrator(
       "Wren, this place has been listening for a hundred years. Move slowly. The bell sets the pace.",
     );
@@ -365,8 +387,8 @@ export class SunkenBellScene extends Phaser.Scene {
       }
     });
     this.setNarrator("The bell tolls once. And the world changes tempo.");
-    this.beatMs = 2000;
-    this.startBeat();
+    this.beatClock.setTempo(2000);
+    this.beatClock.start();
     this.time.delayedCall(2000, () => this.startFirstGhostEncounter());
   }
 
@@ -677,10 +699,8 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private startWardenPhase2(wardenGraphics: Phaser.GameObjects.Graphics): void {
-    // Double tempo
-    this.stopBeat();
-    this.beatMs = 1000;
-    this.startBeat();
+    // Double tempo — the tide rises and the world speeds up.
+    this.beatClock.setTempo(1000);
 
     this.setNarrator("The tide rises. The tempo doubles.");
 
@@ -772,19 +792,21 @@ export class SunkenBellScene extends Phaser.Scene {
           playChime();
           wordIndex += 1;
           this.clearActiveTargets();
-          this.time.delayedCall(200, advanceWord);
+          // §5.5.7 Phase 3: each word claims on a toll. Wait for the next
+          // beat before spawning the next word so the rhythm is exact.
+          this.beatClock.onNextBeat(advanceWord);
         },
       });
       this.typingInput.register(target);
       this.activeTargets.push(target);
     };
 
-    this.time.delayedCall(600, advanceWord);
+    this.beatClock.onNextBeat(advanceWord);
   }
 
   private onWardenDefeated(): void {
     playChime();
-    this.stopBeat();
+    this.beatClock.stop();
     this.setNarrator(
       "A long silence. The bell, for the first time in a hundred years, falls quiet.",
     );
@@ -1257,14 +1279,12 @@ export class SunkenBellScene extends Phaser.Scene {
     steps: Array<{ word: string; narrator: string }>,
     onDone: () => void,
   ): void {
-    // Temporarily allow all input (beat is stopped at this point)
-    const savedOpen = this.claimWindowOpen;
-    this.claimWindowOpen = true;
+    // Free-passage chains run after the boss falls — the BeatClock has
+    // already been stopped, so isInWindow() returns true and input flows.
 
     let idx = 0;
     const advance = (): void => {
       if (idx >= steps.length) {
-        this.claimWindowOpen = savedOpen;
         onDone();
         return;
       }

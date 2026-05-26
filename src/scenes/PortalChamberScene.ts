@@ -303,6 +303,19 @@ export class PortalChamberScene extends Phaser.Scene {
     // Zone navigation (away from portals).
     this.registerNavTarget("runa", 950, 920, () => this.enterZone("desk"));
     this.registerNavTarget("shelf", 1530, 920, () => this.enterZone("shelf"));
+    // Settings entry — small chrome-y target in the upper-right corner so it
+    // stays out of the main portal sight-lines but is discoverable.
+    this.registerNavTarget("settings", 1820, 60, () => this.enterSettings());
+  }
+
+  private enterSettings(): void {
+    this.cameras.main.fadeOut(400, 10, 8, 15);
+    this.cameras.main.once(
+      Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+      () => {
+        this.scene.start("SettingsScene", { store: this.store });
+      },
+    );
   }
 
   // ─── Desk zone ────────────────────────────────────────────────────────────

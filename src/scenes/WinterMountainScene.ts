@@ -6,6 +6,7 @@ import { playClaim } from "../audio/claim";
 import { pickLowHeartLine } from "../audio/runaLines";
 import { playWaveSting } from "../audio/waveSting";
 import { HeartSoulHud } from "../game/heartSoulHud";
+import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 // Danger ramps in over the LAST 60% of a wolf's advance — earlier portion
@@ -148,7 +149,7 @@ const TRUE_NAME_REACTIONS = [
 export class WinterMountainScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
-  private narratorText!: Phaser.GameObjects.Text;
+  private narration!: NarrationManager;
   private wolves: Wolf[] = [];
   private activeTargets: TextWordTarget[] = [];
 
@@ -226,16 +227,7 @@ export class WinterMountainScene extends Phaser.Scene {
       .setDepth(-100);
     this.wrenContainer = this.drawWren(this.scale.width / 2, 880);
 
-    this.narratorText = this.add
-      .text(this.scale.width / 2, 160, "", {
-        fontFamily: SERIF,
-        fontSize: "32px",
-        color: PALETTE.cream,
-        fontStyle: "italic",
-        align: "center",
-        wordWrap: { width: 1400 },
-      })
-      .setOrigin(0.5);
+    this.narration = new NarrationManager(this, { y: 160 });
 
     this.candleGroup = this.add.container(this.scale.width / 2 - 110, 880);
     this.chargeGroup = this.add.container(this.scale.width / 2 + 110, 880);
@@ -1459,14 +1451,7 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private setNarrator(text: string): void {
-    this.narratorText.setText(text);
-    this.narratorText.setAlpha(0);
-    this.tweens.add({
-      targets: this.narratorText,
-      alpha: 1,
-      duration: 400,
-      ease: "Sine.easeOut",
-    });
+    this.narration.sayRaw(text);
   }
 
   private clearActiveTargets(): void {

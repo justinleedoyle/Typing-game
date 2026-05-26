@@ -6,6 +6,7 @@ import { playClaim } from "../audio/claim";
 import { pickLowHeartLine } from "../audio/runaLines";
 import { playWaveSting } from "../audio/waveSting";
 import { HeartSoulHud } from "../game/heartSoulHud";
+import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
@@ -91,7 +92,7 @@ const BOSS_PHASE2_WORDS = ["HOLD", "STAND", "YIELD"] as const;
 export class ClockworkForgeScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
-  private narratorText!: Phaser.GameObjects.Text;
+  private narration!: NarrationManager;
   private golems: Golem[] = [];
   private activeTargets: TextWordTarget[] = [];
   private wrenSprite!: Phaser.GameObjects.Image;
@@ -144,16 +145,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.drawCatwalk();
     this.drawWren(this.scale.width / 2, CATWALK_Y + 20);
 
-    this.narratorText = this.add
-      .text(this.scale.width / 2, 150, "", {
-        fontFamily: SERIF,
-        fontSize: "32px",
-        color: PALETTE.cream,
-        fontStyle: "italic",
-        align: "center",
-        wordWrap: { width: 1400 },
-      })
-      .setOrigin(0.5);
+    this.narration = new NarrationManager(this, { y: 150 });
 
     this.typingInput = new TypingInputController(this.store);
     this.typingInput.setKeystrokeHooks({
@@ -1435,14 +1427,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── Helpers ──────────────────────────────────────────────────────────────────
 
   private setNarrator(text: string): void {
-    this.narratorText.setText(text);
-    this.narratorText.setAlpha(0);
-    this.tweens.add({
-      targets: this.narratorText,
-      alpha: 1,
-      duration: 400,
-      ease: "Sine.easeOut",
-    });
+    this.narration.sayRaw(text);
   }
 
   private clearActiveTargets(): void {

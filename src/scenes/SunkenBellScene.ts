@@ -6,6 +6,7 @@ import { playClaim } from "../audio/claim";
 import { pickLowHeartLine } from "../audio/runaLines";
 import { playWaveSting } from "../audio/waveSting";
 import { HeartSoulHud } from "../game/heartSoulHud";
+import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
@@ -51,7 +52,7 @@ const WREN_Y = 820;
 export class SunkenBellScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
-  private narratorText!: Phaser.GameObjects.Text;
+  private narration!: NarrationManager;
   private ghosts: Ghost[] = [];
   private activeTargets: TextWordTarget[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
@@ -97,16 +98,7 @@ export class SunkenBellScene extends Phaser.Scene {
       .setDepth(-100);
     this.wrenContainer = this.drawWren(WREN_X, WREN_Y);
 
-    this.narratorText = this.add
-      .text(this.scale.width / 2, 120, "", {
-        fontFamily: SERIF,
-        fontSize: "32px",
-        color: PALETTE.cream,
-        fontStyle: "italic",
-        align: "center",
-        wordWrap: { width: 1400 },
-      })
-      .setOrigin(0.5);
+    this.narration = new NarrationManager(this, { y: 120 });
 
     this.typingInput = new TypingInputController(this.store);
     // Bell is "quiet listening" — softer per-keystroke feedback than the
@@ -1210,7 +1202,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private checkWaveComplete(): void {
     if (this.ghosts.every((g) => g.defeated)) {
       this.ghosts = [];
-      const currentNarrator = this.narratorText.text;
+      const currentNarrator = this.narration.currentText();
       // Determine which wave just ended by context
       if (currentNarrator.includes("listening")) {
         // First encounter
@@ -1301,14 +1293,7 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
   private setNarrator(text: string): void {
-    this.narratorText.setText(text);
-    this.narratorText.setAlpha(0);
-    this.tweens.add({
-      targets: this.narratorText,
-      alpha: 1,
-      duration: 400,
-      ease: "Sine.easeOut",
-    });
+    this.narration.sayRaw(text);
   }
 
   private clearActiveTargets(): void {

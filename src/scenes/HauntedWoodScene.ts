@@ -11,7 +11,12 @@ import { PALETTE, SERIF } from "../game/palette";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
-import { pickAdaptiveWords, HAUNTED_WOOD_WORD_BANK } from "../game/wordBank";
+import {
+  pickAdaptiveWords,
+  type WoodDirection,
+  WOOD_DIRECTION_PUNCTUATION,
+  woodWordsForDirection,
+} from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
 import hauntedWoodBackdrop from "../../art/references/haunted-wood-clean.png";
@@ -32,6 +37,9 @@ interface HauntedGhost {
   defeated: boolean;
   advanceTween: Phaser.Tweens.Tween | null;
   advanceMs: number;
+  /** Compass direction the ghost approached from. Determines the punctuation
+   *  on its word and the side of Wren it advances toward. */
+  direction: WoodDirection;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -79,6 +87,10 @@ export class HauntedWoodScene extends Phaser.Scene {
   private companionChoice: "call" | "leave" | null = null;
 
   private mistTimer: Phaser.Time.TimerEvent | null = null;
+  /** Four faint punctuation glyphs at N/S/E/W around Wren — teaches the
+   *  direction-punctuation mapping diegetically. Drawn on first ghost
+   *  spawn, persists through Act 2 + boss. */
+  private compassGlyphs: Phaser.GameObjects.Text[] = [];
   private ambientHandle?: AmbientHandle;
   private revisit = false;
 
@@ -132,6 +144,8 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
       this.mistTimer?.remove();
+      this.compassGlyphs.forEach((g) => g.destroy());
+      this.compassGlyphs = [];
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
     });
@@ -290,35 +304,19 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.time.delayedCall(1200, () => this.startCrossroads1());
   }
 
-  // Encounter 1: 3 ghosts — left, right, top-centre
+  // Encounter 1: 3 ghosts — west, east, north. Introduces 3 of 4 directions
+  // gently so the player can learn each punctuation glyph in turn.
   private startCrossroads1(): void {
-    // Wave-start bookend — audio sting + screen shake so each encounter feels
-    // like an event, not just "more text appears."
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
 
-    const words = pickAdaptiveWords(
-      HAUNTED_WOOD_WORD_BANK,
-      3,
-      this.store.get().keyStats,
-    );
-    // Fixed: override to ensure spec words if bank picks something else; we
-    // just use adaptive picks since all bank words have punctuation.
-    const positions: Array<{ startX: number; restX: number; restY: number }> = [
-      { startX: -120, restX: 300, restY: 750 },
-      { startX: this.scale.width + 120, restX: 1620, restY: 760 },
-      { startX: 960, restX: 960, restY: -80 },
-    ];
+    const directions: WoodDirection[] = ["west", "east", "north"];
     this.ghosts = [];
-    words.forEach((word, i) => {
-      const pos = positions[i];
-      if (!pos) return;
-      const fromAbove = pos.startX === pos.restX && pos.restY < 0;
-      const startY = fromAbove ? -120 : pos.restY;
-      this.spawnGhost(pos.startX, pos.restX, startY, pos.restY, word, i * 300);
-    });
+    this.spawnGhostsByDirection(directions, 300);
     this.time.delayedCall(200, () =>
-      this.setNarrator("Ghosts drift from the tree-line. Ward them with their names."),
+      this.setNarrator(
+        "Ghosts drift from the tree-line. Each carries a mark — match it to ward them.",
+      ),
     );
   }
 
@@ -326,55 +324,56 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.time.delayedCall(1400, () => this.startCrossroads2());
   }
 
-  // Encounter 2: 4 ghosts
+  // Encounter 2: 4 ghosts from all four compass directions. First time
+  // the player sees south, completing the punctuation set.
   private startCrossroads2(): void {
-    this.setNarrator("The cold deepens.");
+    this.setNarrator("The cold deepens. The shrine pulses faintly.");
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
-    const words = pickAdaptiveWords(
-      HAUNTED_WOOD_WORD_BANK,
-      4,
-      this.store.get().keyStats,
-    );
-    const positions: Array<{ startX: number; restX: number; restY: number }> = [
-      { startX: -120, restX: 240, restY: 730 },
-      { startX: this.scale.width + 120, restX: 1680, restY: 750 },
-      { startX: -120, restX: 480, restY: 700 },
-      { startX: this.scale.width + 120, restX: 1440, restY: 720 },
-    ];
+
+    const directions: WoodDirection[] = ["north", "south", "east", "west"];
     this.ghosts = [];
-    words.forEach((word, i) => {
-      const pos = positions[i];
-      if (!pos) return;
-      this.spawnGhost(pos.startX, pos.restX, pos.restY, pos.restY, word, i * 280);
-    });
+    this.spawnGhostsByDirection(directions, 280);
   }
 
   private onCrossroads2Cleared(): void {
     this.time.delayedCall(1400, () => this.startCrossroads3());
   }
 
-  // Encounter 3: 4 ghosts with longer punctuated words
+  // Encounter 3: 4 ghosts with two coming from the same direction —
+  // tests that the player can handle multiple of the same punctuation in
+  // a row without panicking.
   private startCrossroads3(): void {
-    this.setNarrator("Older things stir. The shrine pulses faintly.");
+    this.setNarrator("Older things stir. They come in pairs now.");
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
-    const words = pickAdaptiveWords(
-      HAUNTED_WOOD_WORD_BANK,
-      4,
-      this.store.get().keyStats,
-    );
-    const positions: Array<{ startX: number; restX: number; restY: number }> = [
-      { startX: -120, restX: 300, restY: 720 },
-      { startX: this.scale.width + 120, restX: 1620, restY: 740 },
-      { startX: -120, restX: 540, restY: 760 },
-      { startX: this.scale.width + 120, restX: 1380, restY: 710 },
-    ];
+
+    const directions: WoodDirection[] = ["north", "north", "east", "west"];
     this.ghosts = [];
-    words.forEach((word, i) => {
-      const pos = positions[i];
-      if (!pos) return;
-      this.spawnGhost(pos.startX, pos.restX, pos.restY, pos.restY, word, i * 300);
+    this.spawnGhostsByDirection(directions, 300);
+  }
+
+  /** Spawn a batch of ghosts from given compass directions, staggering
+   *  same-direction siblings into different slots. Each ghost's word is
+   *  picked adaptively from that direction's punctuation-filtered bank. */
+  private spawnGhostsByDirection(
+    directions: readonly WoodDirection[],
+    delayStepMs: number,
+  ): void {
+    const slotCounts: Record<WoodDirection, number> = {
+      north: 0,
+      south: 0,
+      east: 0,
+      west: 0,
+    };
+    directions.forEach((dir, i) => {
+      const slot = slotCounts[dir];
+      slotCounts[dir] += 1;
+      const bank = woodWordsForDirection(dir);
+      const word =
+        pickAdaptiveWords(bank, 1, this.store.get().keyStats)[0] ?? bank[0];
+      if (!word) return;
+      this.spawnGhost(dir, word, i * delayStepMs, slot);
     });
   }
 
@@ -586,21 +585,11 @@ export class HauntedWoodScene extends Phaser.Scene {
   private spawnBossWaveA(): void {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
-    // Wave A: lost; cold, forgotten.
-    const words = ["lost;", "cold,", "forgotten."];
-    const positions: Array<{ startX: number; restX: number; restY: number }> = [
-      { startX: -120, restX: 280, restY: 730 },
-      { startX: this.scale.width + 120, restX: 1640, restY: 750 },
-      { startX: 960, restX: 960, restY: -80 },
-    ];
+    // Wave A: three directions, slower spawn pace. The player should still
+    // recognize the learned punctuation-direction mapping from Act 2.
+    const directions: WoodDirection[] = ["west", "east", "north"];
     this.ghosts = [];
-    words.forEach((word, i) => {
-      const pos = positions[i];
-      if (!pos) return;
-      const fromAbove = pos.startX === pos.restX && pos.restY < 0;
-      const startY = fromAbove ? -120 : pos.restY;
-      this.spawnGhost(pos.startX, pos.restX, startY, pos.restY, word, i * 350);
-    });
+    this.spawnGhostsByDirection(directions, 350);
   }
 
   private onBossWaveACleared(): void {
@@ -611,19 +600,11 @@ export class HauntedWoodScene extends Phaser.Scene {
   private spawnBossWaveB(): void {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
-    // Wave B: hollow! ancient: silence?
-    const words = ["hollow!", "ancient:", "silence?"];
-    const positions: Array<{ startX: number; restX: number; restY: number }> = [
-      { startX: -120, restX: 300, restY: 740 },
-      { startX: this.scale.width + 120, restX: 1620, restY: 720 },
-      { startX: -120, restX: 560, restY: 760 },
-    ];
+    // Wave B: south-heavy attack — two from below + one from above. Reads
+    // as the Ghost-King's hall rising up against Wren.
+    const directions: WoodDirection[] = ["south", "south", "north"];
     this.ghosts = [];
-    words.forEach((word, i) => {
-      const pos = positions[i];
-      if (!pos) return;
-      this.spawnGhost(pos.startX, pos.restX, pos.restY, pos.restY, word, i * 350);
-    });
+    this.spawnGhostsByDirection(directions, 350);
   }
 
   private onBossWaveBCleared(): void {
@@ -804,15 +785,19 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   // ─── Ghost spawning + combat ──────────────────────────────────────────────
 
+  /** Spawn a ghost approaching from a compass direction. Word is drawn
+   *  from the direction's punctuation-filtered bank — north uses period,
+   *  south exclamation, east question, west comma. `slot` lets multiple
+   *  ghosts from the same direction be staggered along the cross-axis. */
   private spawnGhost(
-    startX: number,
-    restX: number,
-    startY: number,
-    restY: number,
+    direction: WoodDirection,
     word: string,
     delay: number,
+    slot: number = 0,
   ): void {
-    const container = this.add.container(startX, startY);
+    this.ensureCompassDrawn();
+    const pos = this.spawnPositionFor(direction, slot);
+    const container = this.add.container(pos.startX, pos.startY);
     const isPunctWord = hasPunctuation(word);
     this.drawGhostInto(container, isPunctWord);
     container.setAlpha(0);
@@ -822,18 +807,19 @@ export class HauntedWoodScene extends Phaser.Scene {
     const ghost: HauntedGhost = {
       container,
       target: null,
-      restX,
-      restY,
+      restX: pos.restX,
+      restY: pos.restY,
       word,
       defeated: false,
       advanceTween: null,
       advanceMs,
+      direction,
     };
 
     this.tweens.add({
       targets: container,
-      x: restX,
-      y: restY,
+      x: pos.restX,
+      y: pos.restY,
       alpha: 0.6,
       duration: 900,
       delay,
@@ -847,6 +833,73 @@ export class HauntedWoodScene extends Phaser.Scene {
     });
 
     this.ghosts.push(ghost);
+  }
+
+  /** Off-screen start + on-screen rest positions for each compass direction.
+   *  Slots stagger ghosts along the axis perpendicular to their approach
+   *  so two ghosts from the same direction don't overlap. */
+  private spawnPositionFor(direction: WoodDirection, slot: number): {
+    startX: number;
+    startY: number;
+    restX: number;
+    restY: number;
+  } {
+    const screenW = this.scale.width;
+    const screenH = this.scale.height;
+    switch (direction) {
+      case "north": {
+        const restX = 760 + slot * 200;
+        return { startX: restX, startY: -120, restX, restY: 340 };
+      }
+      case "south": {
+        const restX = 800 + slot * 180;
+        return {
+          startX: restX,
+          startY: screenH + 120,
+          restX,
+          restY: screenH - 100,
+        };
+      }
+      case "east": {
+        const restY = 720 + slot * 50;
+        return {
+          startX: screenW + 120,
+          startY: restY,
+          restX: 1580,
+          restY,
+        };
+      }
+      case "west": {
+        const restY = 720 + slot * 50;
+        return { startX: -120, startY: restY, restX: 340, restY };
+      }
+    }
+  }
+
+  /** Draw the four punctuation glyphs at compass points around Wren on
+   *  the first ghost spawn. Idempotent — repeat calls do nothing. */
+  private ensureCompassDrawn(): void {
+    if (this.compassGlyphs.length > 0) return;
+    const RADIUS = 140;
+    const positions: Array<{ dir: WoodDirection; x: number; y: number }> = [
+      { dir: "north", x: WREN_X, y: WREN_Y - RADIUS },
+      { dir: "south", x: WREN_X, y: WREN_Y + RADIUS - 30 },
+      { dir: "east", x: WREN_X + RADIUS, y: WREN_Y - 20 },
+      { dir: "west", x: WREN_X - RADIUS, y: WREN_Y - 20 },
+    ];
+    for (const p of positions) {
+      const glyph = this.add
+        .text(p.x, p.y, WOOD_DIRECTION_PUNCTUATION[p.dir], {
+          fontFamily: SERIF,
+          fontSize: "44px",
+          color: PALETTE.cream,
+          fontStyle: "italic",
+        })
+        .setOrigin(0.5)
+        .setAlpha(0.32)
+        .setDepth(2);
+      this.compassGlyphs.push(glyph);
+    }
   }
 
   private drawGhostInto(
@@ -900,22 +953,28 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private startGhostAdvance(ghost: HauntedGhost): void {
-    const remaining = Math.abs(ghost.container.x - WREN_X);
-    const totalRange = Math.abs(ghost.restX - WREN_X);
+    // Advance toward Wren in both axes — ghosts from N/S close vertically,
+    // E/W close horizontally. Euclidean distance scales duration so
+    // farther starts get more time.
+    const dx = WREN_X - ghost.container.x;
+    const dy = WREN_Y - ghost.container.y;
+    const remaining = Math.hypot(dx, dy);
+    const totalRange = Math.hypot(WREN_X - ghost.restX, WREN_Y - ghost.restY);
     const duration =
       ghost.advanceMs * Math.max(0.3, remaining / Math.max(1, totalRange));
 
     ghost.advanceTween = this.tweens.add({
       targets: ghost.container,
       x: WREN_X,
+      y: WREN_Y,
       duration,
       ease: "Linear",
       onUpdate: (tween) => {
         if (!ghost.target) return;
         ghost.target.setAnchorX(ghost.container.x);
+        ghost.target.setAnchorY(ghost.container.y - 80);
         // Danger pulse — as the ghost crosses DANGER_RAMP_START of its
-        // advance, the floating word shifts cream → ember. Communicates
-        // "this one is about to land on you" without needing UI chrome.
+        // advance, the floating word shifts cream → ember.
         const dangerLevel = Math.max(
           0,
           (tween.progress - DANGER_RAMP_START) / (1 - DANGER_RAMP_START),

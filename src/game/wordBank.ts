@@ -190,6 +190,25 @@ export const HAUNTED_WOOD_WORD_BANK = [
   "lament:",
 ] as const;
 
+/** Haunted Wood compass: each direction is bound to one punctuation mark.
+ *  Ghosts approaching from a given direction always wield that direction's
+ *  punctuation — the player learns "the period comes from above" rather
+ *  than memorizing a rule. Semicolon + colon are reserved for the
+ *  Ghost-King's final passage (every-punctuation capstone). */
+export type WoodDirection = "north" | "south" | "east" | "west";
+
+export const WOOD_DIRECTION_PUNCTUATION: Record<WoodDirection, string> = {
+  north: ".",
+  south: "!",
+  east: "?",
+  west: ",",
+};
+
+export function woodWordsForDirection(dir: WoodDirection): readonly string[] {
+  const punct = WOOD_DIRECTION_PUNCTUATION[dir];
+  return HAUNTED_WOOD_WORD_BANK.filter((w) => w.endsWith(punct));
+}
+
 /** Winter-themed word bank for the wolf encounter. Short, lowercase,
  *  curriculum-friendly: spans the alphabet enough that adaptive selection
  *  has room to bias toward the player's struggle letters. */

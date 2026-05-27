@@ -95,10 +95,10 @@ const RIDDLE_1_DISPLAY = "What opens without a door?";
 const RIDDLE_2_DISPLAY = "What travels without moving?";
 const RIDDLE_3_DISPLAY = "Name this island, as it truly is.";
 
-/** Boss sequential word answers */
-const BOSS_PHASE1_WORDS = ["a", "portal"] as const;
-const BOSS_PHASE2_WORDS = ["a", "written", "word"] as const;
-const BOSS_PHASE3_WORDS = ["the", "sky", "that", "held", "the", "light"] as const;
+/** Boss full-sentence answers — typed in one go, no sequential word steps */
+const BOSS_PHASE1_ANSWER = "a portal";
+const BOSS_PHASE2_ANSWER = "a written word";
+const BOSS_PHASE3_ANSWER = "the sky that held the light";
 
 /** True-name passage */
 const TRUE_NAME_PASSAGE =
@@ -672,16 +672,22 @@ export class SkyIslandScene extends Phaser.Scene {
     this.cameras.main.shake(220, 0.005);
     this.setNarrator(`The spirit speaks: "${RIDDLE_1_DISPLAY}"`);
     this.time.delayedCall(1200, () => {
-      // Two sequential word targets: "a" then "portal"
-      this.runSequentialWords(
-        [...BOSS_PHASE1_WORDS],
-        () => {
+      const target = new TextWordTarget({
+        scene: this,
+        word: BOSS_PHASE1_ANSWER,
+        x: this.scale.width / 2,
+        y: this.scale.height / 2 - 40,
+        fontSize: 44,
+        onComplete: () => {
           playChime();
+          this.clearActiveTargets();
           this.tweenBossBow();
           this.setNarrator("The spirit bows slightly. It is satisfied — for now.");
           this.time.delayedCall(2000, () => this.startBossPhase2());
         },
-      );
+      });
+      this.typingInput.register(target);
+      this.activeTargets.push(target);
     });
   }
 
@@ -690,10 +696,15 @@ export class SkyIslandScene extends Phaser.Scene {
     this.cameras.main.shake(220, 0.005);
     this.setNarrator(`The spirit asks again: "${RIDDLE_2_DISPLAY}"`);
     this.time.delayedCall(1200, () => {
-      this.runSequentialWords(
-        [...BOSS_PHASE2_WORDS],
-        () => {
+      const target = new TextWordTarget({
+        scene: this,
+        word: BOSS_PHASE2_ANSWER,
+        x: this.scale.width / 2,
+        y: this.scale.height / 2 - 40,
+        fontSize: 44,
+        onComplete: () => {
           playChime();
+          this.clearActiveTargets();
           this.setNarrator("The spirit's eyes shift colour. Something else stirs within it.");
           this.time.delayedCall(1800, () => {
             if (!this.quietLordFiredInPhase2) {
@@ -703,14 +714,9 @@ export class SkyIslandScene extends Phaser.Scene {
             this.time.delayedCall(1600, () => this.startBossPhase3());
           });
         },
-        // Fire the ~~Agai~~ flash after the second word completes
-        (wordIndex) => {
-          if (wordIndex === 1 && !this.quietLordFiredInPhase2) {
-            this.quietLordFiredInPhase2 = true;
-            flashQuietLordFragment(this, { text: "Agai" });
-          }
-        },
-      );
+      });
+      this.typingInput.register(target);
+      this.activeTargets.push(target);
     });
   }
 
@@ -719,16 +725,35 @@ export class SkyIslandScene extends Phaser.Scene {
     this.cameras.main.shake(220, 0.005);
     this.setNarrator(`The spirit speaks its last riddle: "${RIDDLE_3_DISPLAY}"`);
     this.time.delayedCall(1400, () => {
-      this.runSequentialWords(
-        [...BOSS_PHASE3_WORDS],
-        () => {
+      // Track typed characters to progressively dim the spirit as the
+      // sentence fills in — mirrors the per-word alpha from the old sequential
+      // runner but driven by cursor position at quarter-sentence milestones.
+      const totalChars = BOSS_PHASE3_ANSWER.length;
+      let lastFadeBand = 0;
+      const target = new TextWordTarget({
+        scene: this,
+        word: BOSS_PHASE3_ANSWER,
+        x: this.scale.width / 2,
+        y: this.scale.height / 2 - 40,
+        fontSize: 44,
+        onComplete: () => {
           playChime();
+          this.clearActiveTargets();
           this.onBossDefeated();
         },
-        (wordIndex) => {
-          // Each word dims the spirit a little
-          if (this.bossContainer) {
-            const targetAlpha = Math.max(0.1, 1 - (wordIndex + 1) * 0.15);
+      });
+
+      // Wrap advance() to trigger alpha fades at 25 %, 50 %, 75 %, and 100 %
+      // of the sentence typed — preserves the "spirit fades as Wren answers" feel.
+      const originalAdvance = target.advance.bind(target);
+      target.advance = () => {
+        originalAdvance();
+        if (this.bossContainer) {
+          const typed = totalChars - target.remaining().length;
+          const band = Math.floor((typed / totalChars) * 4); // 0-4
+          if (band > lastFadeBand) {
+            lastFadeBand = band;
+            const targetAlpha = Math.max(0.1, 1 - band * 0.22);
             this.tweens.add({
               targets: this.bossContainer,
               alpha: targetAlpha,
@@ -736,8 +761,11 @@ export class SkyIslandScene extends Phaser.Scene {
               ease: "Sine.easeOut",
             });
           }
-        },
-      );
+        }
+      };
+
+      this.typingInput.register(target);
+      this.activeTargets.push(target);
     });
   }
 
@@ -771,52 +799,6 @@ export class SkyIslandScene extends Phaser.Scene {
       );
       this.time.delayedCall(3000, () => this.startFork2());
     });
-  }
-
-  // ─── Boss: sequential word runner ────────────────────────────────────────
-
-  /**
-   * Present words one at a time in sequence. Each word must be typed before
-   * the next appears. No narrator delay between words — chains directly.
-   * `onWordComplete` fires after each word with its 0-based index.
-   */
-  private runSequentialWords(
-    words: string[],
-    onAllDone: () => void,
-    onWordComplete?: (wordIndex: number) => void,
-  ): void {
-    let wordIndex = 0;
-
-    const advance = (): void => {
-      if (wordIndex >= words.length) {
-        onAllDone();
-        return;
-      }
-      const word = words[wordIndex];
-      if (word === undefined) {
-        onAllDone();
-        return;
-      }
-      const capturedIndex = wordIndex;
-      const target = new TextWordTarget({
-        scene: this,
-        word,
-        x: this.scale.width / 2,
-        y: this.scale.height / 2 - 40,
-        fontSize: 44,
-        onComplete: () => {
-          playChime();
-          wordIndex += 1;
-          onWordComplete?.(capturedIndex);
-          this.clearActiveTargets();
-          this.time.delayedCall(150, advance);
-        },
-      });
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
-    };
-
-    advance();
   }
 
   // ─── Fork 2 — After the Boss ─────────────────────────────────────────────

@@ -44,6 +44,18 @@ export const RELICS: Record<string, Relic> = {
   },
 
   // ─── Sunken Bell ────────────────────────────────────────────────────────
+  "quiet-chant": {
+    id: "quiet-chant",
+    name: "Quiet Chant",
+    realmId: "sunken-bell",
+    flavor: "A whispered chant Old Olin taught. The deep listens to it.",
+  },
+  "lock-bar": {
+    id: "lock-bar",
+    name: "Lock-Bar",
+    realmId: "sunken-bell",
+    flavor: "An iron bar that holds shut what the bell wants to open.",
+  },
   "king-aurland": {
     id: "king-aurland",
     name: "King Aurland's Gratitude",
@@ -140,6 +152,12 @@ export const RELICS: Record<string, Relic> = {
   },
 
   // ─── Haunted Wood ───────────────────────────────────────────────────────
+  "ash-vial": {
+    id: "ash-vial",
+    name: "Ash Vial",
+    realmId: "haunted-wood",
+    flavor: "A glass vial of grove-ash, warm to the touch.",
+  },
   "shrine-token": {
     id: "shrine-token",
     name: "Shrine Token",

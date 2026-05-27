@@ -572,10 +572,20 @@ export class SunkenBellScene extends Phaser.Scene {
       { word: "we knew them once.", narrator: "They part with grace." },
       { word: "they part with grace.", narrator: "(the doors open)" },
     ];
-    this.runBeatLockedChain(phrases, () => this.startAct3Corridor());
+    this.runBeatLockedChain(phrases, () => {
+      // §5.5.5 Fork 1A — side with Old Olin → award Quiet Chant relic
+      this.store.update((s) => {
+        if (!s.satchel.includes("quiet-chant")) s.satchel.push("quiet-chant");
+      });
+      this.startAct3Corridor();
+    });
   }
 
   private startFork1Force(): void {
+    // §5.5.5 Fork 1B — force the doors open → award Lock-Bar relic
+    this.store.update((s) => {
+      if (!s.satchel.includes("lock-bar")) s.satchel.push("lock-bar");
+    });
     this.setNarrator("OPEN");
     const forcePhrases = ["crash", "crack", "clear", "we pass"];
     let step = 0;
@@ -762,6 +772,13 @@ export class SunkenBellScene extends Phaser.Scene {
     const passage = "i am the bell. i drink the sea.";
     const words = passage.split(" ");
     let wordIndex = 0;
+    // §5.5.7 — stumble resets to the last completed sentence, not to index 0.
+    // Sentence boundaries: "i am the bell." ends after index 3;
+    // "i drink the sea." ends after index 7.
+    // sentenceCheckpoint tracks the first word of the sentence currently in
+    // progress; it advances whenever Wren completes the last word of a sentence.
+    const SENTENCE_STARTS = [0, 4]; // word indices that begin each sentence
+    let sentenceCheckpoint = 0;
 
     const advanceWord = (): void => {
       if (wordIndex >= words.length) {
@@ -771,6 +788,8 @@ export class SunkenBellScene extends Phaser.Scene {
       }
       const word = words[wordIndex];
       if (word === undefined) return;
+
+      let completed = false;
       const target = new TextWordTarget({
         scene: this,
         word,
@@ -778,16 +797,31 @@ export class SunkenBellScene extends Phaser.Scene {
         y: this.scale.height / 2,
         fontSize: 40,
         onComplete: () => {
+          completed = true;
           playChime();
           wordIndex += 1;
+          // Advance sentenceCheckpoint when a sentence boundary is passed.
+          const nextSentence = SENTENCE_STARTS.find((s) => s > sentenceCheckpoint);
+          if (nextSentence !== undefined && wordIndex >= nextSentence) {
+            sentenceCheckpoint = nextSentence;
+          }
           this.clearActiveTargets();
-          // §5.5.7 Phase 3: each word claims on a toll. Wait for the next
-          // beat before spawning the next word so the rhythm is exact.
+          // §5.5.7 Phase 3: each word claims on a toll.
           this.beatClock.onNextBeat(advanceWord);
         },
       });
       this.typingInput.register(target);
       this.activeTargets.push(target);
+
+      // On the next toll, if this word wasn't finished — stumble.
+      // Reset to the checkpoint (start of current sentence).
+      this.beatClock.onNextBeat(() => {
+        if (completed) return; // already done, no stumble
+        this.clearActiveTargets();
+        wordIndex = sentenceCheckpoint;
+        this.cameras.main.flash(200, 0, 0, 0, false);
+        this.beatClock.onNextBeat(advanceWord);
+      });
     };
 
     this.beatClock.onNextBeat(advanceWord);

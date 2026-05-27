@@ -158,8 +158,10 @@ export class SkyIslandScene extends Phaser.Scene {
     this.companionChoice = null;
     this.bossContainer = null;
     this.bossRingTween = null;
-    this.quietLordFiredInPhase2 = false;
-    this.quietLordIntruded = false;
+    this.quietLordFiredInPhase2 =
+      this.store.get().realms["sky-island"]?.quietLordFragmentRevealed ?? false;
+    this.quietLordIntruded =
+      this.store.get().realms["sky-island"]?.quietLordIntruded ?? false;
     this.templeIndex = 0;
   }
 
@@ -415,6 +417,10 @@ export class SkyIslandScene extends Phaser.Scene {
     // settled into the scrolling-phrase rhythm before the disruption.
     if (!this.quietLordIntruded && idx === 1) {
       this.quietLordIntruded = true;
+      this.store.update((s) => {
+        const realm = s.realms["sky-island"];
+        if (realm) realm.quietLordIntruded = true;
+      });
       this.time.delayedCall(1800, () => {
         playQuietLordIntrusion(this, {
           x: this.scale.width / 2,
@@ -709,6 +715,10 @@ export class SkyIslandScene extends Phaser.Scene {
           this.time.delayedCall(1800, () => {
             if (!this.quietLordFiredInPhase2) {
               this.quietLordFiredInPhase2 = true;
+              this.store.update((s) => {
+                const realm = s.realms["sky-island"];
+                if (realm) realm.quietLordFragmentRevealed = true;
+              });
               flashQuietLordFragment(this, { text: "Agai" });
             }
             this.time.delayedCall(1600, () => this.startBossPhase3());
@@ -788,8 +798,13 @@ export class SkyIslandScene extends Phaser.Scene {
       this.spawnBossLanternBurst();
     }
 
-    // Fire ~~Agai~~ if not already fired in Phase 2
+    // Fire ~~Agai~~ if not already fired in Phase 2 (and not yet revealed this run)
     if (!this.quietLordFiredInPhase2) {
+      this.quietLordFiredInPhase2 = true;
+      this.store.update((s) => {
+        const realm = s.realms["sky-island"];
+        if (realm) realm.quietLordFragmentRevealed = true;
+      });
       flashQuietLordFragment(this, { text: "Agai" });
     }
 

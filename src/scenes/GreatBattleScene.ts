@@ -130,8 +130,15 @@ export class GreatBattleScene extends Phaser.Scene {
 
   // Phase 1 — ally modifier state
   private waveCharges = WAVE_CHARGES; // may be bumped by king-aurland
-  // shrine-token: forgive first miss per wave
-  // TODO: wire to onMiss callback once typingInput exposes a miss event
+  // §5.5.11 — bellows-hammer: Shift-spell cooldown (ms) between spell-mode
+  // claims. Baseline 2000ms; halved to 1000ms when bellows-hammer is in
+  // satchel. Scoped to GreatBattleScene — no effect on other scenes.
+  private shiftSpellCooldownMs = 2000;
+  private lastShiftSpellAt = 0;
+  // §5.5.11 — shrine-token: first miss per wave forgives the camera-shake
+  // side effect. Accuracy still recorded (recordKeystroke path is inside
+  // typingInput and not interceptable without deeper changes).
+  private shrineTokenForgivenThisWave = false;
   private untetheredWindSlowMult = 1.0; // untethered-wind: <1 slows advance
 
   // Phase 2
@@ -176,6 +183,9 @@ export class GreatBattleScene extends Phaser.Scene {
 
     // Ally modifier state
     this.waveCharges = WAVE_CHARGES;
+    this.shiftSpellCooldownMs = 2000;
+    this.lastShiftSpellAt = 0;
+    this.shrineTokenForgivenThisWave = false;
     this.untetheredWindSlowMult = 1.0;
 
     // Phase 2 relic state
@@ -221,11 +231,37 @@ export class GreatBattleScene extends Phaser.Scene {
       this.untetheredWindSlowMult = 0.85;
     }
 
+    // §5.5.11 — bellows-hammer: halve the Shift-spell cooldown
+    if (satchel.includes("bellows-hammer")) {
+      this.shiftSpellCooldownMs = 1000;
+    }
+
     // Screen brightness overlay (phase 3)
     this.screenBrightnessOverlay = this.add.graphics().setDepth(30).setAlpha(0);
 
     // Input
     this.typingInput = new TypingInputController(this.store);
+    // §5.5.11 — shrine-token: forgive the camera-shake on the first miss of
+    // each Phase 1 wave. Accuracy is still counted by recordKeystroke (inside
+    // typingInput) — we only suppress the visible flinch.
+    this.typingInput.setKeystrokeHooks({
+      onMiss: () => {
+        const hasShrineToken = this.store.get().satchel.includes("shrine-token");
+        if (hasShrineToken && !this.shrineTokenForgivenThisWave) {
+          this.shrineTokenForgivenThisWave = true;
+          // First miss forgiven — skip the shake
+          return;
+        }
+        this.cameras.main.shake(100, 0.003);
+      },
+      // §5.5.11 — bellows-hammer: record when a Shift-spell claim lands so
+      // the cooldown window can be enforced on the next attempt.
+      onClaim: (spell) => {
+        if (spell) {
+          this.lastShiftSpellAt = Date.now();
+        }
+      },
+    });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.input.keyboard?.on("keyup", this.onKeyUp, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, this.onShutdown, this);
@@ -256,7 +292,14 @@ export class GreatBattleScene extends Phaser.Scene {
     }
     if (!event.key || (event.key.length !== 1 && event.key !== " ")) return;
     playClack();
-    this.typingInput.handleChar(event.key, { spell: this.shiftHeld });
+    // §5.5.11 — bellows-hammer: enforce a per-scene Shift-spell cooldown.
+    // If the player holds Shift but the cooldown window hasn't elapsed, the
+    // claim falls through as a normal (non-spell) attempt. The cooldown is
+    // 2000ms baseline, halved to 1000ms when bellows-hammer is in satchel.
+    const spellActive =
+      this.shiftHeld &&
+      Date.now() - this.lastShiftSpellAt >= this.shiftSpellCooldownMs;
+    this.typingInput.handleChar(event.key, { spell: spellActive });
   }
 
   private onKeyUp(event: KeyboardEvent): void {
@@ -388,6 +431,8 @@ export class GreatBattleScene extends Phaser.Scene {
     // Reset per-wave ally state
     this.charges = this.waveCharges;
     this.redrawCharges();
+    // §5.5.11 — shrine-token: each new wave gets a fresh forgiveness slot
+    this.shrineTokenForgivenThisWave = false;
 
     this.setNarrator(`The ${waveDef.label} pour over the wall.`);
 

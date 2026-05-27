@@ -954,7 +954,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           fontStyle: "italic",
         })
         .setOrigin(0.5)
-        .setAlpha(0.32)
+        .setAlpha(0.50)
         .setDepth(2);
       this.compassGlyphs.push(glyph);
     }

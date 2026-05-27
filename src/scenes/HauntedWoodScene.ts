@@ -609,10 +609,50 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private onBossWaveBCleared(): void {
     this.setNarrator("The hall goes still. The Ghost-King rises fully.");
-    this.time.delayedCall(2200, () => this.startFinalPassage());
+    this.time.delayedCall(2200, () => this.startBossCapstone());
   }
 
-  // ─── Phase 3 — Final Passage ──────────────────────────────────────────────
+  // ─── Boss Phase 2 — Every-Punctuation Capstone ────────────────────────────
+  //
+  // The Ghost-King's last words. One passage that touches every punctuation
+  // mark in the game: the four cardinal marks the realm has been teaching
+  // (. , ? !) plus the two reserved (; :) that the player sees here for the
+  // first time. Per §5.5.8 this is the boss's phase 2.
+
+  private startBossCapstone(): void {
+    const dimOverlay = this.add.graphics().setDepth(40).fillStyle(0x000000, 0.4);
+    dimOverlay.fillRect(0, 0, this.scale.width, this.scale.height);
+    dimOverlay.setAlpha(0);
+    this.tweens.add({ targets: dimOverlay, alpha: 1, duration: 700 });
+
+    this.setNarrator("The Ghost-King speaks his last words.");
+    this.time.delayedCall(1800, () => {
+      const passage = [
+        "stop!",
+        "who",
+        "walks",
+        "here:",
+        "friend,",
+        "or",
+        "foe?",
+        "listen;",
+        "we",
+        "remember.",
+      ];
+      this.runWordByWordPassage(passage, () => {
+        this.setNarrator("His voice fades. The mist closes around the throne.");
+        this.tweens.add({
+          targets: dimOverlay,
+          alpha: 0,
+          duration: 700,
+          onComplete: () => dimOverlay.destroy(),
+        });
+        this.time.delayedCall(1600, () => this.startFinalPassage());
+      });
+    });
+  }
+
+  // ─── Realm Seal — True-Name Passage ───────────────────────────────────────
 
   private startFinalPassage(): void {
     this.setNarrator("Type the realm's true name — word by word.");

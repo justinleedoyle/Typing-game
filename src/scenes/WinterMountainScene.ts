@@ -232,7 +232,8 @@ export class WinterMountainScene extends Phaser.Scene {
     this.combatCandlesActive = false;
     this.fork1Choice = null;
     this.fork2Choice = null;
-    this.quietLordIntruded = false;
+    this.quietLordIntruded =
+      this.store.get().realms["winter-mountain"]?.quietLordIntruded ?? false;
   }
 
   preload(): void {
@@ -627,6 +628,10 @@ export class WinterMountainScene extends Phaser.Scene {
     // lands when the player is already split-tracking words.
     if (!this.quietLordIntruded && idx === 1) {
       this.quietLordIntruded = true;
+      this.store.update((s) => {
+        const realm = s.realms["winter-mountain"];
+        if (realm) realm.quietLordIntruded = true;
+      });
       this.time.delayedCall(1400, () => {
         playQuietLordIntrusion(this, {
           x: this.scale.width / 2,
@@ -1170,7 +1175,16 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private onBossDefeated(): void {
     // Quiet Lord fragment ~~A~~ — first letter of the accumulating word.
-    flashQuietLordFragment(this, { text: "A" });
+    // Once per playthrough — skip if already revealed on a previous run.
+    const alreadyRevealed =
+      this.store.get().realms["winter-mountain"]?.quietLordFragmentRevealed ?? false;
+    if (!alreadyRevealed) {
+      this.store.update((s) => {
+        const realm = s.realms["winter-mountain"];
+        if (realm) realm.quietLordFragmentRevealed = true;
+      });
+      flashQuietLordFragment(this, { text: "A" });
+    }
     this.time.delayedCall(1600, () => this.startFork2());
   }
 

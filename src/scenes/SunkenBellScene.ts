@@ -82,7 +82,8 @@ export class SunkenBellScene extends Phaser.Scene {
     this.activeTargets = [];
     this.fork1Choice = null;
     this.fork2Choice = null;
-    this.quietLordIntruded = false;
+    this.quietLordIntruded =
+      this.store.get().realms["sunken-bell"]?.quietLordIntruded ?? false;
   }
 
   preload(): void {
@@ -467,6 +468,10 @@ export class SunkenBellScene extends Phaser.Scene {
     // wave the player has already locked into the rhythm.
     if (!this.quietLordIntruded) {
       this.quietLordIntruded = true;
+      this.store.update((s) => {
+        const realm = s.realms["sunken-bell"];
+        if (realm) realm.quietLordIntruded = true;
+      });
       this.time.delayedCall(1600, () => {
         playQuietLordIntrusion(this, {
           x: this.scale.width / 2,
@@ -750,13 +755,23 @@ export class SunkenBellScene extends Phaser.Scene {
               // Brighten the warden's eyes
               this.redrawWardenPhase2(wardenGraphics, true);
               // Scratched fragment ~~Ag~~ — second letter pair of the
-              // accumulating word.
-              flashQuietLordFragment(this, {
-                text: "Ag",
-                onDone: () => {
-                  this.time.delayedCall(400, () => this.startWardenPhase3());
-                },
-              });
+              // accumulating word. Once per playthrough.
+              const alreadyRevealedBell =
+                this.store.get().realms["sunken-bell"]?.quietLordFragmentRevealed ?? false;
+              if (!alreadyRevealedBell) {
+                this.store.update((s) => {
+                  const realm = s.realms["sunken-bell"];
+                  if (realm) realm.quietLordFragmentRevealed = true;
+                });
+                flashQuietLordFragment(this, {
+                  text: "Ag",
+                  onDone: () => {
+                    this.time.delayedCall(400, () => this.startWardenPhase3());
+                  },
+                });
+              } else {
+                this.time.delayedCall(400, () => this.startWardenPhase3());
+              }
             }
           },
         });

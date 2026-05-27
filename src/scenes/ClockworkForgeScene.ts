@@ -133,7 +133,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.fork1Choice = null;
     this.fork2Choice = null;
     this.companionAwarded = false;
-    this.quietLordIntruded = false;
+    this.quietLordIntruded =
+      this.store.get().realms["clockwork-forge"]?.quietLordIntruded ?? false;
   }
 
   preload(): void {
@@ -467,6 +468,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // lands as part of the realm's signature mechanic.
     if (!this.quietLordIntruded) {
       this.quietLordIntruded = true;
+      this.store.update((s) => {
+        const realm = s.realms["clockwork-forge"];
+        if (realm) realm.quietLordIntruded = true;
+      });
       this.time.delayedCall(1800, () => {
         playQuietLordIntrusion(this, {
           x: this.scale.width / 2,
@@ -851,7 +856,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
     });
 
     // Quiet Lord fragment ~~Aga~~ — third realm of the accumulating word.
-    flashQuietLordFragment(this, { text: "Aga" });
+    // Once per playthrough.
+    const alreadyRevealedForge =
+      this.store.get().realms["clockwork-forge"]?.quietLordFragmentRevealed ?? false;
+    if (!alreadyRevealedForge) {
+      this.store.update((s) => {
+        const realm = s.realms["clockwork-forge"];
+        if (realm) realm.quietLordFragmentRevealed = true;
+      });
+      flashQuietLordFragment(this, { text: "Aga" });
+    }
 
     this.setNarrator(
       "the forge breathes. the brass remembers. its makers are remembered.",

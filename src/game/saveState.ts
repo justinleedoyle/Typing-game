@@ -13,6 +13,12 @@ import { supabase } from "./supabaseClient";
 export interface RealmProgress {
   cleared: boolean;
   choices: Record<string, string>;
+  /** True once the §5.5.10 Quiet Lord intrusion has fired in this realm.
+   *  Persisted so revisiting a cleared realm does not re-fire the moment. */
+  quietLordIntruded?: boolean;
+  /** True once the boss-defeat fragment flash has fired for this realm.
+   *  Persisted so re-defeating a boss on revisit does not replay the reveal. */
+  quietLordFragmentRevealed?: boolean;
 }
 
 export interface KeyStat {

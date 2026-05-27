@@ -110,7 +110,8 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.fork2Choice = null;
     this.companionChoice = null;
     this.mistTimer = null;
-    this.quietLordIntruded = false;
+    this.quietLordIntruded =
+      this.store.get().realms["haunted-wood"]?.quietLordIntruded ?? false;
   }
 
   preload(): void {
@@ -344,6 +345,10 @@ export class HauntedWoodScene extends Phaser.Scene {
     // enough that the punctuation-direction mapping is in muscle memory.
     if (!this.quietLordIntruded) {
       this.quietLordIntruded = true;
+      this.store.update((s) => {
+        const realm = s.realms["haunted-wood"];
+        if (realm) realm.quietLordIntruded = true;
+      });
       this.time.delayedCall(2000, () => {
         playQuietLordIntrusion(this, {
           x: this.scale.width / 2,
@@ -726,14 +731,24 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.setNarrator("The Ghost-King dissolves into the mist.");
 
     // Quiet Lord fragment ~~Again~~ — fifth realm, full word, no period.
-    // The period waits for the finale per §5.5.10.
+    // The period waits for the finale per §5.5.10. Once per playthrough.
     this.time.delayedCall(1200, () => {
-      flashQuietLordFragment(this, {
-        text: "Again",
-        onDone: () => {
-          this.time.delayedCall(600, () => this.startWispCatGate());
-        },
-      });
+      const alreadyRevealedWood =
+        this.store.get().realms["haunted-wood"]?.quietLordFragmentRevealed ?? false;
+      if (!alreadyRevealedWood) {
+        this.store.update((s) => {
+          const realm = s.realms["haunted-wood"];
+          if (realm) realm.quietLordFragmentRevealed = true;
+        });
+        flashQuietLordFragment(this, {
+          text: "Again",
+          onDone: () => {
+            this.time.delayedCall(600, () => this.startWispCatGate());
+          },
+        });
+      } else {
+        this.time.delayedCall(600, () => this.startWispCatGate());
+      }
     });
   }
 

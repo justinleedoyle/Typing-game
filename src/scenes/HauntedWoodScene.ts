@@ -9,6 +9,7 @@ import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, SERIF } from "../game/palette";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
+import { playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import {
@@ -85,6 +86,8 @@ export class HauntedWoodScene extends Phaser.Scene {
   private fork1Choice: "offering" | "bone-flute" | null = null;
   private fork2Choice: "bargain" | "force" | null = null;
   private companionChoice: "call" | "leave" | null = null;
+  /** True after the Quiet Lord's §5.5.10 intrusion has fired this playthrough. */
+  private quietLordIntruded = false;
 
   private mistTimer: Phaser.Time.TimerEvent | null = null;
   /** Four faint punctuation glyphs at N/S/E/W around Wren — teaches the
@@ -107,6 +110,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.fork2Choice = null;
     this.companionChoice = null;
     this.mistTimer = null;
+    this.quietLordIntruded = false;
   }
 
   preload(): void {
@@ -334,6 +338,20 @@ export class HauntedWoodScene extends Phaser.Scene {
     const directions: WoodDirection[] = ["north", "south", "east", "west"];
     this.ghosts = [];
     this.spawnGhostsByDirection(directions, 280);
+
+    // §5.5.10 — for a few seconds the ghosts speak his fragment instead of
+    // their own grievances. Fires once on the second crossroads — late
+    // enough that the punctuation-direction mapping is in muscle memory.
+    if (!this.quietLordIntruded) {
+      this.quietLordIntruded = true;
+      this.time.delayedCall(2000, () => {
+        playQuietLordIntrusion(this, {
+          x: this.scale.width / 2,
+          y: 420,
+          text: "we are all going quiet.",
+        });
+      });
+    }
   }
 
   private onCrossroads2Cleared(): void {

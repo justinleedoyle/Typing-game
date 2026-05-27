@@ -8,6 +8,7 @@ import { playWaveSting } from "../audio/waveSting";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, SERIF } from "../game/palette";
+import { playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { ScrollingPhrase } from "../game/scrollingPhrase";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 // Danger ramps in over the LAST 60% of a spirit's advance — earlier portion
@@ -132,6 +133,9 @@ export class SkyIslandScene extends Phaser.Scene {
   private bossContainer: Phaser.GameObjects.Container | null = null;
   private bossRingTween: Phaser.Tweens.Tween | null = null;
   private quietLordFiredInPhase2 = false;
+  /** True after the realm-level §5.5.10 intrusion has fired this playthrough.
+   *  Separate from `quietLordFiredInPhase2`, which gates a boss-phase moment. */
+  private quietLordIntruded = false;
 
   // Temple state — which temple are we on
   private templeIndex = 0;
@@ -155,6 +159,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.bossContainer = null;
     this.bossRingTween = null;
     this.quietLordFiredInPhase2 = false;
+    this.quietLordIntruded = false;
     this.templeIndex = 0;
   }
 
@@ -403,6 +408,20 @@ export class SkyIslandScene extends Phaser.Scene {
 
     if (this.templeLanterns.length === 0) {
       this.drawTempleLanterns();
+    }
+
+    // §5.5.10 — a lantern's inscription flickers between two readings, one
+    // beautiful, one his. Fires on the second temple so the player has just
+    // settled into the scrolling-phrase rhythm before the disruption.
+    if (!this.quietLordIntruded && idx === 1) {
+      this.quietLordIntruded = true;
+      this.time.delayedCall(1800, () => {
+        playQuietLordIntrusion(this, {
+          x: this.scale.width / 2,
+          y: 380,
+          text: "every page goes blank.",
+        });
+      });
     }
 
     const templeNames = [

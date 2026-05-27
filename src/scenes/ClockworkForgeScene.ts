@@ -9,6 +9,7 @@ import { playWaveSting } from "../audio/waveSting";
 import { playChainSpark } from "../game/vfx";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
+import { playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
@@ -111,6 +112,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   /** fork2: "peaceful" | "fought" */
   private fork2Choice: "peaceful" | "fought" | null = null;
   private companionAwarded = false;
+  /** True after the Quiet Lord's §5.5.10 intrusion has fired this playthrough. */
+  private quietLordIntruded = false;
   private ambientHandle?: AmbientHandle;
   private revisit = false;
 
@@ -130,6 +133,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.fork1Choice = null;
     this.fork2Choice = null;
     this.companionAwarded = false;
+    this.quietLordIntruded = false;
   }
 
   preload(): void {
@@ -457,6 +461,20 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.setNarrator(
       "The golems press forward — one with a word that demands a command.",
     );
+
+    // §5.5.10 — a golem's CAPITALIZED command comes out as scratched-out caps.
+    // Fires on Wave 2 (the wave that introduces the capitalized golem) so it
+    // lands as part of the realm's signature mechanic.
+    if (!this.quietLordIntruded) {
+      this.quietLordIntruded = true;
+      this.time.delayedCall(1800, () => {
+        playQuietLordIntrusion(this, {
+          x: this.scale.width / 2,
+          y: 360,
+          text: "THE BRASS REMEMBERS A DIFFERENT NAME.",
+        });
+      });
+    }
 
     // Two normal golems + one CAPITALIZED golem
     const normalWords = pickAdaptiveWords(

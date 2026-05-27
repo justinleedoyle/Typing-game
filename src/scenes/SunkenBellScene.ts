@@ -9,6 +9,7 @@ import { BeatClock } from "../game/beatClock";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
+import { playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
@@ -64,6 +65,8 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private fork1Choice: "chant" | "force" | null = null;
   private fork2Choice: "free-aurland" | "claim-tongue" | null = null;
+  /** True after the Quiet Lord's §5.5.10 intrusion has fired this playthrough. */
+  private quietLordIntruded = false;
 
   private ambientHandle?: AmbientHandle;
   private revisit = false;
@@ -79,6 +82,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.activeTargets = [];
     this.fork1Choice = null;
     this.fork2Choice = null;
+    this.quietLordIntruded = false;
   }
 
   preload(): void {
@@ -457,6 +461,20 @@ export class SunkenBellScene extends Phaser.Scene {
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
     this.setNarrator("More come. One of them is different — restless, doubled.");
+
+    // §5.5.10 — the bell tolls, and for one peal the cathedral fills with a
+    // scratched whisper of the Lord's text. Fires once per playthrough on the
+    // wave the player has already locked into the rhythm.
+    if (!this.quietLordIntruded) {
+      this.quietLordIntruded = true;
+      this.time.delayedCall(1600, () => {
+        playQuietLordIntrusion(this, {
+          x: this.scale.width / 2,
+          y: 380,
+          text: "the silence answers.",
+        });
+      });
+    }
     // Pick 4 adaptive words for the regular ghosts; the 5th (splitting) ghost
     // always gets "sink" from the bank for thematic weight.
     const adaptiveWords = pickAdaptiveWords(

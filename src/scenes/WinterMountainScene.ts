@@ -8,6 +8,7 @@ import { playWaveSting } from "../audio/waveSting";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
+import { playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 // Danger ramps in over the LAST 60% of a wolf's advance — earlier portion
 // stays cream so players can read the word, then it shifts red as the wolf
@@ -201,6 +202,8 @@ export class WinterMountainScene extends Phaser.Scene {
   private fork1Choice: "huntress" | "firefly" | null = null;
   // Fork 2 result
   private fork2Choice: "bury" | "pelt" | null = null;
+  /** True after the Quiet Lord's §5.5.10 intrusion has fired this playthrough. */
+  private quietLordIntruded = false;
 
   private ambientHandle?: AmbientHandle;
   private revisit = false;
@@ -229,6 +232,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.combatCandlesActive = false;
     this.fork1Choice = null;
     this.fork2Choice = null;
+    this.quietLordIntruded = false;
   }
 
   preload(): void {
@@ -616,6 +620,20 @@ export class WinterMountainScene extends Phaser.Scene {
 
     if (config.hasBoss) {
       this.spawnBoss(config.bossSpawnDelayMs);
+    }
+
+    // §5.5.10 — once per playthrough, a wolf's floating word briefly scratches
+    // into the Quiet Lord's text. Fires on Wave 2 (paired alternation) so it
+    // lands when the player is already split-tracking words.
+    if (!this.quietLordIntruded && idx === 1) {
+      this.quietLordIntruded = true;
+      this.time.delayedCall(1400, () => {
+        playQuietLordIntrusion(this, {
+          x: this.scale.width / 2,
+          y: 340,
+          text: "i have been listening from the cold.",
+        });
+      });
     }
   }
 

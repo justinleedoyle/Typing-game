@@ -11,10 +11,6 @@ import { PALETTE, SERIF } from "../game/palette";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { ScrollingPhrase } from "../game/scrollingPhrase";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
-// Danger ramps in over the LAST 60% of a spirit's advance — earlier portion
-// stays cream so players can read the word, then it shifts red as the spirit
-// closes. Mirrors the Winter Mountain ramp so the typing feel is consistent.
-const DANGER_RAMP_START = 0.4;
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import {
@@ -25,6 +21,11 @@ import {
 import { TextWordTarget } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
 import skyIslandBackdrop from "../../art/references/sky-island-clean.png";
+
+// Danger ramps in over the LAST 60% of a spirit's advance — earlier portion
+// stays cream so players can read the word, then it shifts red as the spirit
+// closes. Mirrors the Winter Mountain ramp so the typing feel is consistent.
+const DANGER_RAMP_START = 0.4;
 
 interface SkyIslandSceneData {
   store: SaveStore;

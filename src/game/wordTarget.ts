@@ -260,6 +260,14 @@ export class TextWordTarget implements WordTarget {
     });
   }
 
+  /** Set the container alpha directly, bypassing the dimmed/hidden state. For
+   *  owners that drive visual alpha externally on a per-frame basis (e.g.
+   *  Sky-Island's lantern blur, where alpha is recomputed each tick from a
+   *  proximity calculation). Caller is responsible for restoring alpha. */
+  setVisualAlpha(alpha: number): void {
+    this.container.setAlpha(alpha);
+  }
+
   setCandidate(candidate: boolean): void {
     this.candidate = candidate;
     this.applyDim();

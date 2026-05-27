@@ -236,3 +236,62 @@ export function flashQuietLordFragment(
     });
   });
 }
+
+export interface StaticQuietLordFragmentOptions {
+  /** Left-edge x of the text block (origin 0, 0 — aligns with page column). */
+  x: number;
+  /** Top-edge y of the text block. */
+  y: number;
+  /** The fragment text — pass just the letters (`A`, `Ag`, etc.). No tilde
+   *  markers; the cross-out stroke is drawn for you. */
+  text: string;
+  /** Font size in px. Defaults to 44. */
+  fontSize?: number;
+  /** Depth for both the text and stroke objects. Defaults to 10. */
+  depth?: number;
+}
+
+/** Render the Quiet Lord's scratched-out fragment as permanent page elements —
+ *  same cream-serif + dark quill cross-out stroke as the animated flash, but
+ *  drawn once and left on screen. Returns the text and stroke objects so the
+ *  caller can push them into a managed list for cleanup on page turn. */
+export function drawStaticQuietLordFragment(
+  scene: Phaser.Scene,
+  opts: StaticQuietLordFragmentOptions,
+): { text: Phaser.GameObjects.Text; stroke: Phaser.GameObjects.Graphics } {
+  const fontSize = opts.fontSize ?? 44;
+  const depth = opts.depth ?? 10;
+
+  const text = scene.add
+    .text(opts.x, opts.y, opts.text, {
+      fontFamily: SERIF,
+      fontSize: `${fontSize}px`,
+      color: "#f3ead2",
+    })
+    .setOrigin(0, 0)
+    .setDepth(depth);
+
+  // Stroke runs horizontally through the visual glyph midline. The text
+  // origin is (0, 0), so the stroke aligns to the left edge, extending 12px
+  // past each side to match the animated version's overhang.
+  const strokeWidth = text.width + 24;
+  const strokeStartX = opts.x - 12;
+  // Shift up from the bbox centre by STROKE_OFFSET_RATIO of fontSize — same
+  // constant used by the animated flash. With origin (0, 0) the bbox centre
+  // sits at y + displayHeight / 2.
+  const strokeY =
+    opts.y + text.displayHeight / 2 - fontSize * STROKE_OFFSET_RATIO;
+
+  const stroke = scene.add
+    .graphics()
+    .setDepth(depth + 1)
+    .lineStyle(6, 0x0b0a0f, 1);
+  stroke.beginPath();
+  stroke.moveTo(0, 0);
+  stroke.lineTo(strokeWidth, 0);
+  stroke.strokePath();
+  stroke.x = strokeStartX;
+  stroke.y = strokeY;
+
+  return { text, stroke };
+}

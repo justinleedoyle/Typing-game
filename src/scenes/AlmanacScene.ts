@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
+import { drawStaticQuietLordFragment } from "../game/quietLordIntrusion";
 import { REALM_LORE, REALM_ORDER } from "../game/realmLore";
 import { RELICS } from "../game/relics";
 import type { SaveStore } from "../game/saveState";
@@ -42,7 +43,7 @@ export class AlmanacScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private bookGraphics!: Phaser.GameObjects.Graphics;
-  private pageTexts: Phaser.GameObjects.Text[] = [];
+  private pageTexts: Phaser.GameObjects.GameObject[] = [];
   private currentPage = 0;
   private clearedRealms: string[] = [];
   private nextTarget?: TextWordTarget;
@@ -339,7 +340,9 @@ export class AlmanacScene extends Phaser.Scene {
       });
     }
 
-    // Quiet Lord fragment — scratched-style italic, low contrast.
+    // Quiet Lord fragment — same scratched-out visual as the boss-defeat
+    // reveal and the mid-realm intrusion (§5.5.10): cream serif with a dark
+    // quill cross-out stroke. Static on the page — no animation.
     this.addPageText(
       RIGHT_PAGE_X,
       TOP_TEXT_Y + 360,
@@ -351,12 +354,23 @@ export class AlmanacScene extends Phaser.Scene {
       },
     );
     const fragment = QUIET_LORD_FRAGMENTS[cleared] ?? "";
-    const fragmentText = fragment ? `~${fragment}~` : "...quiet, for now";
-    this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 410, fragmentText, {
-      fontSize: fragment ? "44px" : "26px",
-      fontStyle: "italic",
-      color: fragment ? PAGE_INK : PAGE_INK_DIM,
-    });
+    if (fragment) {
+      const { text: fragText, stroke: fragStroke } =
+        drawStaticQuietLordFragment(this, {
+          x: RIGHT_PAGE_X,
+          y: TOP_TEXT_Y + 410,
+          text: fragment,
+          fontSize: 44,
+          depth: 10,
+        });
+      this.pageTexts.push(fragText, fragStroke);
+    } else {
+      this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 410, "...quiet, for now", {
+        fontSize: "26px",
+        fontStyle: "italic",
+        color: PAGE_INK_DIM,
+      });
+    }
 
     // Tally — relics carried + lore pages stamped. Small, painterly-italic.
     const realmRelicCount = state.satchel.filter(

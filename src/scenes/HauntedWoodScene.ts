@@ -9,7 +9,7 @@ import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, SERIF } from "../game/palette";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
-import { playQuietLordIntrusion } from "../game/quietLordIntrusion";
+import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import {
@@ -721,10 +721,14 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.cameras.main.flash(500, 220, 230, 210, false);
     this.setNarrator("The Ghost-King dissolves into the mist.");
 
-    // Flash ~~Again~~ — fifth realm, full word, no period
+    // Quiet Lord fragment ~~Again~~ — fifth realm, full word, no period.
+    // The period waits for the finale per §5.5.10.
     this.time.delayedCall(1200, () => {
-      this.showQuietLordFragment("~~Again~~", () => {
-        this.time.delayedCall(600, () => this.startWispCatGate());
+      flashQuietLordFragment(this, {
+        text: "Again",
+        onDone: () => {
+          this.time.delayedCall(600, () => this.startWispCatGate());
+        },
       });
     });
   }
@@ -1164,41 +1168,6 @@ export class HauntedWoodScene extends Phaser.Scene {
       if (ghost.defeated || !ghost.target) continue;
       ghost.target.setHidden(hidden);
     }
-  }
-
-  // ─── Quiet Lord fragment ───────────────────────────────────────────────────
-
-  private showQuietLordFragment(text: string, onDone: () => void): void {
-    const frag = this.add
-      .text(this.scale.width / 2, this.scale.height / 2, text, {
-        fontFamily: SERIF,
-        fontSize: "56px",
-        color: PALETTE.dim,
-        fontStyle: "italic",
-      })
-      .setOrigin(0.5)
-      .setAlpha(0);
-
-    this.tweens.add({
-      targets: frag,
-      alpha: 0.9,
-      duration: 700,
-      ease: "Sine.easeIn",
-      onComplete: () => {
-        this.time.delayedCall(800, () => {
-          this.tweens.add({
-            targets: frag,
-            alpha: 0,
-            duration: 700,
-            ease: "Sine.easeOut",
-            onComplete: () => {
-              frag.destroy();
-              onDone();
-            },
-          });
-        });
-      },
-    });
   }
 
   // ─── Passage-chain helper ─────────────────────────────────────────────────

@@ -8,7 +8,7 @@ import { playWaveSting } from "../audio/waveSting";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
-import { playQuietLordIntrusion } from "../game/quietLordIntrusion";
+import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 // Danger ramps in over the LAST 60% of a wolf's advance — earlier portion
 // stays cream so players can read the word, then it shifts red as the wolf
@@ -1169,42 +1169,12 @@ export class WinterMountainScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private onBossDefeated(): void {
-    // Quiet Lord fragment ~~A~~ scratched text flash
-    this.flashQuietLordFragment("A");
+    // Quiet Lord fragment ~~A~~ — first letter of the accumulating word.
+    flashQuietLordFragment(this, { text: "A" });
     this.time.delayedCall(1600, () => this.startFork2());
   }
 
   /** Renders a brief strikethrough-text flash in the centre of the screen */
-  private flashQuietLordFragment(fragment: string): void {
-    const text = this.add
-      .text(this.scale.width / 2, this.scale.height / 2 - 80, `~~${fragment}~~`, {
-        fontFamily: SERIF,
-        fontSize: "56px",
-        color: PALETTE.dim,
-        fontStyle: "italic",
-      })
-      .setOrigin(0.5)
-      .setAlpha(0)
-      .setDepth(20);
-
-    this.tweens.add({
-      targets: text,
-      alpha: 0.85,
-      duration: 300,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        this.time.delayedCall(900, () => {
-          this.tweens.add({
-            targets: text,
-            alpha: 0,
-            duration: 400,
-            onComplete: () => text.destroy(),
-          });
-        });
-      },
-    });
-  }
-
   /** Fork 2 — Aftermath: bury under cairn stones OR take the pelt */
   private startFork2(): void {
     this.setNarrator(

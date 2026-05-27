@@ -8,7 +8,7 @@ import { playWaveSting } from "../audio/waveSting";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, SERIF } from "../game/palette";
-import { playQuietLordIntrusion } from "../game/quietLordIntrusion";
+import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { ScrollingPhrase } from "../game/scrollingPhrase";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 // Danger ramps in over the LAST 60% of a spirit's advance — earlier portion
@@ -698,7 +698,7 @@ export class SkyIslandScene extends Phaser.Scene {
           this.time.delayedCall(1800, () => {
             if (!this.quietLordFiredInPhase2) {
               this.quietLordFiredInPhase2 = true;
-              this.flashQuietLordFragment("Agai");
+              flashQuietLordFragment(this, { text: "Agai" });
             }
             this.time.delayedCall(1600, () => this.startBossPhase3());
           });
@@ -707,7 +707,7 @@ export class SkyIslandScene extends Phaser.Scene {
         (wordIndex) => {
           if (wordIndex === 1 && !this.quietLordFiredInPhase2) {
             this.quietLordFiredInPhase2 = true;
-            this.flashQuietLordFragment("Agai");
+            flashQuietLordFragment(this, { text: "Agai" });
           }
         },
       );
@@ -762,7 +762,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
     // Fire ~~Agai~~ if not already fired in Phase 2
     if (!this.quietLordFiredInPhase2) {
-      this.flashQuietLordFragment("Agai");
+      flashQuietLordFragment(this, { text: "Agai" });
     }
 
     this.time.delayedCall(800, () => {
@@ -1247,43 +1247,6 @@ export class SkyIslandScene extends Phaser.Scene {
   private startFirstSpiritEncounterFixed(): void {
     this.templeIndex = -1;
     this.startFirstSpiritEncounter();
-  }
-
-  // ─── Quiet Lord fragment flash ────────────────────────────────────────────
-
-  private flashQuietLordFragment(fragment: string): void {
-    const text = this.add
-      .text(
-        this.scale.width / 2,
-        this.scale.height / 2 - 80,
-        `~~${fragment}~~`,
-        {
-          fontFamily: SERIF,
-          fontSize: "56px",
-          color: PALETTE.dim,
-          fontStyle: "italic",
-        },
-      )
-      .setOrigin(0.5)
-      .setAlpha(0)
-      .setDepth(20);
-
-    this.tweens.add({
-      targets: text,
-      alpha: 0.85,
-      duration: 300,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        this.time.delayedCall(900, () => {
-          this.tweens.add({
-            targets: text,
-            alpha: 0,
-            duration: 400,
-            onComplete: () => text.destroy(),
-          });
-        });
-      },
-    });
   }
 
   // ─── Shared utilities ─────────────────────────────────────────────────────

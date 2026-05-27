@@ -4,6 +4,7 @@ import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
+import { selectFinalPhrase } from "../game/relicAlignment";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import {
@@ -32,14 +33,6 @@ const BATTLE_WORD_BANK = [
   "hold", "stand", "speak", "word", "voice", "again",
   "name", "ring", "light", "true", "still", "turn",
   "last", "kept", "long", "clear", "break", "found",
-] as const;
-
-const COMPANION_IDS = [
-  "snow-fox-cub",
-  "glass-fish",
-  "brass-songbird",
-  "lantern-moth",
-  "wisp-cat",
 ] as const;
 
 // ─── Wave definition ───────────────────────────────────────────────────────────
@@ -797,26 +790,7 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private deliverFinalPhrase(): void {
-    const satchel = this.store.get().satchel;
-    const companions = COMPANION_IDS.filter((c) => satchel.includes(c));
-
-    let phrase: string;
-    if (companions.length >= 3) {
-      phrase = "the companions remember. the word holds. again.";
-    } else if (satchel.includes("wisp-cat")) {
-      phrase = "the wood remembers names. the word holds. again.";
-    } else if (satchel.includes("snow-fox-cub")) {
-      phrase = "the mountain is listening. the word holds. again.";
-    } else if (satchel.includes("glass-fish")) {
-      phrase = "the deep has heard. the bell rings out. again.";
-    } else if (satchel.includes("brass-songbird")) {
-      phrase = "the forge remembers song. the word holds. again.";
-    } else if (satchel.includes("lantern-moth")) {
-      phrase = "the lantern finds the dark. again.";
-    } else {
-      phrase = "the word holds. the quiet ends. again.";
-    }
-
+    const phrase = selectFinalPhrase(this.store.get().satchel);
     const words = phrase.split(" ");
     this.runFinalPhraseWords(words, 0);
   }

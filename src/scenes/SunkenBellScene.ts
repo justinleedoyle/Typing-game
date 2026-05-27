@@ -9,7 +9,7 @@ import { BeatClock } from "../game/beatClock";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
-import { playQuietLordIntrusion } from "../game/quietLordIntrusion";
+import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
@@ -739,9 +739,13 @@ export class SunkenBellScene extends Phaser.Scene {
               this.clearActiveTargets();
               // Brighten the warden's eyes
               this.redrawWardenPhase2(wardenGraphics, true);
-              // Show scratched fragment ~~Ag~~
-              this.showScratchedFragment("~~Ag~~", () => {
-                this.time.delayedCall(400, () => this.startWardenPhase3());
+              // Scratched fragment ~~Ag~~ — second letter pair of the
+              // accumulating word.
+              flashQuietLordFragment(this, {
+                text: "Ag",
+                onDone: () => {
+                  this.time.delayedCall(400, () => this.startWardenPhase3());
+                },
               });
             }
           },
@@ -749,39 +753,6 @@ export class SunkenBellScene extends Phaser.Scene {
         this.typingInput.register(target);
         this.activeTargets.push(target);
       });
-    });
-  }
-
-  private showScratchedFragment(text: string, onDone: () => void): void {
-    const frag = this.add
-      .text(this.scale.width / 2, this.scale.height / 2, text, {
-        fontFamily: SERIF,
-        fontSize: "52px",
-        color: PALETTE.dim,
-        fontStyle: "italic",
-      })
-      .setOrigin(0.5)
-      .setAlpha(0);
-
-    this.tweens.add({
-      targets: frag,
-      alpha: 0.85,
-      duration: 600,
-      ease: "Sine.easeIn",
-      onComplete: () => {
-        this.time.delayedCall(600, () => {
-          this.tweens.add({
-            targets: frag,
-            alpha: 0,
-            duration: 600,
-            ease: "Sine.easeOut",
-            onComplete: () => {
-              frag.destroy();
-              onDone();
-            },
-          });
-        });
-      },
     });
   }
 

@@ -9,7 +9,7 @@ import { playWaveSting } from "../audio/waveSting";
 import { playChainSpark } from "../game/vfx";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
-import { playQuietLordIntrusion } from "../game/quietLordIntrusion";
+import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
@@ -850,44 +850,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
       onComplete: () => this.bossContainer.destroy(),
     });
 
-    // Flash the Quiet Lord fragment: ~~Aga~~
-    this.flashQuietLordFragment();
+    // Quiet Lord fragment ~~Aga~~ — third realm of the accumulating word.
+    flashQuietLordFragment(this, { text: "Aga" });
 
     this.setNarrator(
       "the forge breathes. the brass remembers. its makers are remembered.",
     );
     this.time.delayedCall(3200, () => this.startFork2());
-  }
-
-  /** Flash the Quiet Lord fragment — ~~Aga~~ appears, shimmers, fades. */
-  private flashQuietLordFragment(): void {
-    const frag = this.add
-      .text(this.scale.width / 2, this.scale.height / 2 - 60, "~~Aga~~", {
-        fontFamily: SERIF,
-        fontSize: "72px",
-        color: PALETTE.ember,
-        fontStyle: "italic",
-      })
-      .setOrigin(0.5)
-      .setAlpha(0);
-
-    this.tweens.add({
-      targets: frag,
-      alpha: 1,
-      duration: 180,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        this.time.delayedCall(900, () => {
-          this.tweens.add({
-            targets: frag,
-            alpha: 0,
-            duration: 600,
-            ease: "Sine.easeIn",
-            onComplete: () => frag.destroy(),
-          });
-        });
-      },
-    });
   }
 
   // ─── Fork 2 ──────────────────────────────────────────────────────────────────

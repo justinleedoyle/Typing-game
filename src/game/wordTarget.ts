@@ -247,6 +247,19 @@ export class TextWordTarget implements WordTarget {
     this.applyDim();
   }
 
+  /** Tween the container's alpha for a sensory-obscure beat (e.g. Wood's mist
+   *  roll). Restoring goes back to the dimmed-state alpha so this composes
+   *  with setDimmed. Typing input is unaffected — the word is just hidden. */
+  setHidden(hidden: boolean, durationMs = 220): void {
+    const targetAlpha = hidden ? 0 : this.dimmed ? 0.12 : 1;
+    this.opts.scene.tweens.add({
+      targets: this.container,
+      alpha: targetAlpha,
+      duration: durationMs,
+      ease: "Sine.easeInOut",
+    });
+  }
+
   setCandidate(candidate: boolean): void {
     this.candidate = candidate;
     this.applyDim();

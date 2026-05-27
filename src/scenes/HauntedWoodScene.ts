@@ -1124,7 +1124,11 @@ export class HauntedWoodScene extends Phaser.Scene {
       duration: 600,
       ease: "Sine.easeIn",
       onComplete: () => {
+        // Mist peak: obscure ghost words for the hold duration. Player must
+        // clear words before the roll, or hold their nerve and type blind.
+        this.setActiveGhostWordsHidden(true);
         this.time.delayedCall(800, () => {
+          this.setActiveGhostWordsHidden(false);
           this.tweens.add({
             targets: mist,
             alpha: 0,
@@ -1135,6 +1139,13 @@ export class HauntedWoodScene extends Phaser.Scene {
         });
       },
     });
+  }
+
+  private setActiveGhostWordsHidden(hidden: boolean): void {
+    for (const ghost of this.ghosts) {
+      if (ghost.defeated || !ghost.target) continue;
+      ghost.target.setHidden(hidden);
+    }
   }
 
   // ─── Quiet Lord fragment ───────────────────────────────────────────────────

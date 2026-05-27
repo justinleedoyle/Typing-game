@@ -550,6 +550,10 @@ export class HauntedWoodScene extends Phaser.Scene {
       onComplete: () => {
         this.clearActiveTargets();
         this.fork2Choice = "force";
+        // §5.5.5 Fork 2B — burn the grove → award Ash-Vial relic
+        this.store.update((s) => {
+          if (!s.satchel.includes("ash-vial")) s.satchel.push("ash-vial");
+        });
         this.startBossFight();
       },
     });

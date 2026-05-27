@@ -2,16 +2,13 @@
 // by which relics are in the satchel — "force" relics push the duel louder,
 // "kindness" relics push it quieter, and a few specific pairings unlock
 // their own phrases.
-//
-// Three relics from the spec haven't landed in v1: Lock-Bar (force),
-// Quiet Chant (kindness), Ash-Vial (force). The "Master-Key + Quiet Chant"
-// branch is therefore unreachable today — Default catches that satchel
-// shape instead.
 
 export const FORCE_RELICS: ReadonlySet<string> = new Set([
   "bells-tongue",
+  "lock-bar",
   "sabotage-wrench",
   "pelt-of-the-old-one",
+  "ash-vial",
   "beacon-spark",
   "golem-heart",
   "bone-flute",
@@ -22,6 +19,7 @@ export const KINDNESS_RELICS: ReadonlySet<string> = new Set([
   "hunters-horn",
   "firefly-lantern",
   "cairn-token",
+  "quiet-chant",
   "trident-token",
   "bellows-hammer",
   "master-key",
@@ -53,6 +51,9 @@ export function selectFinalPhrase(satchel: readonly string[]): string {
 
   if (has("bells-tongue") && has("hunters-horn")) {
     return "by horn and toll, the old silence breaks.";
+  }
+  if (has("master-key") && has("quiet-chant")) {
+    return "by chant and key, you are kept.";
   }
   if (hasAnyCompanion && has("ghost-kings-promise")) {
     return "by friend and ghost, you are sealed.";

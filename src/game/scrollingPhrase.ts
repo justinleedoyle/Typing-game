@@ -164,4 +164,21 @@ export class ScrollingPhrase {
     }
     this.container.destroy();
   }
+
+  /** Current horizontal screen position of the banner center. Owners use this
+   *  to compute proximity to scene-level features (e.g. Sky-Island lanterns). */
+  getX(): number {
+    return this.container.x;
+  }
+
+  /** Apply a per-frame blur amount in [0, 1]. 0 = fully clear, 1 = fully
+   *  obscured. Drops banner and target alpha together. No-op once resolved
+   *  so the completion / miss fade is not undone. */
+  setBlur(amount: number): void {
+    if (this.resolved) return;
+    const clamped = Math.max(0, Math.min(1, amount));
+    const alpha = 1 - clamped * 0.65;
+    this.container.setAlpha(alpha);
+    this.target.setVisualAlpha(alpha);
+  }
 }

@@ -75,6 +75,12 @@ const TEMPLE_PHRASE_CONFIGS = [
  *  overlapping while leaving the narration row (y=150) untouched. */
 const PHRASE_BANNER_Y_SLOTS = [320, 430, 540] as const;
 
+/** Lantern light columns active during temple play. Each x is a vertical
+ *  beam that obscures any phrase scrolling through it — the §5.5.4 sensory
+ *  mechanic. Phrases between beams are clear; the player picks their window. */
+const LANTERN_BLUR_XS = [480, 960, 1440] as const;
+const LANTERN_BLUR_RADIUS = 130;
+
 /** Scholar Etta interaction */
 const ETTA_LINE = "my last unburned book. help me place it.";
 const ETTA_HELP_TRIGGER = "help her";
@@ -109,6 +115,9 @@ export class SkyIslandScene extends Phaser.Scene {
   /** Temple scrolling-phrase banners currently in flight. */
   private activePhrases: ScrollingPhrase[] = [];
   private templePhrasesRemaining = 0;
+  /** Lantern light-beam graphics. Drawn on the first temple, destroyed in
+   *  scene shutdown — they persist across all five temples. */
+  private templeLanterns: Phaser.GameObjects.Graphics[] = [];
 
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
@@ -187,6 +196,8 @@ export class SkyIslandScene extends Phaser.Scene {
       this.bossRingTween?.stop();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
+      this.templeLanterns.forEach((g) => g.destroy());
+      this.templeLanterns = [];
     });
 
     this.ambientHandle = playAmbientSkyIsland();
@@ -389,6 +400,10 @@ export class SkyIslandScene extends Phaser.Scene {
     // like an event, not just "more text appears."
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+
+    if (this.templeLanterns.length === 0) {
+      this.drawTempleLanterns();
+    }
 
     const templeNames = [
       "The first temple gate. A scroll unrolls in the wind — read it aloud.",
@@ -1339,6 +1354,63 @@ export class SkyIslandScene extends Phaser.Scene {
     g.fillStyle(0x4a3c2c, 0.7);
     g.fillRect(130, 658, 480, 20);
     g.fillRect(1330, 658, 480, 20);
+  }
+
+  /** Phaser update tick. Drives per-frame lantern blur on active phrases —
+   *  alpha drops as a banner enters a lantern's beam, restores between. */
+  update(): void {
+    if (this.activePhrases.length === 0) return;
+    for (const phrase of this.activePhrases) {
+      const x = phrase.getX();
+      let minDist = Infinity;
+      for (const lanternX of LANTERN_BLUR_XS) {
+        const d = Math.abs(x - lanternX);
+        if (d < minDist) minDist = d;
+      }
+      const amount =
+        minDist < LANTERN_BLUR_RADIUS ? 1 - minDist / LANTERN_BLUR_RADIUS : 0;
+      phrase.setBlur(amount);
+    }
+  }
+
+  /** Three vertical light beams that obscure phrases passing through them.
+   *  Drawn once for the entire 5-temple sequence; the SHUTDOWN hook cleans up.
+   *  Beam alpha is intentionally readable but soft — the player should see the
+   *  zone, but the beams shouldn't compete with the phrase banners they obscure. */
+  private drawTempleLanterns(): void {
+    for (const x of LANTERN_BLUR_XS) {
+      const g = this.add.graphics().setDepth(15);
+      const beamTop = 220;
+      const beamBottom = 660;
+      const halfWidth = LANTERN_BLUR_RADIUS;
+      // Outer halo — soft amber wash across the full blur radius
+      g.fillStyle(0xf5c842, 0.12);
+      g.fillRect(x - halfWidth, beamTop, halfWidth * 2, beamBottom - beamTop);
+      // Inner brighter core — narrower column for the "you're in the zone" cue
+      g.fillStyle(0xfdedb0, 0.18);
+      g.fillRect(x - 36, beamTop, 72, beamBottom - beamTop);
+      // Lantern body at the top of the beam
+      g.fillStyle(0xd49020, 0.85);
+      g.fillEllipse(x, beamTop + 20, 40, 54);
+      g.fillStyle(0xfdedb0, 0.95);
+      g.fillEllipse(x, beamTop + 20, 18, 24);
+      // Hanging string
+      g.lineStyle(1.5, 0x8a7060, 0.85);
+      g.beginPath();
+      g.moveTo(x, beamTop - 30);
+      g.lineTo(x, beamTop);
+      g.strokePath();
+      // Gentle pulse — the beam breathes so it doesn't feel like dead UI
+      this.tweens.add({
+        targets: g,
+        alpha: { from: 0.85, to: 1 },
+        duration: 2200 + Math.random() * 600,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.easeInOut",
+      });
+      this.templeLanterns.push(g);
+    }
   }
 
   private drawAmbientLanterns(): void {

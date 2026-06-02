@@ -4,9 +4,10 @@ import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
 import { pickLowHeartLine } from "../audio/runaLines";
+import { playDamageThud } from "../audio/damageThud";
 import { playSparkZap } from "../audio/sparkZap";
 import { playWaveSting } from "../audio/waveSting";
-import { playChainSpark } from "../game/vfx";
+import { flashDamageVignette, playChainSpark } from "../game/vfx";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
@@ -1365,6 +1366,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private golemReachesWren(golem: Golem): void {
     // For simplicity: golem retreats and tries again (no candle system needed)
     this.cameras.main.shake(180, 0.004);
+    playDamageThud();
+    flashDamageVignette(this);
 
     if (golem.target) {
       this.typingInput.unregister(golem.target);

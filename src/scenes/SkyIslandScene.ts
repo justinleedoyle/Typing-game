@@ -4,7 +4,9 @@ import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
 import { pickLowHeartLine } from "../audio/runaLines";
+import { playDamageThud } from "../audio/damageThud";
 import { playWaveSting } from "../audio/waveSting";
+import { flashDamageVignette } from "../game/vfx";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, SERIF } from "../game/palette";
@@ -1232,6 +1234,8 @@ export class SkyIslandScene extends Phaser.Scene {
   private spiritReachesWren(spirit: LanternSpirit): void {
     // Gentle flash — no wave reset
     this.cameras.main.flash(300, 26, 16, 8, false);
+    playDamageThud();
+    flashDamageVignette(this);
 
     if (spirit.target) {
       this.typingInput.unregister(spirit.target);

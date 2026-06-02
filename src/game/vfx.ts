@@ -114,3 +114,51 @@ export function playChainSpark(
     onComplete: () => arc.destroy(),
   });
 }
+
+/** Red damage vignette — four edge bands that pulse in and fade out fast.
+ *  Edge-only (each band fades from opaque at the screen edge to transparent
+ *  toward the center) so it never covers the words in the play area. Fired
+ *  on the "enemy reaches Wren" hit beat alongside the camera shake and the
+ *  damage thud, so a hit reads across all three channels.
+ *
+ *  The gradient uses Phaser's 8-arg fillGradientStyle (per-corner alpha),
+ *  which is WebGL-only; under a Canvas fallback it degrades to a flat-ish
+ *  edge band, which still reads as "damage." */
+export function flashDamageVignette(
+  scene: Phaser.Scene,
+  color: number = 0xc23a2a,
+): void {
+  const w = scene.scale.width;
+  const h = scene.scale.height;
+  const band = 160;
+  const edgeA = 0.55;
+
+  const g = scene.add
+    .graphics()
+    .setDepth(900)
+    .setScrollFactor(0)
+    .setAlpha(0);
+
+  // Top — opaque at y=0, transparent at y=band.
+  g.fillGradientStyle(color, color, color, color, edgeA, edgeA, 0, 0);
+  g.fillRect(0, 0, w, band);
+  // Bottom — transparent at top of band, opaque at y=h.
+  g.fillGradientStyle(color, color, color, color, 0, 0, edgeA, edgeA);
+  g.fillRect(0, h - band, w, band);
+  // Left — opaque at x=0, transparent at x=band.
+  g.fillGradientStyle(color, color, color, color, edgeA, 0, edgeA, 0);
+  g.fillRect(0, 0, band, h);
+  // Right — transparent at left of band, opaque at x=w.
+  g.fillGradientStyle(color, color, color, color, 0, edgeA, 0, edgeA);
+  g.fillRect(w - band, 0, band, h);
+
+  scene.tweens.add({
+    targets: g,
+    alpha: 1,
+    duration: 90,
+    ease: "Quad.easeOut",
+    yoyo: true,
+    hold: 60,
+    onComplete: () => g.destroy(),
+  });
+}

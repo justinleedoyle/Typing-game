@@ -28,6 +28,15 @@ export class OpeningScene extends Phaser.Scene {
   // The Quiet Lord's first foreshadowing — faint silhouette during Beat 6.
   private quietLordSprite: Phaser.GameObjects.Image | null = null;
 
+  // §5.5.2 — Wren is gender-selectable. Cached from saveState in init(); set
+  // by Beat 2.5 on first run; used by beat3 (sibling appearance + dialogue),
+  // drawSibling() (sprite tint + scale), and beat9 (sibling farewell).
+  private wrenGender: "girl" | "boy" | null = null;
+
+  // Beat 2.5 spawns two simultaneous targets; track them so the unpicked
+  // target can be cleared when its sibling is claimed.
+  private beat2_5Targets: TextWordTarget[] = [];
+
   constructor() {
     super("OpeningScene");
   }
@@ -36,6 +45,10 @@ export class OpeningScene extends Phaser.Scene {
     this.store = data.store;
     // Stale sprite reference from a previous run; clear before Beat 6.
     this.quietLordSprite = null;
+    // Honor an existing gender choice on revisit / New Game+; null on a
+    // truly fresh save so Beat 2.5 will prompt.
+    this.wrenGender = this.store.get().wrenGender;
+    this.beat2_5Targets = [];
   }
 
   preload(): void {
@@ -85,19 +98,74 @@ export class OpeningScene extends Phaser.Scene {
     this.time.delayedCall(3000, () => this.beat2());
   }
 
-  /** Beat 2 — Runa descends the staircase (2 s). */
+  /** Beat 2 — Runa descends the staircase (2 s). Branches forward: if Wren's
+   *  gender is already in saveState (revisit / New Game+), skip the identity
+   *  prompt and go straight to the sibling appearance; otherwise route through
+   *  Beat 2.5 to capture the choice. */
   private beat2(): void {
     this.setNarrator(
       "Runa — the royal cartographer — comes down the staircase. Ink-stained. Half-blind in one eye. She has been waiting, too.",
     );
     this.drawRuna();
-    this.time.delayedCall(2000, () => this.beat3());
+    const next = this.wrenGender === null ? () => this.beat2_5() : () => this.beat3();
+    this.time.delayedCall(2000, () => next());
   }
 
-  /** Beat 3 — Sibling appears in doorway (2 s). */
-  private beat3(): void {
+  /** Beat 2.5 — §5.5.2 gender choice. Runa asks who Wren is; player types
+   *  "boy" or "girl". Persisted to saveState so the rest of the opening
+   *  (sibling sprite, dialogue, farewell) branches correctly and so future
+   *  revisits skip the prompt. */
+  private beat2_5(): void {
     this.setNarrator(
-      "At the doorway, a small figure in nightclothes holds a drawing against her chest.",
+      "Runa: \"Before we begin — type 'boy' or 'girl'. I want to know who I'm calling.\"",
+    );
+
+    const pick = (gender: "boy" | "girl") => {
+      // Clear the unpicked target; the picked one self-destroys via its
+      // own burst+fade tween.
+      for (const t of this.beat2_5Targets) {
+        this.typingInput.unregister(t);
+        t.destroy();
+      }
+      this.beat2_5Targets = [];
+      this.wrenGender = gender;
+      this.store.update((s) => {
+        s.wrenGender = gender;
+      });
+      playChime();
+      this.time.delayedCall(700, () => this.beat3());
+    };
+
+    const boy = new TextWordTarget({
+      scene: this,
+      word: "boy",
+      x: TYPE_TARGET.x - 220,
+      y: TYPE_TARGET.y,
+      fontSize: 52,
+      onComplete: () => pick("boy"),
+    });
+    const girl = new TextWordTarget({
+      scene: this,
+      word: "girl",
+      x: TYPE_TARGET.x + 220,
+      y: TYPE_TARGET.y,
+      fontSize: 52,
+      onComplete: () => pick("girl"),
+    });
+    this.typingInput.register(boy);
+    this.typingInput.register(girl);
+    this.beat2_5Targets = [boy, girl];
+  }
+
+  /** Beat 3 — Sibling appears in the doorway (2 s). Branches on wrenGender:
+   *  boy Wren → Saga (small, curious, drawing); girl Wren → Magnus (taller,
+   *  half-amused, half-worried). Dialogue lines are spec-locked per §5.5.2. */
+  private beat3(): void {
+    const isBoy = this.wrenGender === "boy";
+    this.setNarrator(
+      isBoy
+        ? "At the doorway, a small figure in nightclothes holds a drawing against her chest. “Are the portals really real, Runa?”"
+        : "At the doorway, a taller figure leans against the frame, half-amused, half-worried. “You don’t have to do this. There has to be another way.”",
     );
     this.drawSibling();
     this.time.delayedCall(2000, () => this.beat4());
@@ -220,10 +288,14 @@ export class OpeningScene extends Phaser.Scene {
     this.beat9();
   }
 
-  /** Beat 9 — Sibling farewell. */
+  /** Beat 9 — Sibling farewell. Spec-locked dialogue per §5.5.2: Saga keeps
+   *  the drawing line; Magnus says he'll be here, don't take long. */
   private beat9(): void {
+    const isBoy = this.wrenGender === "boy";
     this.setNarrator(
-      "Narrator: At the doorway, she presses the drawing a little tighter. ‘Wren. I made you something.’",
+      isBoy
+        ? "Narrator: At the doorway, she presses the drawing a little tighter. ‘Wren. I made you something.’"
+        : "Narrator: At the doorway, he steadies himself against the frame. ‘Wren. I’ll be here. Don’t take long.’",
     );
     this.time.delayedCall(2400, () => this.beat10());
   }
@@ -284,17 +356,26 @@ export class OpeningScene extends Phaser.Scene {
   }
 
   /** The sibling — fades in just left of the doorway. Doorway center is
-   *  ≈x=1521; she sits at x=1180 so the doorway frame, the painted portal
-   *  through it, and the Quiet Lord (Beat 6) all stay visible past her. */
+   *  ≈x=1521; the sprite sits at x=1180 so the doorway frame, the painted
+   *  portal through it, and the Quiet Lord (Beat 6) all stay visible past it.
+   *
+   *  The sprite asset is the same in both branches (Saga reference); Magnus
+   *  is rendered as a programmatic placeholder via cooler tint + larger
+   *  scale to read as the older sibling. Real Magnus art is locked open per
+   *  §5.5.12 pending parent's reference photo.
+   */
   private drawSibling(): void {
+    const isBoy = this.wrenGender === "boy";
     const img = this.add
       .image(1180, 950, "sibling-sprite")
       .setOrigin(0.5, 1);
-    img.setScale(260 / img.height);
-    // Tint multiplier to soften the bright nightgown+pale skin against the
-    // dim study palette. 0xbfb0a0 ≈ 75% brightness with a warm bias so she
-    // sits in the lamplight rather than glowing in it.
-    img.setTint(0xbfb0a0);
+    // Magnus reads taller (older sibling) than Saga; both still sit below
+    // doorway height so the painted portal stays legible past them.
+    img.setScale((isBoy ? 260 : 300) / img.height);
+    // Tint multipliers soften the bright nightgown+pale skin against the
+    // dim study palette. Saga gets a warm cream cast (sits in lamplight);
+    // Magnus gets a cool blue-gray (reads as older + a beat more distant).
+    img.setTint(isBoy ? 0xbfb0a0 : 0xa0aebf);
     img.setAlpha(0);
     this.tweens.add({
       targets: img,

@@ -14,6 +14,10 @@
 //     has its own camera flash.
 
 import Phaser from "phaser";
+import {
+  playQuietLordFragmentSting,
+  playQuietLordIntrusionSting,
+} from "../audio/quietLordSting";
 import { SERIF } from "./palette";
 
 /** How much to shift the cross-out stroke up from the text's bbox centre,
@@ -54,6 +58,12 @@ export function playQuietLordIntrusion(
   const fadeInMs = 420;
   const fadeOutMs = 480;
   const holdMs = Math.max(0, durationMs - fadeInMs - fadeOutMs);
+
+  // 0) Audio sting — low rumble + whisper, slow attack so it swells under
+  //    the dim and peaks with the quill stroke draw. Scheduled at call time
+  //    against AudioContext.currentTime; runs independently of the scene
+  //    clock so a paused scene can't desync it.
+  playQuietLordIntrusionSting();
 
   // 1) Brief screen dim so the intrusion lands as its own beat. Sits below
   //    the text so the cream stays bright against the darkened backdrop.
@@ -175,6 +185,10 @@ export function flashQuietLordFragment(
 
   const x = scene.scale.width / 2;
   const y = scene.scale.height / 2 - 40;
+
+  // Audio sting — sharper attack than the mid-realm intrusion so it lands
+  // with the boss-defeat camera flash that's already in flight.
+  playQuietLordFragmentSting();
 
   const text = scene.add
     .text(x, y, opts.text, {

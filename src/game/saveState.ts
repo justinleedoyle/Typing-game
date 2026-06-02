@@ -29,6 +29,11 @@ export interface KeyStat {
 export interface SaveState {
   profileName: string;
   typewriterAwakened: boolean;
+  /** §5.5.2 — Wren is gender-selectable. "boy" → sibling is Saga (girl,
+   *  holds drawing); "girl" → sibling is Magnus (older boy, leans in
+   *  doorway). null until the player picks in OpeningScene; persisted
+   *  through New Game+ so Wren's identity carries across runs. */
+  wrenGender: "girl" | "boy" | null;
   realms: Record<string, RealmProgress>;
   satchel: string[];
   keyStats: Record<string, KeyStat>;
@@ -49,6 +54,7 @@ export function emptySave(profileName = "Wren"): SaveState {
   return {
     profileName,
     typewriterAwakened: false,
+    wrenGender: null,
     realms: {},
     satchel: [],
     keyStats: {},

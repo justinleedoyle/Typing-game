@@ -10,10 +10,6 @@ import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
-// Danger ramps in over the LAST 60% of a wolf's advance — earlier portion
-// stays cream so players can read the word, then it shifts red as the wolf
-// closes. Tweak this constant to make the warning earlier or later.
-const DANGER_RAMP_START = 0.4;
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
@@ -26,6 +22,11 @@ import {
 import { makeWolfSprite, preloadWolves } from "../game/wolf";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
 import winterBackdrop from "../../art/references/winter-mountain-clean.png";
+
+// Danger ramps in over the LAST 60% of a wolf's advance — earlier portion
+// stays cream so players can read the word, then it shifts red as the wolf
+// closes. Tweak this constant to make the warning earlier or later.
+const DANGER_RAMP_START = 0.4;
 
 interface WinterSceneData {
   store: SaveStore;

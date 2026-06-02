@@ -415,6 +415,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.clearActiveTargets();
     this.golems = [];
     this.waveActive = false;
+    // Almanac lore pages 1 + 2 — Gregor's lesson is conclusively done, and
+    // the foundry's three-century setup is now visible. Both stamp here.
+    this.store.update((s) => {
+      if (!s.almanacLore.includes("golem-keepers-code")) {
+        s.almanacLore.push("golem-keepers-code");
+      }
+      if (!s.almanacLore.includes("the-broken-bellows")) {
+        s.almanacLore.push("the-broken-bellows");
+      }
+    });
     this.setNarrator(
       "You descend to the foundry floor. The heat is immense. Iron shapes move through the dark.",
     );
@@ -586,6 +596,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private afterFork1(choice: "forn" | "cabal", relicId: string): void {
+    // Almanac lore page 3 — Forn's hammer song OR the Apprentices' manifesto.
+    // Mutually exclusive per fork branch.
+    const lorePageId =
+      choice === "forn" ? "forn-bellows-song" : "apprentices-manifesto";
     this.store.update((s) => {
       const realm = s.realms["clockwork-forge"] ?? {
         cleared: false,
@@ -595,6 +609,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
       s.realms["clockwork-forge"] = realm;
       if (!s.satchel.includes(relicId)) {
         s.satchel.push(relicId);
+      }
+      if (!s.almanacLore.includes(lorePageId)) {
+        s.almanacLore.push(lorePageId);
       }
     });
     this.time.delayedCall(1200, () => this.startAct3());
@@ -866,6 +883,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
       });
       flashQuietLordFragment(this, { text: "Aga" });
     }
+    // Almanac lore page 4 — the Command-Golem's name, stamped at defeat.
+    this.store.update((s) => {
+      if (!s.almanacLore.includes("the-command-golems-name")) {
+        s.almanacLore.push("the-command-golems-name");
+      }
+    });
 
     this.setNarrator(
       "the forge breathes. the brass remembers. its makers are remembered.",
@@ -1064,6 +1087,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
     ];
 
     this.runPassageChain(passages, ["", "", ""], () => {
+      // Almanac lore page 5 — the Forge's true name, stamped at the end of
+      // the realm's true-name passage.
+      this.store.update((s) => {
+        if (!s.almanacLore.includes("the-forge-true-name")) {
+          s.almanacLore.push("the-forge-true-name");
+        }
+      });
       this.time.delayedCall(1000, () => this.startEnding());
     });
   }

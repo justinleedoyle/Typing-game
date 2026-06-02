@@ -491,7 +491,13 @@ export class SkyIslandScene extends Phaser.Scene {
     if (nextIdx < TEMPLE_PHRASE_CONFIGS.length) {
       this.time.delayedCall(1400, () => this.startTemple(nextIdx));
     } else {
-      // All 5 temples cleared → Fork 1
+      // All 5 temples cleared → Fork 1. Almanac lore page 3 — the five
+      // riddle inscriptions, stamped at the moment Wren finishes the last.
+      this.store.update((s) => {
+        if (!s.almanacLore.includes("the-five-temple-riddles")) {
+          s.almanacLore.push("the-five-temple-riddles");
+        }
+      });
       this.time.delayedCall(1400, () => this.startFork1());
     }
   }
@@ -807,6 +813,12 @@ export class SkyIslandScene extends Phaser.Scene {
       });
       flashQuietLordFragment(this, { text: "Agai" });
     }
+    // Almanac lore page 4 — the Scholar-Spirit's riddles, stamped at boss defeat.
+    this.store.update((s) => {
+      if (!s.almanacLore.includes("the-scholar-spirits-riddles")) {
+        s.almanacLore.push("the-scholar-spirits-riddles");
+      }
+    });
 
     this.time.delayedCall(800, () => {
       this.setNarrator(
@@ -953,6 +965,12 @@ export class SkyIslandScene extends Phaser.Scene {
         fontSize: 28,
         onComplete: () => {
           playChime();
+          // Almanac lore page 5 — the Sky-Island's true name.
+          this.store.update((s) => {
+            if (!s.almanacLore.includes("the-sky-true-name")) {
+              s.almanacLore.push("the-sky-true-name");
+            }
+          });
           this.time.delayedCall(800, () => this.startEnding());
         },
       });

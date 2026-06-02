@@ -1,6 +1,10 @@
 import Phaser from "phaser";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
+import {
+  ALMANAC_LORE_PAGES,
+  lorePageIdsForRealm,
+} from "../game/almanacLorePages";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { drawStaticQuietLordFragment } from "../game/quietLordIntrusion";
 import { REALM_LORE, REALM_ORDER } from "../game/realmLore";
@@ -8,6 +12,14 @@ import { RELICS } from "../game/relics";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
+
+/** Page-stack entry. The Almanac walks: overview → for each cleared realm,
+ *  the realm summary page then each of that realm's stamped lore pages, in
+ *  spec sequence. Index 0 is always the overview. */
+type AlmanacPageEntry =
+  | { kind: "overview" }
+  | { kind: "realm"; realmId: string }
+  | { kind: "lore"; loreId: string; realmId: string };
 
 interface AlmanacSceneData {
   store: SaveStore;
@@ -46,6 +58,9 @@ export class AlmanacScene extends Phaser.Scene {
   private pageTexts: Phaser.GameObjects.GameObject[] = [];
   private currentPage = 0;
   private clearedRealms: string[] = [];
+  /** The full ordered page sequence the player walks. Built in create();
+   *  currentPage is an index into this array. */
+  private pageStack: AlmanacPageEntry[] = [];
   private nextTarget?: TextWordTarget;
   private prevTarget?: TextWordTarget;
   private closeTarget?: TextWordTarget;
@@ -58,6 +73,7 @@ export class AlmanacScene extends Phaser.Scene {
     this.store = data.store;
     this.currentPage = 0;
     this.pageTexts = [];
+    this.pageStack = [];
   }
 
   create(): void {
@@ -75,6 +91,7 @@ export class AlmanacScene extends Phaser.Scene {
     this.clearedRealms = REALM_ORDER.filter(
       (id) => state.realms[id]?.cleared,
     );
+    this.pageStack = this.buildPageStack(state.almanacLore);
 
     this.typingInput = new TypingInputController(this.store);
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
@@ -87,21 +104,45 @@ export class AlmanacScene extends Phaser.Scene {
     this.placeNavigationTargets();
   }
 
+  /** Walk cleared realms in REALM_ORDER and inline the lore pages the
+   *  player has stamped for each one, in the spec sequence defined by
+   *  almanacLorePages.ts. Hidden / unknown IDs in saveState.almanacLore are
+   *  ignored so a stale save can't crash the reader. */
+  private buildPageStack(stampedLoreIds: string[]): AlmanacPageEntry[] {
+    const stack: AlmanacPageEntry[] = [{ kind: "overview" }];
+    const stamped = new Set(stampedLoreIds);
+    for (const realmId of this.clearedRealms) {
+      stack.push({ kind: "realm", realmId });
+      for (const loreId of lorePageIdsForRealm(realmId)) {
+        if (stamped.has(loreId) && ALMANAC_LORE_PAGES[loreId]) {
+          stack.push({ kind: "lore", loreId, realmId });
+        }
+      }
+    }
+    return stack;
+  }
+
   private renderCurrentPage(): void {
     for (const t of this.pageTexts) t.destroy();
     this.pageTexts = [];
 
-    if (this.currentPage === 0) {
+    const entry = this.pageStack[this.currentPage];
+    if (!entry || entry.kind === "overview") {
       this.renderOverviewPage();
       return;
     }
+    if (entry.kind === "lore") {
+      this.renderLorePage(entry.loreId, entry.realmId);
+      return;
+    }
 
-    const realmId = this.clearedRealms[this.currentPage - 1];
-    const lore = realmId ? REALM_LORE[realmId] : undefined;
+    const realmId = entry.realmId;
+    const lore = REALM_LORE[realmId];
     const state = this.store.get();
-    const realmProgress = realmId ? state.realms[realmId] : undefined;
+    const realmProgress = state.realms[realmId];
     if (!lore || !realmProgress) {
-      // Fell off the end of the realm list — clamp back to overview.
+      // Stale stack entry (cleared-realm flag flipped between create() and
+      // now somehow) — clamp back to overview rather than rendering blank.
       this.currentPage = 0;
       this.renderOverviewPage();
       return;
@@ -190,8 +231,44 @@ export class AlmanacScene extends Phaser.Scene {
       });
     }
 
-    // Footer: page number. Overview is page 1; realm pages are 2..N+1.
-    const total = this.clearedRealms.length + 1;
+    // Left page bottom — list any lore pages stamped for this realm. Each
+    // title is rendered in italic; bodies live on their own sub-pages,
+    // reachable by typing forward through the navigation.
+    const stampedLoreIds = lorePageIdsForRealm(realmId).filter((id) =>
+      state.almanacLore.includes(id),
+    );
+    if (stampedLoreIds.length > 0) {
+      const loreY = TOP_TEXT_Y + 380;
+      this.addPageText(
+        LEFT_PAGE_X,
+        loreY,
+        `Pages stamped (${stampedLoreIds.length}):`,
+        {
+          fontSize: "22px",
+          fontStyle: "italic",
+          color: PAGE_INK_DIM,
+        },
+      );
+      stampedLoreIds.forEach((loreId, i) => {
+        const page = ALMANAC_LORE_PAGES[loreId];
+        if (!page) return;
+        this.addPageText(
+          LEFT_PAGE_X,
+          loreY + 40 + i * 32,
+          `• ${page.title}`,
+          { fontSize: "22px", color: PAGE_INK },
+        );
+      });
+    }
+
+    this.renderPageFooter();
+  }
+
+  /** Per-page footer line — same format across overview, realm, and lore
+   *  sub-pages, indexed against the full pageStack so the player can see
+   *  their position in the book. */
+  private renderPageFooter(): void {
+    const total = this.pageStack.length;
     this.addPageText(
       this.scale.width / 2,
       PAGE_BOTTOM_Y - 30,
@@ -204,6 +281,59 @@ export class AlmanacScene extends Phaser.Scene {
       },
       { centerX: true },
     );
+  }
+
+  /** Render a single lore sub-page: title spread across the top of the left
+   *  page; body wrapped across both pages. Mirrors the typographic feel of
+   *  the realm-summary spreads but with no relics or path summary. */
+  private renderLorePage(loreId: string, realmId: string): void {
+    const page = ALMANAC_LORE_PAGES[loreId];
+    const realm = REALM_LORE[realmId];
+    if (!page) {
+      // Stamped ID without a content entry — log to console (dev only) and
+      // clamp back to overview so the reader doesn't render an empty spread.
+      // eslint-disable-next-line no-console
+      console.warn(`AlmanacScene: no content for lore page "${loreId}"`);
+      this.currentPage = 0;
+      this.renderOverviewPage();
+      return;
+    }
+
+    // Left page: realm name (small caps feel via italic) + lore title large.
+    if (realm) {
+      this.addPageText(
+        LEFT_PAGE_X,
+        TOP_TEXT_Y,
+        realm.title,
+        {
+          fontSize: "22px",
+          fontStyle: "italic",
+          color: PAGE_INK_DIM,
+        },
+      );
+    }
+    this.addPageText(
+      LEFT_PAGE_X,
+      TOP_TEXT_Y + 40,
+      page.title,
+      { fontSize: "44px", color: PAGE_INK },
+    );
+
+    // Right page: body, wrapped within the page text width. Larger margin
+    // from the top so the title-to-body relationship reads as page-spread,
+    // not column-flow.
+    this.addPageText(
+      RIGHT_PAGE_X,
+      TOP_TEXT_Y + 20,
+      page.body,
+      {
+        fontSize: "26px",
+        color: PAGE_INK,
+        wordWrap: { width: PAGE_TEXT_WIDTH },
+      },
+    );
+
+    this.renderPageFooter();
   }
 
   /** Returns the primary (fork1) lore ending key for a realm. */
@@ -387,20 +517,7 @@ export class AlmanacScene extends Phaser.Scene {
       },
     );
 
-    // Footer: page number. Overview is page 1; realm pages are 2..N+1.
-    const total = this.clearedRealms.length + 1;
-    this.addPageText(
-      this.scale.width / 2,
-      PAGE_BOTTOM_Y - 30,
-      `page 1 of ${total}`,
-      {
-        fontSize: "20px",
-        fontStyle: "italic",
-        color: PAGE_INK_DIM,
-        align: "center",
-      },
-      { centerX: true },
-    );
+    this.renderPageFooter();
   }
 
   private addPageText(
@@ -423,7 +540,7 @@ export class AlmanacScene extends Phaser.Scene {
   private placeNavigationTargets(): void {
     this.clearNavigationTargets();
     const hasPrev = this.currentPage > 0;
-    const hasNext = this.currentPage < this.clearedRealms.length;
+    const hasNext = this.currentPage < this.pageStack.length - 1;
 
     if (hasPrev) {
       this.prevTarget = new TextWordTarget({

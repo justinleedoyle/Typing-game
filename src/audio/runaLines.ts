@@ -33,7 +33,16 @@ export type RunaTone =
   | "wonder"
   | "tender";
 
-export type RunaScene = "title" | "opening" | "hub" | "winter" | "ambient";
+export type RunaScene =
+  | "title"
+  | "opening"
+  | "hub"
+  | "winter"
+  | "sunken"
+  | "forge"
+  | "sky"
+  | "wood"
+  | "ambient";
 
 export interface RunaLine {
   /** Stable ID; becomes `runa_${id}.mp3` filename. */
@@ -594,6 +603,363 @@ const WINTER_LINES: readonly RunaLine[] = [
   },
 ];
 
+// ─── SUNKEN BELL ──────────────────────────────────────────────────────────────
+//
+// Phase 1 coverage — narration anchors for the §5.5.7 beats most visible to
+// the player. All marked isNew: true — none of these are wired into the scene
+// yet; NarrationManager.say(id) is the activation hook. Order matches play
+// sequence: arrival → Olin → choir waves → fork → boss phases → true name.
+
+const SUNKEN_LINES: readonly RunaLine[] = [
+  {
+    id: "sunken_intro_arrival",
+    scene: "sunken",
+    trigger: "SunkenBellScene — scene opens; portal closes underwater",
+    text: "The portal opens onto a flooded nave. You can breathe here — this place is half-real, half-memory. Move slowly. The bell sets the pace.",
+    tone: "reading",
+    isNew: true,
+  },
+  {
+    id: "sunken_olin_intro",
+    scene: "sunken",
+    trigger: "SunkenBellScene.startOlinNPC() — Olin fades in on his pew",
+    text: "An old merfolk priest sits on a pew. Half-deaf — the only one who survived the silencing because he could not hear the command. He gestures you closer.",
+    tone: "tender",
+    isNew: true,
+  },
+  {
+    id: "sunken_olin_teach_activate",
+    scene: "sunken",
+    trigger: "SunkenBellScene.onOlinTeachComplete() — the bell tolls and beat-lock engages",
+    text: "On the toll, you may speak. Between tolls, you cannot. Listen.",
+    tone: "instruction",
+    isNew: true,
+  },
+  {
+    id: "sunken_choir_wave1",
+    scene: "sunken",
+    trigger: "SunkenBellScene.startFirstGhostEncounter() — three slow ghosts approach in tempo",
+    text: "Three shapes drift up the aisle. Type each name on the bell.",
+    tone: "reading",
+    isNew: true,
+  },
+  {
+    id: "sunken_choir_wave2",
+    scene: "sunken",
+    trigger: "SunkenBellScene Act 2 — tighter tempo, more ghosts",
+    text: "More are coming. The water thickens with them.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "sunken_fork1_intro",
+    scene: "sunken",
+    trigger: "SunkenBellScene — Cathedral Doors fork (chant vs thunderclap)",
+    text: "The cathedral doors are old. Chant them open — or call thunder. Either will work. They mean different things.",
+    tone: "instruction",
+    isNew: true,
+  },
+  {
+    id: "sunken_warden_rise",
+    scene: "sunken",
+    trigger: "SunkenBellScene.startWardenPhase1() — Bell-Warden appears, eyes closed",
+    text: "The Warden rises from the bell — stone-faced, eyes closed. The tempo will tighten before he opens them.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "sunken_warden_phase2",
+    scene: "sunken",
+    trigger: "SunkenBellScene.startWardenPhase2() — tempo doubles, eyes open",
+    text: "His eyes are open. The tide is rising. Type quicker.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "sunken_warden_defeated",
+    scene: "sunken",
+    trigger: "SunkenBellScene.onWardenDefeated() — the bell falls silent",
+    text: "A long silence. The bell, for the first time in a hundred years, falls quiet on its own beat.",
+    tone: "wonder",
+    isNew: true,
+  },
+  {
+    id: "sunken_truename_intro",
+    scene: "sunken",
+    trigger: "SunkenBellScene — true-name passage begins",
+    text: "The bell speaks its name. Type it whole — one word per toll. It has been waiting to be spoken.",
+    tone: "wonder",
+    isNew: true,
+  },
+];
+
+// ─── CLOCKWORK FORGE ──────────────────────────────────────────────────────────
+//
+// Phase 1 coverage for the §5.5.8 Forge sketch. Same play-sequence ordering
+// as Sunken; all isNew so the scene wiring can land in a follow-up PR after
+// these get voiced.
+
+const FORGE_LINES: readonly RunaLine[] = [
+  {
+    id: "forge_intro_arrival",
+    scene: "forge",
+    trigger: "ClockworkForgeScene — scene opens in the heat",
+    text: "The portal opens into heat. The Forge has been running for three centuries with no one at the bellows. The golems have been giving themselves orders.",
+    tone: "reading",
+    isNew: true,
+  },
+  {
+    id: "forge_gregor_intro",
+    scene: "forge",
+    trigger: "ClockworkForgeScene.startGregorConversation() — Gregor at the workbench",
+    text: "An old smith at the workbench — Gregor. He waves you over with a soot-black hand.",
+    tone: "tender",
+    isNew: true,
+  },
+  {
+    id: "forge_gregor_teach",
+    scene: "forge",
+    trigger: "ClockworkForgeScene — Gregor teaches the lowercase/CAPITAL rule",
+    text: "Lowercase moves them. CAPITALS command them. Forge folk have known the difference for three centuries. Don't unlearn it.",
+    tone: "instruction",
+    isNew: true,
+  },
+  {
+    id: "forge_wave1_intro",
+    scene: "forge",
+    trigger: "ClockworkForgeScene.startWave1() — first golems advance",
+    text: "Iron shapes move through the dark. Walk the first one off the floor.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "forge_wave2_intro",
+    scene: "forge",
+    trigger: "ClockworkForgeScene — second wave; CAPITAL commands enter rotation",
+    text: "More are advancing. The ones that ignore lowercase need an order — shout it.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "forge_fork1_intro",
+    scene: "forge",
+    trigger: "ClockworkForgeScene.startFork1() — Smith Forn vs Apprentices' Cabal",
+    text: "Two doorways. Smith Forn calls from the gear-room. The apprentices' cabal stands behind its own door, closed.",
+    tone: "instruction",
+    isNew: true,
+  },
+  {
+    id: "forge_command_golem_rise",
+    scene: "forge",
+    trigger: "ClockworkForgeScene.startBossPhase1() — Command-Golem rises",
+    text: "The far wall shudders. Something massive rises from the steam. Half its name is lowercase. Half is a shout.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "forge_command_golem_phase2",
+    scene: "forge",
+    trigger: "ClockworkForgeScene.startBossPhase2() — Shift-switching escalates",
+    text: "It will not stop until it is given the order it has been giving itself. You know the words now.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "forge_command_golem_defeated",
+    scene: "forge",
+    trigger: "ClockworkForgeScene — Command-Golem sits",
+    text: "The golem sits. Three centuries of self-given orders, finally finished. The furnace breathes a little easier.",
+    tone: "wonder",
+    isNew: true,
+  },
+  {
+    id: "forge_truename_intro",
+    scene: "forge",
+    trigger: "ClockworkForgeScene.startTrueNamePassage() — true-name passage begins",
+    text: "The Forge speaks its name. Type it whole — the brass is listening.",
+    tone: "wonder",
+    isNew: true,
+  },
+];
+
+// ─── SKY-ISLAND OF LANTERNS ───────────────────────────────────────────────────
+//
+// Phase 1 coverage for §5.5.8 Sky. The realm's central mechanic is reading-
+// speed pressure on scrolling banners — Runa's voice stays calmer than in
+// Forge or Sunken to make room for the player to read.
+
+const SKY_LINES: readonly RunaLine[] = [
+  {
+    id: "sky_intro_arrival",
+    scene: "sky",
+    trigger: "SkyIslandScene — scene opens in golden air",
+    text: "The portal opens in golden air. The island is tethered too low. The lanterns are running out of moths.",
+    tone: "reading",
+    isNew: true,
+  },
+  {
+    id: "sky_lantern_lighter_intro",
+    scene: "sky",
+    trigger: "SkyIslandScene — Lantern-Lighter appears at the beacon",
+    text: "A child-spirit tends the great beacon. She is counting lanterns, and has been for two hundred years.",
+    tone: "tender",
+    isNew: true,
+  },
+  {
+    id: "sky_temple1_intro",
+    scene: "sky",
+    trigger: "SkyIslandScene.startTemple(0) — first lantern-temple",
+    text: "A phrase is inscribed on the lantern's rim. Read it whole — the lanterns rise as you do.",
+    tone: "instruction",
+    isNew: true,
+  },
+  {
+    id: "sky_temple5_complete",
+    scene: "sky",
+    trigger: "SkyIslandScene — fifth temple cleared, island lifts",
+    text: "Five temples lit. The island lifts a little higher. The wind warms.",
+    tone: "wonder",
+    isNew: true,
+  },
+  {
+    id: "sky_fork1_intro",
+    scene: "sky",
+    trigger: "SkyIslandScene.startFork1() — Scholar Etta vs steal the flame",
+    text: "Scholar Etta has one volume left to shelve. The beacon stands unlit beside her. You can help her — or you can take the flame.",
+    tone: "instruction",
+    isNew: true,
+  },
+  {
+    id: "sky_scholar_spirit_rise",
+    scene: "sky",
+    trigger: "SkyIslandScene.startBossPhase1() — Scholar-Spirit gathers her notes",
+    text: "The Scholar-Spirit gathers her notes — three riddles, full sentences. Answer carefully. She is listening.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "sky_scholar_spirit_phase2",
+    scene: "sky",
+    trigger: "SkyIslandScene.startBossPhase2() — second riddle",
+    text: "She asks again. Each word matters. She is patient — but not infinitely.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "sky_scholar_spirit_defeated",
+    scene: "sky",
+    trigger: "SkyIslandScene.onBossDefeated() — the spirit dissolves",
+    text: "Her hands open. The wind takes her notes. She thanks you — quietly, in a language you almost understand.",
+    tone: "wonder",
+    isNew: true,
+  },
+  {
+    id: "sky_truename_intro",
+    scene: "sky",
+    trigger: "SkyIslandScene.startTrueNamePassage() — true-name passage begins",
+    text: "The sky speaks. Type its name whole — every page that ever lit waits inside it.",
+    tone: "wonder",
+    isNew: true,
+  },
+  {
+    id: "sky_almanac_stamp",
+    scene: "sky",
+    trigger: "SkyIslandScene.startEnding() — almanac stamps the page",
+    text: "The almanac stamps a page. The sky-island holds at its proper height now.",
+    tone: "intimate",
+    isNew: true,
+  },
+];
+
+// ─── HAUNTED WOOD ─────────────────────────────────────────────────────────────
+//
+// Phase 1 coverage for §5.5.8 Wood. The realm's mechanic is punctuation-as-
+// direction; Runa's voice gets quieter here than elsewhere because the wood
+// itself is quiet. More 'tender' tone than the other realms.
+
+const WOOD_LINES: readonly RunaLine[] = [
+  {
+    id: "wood_intro_arrival",
+    scene: "wood",
+    trigger: "HauntedWoodScene — scene opens in fog",
+    text: "The portal opens into fog. The wood has been haunted for two hundred years — not because anything bad lives here, but because no one told the ghosts they could go.",
+    tone: "reading",
+    isNew: true,
+  },
+  {
+    id: "wood_inga_intro",
+    scene: "wood",
+    trigger: "HauntedWoodScene — Inga appears at the path",
+    text: "A small ghost stands between paths. She does not remember her name. She hopes you can find it for her.",
+    tone: "tender",
+    isNew: true,
+  },
+  {
+    id: "wood_crossroads1_intro",
+    scene: "wood",
+    trigger: "HauntedWoodScene.startCrossroads1() — first four-direction encounter",
+    text: "Ghosts approach from four directions. Each direction is bound to a punctuation mark. Type the one that wards it.",
+    tone: "instruction",
+    isNew: true,
+  },
+  {
+    id: "wood_crossroads2_intro",
+    scene: "wood",
+    trigger: "HauntedWoodScene.startCrossroads2() — second crossroads, more directions",
+    text: "More crossroads. The marks know which way is open.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "wood_fork1_intro",
+    scene: "wood",
+    trigger: "HauntedWoodScene — shrine fork (offering vs bone-flute)",
+    text: "A crossroads shrine. Leave an offering — or take the bone-flute. Both are quiet choices.",
+    tone: "instruction",
+    isNew: true,
+  },
+  {
+    id: "wood_ghost_king_rise",
+    scene: "wood",
+    trigger: "HauntedWoodScene.startBossFight() — Ghost-King rises",
+    text: "The Ghost-King rises from the root-throne. Two phases. Listen carefully — the second one is built of every punctuation mark in the wood.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "wood_ghost_king_phase2",
+    scene: "wood",
+    trigger: "HauntedWoodScene.startBossCapstone() — every-punctuation passage begins",
+    text: "His last words are coming. Every mark you have learned is in them. Type them in order.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "wood_ghost_king_defeated",
+    scene: "wood",
+    trigger: "HauntedWoodScene.onFinalPassageComplete() — Ghost-King dissolves",
+    text: "He smiles for the first and last time. The mist closes around the throne. The ghosts behind him bow their heads.",
+    tone: "wonder",
+    isNew: true,
+  },
+  {
+    id: "wood_truename_intro",
+    scene: "wood",
+    trigger: "HauntedWoodScene.startFinalPassage() — true-name passage begins",
+    text: "The wood speaks its name. Type it whole. The ghosts have somewhere to be, finally.",
+    tone: "wonder",
+    isNew: true,
+  },
+  {
+    id: "wood_almanac_stamp",
+    scene: "wood",
+    trigger: "HauntedWoodScene — almanac stamps the page",
+    text: "The almanac stamps a page. The wood is quiet, but it is not silent.",
+    tone: "intimate",
+    isNew: true,
+  },
+];
+
 // ─── AMBIENT (realm-agnostic combat support) ──────────────────────────────────
 //
 // These fire from any realm when the player needs gentle support — currently
@@ -634,6 +1000,10 @@ export const RUNA_LINES: readonly RunaLine[] = [
   ...OPENING_LINES,
   ...HUB_LINES,
   ...WINTER_LINES,
+  ...SUNKEN_LINES,
+  ...FORGE_LINES,
+  ...SKY_LINES,
+  ...WOOD_LINES,
   ...AMBIENT_LINES,
 ];
 

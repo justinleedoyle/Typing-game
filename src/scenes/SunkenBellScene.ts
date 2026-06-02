@@ -386,9 +386,14 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private onOlinTeachComplete(): void {
     playChime();
+    // Almanac lore pages 1 + 5 — Drowned Choir + Olin's hidden confession,
+    // both stamped at the end of his teaching beat per §5.5.7.
     this.store.update((s) => {
       if (!s.almanacLore.includes("the-drowned-choir")) {
         s.almanacLore.push("the-drowned-choir");
+      }
+      if (!s.almanacLore.includes("notes-from-a-half-deaf-priest")) {
+        s.almanacLore.push("notes-from-a-half-deaf-priest");
       }
     });
     this.setNarrator("The bell tolls once. And the world changes tempo.");
@@ -845,6 +850,12 @@ export class SunkenBellScene extends Phaser.Scene {
   private onWardenDefeated(): void {
     playChime();
     this.beatClock.stop();
+    // Almanac lore page 4 — the Warden's true name, stamped at defeat.
+    this.store.update((s) => {
+      if (!s.almanacLore.includes("the-wardens-true-name")) {
+        s.almanacLore.push("the-wardens-true-name");
+      }
+    });
     this.setNarrator(
       "A long silence. The bell, for the first time in a hundred years, falls quiet.",
     );

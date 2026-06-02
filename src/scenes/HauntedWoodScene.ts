@@ -326,6 +326,13 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private onCrossroads1Cleared(): void {
+    // Almanac lore page 3 — the punctuation warding lesson, stamped after
+    // Wren has cleared the first four-direction crossroads.
+    this.store.update((s) => {
+      if (!s.almanacLore.includes("punctuation-warding")) {
+        s.almanacLore.push("punctuation-warding");
+      }
+    });
     this.time.delayedCall(1400, () => this.startCrossroads2());
   }
 
@@ -668,6 +675,13 @@ export class HauntedWoodScene extends Phaser.Scene {
       ];
       this.runWordByWordPassage(passage, () => {
         this.setNarrator("His voice fades. The mist closes around the throne.");
+        // Almanac lore page 4 — the Ghost-King's true name, stamped after
+        // his every-punctuation capstone resolves.
+        this.store.update((s) => {
+          if (!s.almanacLore.includes("ghost-kings-true-name")) {
+            s.almanacLore.push("ghost-kings-true-name");
+          }
+        });
         this.tweens.add({
           targets: dimOverlay,
           alpha: 0,
@@ -729,6 +743,13 @@ export class HauntedWoodScene extends Phaser.Scene {
     // Ghost-King dissolves
     this.cameras.main.flash(500, 220, 230, 210, false);
     this.setNarrator("The Ghost-King dissolves into the mist.");
+    // Almanac lore page 5 — the Wood's true name, stamped when the realm's
+    // true-name passage resolves.
+    this.store.update((s) => {
+      if (!s.almanacLore.includes("the-wood-true-name")) {
+        s.almanacLore.push("the-wood-true-name");
+      }
+    });
 
     // Quiet Lord fragment ~~Again~~ — fifth realm, full word, no period.
     // The period waits for the finale per §5.5.10. Once per playthrough.

@@ -490,10 +490,14 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private onHeldurSpoken(): void {
     this.clearActiveTargets();
-    // Almanac lore page 1 unlocked
+    // Almanac lore pages 1 + 5 — Heldur's history + the wayshrine carvings
+    // beneath it. Both fire on the same beat per §5.5.6.
     this.store.update((s) => {
       if (!s.almanacLore.includes("the-hundred-quiet-years")) {
         s.almanacLore.push("the-hundred-quiet-years");
+      }
+      if (!s.almanacLore.includes("wayshrine-runes")) {
+        s.almanacLore.push("wayshrine-runes");
       }
     });
     playChime();
@@ -941,6 +945,11 @@ export class WinterMountainScene extends Phaser.Scene {
       onComplete: () => {
         this.clearActiveTargets();
         this.foxSpared = true;
+        this.store.update((s) => {
+          if (!s.almanacLore.includes("the-wounded-foxs-name")) {
+            s.almanacLore.push("the-wounded-foxs-name");
+          }
+        });
         this.setNarrator(
           "The fox's ear tilts. She watches you from the treeline as you move on.",
         );
@@ -1005,6 +1014,11 @@ export class WinterMountainScene extends Phaser.Scene {
     this.clearActiveTargets();
     this.setNarrator("A woman, half-buried in snow, lifts her head as you approach.");
     this.fadeInHuntress();
+    this.store.update((s) => {
+      if (!s.almanacLore.includes("the-huntress-song")) {
+        s.almanacLore.push("the-huntress-song");
+      }
+    });
     this.time.delayedCall(1100, () => {
       this.runPassageChain(
         HUNTRESS_PASSAGES,
@@ -1049,6 +1063,11 @@ export class WinterMountainScene extends Phaser.Scene {
   private startFireflyBranch(nextWave: number): void {
     this.clearActiveTargets();
     this.setNarrator("Three fireflies hover at eye level, then dart up the slope.");
+    this.store.update((s) => {
+      if (!s.almanacLore.includes("the-firefly-trail")) {
+        s.almanacLore.push("the-firefly-trail");
+      }
+    });
     this.time.delayedCall(1100, () => {
       this.runPassageChain(
         FIREFLY_PASSAGES,
@@ -1186,6 +1205,13 @@ export class WinterMountainScene extends Phaser.Scene {
       });
       flashQuietLordFragment(this, { text: "A" });
     }
+    // Almanac lore page 4 — the pack leader's true name. Stamped at the
+    // moment of defeat, alongside the fragment flash.
+    this.store.update((s) => {
+      if (!s.almanacLore.includes("the-pack-leader-true-name")) {
+        s.almanacLore.push("the-pack-leader-true-name");
+      }
+    });
     this.time.delayedCall(1600, () => this.startFork2());
   }
 

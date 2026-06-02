@@ -152,6 +152,11 @@ export class GreatBattleScene extends Phaser.Scene {
   private masterKeyFlankUsed = false;
   private peltKnockbackForgiven = false;
   private tetherCordBindUsed = false;
+  // §5.5.11 — Wind-Phrase + Quiet Chant (both): the Lord's whirlwind attack
+  // is permanently canceled. First cancel is narrated; subsequent calls skip
+  // silently so the duel just flows past where the whirlwind would have been.
+  private whirlwindCanceled = false;
+  private whirlwindCancelAnnounced = false;
 
   // Phase 3
   private screenBrightnessOverlay!: Phaser.GameObjects.Graphics;
@@ -193,6 +198,8 @@ export class GreatBattleScene extends Phaser.Scene {
     this.masterKeyFlankUsed = false;
     this.peltKnockbackForgiven = false;
     this.tetherCordBindUsed = false;
+    this.whirlwindCanceled = false;
+    this.whirlwindCancelAnnounced = false;
 
     // Phase 3
     this.brassSongbirdStallTimer = null;
@@ -654,6 +661,9 @@ export class GreatBattleScene extends Phaser.Scene {
     this.bellsTongueSuperHitAvailable = satchel.includes("bells-tongue");
     this.peltKnockbackForgiven = satchel.includes("pelt-of-the-old-one");
     this.tetherCordBindUsed = false;
+    this.whirlwindCanceled =
+      satchel.includes("wind-phrase") && satchel.includes("quiet-chant");
+    this.whirlwindCancelAnnounced = false;
 
     // §5.5.11 — ≥3 force relics: music swells
     if (forceCount >= 3) {
@@ -1043,6 +1053,91 @@ export class GreatBattleScene extends Phaser.Scene {
     this.activeTargets.push(bonusTarget);
   }
 
+  // §5.5.11 — the Lord's whirlwind attack between rounds. Wren must type
+  // "hold" to clear it before the duel continues. If Wind-Phrase + Quiet
+  // Chant are both in the satchel, the whirlwind is permanently canceled:
+  // a one-time narration acknowledges the cancel on first call, subsequent
+  // calls skip silently so the duel just flows past it.
+  private runWhirlwindAttack(onDone: () => void): void {
+    if (this.whirlwindCanceled) {
+      if (!this.whirlwindCancelAnnounced) {
+        this.whirlwindCancelAnnounced = true;
+        this.setNarrator(
+          "Wind-Phrase and Quiet Chant intertwine. The air goes still — his whirlwind dies before it rises.",
+        );
+        const pulse = this.add.graphics().setDepth(3).setAlpha(0);
+        pulse.fillStyle(PALETTE_HEX.frost, 0.22);
+        pulse.fillRect(0, 0, this.scale.width, this.scale.height);
+        this.tweens.add({
+          targets: pulse,
+          alpha: 1,
+          duration: 350,
+          yoyo: true,
+          hold: 250,
+          onComplete: () => {
+            pulse.destroy();
+            this.time.delayedCall(1100, () => onDone());
+          },
+        });
+        return;
+      }
+      onDone();
+      return;
+    }
+
+    this.setNarrator("He raises a whirlwind. Plant your feet.");
+
+    const overlay = this.add.graphics().setDepth(2).setAlpha(0);
+    overlay.fillStyle(PALETTE_HEX.dim, 0.28);
+    overlay.fillRect(0, 0, this.scale.width, this.scale.height);
+
+    const swirl = this.add.graphics().setDepth(4).setAlpha(0);
+    swirl.lineStyle(2, PALETTE_HEX.frost, 0.6);
+    for (let r = 30; r <= 110; r += 20) {
+      swirl.strokeCircle(0, 0, r);
+    }
+    swirl.x = this.scale.width / 2;
+    swirl.y = 250;
+
+    this.tweens.add({
+      targets: [overlay, swirl],
+      alpha: 1,
+      duration: 350,
+    });
+    const swirlTween = this.tweens.add({
+      targets: swirl,
+      rotation: Math.PI * 4,
+      duration: 6000,
+    });
+
+    this.cameras.main.shake(240, 0.004);
+
+    const defenseTarget = new TextWordTarget({
+      scene: this,
+      word: "hold",
+      x: this.scale.width / 2,
+      y: 500,
+      fontSize: 48,
+      onComplete: () => {
+        playChime();
+        swirlTween.stop();
+        this.clearActiveTargets();
+        this.tweens.add({
+          targets: [overlay, swirl],
+          alpha: 0,
+          duration: 350,
+          onComplete: () => {
+            overlay.destroy();
+            swirl.destroy();
+            this.time.delayedCall(400, () => onDone());
+          },
+        });
+      },
+    });
+    this.typingInput.register(defenseTarget);
+    this.activeTargets.push(defenseTarget);
+  }
+
   // §5.5.9 — wisp-cat: extra phrase target spawns mid-phase (flank)
   private applyWispCatFlank(onDone: () => void): void {
     this.setNarrator("The wisp-cat finds a path around him. Take it.");
@@ -1092,7 +1187,9 @@ export class GreatBattleScene extends Phaser.Scene {
       duration: 700,
     });
 
-    this.time.delayedCall(1200, () => this.startPhase2bRound2());
+    this.time.delayedCall(1200, () =>
+      this.runWhirlwindAttack(() => this.startPhase2bRound2()),
+    );
   }
 
   private startPhase2bRound2(): void {
@@ -1191,7 +1288,9 @@ export class GreatBattleScene extends Phaser.Scene {
       },
     });
 
-    this.time.delayedCall(1400, () => this.startPhase2c());
+    this.time.delayedCall(1400, () =>
+      this.runWhirlwindAttack(() => this.startPhase2c()),
+    );
   }
 
   private startPhase2c(): void {

@@ -878,23 +878,29 @@ const SKY_LINES: readonly RunaLine[] = [
 
 // ─── HAUNTED WOOD ─────────────────────────────────────────────────────────────
 //
-// Phase 1 coverage for §5.5.8 Wood. The realm's mechanic is punctuation-as-
-// direction; Runa's voice gets quieter here than elsewhere because the wood
-// itself is quiet. More 'tender' tone than the other realms.
+// §5.5.8 narration. 9 of these are now WIRED into HauntedWoodScene via
+// narration.say(id) (Connection Pass). Their `text` is reconciled 1:1 to the
+// caption the scene already displayed, so wiring is zero-regression — say(id)
+// is now the playback path, so voice files drop in without touching the scene.
+//
+// wood_inga_intro stays UNWIRED: at her appearance Inga (an NPC) speaks first
+// ("i don't know my name."), with no Runa-narrator beat — the same rule that
+// left Sunken's sunken_olin_intro unwired. Kept here as a record of the beat.
 
 const WOOD_LINES: readonly RunaLine[] = [
   {
     id: "wood_intro_arrival",
     scene: "wood",
-    trigger: "HauntedWoodScene — scene opens in fog",
-    text: "The portal opens into fog. The wood has been haunted for two hundred years — not because anything bad lives here, but because no one told the ghosts they could go.",
+    trigger: "HauntedWoodScene.startArrival() — scene opens in fog (wired)",
+    text: "Wren. This place remembers everything. Move carefully. Speak only when spoken to.",
     tone: "reading",
     isNew: true,
   },
   {
     id: "wood_inga_intro",
     scene: "wood",
-    trigger: "HauntedWoodScene — Inga appears at the path",
+    trigger:
+      "HauntedWoodScene.startIngaNPC() — UNWIRED: Inga (an NPC) speaks first at her appearance, no Runa-narrator beat. Kept as a record / future inserted beat.",
     text: "A small ghost stands between paths. She does not remember her name. She hopes you can find it for her.",
     tone: "tender",
     isNew: true,
@@ -902,64 +908,64 @@ const WOOD_LINES: readonly RunaLine[] = [
   {
     id: "wood_crossroads1_intro",
     scene: "wood",
-    trigger: "HauntedWoodScene.startCrossroads1() — first four-direction encounter",
-    text: "Ghosts approach from four directions. Each direction is bound to a punctuation mark. Type the one that wards it.",
+    trigger: "HauntedWoodScene.startCrossroads1() — first crossroads encounter (wired)",
+    text: "Ghosts drift from the tree-line. Each carries a mark — match it to ward them.",
     tone: "instruction",
     isNew: true,
   },
   {
     id: "wood_crossroads2_intro",
     scene: "wood",
-    trigger: "HauntedWoodScene.startCrossroads2() — second crossroads, more directions",
-    text: "More crossroads. The marks know which way is open.",
+    trigger: "HauntedWoodScene.startCrossroads2() — second crossroads (wired)",
+    text: "The cold deepens. The shrine pulses faintly.",
     tone: "urgent",
     isNew: true,
   },
   {
     id: "wood_fork1_intro",
     scene: "wood",
-    trigger: "HauntedWoodScene — shrine fork (offering vs bone-flute)",
-    text: "A crossroads shrine. Leave an offering — or take the bone-flute. Both are quiet choices.",
+    trigger: "HauntedWoodScene.startFork1() — shrine fork (offering vs bone-flute) (wired)",
+    text: "The shrine glows at the crossroads. Two ways forward. The offering bowl is empty. A flute-bone catches your eye.",
     tone: "instruction",
     isNew: true,
   },
   {
     id: "wood_ghost_king_rise",
     scene: "wood",
-    trigger: "HauntedWoodScene.startBossFight() — Ghost-King rises",
-    text: "The Ghost-King rises from the root-throne. Two phases. Listen carefully — the second one is built of every punctuation mark in the wood.",
+    trigger: "HauntedWoodScene.startAct3() — the throne reveals; the Ghost-King appears (wired)",
+    text: "The trees part. A wider clearing. A throne of tangled roots.",
     tone: "urgent",
     isNew: true,
   },
   {
     id: "wood_ghost_king_phase2",
     scene: "wood",
-    trigger: "HauntedWoodScene.startBossCapstone() — every-punctuation passage begins",
-    text: "His last words are coming. Every mark you have learned is in them. Type them in order.",
+    trigger: "HauntedWoodScene.startBossCapstone() — every-punctuation passage begins (wired)",
+    text: "The Ghost-King speaks his last words.",
     tone: "urgent",
     isNew: true,
   },
   {
     id: "wood_ghost_king_defeated",
     scene: "wood",
-    trigger: "HauntedWoodScene.onFinalPassageComplete() — Ghost-King dissolves",
-    text: "He smiles for the first and last time. The mist closes around the throne. The ghosts behind him bow their heads.",
+    trigger: "HauntedWoodScene.onFinalPassageComplete() — Ghost-King dissolves (wired)",
+    text: "The Ghost-King dissolves into the mist.",
     tone: "wonder",
     isNew: true,
   },
   {
     id: "wood_truename_intro",
     scene: "wood",
-    trigger: "HauntedWoodScene.startFinalPassage() — true-name passage begins",
-    text: "The wood speaks its name. Type it whole. The ghosts have somewhere to be, finally.",
+    trigger: "HauntedWoodScene.startFinalPassage() — true-name passage begins (wired)",
+    text: "Type the realm's true name — word by word.",
     tone: "wonder",
     isNew: true,
   },
   {
     id: "wood_almanac_stamp",
     scene: "wood",
-    trigger: "HauntedWoodScene — almanac stamps the page",
-    text: "The almanac stamps a page. The wood is quiet, but it is not silent.",
+    trigger: "HauntedWoodScene.startEnding() — almanac stamps the page (wired)",
+    text: "You return to the portal. The Almanac stamps a new page.",
     tone: "intimate",
     isNew: true,
   },

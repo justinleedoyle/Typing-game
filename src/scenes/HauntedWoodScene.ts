@@ -224,9 +224,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Act 1 — Into the Wood ────────────────────────────────────────────────
 
   private startArrival(): void {
-    this.setNarrator(
-      "Wren. This place remembers everything. Move carefully. Speak only when spoken to.",
-    );
+    this.narration.say("wood_intro_arrival");
     this.time.delayedCall(2800, () => this.startPathExploration());
   }
 
@@ -321,9 +319,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.ghosts = [];
     this.spawnGhostsByDirection(directions, 300);
     this.time.delayedCall(200, () =>
-      this.setNarrator(
-        "Ghosts drift from the tree-line. Each carries a mark — match it to ward them.",
-      ),
+      this.narration.say("wood_crossroads1_intro"),
     );
   }
 
@@ -341,7 +337,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   // Encounter 2: 4 ghosts from all four compass directions. First time
   // the player sees south, completing the punctuation set.
   private startCrossroads2(): void {
-    this.setNarrator("The cold deepens. The shrine pulses faintly.");
+    this.narration.say("wood_crossroads2_intro");
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
 
@@ -418,9 +414,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Fork 1 — The Crossroads Shrine ──────────────────────────────────────
 
   private startFork1(): void {
-    this.setNarrator(
-      "The shrine glows at the crossroads. Two ways forward. The offering bowl is empty. A flute-bone catches your eye.",
-    );
+    this.narration.say("wood_fork1_intro");
 
     const offeringTarget = new TextWordTarget({
       scene: this,
@@ -529,7 +523,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Act 3 — The Ghost-King's Hall ────────────────────────────────────────
 
   private startAct3(): void {
-    this.setNarrator("The trees part. A wider clearing. A throne of tangled roots.");
+    this.narration.say("wood_ghost_king_rise");
     this.time.delayedCall(2200, () => {
       this.drawGhostKing();
       this.time.delayedCall(1200, () => this.startFork2());
@@ -661,7 +655,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     dimOverlay.setAlpha(0);
     this.tweens.add({ targets: dimOverlay, alpha: 1, duration: 700 });
 
-    this.setNarrator("The Ghost-King speaks his last words.");
+    this.narration.say("wood_ghost_king_phase2");
     this.time.delayedCall(1800, () => {
       const passage = [
         "stop!",
@@ -698,7 +692,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Realm Seal — True-Name Passage ───────────────────────────────────────
 
   private startFinalPassage(): void {
-    this.setNarrator("Type the realm's true name — word by word.");
+    this.narration.say("wood_truename_intro");
     const passage1 = ["we", "are", "remembered.", "we", "are", "quiet."];
     const passage2 = ["but", "we", "are", "not", "silent."];
 
@@ -744,7 +738,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.clearActiveTargets();
     // Ghost-King dissolves
     this.cameras.main.flash(500, 220, 230, 210, false);
-    this.setNarrator("The Ghost-King dissolves into the mist.");
+    this.narration.say("wood_ghost_king_defeated");
     // Almanac lore page 5 — the Wood's true name, stamped when the realm's
     // true-name passage resolves.
     this.store.update((s) => {
@@ -830,7 +824,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startEnding(): void {
     this.clearActiveTargets();
-    this.setNarrator("You return to the portal. The Almanac stamps a new page.");
+    this.narration.say("wood_almanac_stamp");
 
     this.store.update((s) => {
       s.realms["haunted-wood"] = {

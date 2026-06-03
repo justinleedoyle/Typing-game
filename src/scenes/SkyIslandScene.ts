@@ -281,9 +281,7 @@ export class SkyIslandScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private startAct1(): void {
-    this.setNarrator(
-      "Wren — careful. The island floats. The lanterns never go out here. Something tends them.",
-    );
+    this.narration.say("sky_intro_arrival");
     this.time.delayedCall(2800, () => this.runPathBeats(0));
   }
 
@@ -318,9 +316,7 @@ export class SkyIslandScene extends Phaser.Scene {
   // ─── Lantern-Lighter NPC ──────────────────────────────────────────────────
 
   private startLanternLighter(): void {
-    this.setNarrator(
-      "At the base of the great beacon tower, a child-spirit tends a cluster of lanterns.",
-    );
+    this.narration.say("sky_lantern_lighter_intro");
     this.time.delayedCall(2000, () => {
       this.setNarrator(LIGHTER_LINE_1);
       this.time.delayedCall(600, () => {
@@ -594,9 +590,7 @@ export class SkyIslandScene extends Phaser.Scene {
   // ─── Fork 1 — Library Tower ──────────────────────────────────────────────
 
   private startFork1(): void {
-    this.setNarrator(
-      "The Library Tower. Two paths lead inside.",
-    );
+    this.narration.say("sky_fork1_intro");
 
     const helpTarget = new TextWordTarget({
       scene: this,
@@ -673,9 +667,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private startAct3(): void {
     this.clearActiveTargets();
-    this.setNarrator(
-      "The summit. Scrolls orbit a shape that is almost human. The Scholar-Spirit waits.",
-    );
+    this.narration.say("sky_scholar_spirit_rise");
     this.bossContainer = this.drawScholarSpirit();
     this.time.delayedCall(2400, () => this.startBossPhase1());
   }
@@ -824,9 +816,7 @@ export class SkyIslandScene extends Phaser.Scene {
     });
 
     this.time.delayedCall(800, () => {
-      this.setNarrator(
-        "the sky remembers every page that ever lit. nothing burned is truly gone.",
-      );
+      this.narration.say("sky_scholar_spirit_defeated");
       this.time.delayedCall(3000, () => this.startFork2());
     });
   }
@@ -958,7 +948,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private startTrueNamePassage(): void {
     this.clearActiveTargets();
-    this.setNarrator("The island speaks. Type back its name.");
+    this.narration.say("sky_truename_intro");
     this.time.delayedCall(1800, () => {
       const target = new TextWordTarget({
         scene: this,
@@ -986,7 +976,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private startEnding(): void {
     this.clearActiveTargets();
-    this.setNarrator("You return to the portal. The Almanac stamps a new page.");
+    this.narration.say("sky_almanac_stamp");
 
     this.store.update((s) => {
       s.realms["sky-island"] = {

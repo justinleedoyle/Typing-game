@@ -247,9 +247,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── ACT 1 — Descent into the Forge ─────────────────────────────────────────
 
   private startAct1Arrival(): void {
-    this.setNarrator(
-      "Runa: \"Wren. The air here bites. Brass and iron. Something older underneath.\"",
-    );
+    this.narration.say("forge_intro_arrival");
     this.time.delayedCall(2600, () => this.startCatwalkBeats(0));
   }
 
@@ -437,9 +435,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.golems = [];
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
-    this.setNarrator(
-      "Three golems stir. Type their words to redirect them.",
-    );
+    this.narration.say("forge_wave1_intro");
 
     const words = pickAdaptiveWords(
       FORGE_WORD_BANK,
@@ -470,9 +466,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.golems = [];
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
-    this.setNarrator(
-      "The golems press forward — one with a word that demands a command.",
-    );
+    this.narration.say("forge_wave2_intro");
 
     // §5.5.10 — a golem's CAPITALIZED command comes out as scratched-out caps.
     // Fires on Wave 2 (the wave that introduces the capitalized golem) so it
@@ -531,9 +525,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.clearActiveTargets();
     this.golems = [];
     this.waveActive = false;
-    this.setNarrator(
-      "The bellows hang broken. Two paths open before you. Type a choice.",
-    );
+    this.narration.say("forge_fork1_intro");
 
     const helpForn = new TextWordTarget({
       scene: this,
@@ -625,9 +617,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.golems = [];
     this.waveActive = false;
     this.cameras.main.shake(300, 0.006);
-    this.setNarrator(
-      "The far end of the foundry shudders. Something massive rises from the steam.",
-    );
+    this.narration.say("forge_command_golem_rise");
     this.time.delayedCall(2800, () => this.startBossPhase1());
   }
 
@@ -702,9 +692,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.bossEye.lineStyle(2, 0xffd277, 1);
     this.bossEye.strokeCircle(22, -18, 10);
 
-    this.setNarrator(
-      "The golem's eye blazes brass-gold. Hold Shift and command it.",
-    );
+    this.narration.say("forge_command_golem_phase2");
 
     let phaseIdx = 0;
     const nextWord = (): void => {
@@ -891,9 +879,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       }
     });
 
-    this.setNarrator(
-      "the forge breathes. the brass remembers. its makers are remembered.",
-    );
+    this.narration.say("forge_command_golem_defeated");
     this.time.delayedCall(3200, () => this.startFork2());
   }
 
@@ -1079,7 +1065,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private startTrueNamePassage(): void {
     this.clearActiveTargets();
-    this.setNarrator("One last passage. Type it to leave the forge behind.");
+    this.narration.say("forge_truename_intro");
 
     const passages = [
       "the forge breathes.",

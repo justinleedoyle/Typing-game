@@ -239,6 +239,29 @@ const HUB_LINES: readonly RunaLine[] = [
 ];
 
 // ─── WINTER MOUNTAIN ──────────────────────────────────────────────────────────
+//
+// §5.5.6 narration. 21 of these are now WIRED into WinterMountainScene via
+// narration.say(id) (Connection Pass — the 5th and final realm). Their `text`
+// is reconciled 1:1 to the caption the scene already displayed, so wiring is
+// zero-regression. Most already byte-matched (these lines were written with the
+// scene); the three lowercase "primal" beats — winter_boss_rise,
+// winter_boss_defeated, winter_wave_reset — had their `text` lowercased here to
+// match the scene's actual captions.
+//
+// 26 stay UNWIRED because their captions are dynamic (array-indexed or branch
+// variables) — one setNarrator call serving many lines — which can't byte-match
+// a single say(id) without refactoring the emit site (the same rule that left
+// the other realms' dynamic captions as setNarrator):
+//   • winter_idle_river — no idle hook exists in the scene (drafted-but-no-beat).
+//   • winter_revisit_{bury,pelt,fallback} — startRevisit picks one by branch var.
+//   • winter_river_{pine,ice,branch} — runRiverBeats uses a narrations[idx] array.
+//   • winter_heldur_ask_{name,story,holdfast} — runHeldurExchange uses the
+//     HELDUR_NARRATOR_PROMPTS[idx] array.
+//   • winter_wave{1,2,3}_intro — startWave uses WAVES[idx].intro.
+//   • winter_{huntress,firefly,bury,pelt}_passage{1,2} — runPassageChain emits
+//     step.narrator from a per-branch array.
+//   • winter_nearmiss_{no_fox,no_huntress,pelt} — startFoxGate picks one by branch.
+//   • winter_truename_reaction_{1,2} — emitted from the TRUE_NAME_REACTIONS array.
 
 const WINTER_LINES: readonly RunaLine[] = [
   // Arrival
@@ -392,14 +415,14 @@ const WINTER_LINES: readonly RunaLine[] = [
     id: "winter_boss_rise",
     scene: "winter",
     trigger: "WinterMountainScene.spawnBoss() — pack leader appears",
-    text: "The pack leader rises. Type its name to fell it.",
+    text: "the pack leader rises. type its name to fell it.",
     tone: "urgent",
   },
   {
     id: "winter_boss_defeated",
     scene: "winter",
     trigger: "WinterMountainScene.onBossDefeated()",
-    text: "The old one slumps. The trail breathes again.",
+    text: "the old one slumps. the trail breathes again.",
     tone: "wonder",
   },
 
@@ -408,7 +431,7 @@ const WINTER_LINES: readonly RunaLine[] = [
     id: "winter_wave_reset",
     scene: "winter",
     trigger: "WinterMountainScene.resetWave() — all candles snuffed",
-    text: "The dark presses in. Steady your hands and try again.",
+    text: "the dark presses in. steady your hands and try again.",
     tone: "tender",
   },
 

@@ -605,24 +605,29 @@ const WINTER_LINES: readonly RunaLine[] = [
 
 // ─── SUNKEN BELL ──────────────────────────────────────────────────────────────
 //
-// Phase 1 coverage — narration anchors for the §5.5.7 beats most visible to
-// the player. All marked isNew: true — none of these are wired into the scene
-// yet; NarrationManager.say(id) is the activation hook. Order matches play
-// sequence: arrival → Olin → choir waves → fork → boss phases → true name.
+// §5.5.7 narration. 9 of these are now WIRED into SunkenBellScene via
+// narration.say(id) (Connection Pass). Their `text` is reconciled 1:1 to the
+// caption the scene already displayed, so wiring is zero-regression — the only
+// change is that say(id) is now the playback path, so voice files drop in
+// without touching the scene. Prose enrichment happens in a later review pass;
+// because the lines are wired, enriching a `text` here auto-updates the
+// caption. `sunken_olin_intro` stays UNWIRED: the scene has Olin speak
+// directly with no Runa-narrator beat at his appearance.
 
 const SUNKEN_LINES: readonly RunaLine[] = [
   {
     id: "sunken_intro_arrival",
     scene: "sunken",
-    trigger: "SunkenBellScene — scene opens; portal closes underwater",
-    text: "The portal opens onto a flooded nave. You can breathe here — this place is half-real, half-memory. Move slowly. The bell sets the pace.",
+    trigger: "SunkenBellScene.startArrival() — scene opens (wired)",
+    text: "Wren, this place has been listening for a hundred years. Move slowly. The bell sets the pace.",
     tone: "reading",
     isNew: true,
   },
   {
     id: "sunken_olin_intro",
     scene: "sunken",
-    trigger: "SunkenBellScene.startOlinNPC() — Olin fades in on his pew",
+    trigger:
+      "SunkenBellScene.startOlinNPC() — UNWIRED: scene has Olin speak directly, no Runa-narrator beat at his appearance. Candidate for a future inserted beat.",
     text: "An old merfolk priest sits on a pew. Half-deaf — the only one who survived the silencing because he could not hear the command. He gestures you closer.",
     tone: "tender",
     isNew: true,
@@ -630,64 +635,64 @@ const SUNKEN_LINES: readonly RunaLine[] = [
   {
     id: "sunken_olin_teach_activate",
     scene: "sunken",
-    trigger: "SunkenBellScene.onOlinTeachComplete() — the bell tolls and beat-lock engages",
-    text: "On the toll, you may speak. Between tolls, you cannot. Listen.",
+    trigger: "SunkenBellScene.onOlinTeachComplete() — bell tolls, beat-lock engages (wired)",
+    text: "The bell tolls once. And the world changes tempo.",
     tone: "instruction",
     isNew: true,
   },
   {
     id: "sunken_choir_wave1",
     scene: "sunken",
-    trigger: "SunkenBellScene.startFirstGhostEncounter() — three slow ghosts approach in tempo",
-    text: "Three shapes drift up the aisle. Type each name on the bell.",
+    trigger: "SunkenBellScene.startWave1() — the nave (wired)",
+    text: "The nave stretches ahead. Shapes drift between the columns.",
     tone: "reading",
     isNew: true,
   },
   {
     id: "sunken_choir_wave2",
     scene: "sunken",
-    trigger: "SunkenBellScene Act 2 — tighter tempo, more ghosts",
-    text: "More are coming. The water thickens with them.",
+    trigger: "SunkenBellScene.startWave2() — escalation (wired)",
+    text: "More come. One of them is different — restless, doubled.",
     tone: "urgent",
     isNew: true,
   },
   {
     id: "sunken_fork1_intro",
     scene: "sunken",
-    trigger: "SunkenBellScene — Cathedral Doors fork (chant vs thunderclap)",
-    text: "The cathedral doors are old. Chant them open — or call thunder. Either will work. They mean different things.",
+    trigger: "SunkenBellScene.startFork1() — Cathedral Doors fork (wired)",
+    text: "The cathedral doors. Two ways through. Choose.",
     tone: "instruction",
     isNew: true,
   },
   {
     id: "sunken_warden_rise",
     scene: "sunken",
-    trigger: "SunkenBellScene.startWardenPhase1() — Bell-Warden appears, eyes closed",
-    text: "The Warden rises from the bell — stone-faced, eyes closed. The tempo will tighten before he opens them.",
+    trigger: "SunkenBellScene.startAct3() — Bell-Warden appears, eyes closed (wired)",
+    text: "The Bell-Warden. Still. Waiting.",
     tone: "urgent",
     isNew: true,
   },
   {
     id: "sunken_warden_phase2",
     scene: "sunken",
-    trigger: "SunkenBellScene.startWardenPhase2() — tempo doubles, eyes open",
-    text: "His eyes are open. The tide is rising. Type quicker.",
+    trigger: "SunkenBellScene.startWardenPhase2() — tempo doubles (wired)",
+    text: "The tide rises. The tempo doubles.",
     tone: "urgent",
     isNew: true,
   },
   {
     id: "sunken_warden_defeated",
     scene: "sunken",
-    trigger: "SunkenBellScene.onWardenDefeated() — the bell falls silent",
-    text: "A long silence. The bell, for the first time in a hundred years, falls quiet on its own beat.",
+    trigger: "SunkenBellScene.onWardenDefeated() — the bell falls silent (wired)",
+    text: "A long silence. The bell, for the first time in a hundred years, falls quiet.",
     tone: "wonder",
     isNew: true,
   },
   {
     id: "sunken_truename_intro",
     scene: "sunken",
-    trigger: "SunkenBellScene — true-name passage begins",
-    text: "The bell speaks its name. Type it whole — one word per toll. It has been waiting to be spoken.",
+    trigger: "SunkenBellScene.startTrueNamePassage() — true-name passage begins (wired)",
+    text: "The realm speaks. Type back its name.",
     tone: "wonder",
     isNew: true,
   },

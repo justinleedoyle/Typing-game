@@ -267,9 +267,7 @@ export class SunkenBellScene extends Phaser.Scene {
     // Act 1 pre-beat: input flows freely until Olin teaches the bell's rhythm.
     // BeatClock stays not-running here; gating engages only once start() is
     // called at the end of Olin's exchange.
-    this.setNarrator(
-      "Wren, this place has been listening for a hundred years. Move slowly. The bell sets the pace.",
-    );
+    this.narration.say("sunken_intro_arrival");
     this.time.delayedCall(2500, () => this.startDescent());
   }
 
@@ -398,7 +396,7 @@ export class SunkenBellScene extends Phaser.Scene {
         s.almanacLore.push("notes-from-a-half-deaf-priest");
       }
     });
-    this.setNarrator("The bell tolls once. And the world changes tempo.");
+    this.narration.say("sunken_olin_teach_activate");
     this.beatClock.setTempo(2000);
     this.beatClock.start();
     this.time.delayedCall(2000, () => this.startFirstGhostEncounter());
@@ -442,7 +440,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private startWave1(): void {
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
-    this.setNarrator("The nave stretches ahead. Shapes drift between the columns.");
+    this.narration.say("sunken_choir_wave1");
     const words = pickAdaptiveWords(
       SUNKEN_BELL_WORD_BANK,
       4,
@@ -468,7 +466,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private startWave2(): void {
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
-    this.setNarrator("More come. One of them is different — restless, doubled.");
+    this.narration.say("sunken_choir_wave2");
 
     // §5.5.10 — the bell tolls, and for one peal the cathedral fills with a
     // scratched whisper of the Lord's text. Fires once per playthrough on the
@@ -543,9 +541,7 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Act 2: Fork 1 — The Cathedral Doors ──────────────────────────────────
 
   private startFork1(): void {
-    this.setNarrator(
-      "The cathedral doors. Two ways through. Choose.",
-    );
+    this.narration.say("sunken_fork1_intro");
 
     const chantTarget = new TextWordTarget({
       scene: this,
@@ -672,7 +668,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.ghosts = [];
     const wardenGraphics = this.drawWarden();
     // Phase 1
-    this.setNarrator("The Bell-Warden. Still. Waiting.");
+    this.narration.say("sunken_warden_rise");
     this.time.delayedCall(1200, () => {
       this.startWardenPhase1(wardenGraphics);
     });
@@ -742,7 +738,7 @@ export class SunkenBellScene extends Phaser.Scene {
     // Double tempo — the tide rises and the world speeds up.
     this.beatClock.setTempo(1000);
 
-    this.setNarrator("The tide rises. The tempo doubles.");
+    this.narration.say("sunken_warden_phase2");
 
     const phrases = ["tide-and-toll", "deep-and-dark", "still-and-stir"];
     let remaining = phrases.length;
@@ -858,9 +854,7 @@ export class SunkenBellScene extends Phaser.Scene {
         s.almanacLore.push("the-wardens-true-name");
       }
     });
-    this.setNarrator(
-      "A long silence. The bell, for the first time in a hundred years, falls quiet.",
-    );
+    this.narration.say("sunken_warden_defeated");
     this.time.delayedCall(2000, () => this.startFork2());
   }
 
@@ -981,7 +975,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startTrueNamePassage(): void {
     this.clearActiveTargets();
-    this.setNarrator("The realm speaks. Type back its name.");
+    this.narration.say("sunken_truename_intro");
     this.time.delayedCall(800, () => {
       const trueName = "the bell remembers. the deep listens. the kingdom holds.";
       const target = new TextWordTarget({

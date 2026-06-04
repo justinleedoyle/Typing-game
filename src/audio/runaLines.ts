@@ -74,91 +74,94 @@ const TITLE_LINES: readonly RunaLine[] = [
 
 // ─── OPENING ──────────────────────────────────────────────────────────────────
 //
-// §5.5.2 narration. 8 of these are now WIRED into OpeningScene via
-// narration.say(id) (Connection Pass). Their `text` is reconciled 1:1 to the
-// caption the scene already displayed, so wiring is zero-regression.
+// §5.5.2 narration. 8 of these are WIRED into OpeningScene via
+// narration.say(id) (Connection Pass).
 //
-// Beats 4, 5, 6, 7, 8, 10 retain the scene's speaker-tag caption styling
-// verbatim — `Runa: "…"` for spoken lines, `Narrator: …` for description — so
-// the captions stay byte-identical. Those tags are stripped at voice-generation
-// time; harmonizing the opening's caption style (it predates the prefix-less
-// realm narration) is a §5.5.8 prose-pass job.
+// §5.5.8 PROSE PASS (done): beats 4, 5, 6, 7, 8, 10 had their `Runa: "…"` /
+// `Narrator: …` speaker-tag styling stripped so the opening matches the
+// prefix-less realm narration, and the bodies were lifted — anchored to the
+// §5.5.2 canon, which the prior draft had drifted from and in places degraded
+// (e.g. the beat-5 "brass → Bjarn" logic, and restored beats like "He will
+// come here. Soon."). Because the beats are wired, editing `text` here updates
+// the caption directly — these are no longer byte-identical to old `main`.
 //
 // 2 stay UNWIRED: opening_beat3_sibling_doorway and opening_beat9_sibling_farewell
 // are gender-conditional (the scene shows a different caption for boy-Wren's
 // sibling Saga vs girl-Wren's sibling Magnus), so one say(id) can't byte-match
-// both branches. Beat 2.5 (the boy/girl gender prompt) has no line and stays
-// setNarrator as a functional prompt.
+// both branches. Their `text` mirrors the scene's boy-branch (Saga) narration
+// as the canonical record; the scene (OpeningScene.beat3/beat9) is the source
+// of truth for what actually renders. Beat 2.5 (the boy/girl gender prompt) has
+// no line and stays setNarrator as a functional prompt.
 
 const OPENING_LINES: readonly RunaLine[] = [
   {
     id: "opening_beat1_intro",
     scene: "opening",
     trigger: "OpeningScene.beat1() — scene opens, 3 s hold",
-    text: "In the kingdom of Holdfast — the last quiet place in the world — a child has been waiting all evening to be called downstairs.",
+    text: "In the kingdom of Holdfast — the last quiet place in the world — a child has waited all evening to be called downstairs. Tonight, after a hundred years, someone calls.",
     tone: "reading",
   },
   {
     id: "opening_beat2_runa_descends",
     scene: "opening",
     trigger: "OpeningScene.beat2() — Runa fades in at the desk",
-    text: "Runa — the royal cartographer — comes down the staircase. Ink-stained. Half-blind in one eye. She has been waiting, too.",
+    text: "Runa — the royal cartographer — comes down the stair. Ink to the elbows, half-blind in one eye, the good eye already on you. She has been waiting, too.",
     tone: "reading",
   },
   {
     id: "opening_beat3_sibling_doorway",
     scene: "opening",
     trigger: "OpeningScene.beat3() — sibling fades in at the doorway",
-    text: "At the doorway, a small figure in nightclothes holds a drawing against her chest.",
+    text: "At the doorway, a small figure in nightclothes hangs back, a drawing held to the chest like a shield.",
     tone: "tender",
   },
   {
     id: "opening_beat4_type_name",
     scene: "opening",
     trigger: "OpeningScene.beat4() — first typed word: 'Wren'",
-    text: "Runa: \"Wren. Hands on the keys. Type your name.\"",
+    text: "The kingdom has gone a hundred years without a Portalwright. Tonight we find out if it has one again. Hands on the keys — and type your name.",
     tone: "intimate",
   },
   {
     id: "opening_beat5_type_typewriter",
     scene: "opening",
     trigger: "OpeningScene.beat5() — second typed word: 'Bjarn'",
-    text: "Runa: \"Good. The typewriter has a name. It is a brass one, so the name is Bjarn. Type it.\"",
+    text: "Good. Now — the machine itself. Typewriters have names; you only have to listen for them. Yours is brass, and old, and a little stubborn. It answers to Bjarn. Type it.",
     tone: "intimate",
   },
   {
     id: "opening_beat6_almanac_speech",
     scene: "opening",
     trigger: "OpeningScene.beat6() — Quiet Lord foreshadow + Almanac reveal",
-    text: "Runa: \"The Quiet Lord has been waking up. Across the Realms Beyond he is gathering an army that hates language and loves silence. This is the Almanac. It records everywhere you go, everyone you save, everything you bring home. It is yours now.\"",
+    text: "The Quiet Lord has been waking for some time. Across the Realms Beyond he gathers an army that hates language and loves silence. He will come here — soon. This is the Almanac. It remembers every place you go, every soul you save, everything you carry home. It is yours now.",
     tone: "reading",
   },
   {
     id: "opening_beat7_portal_wakes",
     scene: "opening",
     trigger: "OpeningScene.beat7() — first portal flickers awake",
-    text: "Narrator: The nearest arch flickers. Pale cold light from beyond. A distant sound — wolves on a mountain.",
+    text: "The nearest arch stirs and fills with pale, cold light. From the far side of it, faint — wolves on a mountain.",
     tone: "reading",
   },
   {
     id: "opening_beat8_winter_woken",
     scene: "opening",
     trigger: "OpeningScene.beat8() — type 'Winter Mountain' to step through",
-    text: "Runa: \"The Winter Mountain has woken. Type its name when you are ready.\"",
+    text: "The Winter Mountain has woken, and it will take you first. Type its name when you are ready — and Wren: you are readier than you feel.",
     tone: "intimate",
   },
   {
     id: "opening_beat9_sibling_farewell",
     scene: "opening",
     trigger: "OpeningScene.beat9() — sibling presses the drawing tighter",
-    text: "At the doorway, she presses the drawing a little tighter. Wren. I made you something.",
+    text: "At the doorway, she holds the drawing out at last — both hands, no more hiding it. Wren. I made you something.",
     tone: "tender",
   },
   {
     id: "opening_beat10_bridge_to_hub",
     scene: "opening",
     trigger: "OpeningScene.beat10() — fade to Portal Chamber",
-    text: "Narrator: Runa rises and beckons. You follow her down the hall to the Portal Chamber.",
+    text: "Runa gathers her maps and rises, and beckons you after her — down the long hall, to the Portal Chamber. The Almanac knows the way back.",
     tone: "reading",
   },
 ];
@@ -1100,7 +1103,7 @@ const FINALE_LINES: readonly RunaLine[] = [
     id: "finale_phase1_arrival",
     scene: "finale",
     trigger: "GreatBattleScene.startPhase1() — Hearthward at dusk (wired)",
-    text: "Hearthward. The castle walls at dusk. They are coming.",
+    text: "Hearthward. The last wall, and the light failing. They are coming.",
     tone: "reading",
     isNew: true,
   },
@@ -1108,7 +1111,7 @@ const FINALE_LINES: readonly RunaLine[] = [
     id: "finale_phase1_walked_alone",
     scene: "finale",
     trigger: "GreatBattleScene.startPhase1() — zero-allies 'Walked Alone' branch (wired)",
-    text: "Runa's voice comes through the dark. You stand alone. That is enough.",
+    text: "Runa's voice, steady in the dark. No one beside you but the keys. You stand alone — and that is enough.",
     tone: "intimate",
     isNew: true,
   },
@@ -1116,7 +1119,7 @@ const FINALE_LINES: readonly RunaLine[] = [
     id: "finale_ally_untethered_wind",
     scene: "finale",
     trigger: "GreatBattleScene.startPhase1() — Untethered Wind ally modifier (wired)",
-    text: "Enemy banners fall. The wind is with you.",
+    text: "Enemy banners fall in a wind from nowhere. It is with you.",
     tone: "reading",
     isNew: true,
   },
@@ -1140,7 +1143,7 @@ const FINALE_LINES: readonly RunaLine[] = [
     id: "finale_ally_ghost_king",
     scene: "finale",
     trigger: "GreatBattleScene — Ghost-King ally column (wired)",
-    text: "A column of ghosts closes around one.",
+    text: "A column of ghosts closes around one of his own.",
     tone: "reading",
     isNew: true,
   },

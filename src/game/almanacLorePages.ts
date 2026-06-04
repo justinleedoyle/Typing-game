@@ -6,6 +6,12 @@
 // remaining realms as sketches — Forge, Sky, and Wood titles + bodies here
 // are original Almanac-voice prose grounded in the sketch beats; revise
 // freely without code changes.
+//
+// §5.5.8 PROSE PASS (done): the 13 unspecced Forge/Sky/Wood bodies (every page
+// except the three realm true-name pages, whose text is locked by §5.5.8) were
+// lifted to the ambitious register — anchored to the sketch beats + §5.5.9
+// companion/fork canon, preserving the strongest existing lines. Bodies are
+// sized to the Almanac reader's ~19-line page budget (26px / 620px wrap).
 
 export interface AlmanacLorePage {
   realmId: string;
@@ -110,35 +116,35 @@ export const ALMANAC_LORE_PAGES: Record<string, AlmanacLorePage> = {
     realmId: "clockwork-forge",
     title: "The Golem-Keeper's Code",
     body:
-      "Gregor showed Wren the difference between walk and WALK. Lowercase, the golem moved. Capitalized, it obeyed. “A small letter is a suggestion, lad,” he said. “A big one is an order. Forge folk have known the difference for three centuries. Don't unlearn it.”",
+      "Gregor set two words on the bench — walk, and WALK — and made Wren say which was which. Lowercase, the golem shifted its weight. Capitalized, it stood and obeyed. “A small letter is a suggestion, lad,” he said, tapping the brass. “A big one is an order. Forge folk have known the difference for three centuries. Don't you go unlearning it.”",
   },
 
   "the-broken-bellows": {
     realmId: "clockwork-forge",
     title: "The Broken Bellows",
     body:
-      "The Forge had been running for three centuries without anyone at the bellows. The fire had not grown smaller, only stranger: it burned without smoke, and the golems had begun giving themselves orders. None of them remembered who had given the first one.",
+      "Three centuries the Forge had run with no hand at the bellows, and the fire had not gone out — only gone strange. It burned without smoke now, and without a heat you could name, and somewhere in those long unwatched years the golems had begun giving themselves orders. None of them remembered who had given the first one. None of them had thought to ask.",
   },
 
   "forn-bellows-song": {
     realmId: "clockwork-forge",
     title: "Forn's Bellows Song",
     body:
-      "Forn the smith taught Wren the four-beat hammer song he used to time his work. “You don't keep tempo,” he said. “You let the metal keep tempo, and you follow it.” He gave Wren his spare hammer in a cloth, still warm, when the bellows started again.",
+      "Forn had timed his work to a four-beat hammer song since he was a boy, and he taught it to Wren now. “You don't keep tempo,” he said, marking it out on the anvil-edge — one, two, three, rest. “You let the metal keep tempo, and you follow where it goes.” When the bellows drew their first full breath in three hundred years, he wrapped his spare hammer in cloth and pressed it into Wren's hands, still warm from the fire.",
   },
 
   "apprentices-manifesto": {
     realmId: "clockwork-forge",
     title: "The Apprentices' Manifesto",
     body:
-      "The Apprentices' Cabal had pinned their manifesto inside the wrench cabinet: no more orders we did not write. no more fires we did not feed. Wren handed them the sabotage wrench they asked for. The Forge ran rougher after, but it ran by its own choosing.",
+      "The Apprentices' Cabal had pinned their manifesto inside the wrench cabinet, in a hand that pressed hard enough to score the brass: no more orders we did not write. no more fires we did not feed. Wren gave them the sabotage-wrench they asked for and did not stay to watch what they did with it. The Forge ran rougher after that — louder, with a limp in its rhythm. But it ran by its own choosing, and that was the thing they had wanted.",
   },
 
   "the-command-golems-name": {
     realmId: "clockwork-forge",
     title: "The Command-Golem's Name",
     body:
-      "The Command-Golem's true name was half-lowercase, half-shouted: stand DOWN. It was the order it had been giving itself for three centuries. Wren typed it the way it had to be typed and the golem sat, finally, like something that had been very tired for a long time.",
+      "The Command-Golem's true name was half-whispered, half-shouted: stand DOWN. It was the order it had been giving itself, over and over, for three hundred years — the only voice left to give it. Wren typed it the way it had to be typed, the small letters soft and the great ones hard, and the golem lowered itself to the floor. It sat the way a thing sits when it has been very tired for a very long time, and has only just been given permission to stop.",
   },
 
   "the-forge-true-name": {
@@ -154,28 +160,28 @@ export const ALMANAC_LORE_PAGES: Record<string, AlmanacLorePage> = {
     realmId: "sky-island",
     title: "The Lantern-Lighter's Vigil",
     body:
-      "A child-spirit tended the great beacon. “I light them and I count them,” she said. “That is my work. If I miscount, the island will fall.” She had been counting for two hundred years and was not tired. She let Wren help her count the row at the railing.",
+      "A child-spirit tended the great beacon, moving along the rails with a taper that never burned down. “I light them, and I count them,” she said. “That is the whole of my work. Miscount, and the island falls.” She had been counting for two hundred years and was not tired — counting, she explained, is not the sort of thing that tires you, if you love the things you count. She let Wren help with the row along the railing, and corrected him, kindly, twice.",
   },
 
   "scholar-ettas-last-volume": {
     realmId: "sky-island",
     title: "Scholar Etta's Last Volume",
     body:
-      "Scholar Etta had been writing her sky-chart for forty years and was very nearly done. She would not put down the pen until Wren typed the last three measurements for her. She pressed her ledger into his hands and asked him to carry it down to a library that no longer existed.",
+      "Scholar Etta had been writing her sky-chart for forty years and was three measurements short of finished. She would not put down the pen — could not, her hand had forgotten how — until Wren typed those last three for her. Then she pressed the ledger into his arms, heavy as a paving-stone, and asked him to carry it down to the library at Holdfast. She did not seem to know, or did not wish to know, that the library had burned long ago. Wren took it anyway. Some promises are worth keeping to a place that is gone.",
   },
 
   "the-five-temple-riddles": {
     realmId: "sky-island",
     title: "The Five Temple Riddles",
     body:
-      "At each lantern-temple a phrase had been inscribed on the rim, longer than the last. By the fifth temple, Wren was reading whole sentences without slowing. The lanterns rose when he finished each, and the island lifted a fraction with them.",
+      "At each lantern-temple a phrase had been cut into the rim of the great lamp, longer than the one before — a line, then a couplet, then a whole verse. The lanterns would not rise until the phrase was read entire, without a stumble. By the fifth temple Wren was reading full sentences at speed, the way you read a thing you have stopped being afraid of. Each lamp he lit drew the island a little higher into the gold air, until Holdfast itself was a far green smudge below.",
   },
 
   "the-scholar-spirits-riddles": {
     realmId: "sky-island",
     title: "The Scholar-Spirit's Riddles",
     body:
-      "The Scholar-Spirit asked three riddles in long form. The first was about what survives a fire; the second about what light owes the dark; the third Wren could not remember afterward. He answered all three. The Spirit, satisfied, opened her hands and let the wind take her notes.",
+      "The Scholar-Spirit asked three riddles, each the length of a paragraph, each wanting a whole sentence back. The first asked what survives a fire. The second asked what light owes the dark. The third Wren answered correctly and could not, afterward, remember a word of — not the question, not his answer, only that it had been true. She listened to all three with her head tilted, the way scholars do, and when he had finished she opened her hands and let the wind take her notes — two hundred years of them, out over the railing and gone.",
   },
 
   "the-sky-true-name": {
@@ -191,28 +197,28 @@ export const ALMANAC_LORE_PAGES: Record<string, AlmanacLorePage> = {
     realmId: "haunted-wood",
     title: "The Crossroads Ghost",
     body:
-      "At the first crossroads a ghost stood patient between four paths. “I do not remember which way I came,” she said. “Could you tell me which way you came?” Wren told her. She thanked him, and chose a fifth direction, and walked into the trees.",
+      "At the first crossroads a ghost stood waiting between the four paths, patient as a signpost. “I don't remember which way I came,” she said. “Could you tell me which way you came?” Wren told her — pointed back the way he had walked, the fog already closing over it. She thanked him as though he had handed her something far larger than a direction. Then she chose a fifth way, one Wren had not seen until she stepped onto it, and walked off into the trees without looking back.",
   },
 
   "ingas-name": {
     realmId: "haunted-wood",
     title: "Inga's Name",
     body:
-      "Her name was Inga. She had forgotten it for two hundred years, and when Wren typed it for her she said it out loud, slowly, like a word she had borrowed and was returning. The fog around her thinned. She had somewhere to be, finally.",
+      "Her name was Inga. She had carried the shape of it for two hundred years without the word itself — a held breath, a door she could not find the latch of. When Wren found the clue and typed it out for her, she said it aloud, slowly, like a word she had borrowed a long time ago and was at last returning. The fog around her thinned to nothing. She had somewhere to be, finally, and now she remembered the way.",
   },
 
   "punctuation-warding": {
     realmId: "haunted-wood",
     title: "Punctuation Warding",
     body:
-      "At the four-way crossroads each direction was guarded by a punctuation mark: north a period, east a question mark, south an exclamation, west a comma. “The marks are old wards,” Inga had said. “They hold the path you face open and the others closed.” Wren learned to pivot mid-word.",
+      "Each direction at the crossroads answered to a punctuation mark: a period north, a question mark east, an exclamation south, a comma west. “The marks are old wards,” Inga told him, “older than the wood. They hold open the path you face, and hold shut all the others. Mind your turning.” Wren learned to pivot mid-word — to set a comma and wheel west, to stop a charge from the north with one hard period — until the warding felt less like spelling and more like footwork.",
   },
 
   "ghost-kings-true-name": {
     realmId: "haunted-wood",
     title: "The Ghost-King's True Name",
     body:
-      "The Ghost-King's true name was a long sentence with every punctuation mark in it: each comma and semicolon and colon a footstep, each period and exclamation a stop. Wren typed it whole, and the ghosts behind the king bowed their heads, and the Ghost-King smiled for the first and last time.",
+      "The Ghost-King's true name was a single long sentence that held every mark of punctuation there is — each comma and semicolon a footstep, each colon a held breath, each period and exclamation a place to stop and be still. Wren typed it whole, without dropping a single mark, the way you carry a full cup across a dark room. Behind the throne the lesser ghosts bowed their heads. And the Ghost-King, who had been at war with his own name for longer than the wood had stood, smiled — for the first time, and the last.",
   },
 
   "the-wood-true-name": {

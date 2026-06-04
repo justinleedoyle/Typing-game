@@ -104,7 +104,8 @@ export class OpeningScene extends Phaser.Scene {
     this.narration.say("opening_beat2_runa_descends");
     this.drawRuna();
     const next = this.wrenGender === null ? () => this.beat2_5() : () => this.beat3();
-    this.time.delayedCall(2000, () => next());
+    // 2.8 s (was 2 s): the richer Runa-introduction caption needs room to read.
+    this.time.delayedCall(2800, () => next());
   }
 
   /** Beat 2.5 — §5.5.2 gender choice. Runa asks who Wren is; player types
@@ -113,7 +114,7 @@ export class OpeningScene extends Phaser.Scene {
    *  revisits skip the prompt. */
   private beat2_5(): void {
     this.setNarrator(
-      "Runa: \"Before we begin — type 'boy' or 'girl'. I want to know who I'm calling.\"",
+      "Before we begin, I should know who I am calling down into all of this. Type 'boy' or 'girl'.",
     );
 
     const pick = (gender: "boy" | "girl") => {
@@ -160,8 +161,8 @@ export class OpeningScene extends Phaser.Scene {
     const isBoy = this.wrenGender === "boy";
     this.setNarrator(
       isBoy
-        ? "At the doorway, a small figure in nightclothes holds a drawing against her chest. “Are the portals really real, Runa?”"
-        : "At the doorway, a taller figure leans against the frame, half-amused, half-worried. “You don’t have to do this. There has to be another way.”",
+        ? "At the doorway, a small figure in nightclothes hangs back, a drawing held to the chest like a shield. “Are the portals really real, Runa?”"
+        : "At the doorway, a taller figure leans in the frame, arms folded over a worry they are trying to wear as a joke. “You don’t have to do this. There has to be another way.”",
     );
     this.drawSibling();
     this.time.delayedCall(2000, () => this.beat4());
@@ -282,8 +283,8 @@ export class OpeningScene extends Phaser.Scene {
     const isBoy = this.wrenGender === "boy";
     this.setNarrator(
       isBoy
-        ? "Narrator: At the doorway, she presses the drawing a little tighter. ‘Wren. I made you something.’"
-        : "Narrator: At the doorway, he steadies himself against the frame. ‘Wren. I’ll be here. Don’t take long.’",
+        ? "At the doorway, she holds the drawing out at last — both hands, no more hiding it. ‘Wren. I made you something.’"
+        : "At the doorway, the joke finally leaves his face. ‘Wren. I’ll be here. Don’t take long.’",
     );
     this.time.delayedCall(2400, () => this.beat10());
   }

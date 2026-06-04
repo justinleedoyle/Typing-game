@@ -72,6 +72,22 @@ const TITLE_LINES: readonly RunaLine[] = [
 ];
 
 // ─── OPENING ──────────────────────────────────────────────────────────────────
+//
+// §5.5.2 narration. 8 of these are now WIRED into OpeningScene via
+// narration.say(id) (Connection Pass). Their `text` is reconciled 1:1 to the
+// caption the scene already displayed, so wiring is zero-regression.
+//
+// Beats 4, 5, 6, 7, 8, 10 retain the scene's speaker-tag caption styling
+// verbatim — `Runa: "…"` for spoken lines, `Narrator: …` for description — so
+// the captions stay byte-identical. Those tags are stripped at voice-generation
+// time; harmonizing the opening's caption style (it predates the prefix-less
+// realm narration) is a §5.5.8 prose-pass job.
+//
+// 2 stay UNWIRED: opening_beat3_sibling_doorway and opening_beat9_sibling_farewell
+// are gender-conditional (the scene shows a different caption for boy-Wren's
+// sibling Saga vs girl-Wren's sibling Magnus), so one say(id) can't byte-match
+// both branches. Beat 2.5 (the boy/girl gender prompt) has no line and stays
+// setNarrator as a functional prompt.
 
 const OPENING_LINES: readonly RunaLine[] = [
   {
@@ -99,35 +115,35 @@ const OPENING_LINES: readonly RunaLine[] = [
     id: "opening_beat4_type_name",
     scene: "opening",
     trigger: "OpeningScene.beat4() — first typed word: 'Wren'",
-    text: "Wren. Hands on the keys. Type your name.",
+    text: "Runa: \"Wren. Hands on the keys. Type your name.\"",
     tone: "intimate",
   },
   {
     id: "opening_beat5_type_typewriter",
     scene: "opening",
     trigger: "OpeningScene.beat5() — second typed word: 'Bjarn'",
-    text: "Good. The typewriter has a name. It is a brass one, so the name is Bjarn. Type it.",
+    text: "Runa: \"Good. The typewriter has a name. It is a brass one, so the name is Bjarn. Type it.\"",
     tone: "intimate",
   },
   {
     id: "opening_beat6_almanac_speech",
     scene: "opening",
     trigger: "OpeningScene.beat6() — Quiet Lord foreshadow + Almanac reveal",
-    text: "The Quiet Lord has been waking up. Across the Realms Beyond he is gathering an army that hates language and loves silence. This is the Almanac. It records everywhere you go, everyone you save, everything you bring home. It is yours now.",
+    text: "Runa: \"The Quiet Lord has been waking up. Across the Realms Beyond he is gathering an army that hates language and loves silence. This is the Almanac. It records everywhere you go, everyone you save, everything you bring home. It is yours now.\"",
     tone: "reading",
   },
   {
     id: "opening_beat7_portal_wakes",
     scene: "opening",
     trigger: "OpeningScene.beat7() — first portal flickers awake",
-    text: "The nearest arch flickers. Pale cold light from beyond. A distant sound — wolves on a mountain.",
+    text: "Narrator: The nearest arch flickers. Pale cold light from beyond. A distant sound — wolves on a mountain.",
     tone: "reading",
   },
   {
     id: "opening_beat8_winter_woken",
     scene: "opening",
     trigger: "OpeningScene.beat8() — type 'Winter Mountain' to step through",
-    text: "The Winter Mountain has woken. Type its name when you are ready.",
+    text: "Runa: \"The Winter Mountain has woken. Type its name when you are ready.\"",
     tone: "intimate",
   },
   {
@@ -141,7 +157,7 @@ const OPENING_LINES: readonly RunaLine[] = [
     id: "opening_beat10_bridge_to_hub",
     scene: "opening",
     trigger: "OpeningScene.beat10() — fade to Portal Chamber",
-    text: "Runa rises and beckons. You follow her down the hall to the Portal Chamber.",
+    text: "Narrator: Runa rises and beckons. You follow her down the hall to the Portal Chamber.",
     tone: "reading",
   },
 ];

@@ -92,9 +92,7 @@ export class OpeningScene extends Phaser.Scene {
 
   /** Beat 1 — Narrator intro, 3 s delay, no input. */
   private beat1(): void {
-    this.setNarrator(
-      "In the kingdom of Holdfast — the last quiet place in the world — a child has been waiting all evening to be called downstairs.",
-    );
+    this.narration.say("opening_beat1_intro");
     this.time.delayedCall(3000, () => this.beat2());
   }
 
@@ -103,9 +101,7 @@ export class OpeningScene extends Phaser.Scene {
    *  prompt and go straight to the sibling appearance; otherwise route through
    *  Beat 2.5 to capture the choice. */
   private beat2(): void {
-    this.setNarrator(
-      "Runa — the royal cartographer — comes down the staircase. Ink-stained. Half-blind in one eye. She has been waiting, too.",
-    );
+    this.narration.say("opening_beat2_runa_descends");
     this.drawRuna();
     const next = this.wrenGender === null ? () => this.beat2_5() : () => this.beat3();
     this.time.delayedCall(2000, () => next());
@@ -173,7 +169,7 @@ export class OpeningScene extends Phaser.Scene {
 
   /** Beat 4 — Type your name. */
   private beat4(): void {
-    this.setNarrator('Runa: "Wren. Hands on the keys. Type your name."');
+    this.narration.say("opening_beat4_type_name");
 
     const target = new TextWordTarget({
       scene: this,
@@ -193,9 +189,7 @@ export class OpeningScene extends Phaser.Scene {
 
   /** Beat 5 — Type the typewriter's name. */
   private beat5(): void {
-    this.setNarrator(
-      'Runa: "Good. The typewriter has a name. It is a brass one, so the name is Bjarn. Type it."',
-    );
+    this.narration.say("opening_beat5_type_typewriter");
 
     const target = new TextWordTarget({
       scene: this,
@@ -218,9 +212,7 @@ export class OpeningScene extends Phaser.Scene {
   /** Beat 6 — The Almanac speech. Quiet Lord lingers visibly through the
    *  doorway so the player has time to notice him while reading the line. */
   private beat6(): void {
-    this.setNarrator(
-      'Runa: "The Quiet Lord has been waking up. Across the Realms Beyond he is gathering an army that hates language and loves silence. This is the Almanac. It records everywhere you go, everyone you save, everything you bring home. It is yours now."',
-    );
+    this.narration.say("opening_beat6_almanac_speech");
     this.fadeInQuietLord();
     // Hold him at peak longer (2.4s) so he registers, then fade out cleanly.
     this.time.delayedCall(4200, () => this.fadeOutQuietLord());
@@ -260,17 +252,13 @@ export class OpeningScene extends Phaser.Scene {
    *  portal, so the narrator beat sells the awakening on its own — no
    *  extra overlay circles. */
   private beat7(): void {
-    this.setNarrator(
-      "Narrator: The nearest arch flickers. Pale cold light from beyond. A distant sound — wolves on a mountain.",
-    );
+    this.narration.say("opening_beat7_portal_wakes");
     this.time.delayedCall(2400, () => this.beat8());
   }
 
   /** Beat 8 — Type the portal name. */
   private beat8(): void {
-    this.setNarrator(
-      'Runa: "The Winter Mountain has woken. Type its name when you are ready."',
-    );
+    this.narration.say("opening_beat8_winter_woken");
 
     const target = new TextWordTarget({
       scene: this,
@@ -303,9 +291,7 @@ export class OpeningScene extends Phaser.Scene {
   /** Beat 10 — Bridge to the Portal Chamber. Frames the hub as the next room
    *  Wren walks into, not a redundant second scene. */
   private beat10(): void {
-    this.setNarrator(
-      "Narrator: Runa rises and beckons. You follow her down the hall to the Portal Chamber.",
-    );
+    this.narration.say("opening_beat10_bridge_to_hub");
     this.time.delayedCall(2400, () => {
       this.store.update((s) => {
         s.typewriterAwakened = true;

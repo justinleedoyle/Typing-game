@@ -2,7 +2,9 @@ import Phaser from "phaser";
 import { type AmbientHandle, playAmbientBattle } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
+import { playDamageThud } from "../audio/damageThud";
 import { NarrationManager } from "../game/narrationManager";
+import { flashDamageVignette } from "../game/vfx";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import {
   COMPANION_IDS,
@@ -140,6 +142,9 @@ export class GreatBattleScene extends Phaser.Scene {
   // typingInput and not interceptable without deeper changes).
   private shrineTokenForgivenThisWave = false;
   private untetheredWindSlowMult = 1.0; // untethered-wind: <1 slows advance
+  // Damage-feedback parity (#73): onMiss fires per keystroke, so the thud +
+  // edge vignette are throttled to avoid strobing on a burst of mistyping.
+  private lastMissFeedbackAt = 0;
 
   // Phase 2
   private quietLordContainer!: Phaser.GameObjects.Container;
@@ -192,6 +197,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.lastShiftSpellAt = 0;
     this.shrineTokenForgivenThisWave = false;
     this.untetheredWindSlowMult = 1.0;
+    this.lastMissFeedbackAt = 0;
 
     // Phase 2 relic state
     this.bellsTongueSuperHitAvailable = false;
@@ -256,10 +262,19 @@ export class GreatBattleScene extends Phaser.Scene {
         const hasShrineToken = this.store.get().satchel.includes("shrine-token");
         if (hasShrineToken && !this.shrineTokenForgivenThisWave) {
           this.shrineTokenForgivenThisWave = true;
-          // First miss forgiven — skip the shake
+          // First miss forgiven — skip the flinch entirely
           return;
         }
         this.cameras.main.shake(100, 0.003);
+        // Damage-feedback parity (#73): a slip under the Lord's pressure reads
+        // as a hit — same thud + edge vignette the five realms use. Throttled so
+        // a burst of mistyping doesn't strobe (onMiss is per-keystroke).
+        const now = Date.now();
+        if (now - this.lastMissFeedbackAt > 700) {
+          this.lastMissFeedbackAt = now;
+          playDamageThud();
+          flashDamageVignette(this);
+        }
       },
       // §5.5.11 — bellows-hammer: record when a Shift-spell claim lands so
       // the cooldown window can be enforced on the next attempt.
@@ -1324,6 +1339,12 @@ export class GreatBattleScene extends Phaser.Scene {
           this.time.delayedCall(600, () => this.startPhase2c());
           return;
         }
+        // Damage-feedback parity (#73): the counter fumbles and his word lands
+        // — the realms' hit feedback (shake + thud + edge vignette). The Pelt
+        // branch above returns first, so a forgiven knockback stays clean.
+        this.cameras.main.shake(240, 0.006);
+        playDamageThud();
+        flashDamageVignette(this);
         this.clearActiveTargets();
         this.setNarrator(`Hold Shift while typing: ${spellWord}`);
         this.time.delayedCall(800, () => this.startPhase2c());

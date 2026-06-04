@@ -700,23 +700,36 @@ const SUNKEN_LINES: readonly RunaLine[] = [
 
 // ─── CLOCKWORK FORGE ──────────────────────────────────────────────────────────
 //
-// Phase 1 coverage for the §5.5.8 Forge sketch. Same play-sequence ordering
-// as Sunken; all isNew so the scene wiring can land in a follow-up PR after
-// these get voiced.
+// §5.5.8 narration. 8 of these are now WIRED into ClockworkForgeScene via
+// narration.say(id) (Connection Pass). Their `text` is reconciled 1:1 to the
+// caption the scene already displayed, so wiring is zero-regression — say(id)
+// is now the playback path, so voice files drop in without touching the scene.
+// Prose enrichment happens in a later review pass; because the lines are wired,
+// enriching a `text` here auto-updates the caption.
+//
+// `forge_gregor_intro` and `forge_gregor_teach` stay UNWIRED: at those beats an
+// NPC (Old Gregor) speaks directly, so they are not Runa-narrator lines — the
+// same rule that left Sunken's `sunken_olin_intro` unwired. They are kept here
+// as a record of the beat and a candidate for a future inserted Runa line.
+//
+// `forge_intro_arrival` retains the scene's `Runa: "…"` caption styling verbatim
+// (Forge predates the prefix-less narration style); the speaker tag is stripped
+// at voice-generation time. Harmonizing caption style is a §5.5.8 prose-pass job.
 
 const FORGE_LINES: readonly RunaLine[] = [
   {
     id: "forge_intro_arrival",
     scene: "forge",
-    trigger: "ClockworkForgeScene — scene opens in the heat",
-    text: "The portal opens into heat. The Forge has been running for three centuries with no one at the bellows. The golems have been giving themselves orders.",
+    trigger: "ClockworkForgeScene.startAct1Arrival() — scene opens in the heat (wired)",
+    text: "Runa: \"Wren. The air here bites. Brass and iron. Something older underneath.\"",
     tone: "reading",
     isNew: true,
   },
   {
     id: "forge_gregor_intro",
     scene: "forge",
-    trigger: "ClockworkForgeScene.startGregorConversation() — Gregor at the workbench",
+    trigger:
+      "ClockworkForgeScene.startGregorConversation() — UNWIRED: Gregor speaks directly (NPC), no Runa-narrator beat at his appearance. Candidate for a future inserted beat.",
     text: "An old smith at the workbench — Gregor. He waves you over with a soot-black hand.",
     tone: "tender",
     isNew: true,
@@ -724,7 +737,8 @@ const FORGE_LINES: readonly RunaLine[] = [
   {
     id: "forge_gregor_teach",
     scene: "forge",
-    trigger: "ClockworkForgeScene — Gregor teaches the lowercase/CAPITAL rule",
+    trigger:
+      "ClockworkForgeScene.gregorStep2() — UNWIRED: Gregor's lesson is NPC dialogue, left as sayRaw.",
     text: "Lowercase moves them. CAPITALS command them. Forge folk have known the difference for three centuries. Don't unlearn it.",
     tone: "instruction",
     isNew: true,
@@ -732,56 +746,58 @@ const FORGE_LINES: readonly RunaLine[] = [
   {
     id: "forge_wave1_intro",
     scene: "forge",
-    trigger: "ClockworkForgeScene.startWave1() — first golems advance",
-    text: "Iron shapes move through the dark. Walk the first one off the floor.",
+    trigger: "ClockworkForgeScene.startWave1() — first golems advance (wired)",
+    text: "Three golems stir. Type their words to redirect them.",
     tone: "urgent",
     isNew: true,
   },
   {
     id: "forge_wave2_intro",
     scene: "forge",
-    trigger: "ClockworkForgeScene — second wave; CAPITAL commands enter rotation",
-    text: "More are advancing. The ones that ignore lowercase need an order — shout it.",
+    trigger:
+      "ClockworkForgeScene.startWave2() — second wave; CAPITAL command enters rotation (wired)",
+    text: "The golems press forward — one with a word that demands a command.",
     tone: "urgent",
     isNew: true,
   },
   {
     id: "forge_fork1_intro",
     scene: "forge",
-    trigger: "ClockworkForgeScene.startFork1() — Smith Forn vs Apprentices' Cabal",
-    text: "Two doorways. Smith Forn calls from the gear-room. The apprentices' cabal stands behind its own door, closed.",
+    trigger: "ClockworkForgeScene.startFork1() — Smith Forn vs Apprentices' Cabal (wired)",
+    text: "The bellows hang broken. Two paths open before you. Type a choice.",
     tone: "instruction",
     isNew: true,
   },
   {
     id: "forge_command_golem_rise",
     scene: "forge",
-    trigger: "ClockworkForgeScene.startBossPhase1() — Command-Golem rises",
-    text: "The far wall shudders. Something massive rises from the steam. Half its name is lowercase. Half is a shout.",
+    trigger: "ClockworkForgeScene.startAct3() — Command-Golem rises from the steam (wired)",
+    text: "The far end of the foundry shudders. Something massive rises from the steam.",
     tone: "urgent",
     isNew: true,
   },
   {
     id: "forge_command_golem_phase2",
     scene: "forge",
-    trigger: "ClockworkForgeScene.startBossPhase2() — Shift-switching escalates",
-    text: "It will not stop until it is given the order it has been giving itself. You know the words now.",
+    trigger: "ClockworkForgeScene.startBossPhase2() — Shift-switching escalates (wired)",
+    text: "The golem's eye blazes brass-gold. Hold Shift and command it.",
     tone: "urgent",
     isNew: true,
   },
   {
     id: "forge_command_golem_defeated",
     scene: "forge",
-    trigger: "ClockworkForgeScene — Command-Golem sits",
-    text: "The golem sits. Three centuries of self-given orders, finally finished. The furnace breathes a little easier.",
+    trigger:
+      "ClockworkForgeScene.bossDefeated() — the Command-Golem falls; doubles as the realm's true-name line (wired)",
+    text: "the forge breathes. the brass remembers. its makers are remembered.",
     tone: "wonder",
     isNew: true,
   },
   {
     id: "forge_truename_intro",
     scene: "forge",
-    trigger: "ClockworkForgeScene.startTrueNamePassage() — true-name passage begins",
-    text: "The Forge speaks its name. Type it whole — the brass is listening.",
+    trigger: "ClockworkForgeScene.startTrueNamePassage() — true-name passage begins (wired)",
+    text: "One last passage. Type it to leave the forge behind.",
     tone: "wonder",
     isNew: true,
   },

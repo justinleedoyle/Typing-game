@@ -383,7 +383,7 @@ export class GreatBattleScene extends Phaser.Scene {
   // ─── PHASE 1 — The Wall ─────────────────────────────────────────────────────
 
   private startPhase1(): void {
-    this.setNarrator("Hearthward. The castle walls at dusk. They are coming.");
+    this.narration.say("finale_phase1_arrival");
 
     // Build wave queue from cleared realms
     this.waveQueue = [];
@@ -396,7 +396,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
     // §5.5.11 — Zero allies: Walked Alone tone — no chorus, quiet music
     if (this.waveQueue.length === 0) {
-      this.setNarrator("Runa's voice comes through the dark. You stand alone. That is enough.");
+      this.narration.say("finale_phase1_walked_alone");
       this.time.delayedCall(2000, () => this.transitionToPhase2());
       return;
     }
@@ -413,7 +413,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // §5.5.11 — Untethered Wind narration cue
     if (state.satchel.includes("untethered-wind")) {
       this.time.delayedCall(400, () => {
-        this.setNarrator("Enemy banners fall. The wind is with you.");
+        this.narration.say("finale_ally_untethered_wind");
       });
     }
 
@@ -426,7 +426,7 @@ export class GreatBattleScene extends Phaser.Scene {
     if (this.waveQueue.length === 0) {
       // All waves done
       this.time.delayedCall(1000, () => {
-        this.setNarrator("He is here.");
+        this.narration.say("finale_phase1_lord_arrives");
         this.time.delayedCall(1800, () => this.transitionToPhase2());
       });
       return;
@@ -508,7 +508,7 @@ export class GreatBattleScene extends Phaser.Scene {
     const easiest = waveEnemies.reduce((a, b) =>
       a.word.length <= b.word.length ? a : b,
     );
-    this.setNarrator("Etta's Ledger — she marks one down.");
+    this.narration.say("finale_ally_etta_ledger");
     this.defeatEnemy(easiest);
   }
 
@@ -519,7 +519,7 @@ export class GreatBattleScene extends Phaser.Scene {
     );
     if (waveEnemies.length === 0) return;
     const victim = waveEnemies[Math.floor(Math.random() * waveEnemies.length)]!;
-    this.setNarrator("A column of ghosts closes around one.");
+    this.narration.say("finale_ally_ghost_king");
     this.defeatEnemy(victim);
   }
 
@@ -769,7 +769,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // §5.5.11 — bells-tongue: one-shot massive hit — ends Phase 2a early
     if (this.bellsTongueSuperHitAvailable) {
       this.bellsTongueSuperHitAvailable = false; // consumed
-      this.setNarrator("Bell's Tongue — one toll rings across the courtyard. He staggers.");
+      this.narration.say("finale_relic_bells_tongue");
       this.time.delayedCall(1800, () => {
         // Camera flash to signal the super-hit
         this.cameras.main.flash(300, 200, 200, 255, false);
@@ -796,9 +796,9 @@ export class GreatBattleScene extends Phaser.Scene {
       : ["unmake", "unsay", "unfound"];
 
     if (satchel.includes("sabotage-wrench")) {
-      this.setNarrator("The Wrench jams his armor. He speaks half a word and stops.");
+      this.narration.say("finale_relic_sabotage_wrench");
     } else {
-      this.setNarrator("He speaks to unmake. Answer him.");
+      this.narration.say("finale_phase2_unmake");
     }
 
     this.runSequentialWords(counterWords, 0, () => this.startPhase2b());
@@ -853,7 +853,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // §5.5.11 — tether-cord: bind the Lord for one beat — spawn an extra free phrase first
     if (satchel.includes("tether-cord") && !this.tetherCordBindUsed) {
       this.tetherCordBindUsed = true;
-      this.setNarrator("The Tether Cord pulls taut. He is bound — one beat.");
+      this.narration.say("finale_relic_tether_cord");
       const bindTarget = new TextWordTarget({
         scene: this,
         word: "bound",
@@ -863,7 +863,7 @@ export class GreatBattleScene extends Phaser.Scene {
         onComplete: () => {
           playChime();
           this.clearActiveTargets();
-          this.setNarrator("He breaks free. Answer him again.");
+          this.narration.say("finale_phase2_breaks_free");
           this.time.delayedCall(600, () => this.runPhase2bRounds());
         },
       });
@@ -880,7 +880,7 @@ export class GreatBattleScene extends Phaser.Scene {
     const satchel = this.store.get().satchel;
     if (satchel.includes("master-key") && !this.masterKeyFlankUsed) {
       this.masterKeyFlankUsed = true;
-      this.setNarrator("The Master Key clicks open a hidden corridor. An opening —");
+      this.narration.say("finale_relic_master_key");
       const flankTarget = new TextWordTarget({
         scene: this,
         word: "flank",
@@ -981,7 +981,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   // §5.5.9 — glass-fish: brief flash + bonus hit window word
   private applyGlassFishHitWindow(onDone: () => void): void {
-    this.setNarrator("The glass-fish lights the dark passage. A moment —");
+    this.narration.say("finale_companion_glass_fish");
     // Flash the screen briefly (light corridor effect)
     this.cameras.main.flash(400, 160, 220, 255, false);
     this.time.delayedCall(500, () => {
@@ -1013,7 +1013,7 @@ export class GreatBattleScene extends Phaser.Scene {
   private applyLanternMothHitWindow(): void {
     // Only fires if there are still live targets in play (avoid double-clear)
     if (this.activeTargets.length === 0) return;
-    this.setNarrator("The lantern-moth opens wide. The throne is lit.");
+    this.narration.say("finale_companion_lantern_moth");
     // Warm light overlay
     const throneLight = this.add.graphics().setDepth(3).setAlpha(0);
     throneLight.fillStyle(0xffd080, 0.18);
@@ -1062,9 +1062,7 @@ export class GreatBattleScene extends Phaser.Scene {
     if (this.whirlwindCanceled) {
       if (!this.whirlwindCancelAnnounced) {
         this.whirlwindCancelAnnounced = true;
-        this.setNarrator(
-          "Wind-Phrase and Quiet Chant intertwine. The air goes still — his whirlwind dies before it rises.",
-        );
+        this.narration.say("finale_relic_windphrase_chant");
         const pulse = this.add.graphics().setDepth(3).setAlpha(0);
         pulse.fillStyle(PALETTE_HEX.frost, 0.22);
         pulse.fillRect(0, 0, this.scale.width, this.scale.height);
@@ -1085,7 +1083,7 @@ export class GreatBattleScene extends Phaser.Scene {
       return;
     }
 
-    this.setNarrator("He raises a whirlwind. Plant your feet.");
+    this.narration.say("finale_phase2_whirlwind");
 
     const overlay = this.add.graphics().setDepth(2).setAlpha(0);
     overlay.fillStyle(PALETTE_HEX.dim, 0.28);
@@ -1140,7 +1138,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   // §5.5.9 — wisp-cat: extra phrase target spawns mid-phase (flank)
   private applyWispCatFlank(onDone: () => void): void {
-    this.setNarrator("The wisp-cat finds a path around him. Take it.");
+    this.narration.say("finale_companion_wisp_cat");
     const flankTarget = new TextWordTarget({
       scene: this,
       word: "flank",
@@ -1165,7 +1163,7 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private onPhase2Round1Done(): void {
-    this.setNarrator("He wavers.");
+    this.narration.say("finale_phase2_wavers");
     this.tweens.add({
       targets: this.quietLordContainer,
       alpha: { from: 1.0, to: 0.6 },
@@ -1196,7 +1194,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // §5.5.11 — pelt-of-the-old-one: Wren survives one knock without resetting
     // The pelt is consumed on first use; here we show a ready-cue if available
     if (this.peltKnockbackForgiven) {
-      this.setNarrator("The Pelt wraps you. One cold strike will not move you.");
+      this.narration.say("finale_relic_pelt");
     }
 
     // Round 2: 3 more words with no overlap
@@ -1240,7 +1238,7 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private onPhase2Round2Done(): void {
-    this.setNarrator("The word on him burns.");
+    this.narration.say("finale_phase3_word_burns");
 
     const satchel = this.store.get().satchel;
     const forceCount = satchel.filter((id) => FORCE_RELICS.has(id)).length;
@@ -1319,7 +1317,7 @@ export class GreatBattleScene extends Phaser.Scene {
         // §5.5.11 — pelt: forgive first knockback / re-register without penalty once
         if (this.peltKnockbackForgiven) {
           this.peltKnockbackForgiven = false; // consume
-          this.setNarrator("The Pelt holds. Try again.");
+          this.narration.say("finale_relic_pelt_retry");
           this.clearActiveTargets();
           this.time.delayedCall(600, () => this.startPhase2c());
           return;
@@ -1460,7 +1458,7 @@ export class GreatBattleScene extends Phaser.Scene {
   // §5.5.9 — brass-songbird: auto-fill the next 3 characters of the stalled word
   private applyBrassSongbirdHint(_target: TextWordTarget, word: string): void {
     // Show a narrator cue
-    this.setNarrator("The songbird sings ahead. Listen —");
+    this.narration.say("finale_companion_songbird");
 
     // TextWordTarget doesn't expose a direct "advance N chars" API, so we
     // simulate by injecting up to 3 typed characters via the typingInput.

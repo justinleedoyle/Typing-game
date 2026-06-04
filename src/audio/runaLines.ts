@@ -42,7 +42,8 @@ export type RunaScene =
   | "forge"
   | "sky"
   | "wood"
-  | "ambient";
+  | "ambient"
+  | "finale";
 
 export interface RunaLine {
   /** Stable ID; becomes `runa_${id}.mp3` filename. */
@@ -1000,6 +1001,200 @@ const AMBIENT_LINES: readonly RunaLine[] = [
 
 // ─── EXPORT ───────────────────────────────────────────────────────────────────
 
+// ─── GREAT BATTLE OF HOLDFAST (finale) ────────────────────────────────────────
+//
+// §5.5.11 narration. These lines were AUTHORED during the Connection Pass — the
+// finale had no runaLines entries before, only inline setNarrator() captions.
+// Each line's `text` byte-matches the caption GreatBattleScene already displayed
+// (verified against origin/main), so wiring is zero-regression — say(id) is now
+// the voice-ready path. The finale's narration is heavily satchel-conditional
+// (per-ally, per-relic, per-companion §5.5.11 branches); each branch is its own
+// static caption, so each is its own line.
+//
+// 5 captions stay UNWIRED because they are dynamic (template literals /
+// variables): the per-wave `The ${waveDef.label} pour over the wall.`,
+// `waveDef.companionLine`, the relic `descLine`, and the two
+// `Hold Shift … ${spellWord}` prompts.
+
+const FINALE_LINES: readonly RunaLine[] = [
+  {
+    id: "finale_phase1_arrival",
+    scene: "finale",
+    trigger: "GreatBattleScene.startPhase1() — Hearthward at dusk (wired)",
+    text: "Hearthward. The castle walls at dusk. They are coming.",
+    tone: "reading",
+    isNew: true,
+  },
+  {
+    id: "finale_phase1_walked_alone",
+    scene: "finale",
+    trigger: "GreatBattleScene.startPhase1() — zero-allies 'Walked Alone' branch (wired)",
+    text: "Runa's voice comes through the dark. You stand alone. That is enough.",
+    tone: "intimate",
+    isNew: true,
+  },
+  {
+    id: "finale_ally_untethered_wind",
+    scene: "finale",
+    trigger: "GreatBattleScene.startPhase1() — Untethered Wind ally modifier (wired)",
+    text: "Enemy banners fall. The wind is with you.",
+    tone: "reading",
+    isNew: true,
+  },
+  {
+    id: "finale_phase1_lord_arrives",
+    scene: "finale",
+    trigger: "GreatBattleScene.runNextWave() — the Quiet Lord arrives (wired)",
+    text: "He is here.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "finale_ally_etta_ledger",
+    scene: "finale",
+    trigger: "GreatBattleScene — Etta's Ledger ally auto-complete (wired)",
+    text: "Etta's Ledger — she marks one down.",
+    tone: "reading",
+    isNew: true,
+  },
+  {
+    id: "finale_ally_ghost_king",
+    scene: "finale",
+    trigger: "GreatBattleScene — Ghost-King ally column (wired)",
+    text: "A column of ghosts closes around one.",
+    tone: "reading",
+    isNew: true,
+  },
+  {
+    id: "finale_relic_bells_tongue",
+    scene: "finale",
+    trigger: "GreatBattleScene.startPhase2a() — Bell's Tongue one-shot (wired)",
+    text: "Bell's Tongue — one toll rings across the courtyard. He staggers.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "finale_relic_sabotage_wrench",
+    scene: "finale",
+    trigger: "GreatBattleScene.startPhase2a() — Sabotage-Wrench jam (wired)",
+    text: "The Wrench jams his armor. He speaks half a word and stops.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "finale_phase2_unmake",
+    scene: "finale",
+    trigger: "GreatBattleScene.startPhase2a() — default duel open (wired)",
+    text: "He speaks to unmake. Answer him.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "finale_relic_tether_cord",
+    scene: "finale",
+    trigger: "GreatBattleScene.startPhase2b() — Tether-Cord bind (wired)",
+    text: "The Tether Cord pulls taut. He is bound — one beat.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "finale_phase2_breaks_free",
+    scene: "finale",
+    trigger: "GreatBattleScene.startPhase2b() — Lord breaks the bind (wired)",
+    text: "He breaks free. Answer him again.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "finale_relic_master_key",
+    scene: "finale",
+    trigger: "GreatBattleScene.runPhase2bRounds() — Master-Key corridor (wired)",
+    text: "The Master Key clicks open a hidden corridor. An opening —",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "finale_companion_glass_fish",
+    scene: "finale",
+    trigger: "GreatBattleScene — Glass-fish lights the passage (wired)",
+    text: "The glass-fish lights the dark passage. A moment —",
+    tone: "wonder",
+    isNew: true,
+  },
+  {
+    id: "finale_companion_lantern_moth",
+    scene: "finale",
+    trigger: "GreatBattleScene — Lantern-moth lights the throne (wired)",
+    text: "The lantern-moth opens wide. The throne is lit.",
+    tone: "wonder",
+    isNew: true,
+  },
+  {
+    id: "finale_relic_windphrase_chant",
+    scene: "finale",
+    trigger: "GreatBattleScene.runWhirlwindAttack() — Wind-Phrase + Quiet Chant cancel (wired)",
+    text: "Wind-Phrase and Quiet Chant intertwine. The air goes still — his whirlwind dies before it rises.",
+    tone: "wonder",
+    isNew: true,
+  },
+  {
+    id: "finale_phase2_whirlwind",
+    scene: "finale",
+    trigger: "GreatBattleScene.runWhirlwindAttack() — whirlwind rises (uncanceled) (wired)",
+    text: "He raises a whirlwind. Plant your feet.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "finale_companion_wisp_cat",
+    scene: "finale",
+    trigger: "GreatBattleScene — Wisp-cat flank (wired)",
+    text: "The wisp-cat finds a path around him. Take it.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
+    id: "finale_phase2_wavers",
+    scene: "finale",
+    trigger: "GreatBattleScene — the Lord wavers (wired)",
+    text: "He wavers.",
+    tone: "wonder",
+    isNew: true,
+  },
+  {
+    id: "finale_relic_pelt",
+    scene: "finale",
+    trigger: "GreatBattleScene — Pelt of the Old One survives a cold strike (wired)",
+    text: "The Pelt wraps you. One cold strike will not move you.",
+    tone: "instruction",
+    isNew: true,
+  },
+  {
+    id: "finale_phase3_word_burns",
+    scene: "finale",
+    trigger: "GreatBattleScene — the final word lands (wired)",
+    text: "The word on him burns.",
+    tone: "wonder",
+    isNew: true,
+  },
+  {
+    id: "finale_relic_pelt_retry",
+    scene: "finale",
+    trigger: "GreatBattleScene — Pelt absorbs a miss, retry (wired)",
+    text: "The Pelt holds. Try again.",
+    tone: "instruction",
+    isNew: true,
+  },
+  {
+    id: "finale_companion_songbird",
+    scene: "finale",
+    trigger: "GreatBattleScene — Brass songbird hint on stall (wired)",
+    text: "The songbird sings ahead. Listen —",
+    tone: "tender",
+    isNew: true,
+  },
+];
+
 export const RUNA_LINES: readonly RunaLine[] = [
   ...TITLE_LINES,
   ...OPENING_LINES,
@@ -1010,6 +1205,7 @@ export const RUNA_LINES: readonly RunaLine[] = [
   ...SKY_LINES,
   ...WOOD_LINES,
   ...AMBIENT_LINES,
+  ...FINALE_LINES,
 ];
 
 /** Pick a random low-Heart ambient line, for the scene to render as a caption. */

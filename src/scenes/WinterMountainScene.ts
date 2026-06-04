@@ -74,9 +74,7 @@ const HELDUR_RESPONSES = [
   "Holdfast...",
 ] as const;
 
-/** Runa's cold-decay candle warning (Acts 1→2 transition) */
-const COLD_DECAY_NARRATOR =
-  "Wren — something moves in the trees. The cold is pressing in. Keep your candles lit.";
+// COLD_DECAY_NARRATOR moved into runaLines.ts as winter_cold_decay (Connection Pass).
 
 /** Interval at which the cold snuffs one candle in Act 1 (ms) */
 const COLD_DECAY_INTERVAL_MS = 55_000;
@@ -373,9 +371,7 @@ export class WinterMountainScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private startAct1(): void {
-    this.setNarrator(
-      "The portal closes behind you. Snow muffles the world. The frozen river stretches ahead.",
-    );
+    this.narration.say("winter_intro_arrival");
     this.time.delayedCall(2600, () => this.runRiverBeats(0));
   }
 
@@ -409,9 +405,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   /** The Wayshrine Knight — Heldur */
   private startHeldur(): void {
-    this.setNarrator(
-      "An old wayshrine. A knight stands frozen over it, armored in frost.",
-    );
+    this.narration.say("winter_wayshrine_intro");
     this.fadeInHeldur();
     this.time.delayedCall(1800, () => this.runHeldurExchange(0));
   }
@@ -421,7 +415,7 @@ export class WinterMountainScene extends Phaser.Scene {
    *  fires and the scene moves on to cold-decay. */
   private runHeldurExchange(idx: number): void {
     if (idx >= HELDUR_QUESTIONS.length) {
-      this.setNarrator("His eyes open.");
+      this.narration.say("winter_heldur_eyes_open");
       if (this.heldurSprite) {
         this.heldurSprite.setTintFill(0xffd277);
         this.time.delayedCall(180, () => this.heldurSprite?.clearTint());
@@ -536,7 +530,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   /** Edge of the Dark Wood — cold-decay candle mechanic begins */
   private startColdDecay(): void {
-    this.setNarrator(COLD_DECAY_NARRATOR);
+    this.narration.say("winter_cold_decay");
     // Candles are visible from the start; now they start dimming
     this.startColdDecayTimer();
     // First `kindle` prompt — gives Aiden ~3s to read before timer fires
@@ -556,9 +550,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private promptKindle(): void {
     if (this.combatCandlesActive) return;
-    this.setNarrator(
-      "The cold dims your light. Type 'kindle' to keep the candles burning.",
-    );
+    this.narration.say("winter_kindle_prompt");
     const target = new TextWordTarget({
       scene: this,
       word: "kindle",
@@ -568,7 +560,7 @@ export class WinterMountainScene extends Phaser.Scene {
       onComplete: () => {
         playChime();
         this.restoreCandles();
-        this.setNarrator("The flames steady. Press on.");
+        this.narration.say("winter_kindle_steady");
         this.time.delayedCall(1800, () => this.transitionToAct2());
       },
     });
@@ -732,7 +724,7 @@ export class WinterMountainScene extends Phaser.Scene {
     if (boss.target || boss.defeated) return;
     // Snow-drift sensory beat: 2s of falling snow obscures words briefly
     this.triggerSnowDrift(() => {
-      this.setNarrator("the pack leader rises. type its name to fell it.");
+      this.narration.say("winter_boss_rise");
       if (boss.bodySprite) {
         boss.bodySprite.setTintFill(0xffd277);
         this.time.delayedCall(140, () => boss.bodySprite?.clearTint());
@@ -892,7 +884,7 @@ export class WinterMountainScene extends Phaser.Scene {
     if (this.wolves.every((w) => w.defeated)) {
       this.waveActive = false;
       if (wolf.isBoss) {
-        this.setNarrator("the old one slumps. the trail breathes again.");
+        this.narration.say("winter_boss_defeated");
         this.time.delayedCall(2200, () => this.onBossDefeated());
       } else {
         this.time.delayedCall(900, () => this.onWaveCleared());
@@ -934,9 +926,7 @@ export class WinterMountainScene extends Phaser.Scene {
   // ─── Wounded Fox (between Wave 1 and Wave 2) ─────────────────────────────
 
   private startWoundedFox(nextWave: number): void {
-    this.setNarrator(
-      "A clearing. A small white fox curled in the snow — hurt. She watches you with one open eye.",
-    );
+    this.narration.say("winter_fox_intro");
 
     const kindTarget = new TextWordTarget({
       scene: this,
@@ -952,9 +942,7 @@ export class WinterMountainScene extends Phaser.Scene {
             s.almanacLore.push("the-wounded-foxs-name");
           }
         });
-        this.setNarrator(
-          "The fox's ear tilts. She watches you from the treeline as you move on.",
-        );
+        this.narration.say("winter_fox_spared_ear");
         this.time.delayedCall(2200, () => this.startWave(nextWave));
       },
     });
@@ -968,7 +956,7 @@ export class WinterMountainScene extends Phaser.Scene {
       onComplete: () => {
         this.clearActiveTargets();
         this.foxSpared = false;
-        this.setNarrator("The fox vanishes into the snow. The trail is quiet.");
+        this.narration.say("winter_fox_dismissed");
         this.time.delayedCall(1800, () => this.startWave(nextWave));
       },
     });
@@ -981,9 +969,7 @@ export class WinterMountainScene extends Phaser.Scene {
   // ─── CYOA Fork 1 (after Wave 2, before Wave 3) ───────────────────────────
 
   private startFork1(nextWave: number): void {
-    this.setNarrator(
-      "The trail forks. Someone calls from the drift to your left. A trail of fireflies hovers to your right.",
-    );
+    this.narration.say("winter_fork1_intro");
 
     const huntress = new TextWordTarget({
       scene: this,
@@ -1014,7 +1000,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private startHuntressBranch(nextWave: number): void {
     this.clearActiveTargets();
-    this.setNarrator("A woman, half-buried in snow, lifts her head as you approach.");
+    this.narration.say("winter_huntress_intro");
     this.fadeInHuntress();
     this.store.update((s) => {
       if (!s.almanacLore.includes("the-huntress-song")) {
@@ -1064,7 +1050,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private startFireflyBranch(nextWave: number): void {
     this.clearActiveTargets();
-    this.setNarrator("Three fireflies hover at eye level, then dart up the slope.");
+    this.narration.say("winter_firefly_intro");
     this.store.update((s) => {
       if (!s.almanacLore.includes("the-firefly-trail")) {
         s.almanacLore.push("the-firefly-trail");
@@ -1133,7 +1119,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private resetWave(): void {
     if (!this.waveActive) return;
     this.waveActive = false;
-    this.setNarrator("the dark presses in. steady your hands and try again.");
+    this.narration.say("winter_wave_reset");
 
     for (const w of this.wolves) {
       if (w.target) {
@@ -1222,9 +1208,7 @@ export class WinterMountainScene extends Phaser.Scene {
   /** Renders a brief strikethrough-text flash in the centre of the screen */
   /** Fork 2 — Aftermath: bury under cairn stones OR take the pelt */
   private startFork2(): void {
-    this.setNarrator(
-      "The pack leader is still. What do you do?",
-    );
+    this.narration.say("winter_fork2_intro");
 
     const buryTarget = new TextWordTarget({
       scene: this,
@@ -1306,9 +1290,7 @@ export class WinterMountainScene extends Phaser.Scene {
       return;
     }
 
-    this.setNarrator(
-      "The small white fox pads back into the clearing. She watches you steadily.",
-    );
+    this.narration.say("winter_fox_companion_accept");
 
     const whisperTarget = new TextWordTarget({
       scene: this,
@@ -1321,7 +1303,7 @@ export class WinterMountainScene extends Phaser.Scene {
         this.store.update((s) => {
           if (!s.satchel.includes("snow-fox-cub")) s.satchel.push("snow-fox-cub");
         });
-        this.setNarrator("She steps forward. Her nose brushes your hand. She is coming with you.");
+        this.narration.say("winter_fox_companion_yes");
         this.time.delayedCall(2400, () => this.startTrueNamePassage());
       },
     });
@@ -1334,7 +1316,7 @@ export class WinterMountainScene extends Phaser.Scene {
       fontSize: 32,
       onComplete: () => {
         this.clearActiveTargets();
-        this.setNarrator("She holds your gaze a moment longer. Then she slips into the pines.");
+        this.narration.say("winter_fox_companion_no");
         this.time.delayedCall(2000, () => this.startTrueNamePassage());
       },
     });
@@ -1347,7 +1329,7 @@ export class WinterMountainScene extends Phaser.Scene {
   /** The realm's true-name passage — three short lines, the mountain
    *  settling one line at a time. */
   private startTrueNamePassage(): void {
-    this.setNarrator("The mountain speaks. Type back what it says.");
+    this.narration.say("winter_truename_intro");
     this.time.delayedCall(900, () => {
       this.runPassageChain(
         [...TRUE_NAME_LINES],
@@ -1364,7 +1346,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private startEnding(): void {
     this.clearActiveTargets();
-    this.setNarrator("You return to the portal. The Almanac stamps a new page.");
+    this.narration.say("winter_almanac_stamp");
 
     this.store.update((s) => {
       s.realms["winter-mountain"] = {

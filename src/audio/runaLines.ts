@@ -805,31 +805,46 @@ const FORGE_LINES: readonly RunaLine[] = [
 
 // ─── SKY-ISLAND OF LANTERNS ───────────────────────────────────────────────────
 //
-// Phase 1 coverage for §5.5.8 Sky. The realm's central mechanic is reading-
-// speed pressure on scrolling banners — Runa's voice stays calmer than in
-// Forge or Sunken to make room for the player to read.
+// §5.5.8 narration. 7 of these are now WIRED into SkyIslandScene via
+// narration.say(id) (Connection Pass). Their `text` is reconciled 1:1 to the
+// caption the scene already displayed, so wiring is zero-regression — say(id)
+// is now the playback path, so voice files drop in without touching the scene.
+//
+// 3 stay UNWIRED:
+//   • sky_temple1_intro — the temple intros are a dynamic array (templeNames[idx]
+//     in startTemple), one setNarrator call serving all five gates; wiring would
+//     need per-temple lines (sky_temple1..5_intro), a future expansion.
+//   • sky_temple5_complete — the scene has no "island lifts" beat; after the
+//     fifth temple it goes straight to Fork 1. Drafted-but-no-beat.
+//   • sky_scholar_spirit_phase2 — the boss-phase captions interpolate the live
+//     riddle text (`The spirit asks again: "<riddle>"`), so there is no static
+//     caption to byte-match. The riddle phases stay setNarrator.
+// (Same rules that left Sunken's sunken_olin_intro and its dynamic passage text
+// as setNarrator.)
 
 const SKY_LINES: readonly RunaLine[] = [
   {
     id: "sky_intro_arrival",
     scene: "sky",
-    trigger: "SkyIslandScene — scene opens in golden air",
-    text: "The portal opens in golden air. The island is tethered too low. The lanterns are running out of moths.",
+    trigger: "SkyIslandScene.startAct1() — scene opens in golden air (wired)",
+    text: "Wren — careful. The island floats. The lanterns never go out here. Something tends them.",
     tone: "reading",
     isNew: true,
   },
   {
     id: "sky_lantern_lighter_intro",
     scene: "sky",
-    trigger: "SkyIslandScene — Lantern-Lighter appears at the beacon",
-    text: "A child-spirit tends the great beacon. She is counting lanterns, and has been for two hundred years.",
+    trigger:
+      "SkyIslandScene.startLanternLighter() — Runa narrates the Lantern-Lighter's appearance before she speaks (wired); her LIGHTER_LINE_* dialogue stays sayRaw",
+    text: "At the base of the great beacon tower, a child-spirit tends a cluster of lanterns.",
     tone: "tender",
     isNew: true,
   },
   {
     id: "sky_temple1_intro",
     scene: "sky",
-    trigger: "SkyIslandScene.startTemple(0) — first lantern-temple",
+    trigger:
+      "SkyIslandScene.startTemple() — UNWIRED: temple intros are a dynamic array (templeNames[idx]); one call serves all five gates. Future: split into sky_temple1..5_intro.",
     text: "A phrase is inscribed on the lantern's rim. Read it whole — the lanterns rise as you do.",
     tone: "instruction",
     isNew: true,
@@ -837,7 +852,8 @@ const SKY_LINES: readonly RunaLine[] = [
   {
     id: "sky_temple5_complete",
     scene: "sky",
-    trigger: "SkyIslandScene — fifth temple cleared, island lifts",
+    trigger:
+      "SkyIslandScene.onTempleCleared() — UNWIRED: no 'island lifts' beat exists; after the fifth temple the scene goes straight to Fork 1. Drafted-but-no-beat.",
     text: "Five temples lit. The island lifts a little higher. The wind warms.",
     tone: "wonder",
     isNew: true,
@@ -845,23 +861,24 @@ const SKY_LINES: readonly RunaLine[] = [
   {
     id: "sky_fork1_intro",
     scene: "sky",
-    trigger: "SkyIslandScene.startFork1() — Scholar Etta vs steal the flame",
-    text: "Scholar Etta has one volume left to shelve. The beacon stands unlit beside her. You can help her — or you can take the flame.",
+    trigger: "SkyIslandScene.startFork1() — Scholar Etta vs steal the flame (wired)",
+    text: "The Library Tower. Two paths lead inside.",
     tone: "instruction",
     isNew: true,
   },
   {
     id: "sky_scholar_spirit_rise",
     scene: "sky",
-    trigger: "SkyIslandScene.startBossPhase1() — Scholar-Spirit gathers her notes",
-    text: "The Scholar-Spirit gathers her notes — three riddles, full sentences. Answer carefully. She is listening.",
+    trigger: "SkyIslandScene.startAct3() — the Scholar-Spirit waits at the summit (wired)",
+    text: "The summit. Scrolls orbit a shape that is almost human. The Scholar-Spirit waits.",
     tone: "urgent",
     isNew: true,
   },
   {
     id: "sky_scholar_spirit_phase2",
     scene: "sky",
-    trigger: "SkyIslandScene.startBossPhase2() — second riddle",
+    trigger:
+      "SkyIslandScene.startBossPhase2() — UNWIRED: caption interpolates the live riddle (`The spirit asks again: \"<riddle>\"`), no static text to byte-match.",
     text: "She asks again. Each word matters. She is patient — but not infinitely.",
     tone: "urgent",
     isNew: true,
@@ -869,24 +886,25 @@ const SKY_LINES: readonly RunaLine[] = [
   {
     id: "sky_scholar_spirit_defeated",
     scene: "sky",
-    trigger: "SkyIslandScene.onBossDefeated() — the spirit dissolves",
-    text: "Her hands open. The wind takes her notes. She thanks you — quietly, in a language you almost understand.",
+    trigger:
+      "SkyIslandScene.onBossDefeated() — the spirit dissolves; doubles as the realm's true-name line (wired)",
+    text: "the sky remembers every page that ever lit. nothing burned is truly gone.",
     tone: "wonder",
     isNew: true,
   },
   {
     id: "sky_truename_intro",
     scene: "sky",
-    trigger: "SkyIslandScene.startTrueNamePassage() — true-name passage begins",
-    text: "The sky speaks. Type its name whole — every page that ever lit waits inside it.",
+    trigger: "SkyIslandScene.startTrueNamePassage() — true-name passage begins (wired)",
+    text: "The island speaks. Type back its name.",
     tone: "wonder",
     isNew: true,
   },
   {
     id: "sky_almanac_stamp",
     scene: "sky",
-    trigger: "SkyIslandScene.startEnding() — almanac stamps the page",
-    text: "The almanac stamps a page. The sky-island holds at its proper height now.",
+    trigger: "SkyIslandScene.startEnding() — almanac stamps the page (wired)",
+    text: "You return to the portal. The Almanac stamps a new page.",
     tone: "intimate",
     isNew: true,
   },

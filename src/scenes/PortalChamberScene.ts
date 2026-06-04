@@ -3,6 +3,7 @@ import { type AmbientHandle, playAmbientHub } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
+import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { RELICS } from "../game/relics";
 import type { SaveStore } from "../game/saveState";
@@ -62,14 +63,16 @@ const ZONE_X: Record<Zone, number> = {
 };
 const WREN_Y = 900;
 
-// Runa's desk contextual lines — one per last-cleared realm.
-const RUNA_LINES: Record<string, string> = {
-  none:              "The Winter Mountain is the closest. Its arch is lit. Go when you're ready.",
-  "winter-mountain": "You carried something home from the mountain. I can still see the snow in it.",
-  "sunken-bell":     "The bell is quiet now. I hear its absence from here — the silence it left behind.",
-  "clockwork-forge": "The forge is breathing again. Whether that's Forn's work or yours, hard to tell.",
-  "sky-island":      "Every page that ever lit — nothing burned is truly gone. She was right, you know.",
-  "haunted-wood":    "The wood remembers everything. I found the Ghost-King's name once, in the margin of an old atlas.",
+// Maps the last-cleared realm to its Runa desk-line ID in runaLines.ts. The
+// line text now lives there (single source of truth); the hub renders it via
+// narration.say(id) as the top caption, voice-ready like every other scene.
+const DESK_LINE_IDS: Record<string, string> = {
+  none:              "hub_desk_none",
+  "winter-mountain": "hub_desk_winter",
+  "sunken-bell":     "hub_desk_sunken",
+  "clockwork-forge": "hub_desk_forge",
+  "sky-island":      "hub_desk_sky",
+  "haunted-wood":    "hub_desk_wood",
 };
 
 export class PortalChamberScene extends Phaser.Scene {
@@ -78,6 +81,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private archGraphics = new Map<string, Phaser.GameObjects.Graphics>();
   private archSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private hint!: Phaser.GameObjects.Text;
+  private narration!: NarrationManager;
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   private zoneTargets: TextWordTarget[] = [];
@@ -143,6 +147,12 @@ export class PortalChamberScene extends Phaser.Scene {
         wordWrap: { width: 1200 },
       })
       .setOrigin(0.5);
+
+    // Runa's narration — the shared top caption every other scene uses. The
+    // hub's Runa-narrator beats (arrival, desk reflections, the endgame calls)
+    // route through say(id); say() is the voice hook when audio lands. The
+    // bottom `hint` above keeps only the functional prompts (arch name, shelf).
+    this.narration = new NarrationManager(this, { y: 150 });
 
     // Fragment display — shows the accumulating Quiet Lord word in the upper-
     // centre of the room, growing one letter per realm cleared.
@@ -247,6 +257,13 @@ export class PortalChamberScene extends Phaser.Scene {
       this.typingInput.register(primary);
       this.zoneTargets.push(primary);
       this.hint.setText("type the glowing arch's name to step through  ·  backspace to cancel");
+      // First-arrival narration — only while nothing is cleared yet (the
+      // "you're new here" state). On returns the desk reflections carry Runa.
+      if (!REALM_SEQUENCE.some((id) => state.realms[id]?.cleared)) {
+        this.narration.say("hub_first_arrival");
+      } else {
+        this.narration.clear();
+      }
     } else {
       const battleCleared = !!state.realms["great-battle"]?.cleared;
 
@@ -267,7 +284,8 @@ export class PortalChamberScene extends Phaser.Scene {
         });
         this.typingInput.register(battleTarget);
         this.zoneTargets.push(battleTarget);
-        this.hint.setText("all realms cleared — hearthward needs you");
+        this.narration.say("hub_all_cleared");
+        this.hint.setText("");
       } else {
         // Battle cleared — show begin again target (New Game+).
         const ngPlusTarget = new TextWordTarget({
@@ -280,7 +298,8 @@ export class PortalChamberScene extends Phaser.Scene {
         });
         this.typingInput.register(ngPlusTarget);
         this.zoneTargets.push(ngPlusTarget);
-        this.hint.setText("the almanac is complete. type to begin a new run.");
+        this.narration.say("hub_post_battle");
+        this.hint.setText("");
       }
     }
 
@@ -325,9 +344,8 @@ export class PortalChamberScene extends Phaser.Scene {
     const lastCleared = [...REALM_SEQUENCE]
       .reverse()
       .find((id) => state.realms[id]?.cleared) ?? "none";
-    const line = RUNA_LINES[lastCleared] ?? RUNA_LINES["none"];
-
-    this.hint.setText(`Runa: "${line}"`);
+    this.narration.say(DESK_LINE_IDS[lastCleared] ?? DESK_LINE_IDS["none"]);
+    this.hint.setText("");
 
     this.registerNavTarget("back", ZONE_X.desk + 200, 920, () =>
       this.enterZone("portals"),
@@ -339,6 +357,8 @@ export class PortalChamberScene extends Phaser.Scene {
   private registerShelfZoneTargets(): void {
     const state = this.store.get();
     const items = state.satchel;
+    // Shelf is a functional zone — clear Runa's top caption.
+    this.narration.clear();
 
     if (items.length === 0) {
       this.hint.setText("your shelf is empty. bring something back from a realm.");
@@ -442,6 +462,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private onEnterPortal(sceneKey: string, revisit: boolean): void {
     playChime();
     this.hint.setText("");
+    this.narration.clear();
     this.cameras.main.fadeOut(500, 11, 10, 15);
     this.cameras.main.once(
       Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,

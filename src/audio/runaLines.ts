@@ -167,6 +167,22 @@ const OPENING_LINES: readonly RunaLine[] = [
 ];
 
 // ─── HUB (Portal Chamber) ─────────────────────────────────────────────────────
+//
+// Voice-ready via NarrationManager (option (a)): the hub's Runa-narrator beats
+// route through narration.say(id) as the top caption, like every other scene.
+// The bottom `hint` keeps only functional prompts (arch name, shelf contents).
+//
+// WIRED (say-routed): hub_first_arrival (first visit, nothing cleared yet),
+// hub_desk_{none,winter,sunken,forge,sky,wood} (desk reflections, keyed by
+// last-cleared realm via DESK_LINE_IDS in PortalChamberScene), hub_all_cleared,
+// hub_post_battle. The desk text is reconciled to the previously-shipped local
+// map (warm contractions: "you're", "that's"), so it reads identically — only
+// relocated to the top caption and de-prefixed (the old `Runa: "…"` tag is gone).
+//
+// NOT say-routed (kept as records): hub_portals_prompt is the functional bottom
+// hint (functional prompts don't get say(id), per the wire rule); hub_portal_opens
+// and hub_return_greeting_winter have no beat yet — candidates for a future portal
+// send-off / per-realm return greeting.
 
 const HUB_LINES: readonly RunaLine[] = [
   {
@@ -204,7 +220,7 @@ const HUB_LINES: readonly RunaLine[] = [
     id: "hub_desk_none",
     scene: "hub",
     trigger: "PortalChamberScene desk zone — no realm cleared yet",
-    text: "The Winter Mountain is the closest. Its arch is lit. Go when you are ready.",
+    text: "The Winter Mountain is the closest. Its arch is lit. Go when you're ready.",
     tone: "intimate",
   },
   {
@@ -225,7 +241,7 @@ const HUB_LINES: readonly RunaLine[] = [
     id: "hub_desk_forge",
     scene: "hub",
     trigger: "PortalChamberScene desk zone — Clockwork Forge cleared (Phase 3)",
-    text: "The forge is breathing again. Whether that is Forn's work or yours, hard to tell.",
+    text: "The forge is breathing again. Whether that's Forn's work or yours, hard to tell.",
     tone: "intimate",
   },
   {

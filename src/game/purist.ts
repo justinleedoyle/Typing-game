@@ -1,13 +1,43 @@
-// "Purist mode" — opt-in difficulty where typing a wrong letter on a
-// claimed word resets the typing progress (the player has to retype the
-// word from the start). Off by default since Aiden is the target player.
+// Difficulty tiers — how harshly a mid-word typo is punished — plus the
+// Ctrl+Shift+P shortcut and the helpers that read the player's chosen tier.
 //
-// Toggled in-game with Ctrl+Shift+P from any playing scene. The setting
-// persists on the SaveStore, so it survives scene transitions and reloads.
+//   forgiving — a wrong key is free; the next correct key just advances.
+//   standard  — (default) a wrong key resets the current word's typed
+//               progress; you retype it, but the target stays claimed.
+//   purist    — progress resets AND the claim drops, so the enemy keeps
+//               coming and you must re-acquire the word under pressure.
+//
+// Cycled in-game with Ctrl+Shift+P from any playing scene, and set in the
+// Settings menu. The tier persists on the SaveStore.
 
 import Phaser from "phaser";
 import { PALETTE, SERIF } from "./palette";
-import type { SaveStore } from "./saveState";
+import type { Difficulty, SaveStore } from "./saveState";
+
+const ORDER: readonly Difficulty[] = ["forgiving", "standard", "purist"];
+
+const LABELS: Record<Difficulty, string> = {
+  forgiving: "Forgiving",
+  standard: "Standard",
+  purist: "Purist",
+};
+
+/** Human-readable label for the Settings row + toast. */
+export function difficultyLabel(tier: Difficulty): string {
+  return LABELS[tier];
+}
+
+/** True if a mid-word typo should reset the current word's typed progress
+ *  (standard + purist). Forgiving leaves progress untouched. */
+export function missResetsProgress(store: SaveStore): boolean {
+  return store.get().difficulty !== "forgiving";
+}
+
+/** True if a mid-word typo should also drop the claim, forcing the player to
+ *  re-acquire the word while the enemy keeps advancing (purist only). */
+export function missReleasesClaim(store: SaveStore): boolean {
+  return store.get().difficulty === "purist";
+}
 
 /** True if the given KeyboardEvent is the Ctrl+Shift+P shortcut. */
 export function isPuristToggleKey(event: KeyboardEvent): boolean {
@@ -16,27 +46,25 @@ export function isPuristToggleKey(event: KeyboardEvent): boolean {
   return event.key === "P" || event.key === "p";
 }
 
-/** Flip the purist flag in the store and show a brief on-screen confirmation. */
+/** Cycle forgiving → standard → purist → … on the store, with a brief toast. */
 export function togglePuristMode(scene: Phaser.Scene, store: SaveStore): void {
+  let next: Difficulty = "standard";
   store.update((s) => {
-    s.purist = !s.purist;
+    const i = ORDER.indexOf(s.difficulty);
+    next = ORDER[(i + 1) % ORDER.length];
+    s.difficulty = next;
   });
-  showPuristToast(scene, store.get().purist);
+  showDifficultyToast(scene, next);
 }
 
-function showPuristToast(scene: Phaser.Scene, isOn: boolean): void {
+function showDifficultyToast(scene: Phaser.Scene, tier: Difficulty): void {
   const text = scene.add
-    .text(
-      scene.scale.width / 2,
-      140,
-      `Purist mode: ${isOn ? "ON" : "OFF"}`,
-      {
-        fontFamily: SERIF,
-        fontSize: "28px",
-        color: isOn ? PALETTE.ember : PALETTE.cream,
-        fontStyle: "italic",
-      },
-    )
+    .text(scene.scale.width / 2, 140, `Difficulty: ${LABELS[tier]}`, {
+      fontFamily: SERIF,
+      fontSize: "28px",
+      color: tier === "forgiving" ? PALETTE.cream : PALETTE.ember,
+      fontStyle: "italic",
+    })
     .setOrigin(0.5)
     .setDepth(100)
     .setAlpha(0);

@@ -8,6 +8,7 @@
 // word, the target releases entirely and you're back to free buffer typing.
 // Escape always releases the claim entirely (panic abort).
 
+import { missReleasesClaim, missResetsProgress } from "./purist";
 import type { SaveStore } from "./saveState";
 import { SessionStats } from "./sessionStats";
 
@@ -214,10 +215,16 @@ export class TypingInputController {
       this.store?.recordKeystroke(ch, false);
       this.stats.record(false);
       this.onMissChar?.();
-      // Purist mode: typo wipes typing progress on the claimed word, but
-      // the target stays claimed so the player doesn't have to re-find it.
-      if (this.store?.get().purist) {
+      // Difficulty: standard+ wipes the word's typed progress; purist also
+      // drops the claim, so the enemy keeps coming and you must re-acquire it.
+      if (this.store && missResetsProgress(this.store)) {
         this.claimed.resetCursor?.();
+        if (missReleasesClaim(this.store)) {
+          this.releaseClaim();
+          this.typingBuffer = "";
+          this.rawTypingBuffer = "";
+          this.refreshCandidateDisplay();
+        }
       }
       return true;
     }

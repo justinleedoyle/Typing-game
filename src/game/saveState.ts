@@ -38,9 +38,9 @@ export interface SaveState {
   satchel: string[];
   keyStats: Record<string, KeyStat>;
   almanacLore: string[];
-  /** Opt-in "purist" mode — typos reset the claimed word to the start.
-   *  Off by default (kid-friendly). Toggled in-game via Ctrl+Shift+P. */
-  purist: boolean;
+  /** Difficulty tier — how harshly a mid-word typo is punished. Default
+   *  "standard". Cycled in-game via Ctrl+Shift+P and set in Settings. */
+  difficulty: Difficulty;
   /** Player-chosen audio level. Stored as a coarse step so the Settings UI
    *  can cycle through fixed labels; the actual volume scaling is wired
    *  separately in the audio modules. Defaults to "medium". */
@@ -49,6 +49,12 @@ export interface SaveState {
 }
 
 export type AudioLevel = "loud" | "medium" | "quiet" | "off";
+
+/** Difficulty tiers — how harshly a mid-word typo is punished.
+ *  forgiving: a wrong key is free (the next correct key just advances).
+ *  standard:  a wrong key resets the current word's typed progress (default).
+ *  purist:    progress resets AND the claim drops — re-acquire under pressure. */
+export type Difficulty = "forgiving" | "standard" | "purist";
 
 export function emptySave(profileName = "Wren"): SaveState {
   return {
@@ -59,7 +65,7 @@ export function emptySave(profileName = "Wren"): SaveState {
     satchel: [],
     keyStats: {},
     almanacLore: [],
-    purist: false,
+    difficulty: "standard",
     audioLevel: "medium",
     updatedAt: Date.now(),
   };
@@ -170,6 +176,14 @@ export class SaveStore {
     const state: SaveState = loaded
       ? { ...emptySave(loaded.profileName), ...loaded }
       : emptySave();
+    // Migrate legacy `purist: boolean` → difficulty tier. true → "purist";
+    // the old kid-friendly default (false) becomes "standard", raising the
+    // floor for existing saves. Then drop the dead field.
+    const legacy = state as SaveState & { purist?: boolean };
+    if (typeof legacy.purist === "boolean") {
+      state.difficulty = legacy.purist ? "purist" : "standard";
+      delete legacy.purist;
+    }
     return new SaveStore(backend, state);
   }
 

@@ -18,7 +18,7 @@ import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
 import { setAudioLevel } from "../audio/context";
 import { PALETTE, SERIF } from "../game/palette";
-import { togglePuristMode } from "../game/purist";
+import { difficultyLabel, togglePuristMode } from "../game/purist";
 import {
   emptySave,
   type AudioLevel,
@@ -136,8 +136,8 @@ export class SettingsScene extends Phaser.Scene {
 
     const state = this.store.get();
 
-    this.drawRow(0, "Purist mode", state.purist ? "ON" : "off");
-    this.drawAction(0, "purist", () => this.handlePurist());
+    this.drawRow(0, "Difficulty", difficultyLabel(state.difficulty));
+    this.drawAction(0, "difficulty", () => this.handleDifficulty());
 
     this.drawRow(1, "Sound", state.audioLevel);
     this.drawAction(1, "sound", () => this.handleSound());
@@ -206,7 +206,7 @@ export class SettingsScene extends Phaser.Scene {
 
   // ─── Actions ────────────────────────────────────────────────────────────────
 
-  private handlePurist(): void {
+  private handleDifficulty(): void {
     togglePuristMode(this, this.store);
     this.renderMenu();
   }
@@ -337,7 +337,7 @@ export class SettingsScene extends Phaser.Scene {
       s.satchel = fresh.satchel;
       s.keyStats = fresh.keyStats;
       s.almanacLore = fresh.almanacLore;
-      s.purist = fresh.purist;
+      s.difficulty = fresh.difficulty;
       s.audioLevel = fresh.audioLevel;
     });
     playChime();

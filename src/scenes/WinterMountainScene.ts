@@ -13,6 +13,7 @@ import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
+import { SPELL_COST } from "../game/sessionStats";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
@@ -82,6 +83,8 @@ const COLD_DECAY_INTERVAL_MS = 55_000;
 // ─── Act 2 constants ──────────────────────────────────────────────────────────
 
 const WAVE_CANDLES = 3;
+// Thunder is no longer a per-wave refill — it's bought with Soul (SPELL_COST
+// each). This is just how many pips the "thunder" row draws: SOUL_MAX/SPELL_COST.
 const WAVE_CHARGES = 2;
 const WOLF_KNOCKBACK_PAUSE_MS = 1500;
 
@@ -186,7 +189,9 @@ export class WinterMountainScene extends Phaser.Scene {
   private chargeGroup!: Phaser.GameObjects.Container;
 
   private candles = WAVE_CANDLES;
-  private charges = WAVE_CHARGES;
+  // How many thunderclaps the current Soul can afford — derived from Soul
+  // (floor(soul / SPELL_COST)), cached so the pip row only redraws on change.
+  private castableThunder = 0;
   private shiftHeld = false;
   private waveActive = false;
   private waveIndex = 0;
@@ -224,7 +229,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.wolves = [];
     this.activeTargets = [];
     this.candles = WAVE_CANDLES;
-    this.charges = WAVE_CHARGES;
+    this.castableThunder = 0;
     this.shiftHeld = false;
     this.waveActive = false;
     this.waveIndex = 0;
@@ -278,7 +283,11 @@ export class WinterMountainScene extends Phaser.Scene {
 
     this.typingInput = new TypingInputController(this.store);
     this.typingInput.setKeystrokeHooks({
-      onCorrect: () => bobWrenSprite(this.wrenSprite),
+      onCorrect: () => {
+        bobWrenSprite(this.wrenSprite);
+        // A clean keystroke filled Soul — the thunder pips may have ticked up.
+        this.refreshThunderPips();
+      },
       onMiss: () => {
         flashWrenMiss(this.wrenSprite);
         this.cameras.main.shake(80, 0.002);
@@ -288,6 +297,8 @@ export class WinterMountainScene extends Phaser.Scene {
     new HeartSoulHud(this, {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
+      getCombo: () => this.typingInput.getStats().getCombo(),
+      getCastReady: () => this.typingInput.getStats().canCast(SPELL_COST),
       onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
     });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
@@ -591,8 +602,9 @@ export class WinterMountainScene extends Phaser.Scene {
     this.waveIndex = idx;
     this.waveActive = true;
     this.wolves = [];
-    this.charges = WAVE_CHARGES;
-    this.redrawCharges();
+    // Thunder no longer refills per wave — it carries over as banked Soul, so
+    // a fast clean wave can stockpile casts and a sloppy one starts dry.
+    this.refreshThunderPips();
     const config = WAVES[idx];
     this.setNarrator(config.intro);
 
@@ -1152,8 +1164,8 @@ export class WinterMountainScene extends Phaser.Scene {
   // ─── Thunderclap (Shift spell) ────────────────────────────────────────────
 
   private castThunderclap(source: Wolf): void {
-    this.charges = Math.max(0, this.charges - 1);
-    this.redrawCharges();
+    this.typingInput.getStats().spendSoul(SPELL_COST);
+    this.refreshThunderPips();
     this.cameras.main.flash(220, 240, 230, 200);
     playChime();
 
@@ -1456,7 +1468,10 @@ export class WinterMountainScene extends Phaser.Scene {
     if (event.key.length === 1 || event.key === " ") {
       playClack();
     }
-    const spell = this.shiftHeld && this.charges > 0 && this.waveActive;
+    const spell =
+      this.shiftHeld &&
+      this.typingInput.getStats().canCast(SPELL_COST) &&
+      this.waveActive;
     this.typingInput.handleChar(event.key, { spell });
   }
 
@@ -1471,7 +1486,12 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private updateWrenGlow(): void {
-    const armed = this.shiftHeld && this.charges > 0 && this.waveActive;
+    // redrawCharges() calls this during create(), before typingInput exists.
+    if (!this.typingInput) return;
+    const armed =
+      this.shiftHeld &&
+      this.typingInput.getStats().canCast(SPELL_COST) &&
+      this.waveActive;
     this.wrenGlow.setAlpha(armed ? 0.55 : 0);
     // Don't overwrite a hurt pose mid-flash; the timer restores from there.
     if (this.hurtPoseTimer) return;
@@ -1526,10 +1546,24 @@ export class WinterMountainScene extends Phaser.Scene {
     }
   }
 
+  /** Recompute affordable thunderclaps from banked Soul; redraw the pip row
+   *  only when that discrete count changes. Soul moves on every keystroke and
+   *  every cast, so this is driven from the keystroke hook and after a cast —
+   *  Winter has no per-frame update loop. */
+  private refreshThunderPips(): void {
+    const castable = Math.min(
+      WAVE_CHARGES,
+      Math.floor(this.typingInput.getStats().getSoul() / SPELL_COST),
+    );
+    if (castable === this.castableThunder) return;
+    this.castableThunder = castable;
+    this.redrawCharges();
+  }
+
   private redrawCharges(): void {
     this.chargeGroup.removeAll(true);
     for (let i = 0; i < WAVE_CHARGES; i++) {
-      const ready = i < this.charges;
+      const ready = i < this.castableThunder;
       const x = (i - (WAVE_CHARGES - 1) / 2) * 24;
       const g = this.add.graphics();
       if (ready) {

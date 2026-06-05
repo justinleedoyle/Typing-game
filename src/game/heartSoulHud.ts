@@ -30,8 +30,20 @@ const PIP_OUTLINE = 0x0b0a0f;
 interface HudOptions {
   getHeart: () => number;
   getSoul: () => number;
+  /** Current clean-streak combo. When provided, an "×N" flourish appears
+   *  below the meters once the streak clears COMBO_SHOW_MIN. */
+  getCombo?: () => number;
+  /** True when the player has enough Soul banked to cast a spell. When
+   *  provided, the "soul" label pulses brass to signal a cast is armed —
+   *  the only ready-cue in realms (e.g. Forge) that have no charge pips. */
+  getCastReady?: () => boolean;
   onSustainedLowHeart?: () => void;
 }
+
+/** Streak length at which the combo flourish first appears. */
+const COMBO_SHOW_MIN = 5;
+/** Combo at which the flourish shifts brass → ember (matches the ×2 tier). */
+const COMBO_HOT = 20;
 
 export class HeartSoulHud {
   private readonly container: Phaser.GameObjects.Container;
@@ -41,6 +53,10 @@ export class HeartSoulHud {
   private currentSoul = 0;
   private lowHeartSinceMs: number | null = null;
   private lowHeartLastFiredMs = -Infinity;
+  private soulLabel!: Phaser.GameObjects.Text;
+  private comboText!: Phaser.GameObjects.Text;
+  private comboTier = 0;
+  private pulseMs = 0;
   private readonly updateHandler: (time: number, delta: number) => void;
 
   constructor(
@@ -85,7 +101,7 @@ export class HeartSoulHud {
         color: PALETTE.cream,
       })
       .setOrigin(1, 0.5);
-    const soulLabel = scene.add
+    this.soulLabel = scene.add
       .text(-rowW - LABEL_GAP, ROW_GAP, "soul", {
         fontFamily: SERIF,
         fontStyle: "italic",
@@ -93,7 +109,20 @@ export class HeartSoulHud {
         color: PALETTE.cream,
       })
       .setOrigin(1, 0.5);
-    this.container.add([heartLabel, soulLabel]);
+    this.container.add([heartLabel, this.soulLabel]);
+
+    // Combo flourish — sits just below the soul pips, right-aligned to their
+    // edge. Hidden until the streak clears COMBO_SHOW_MIN.
+    this.comboText = scene.add
+      .text(0, ROW_GAP + 20, "", {
+        fontFamily: SERIF,
+        fontStyle: "italic",
+        fontSize: "18px",
+        color: PALETTE.brass,
+      })
+      .setOrigin(1, 0.5)
+      .setAlpha(0);
+    this.container.add(this.comboText);
 
     for (let i = 0; i < PIP_COUNT; i++) {
       const px = -rowW + i * (PIP_W + PIP_GAP) + PIP_W / 2;
@@ -128,6 +157,7 @@ export class HeartSoulHud {
   }
 
   private tick(deltaMs: number): void {
+    this.pulseMs += deltaMs;
     const heart = this.opts.getHeart();
     const soul = this.opts.getSoul();
     const t = 1 - Math.pow(1 - LERP_RATE, deltaMs / 16.67);
@@ -135,7 +165,44 @@ export class HeartSoulHud {
     this.currentSoul += (soul - this.currentSoul) * t;
     this.renderRow(this.heartPips, this.currentHeart, PALETTE_HEX.ember);
     this.renderRow(this.soulPips, this.currentSoul, PALETTE_HEX.brass);
+    this.tickCombo();
+    this.tickCastReady();
     this.tickLowHeartWatcher(heart);
+  }
+
+  private tickCombo(): void {
+    const combo = this.opts.getCombo?.() ?? 0;
+    if (combo < COMBO_SHOW_MIN) {
+      if (this.comboText.alpha > 0) this.comboText.setAlpha(0);
+      this.comboTier = -1;
+      return;
+    }
+    this.comboText.setText(`×${combo}`);
+    this.comboText.setColor(combo >= COMBO_HOT ? PALETTE.ember : PALETTE.brass);
+    this.comboText.setAlpha(1);
+    // Pop the flourish when the streak first appears or climbs a fill tier.
+    const tier = comboTierOf(combo);
+    if (tier > this.comboTier) {
+      this.comboTier = tier;
+      this.scene.tweens.killTweensOf(this.comboText);
+      this.comboText.setScale(1.35);
+      this.scene.tweens.add({
+        targets: this.comboText,
+        scale: 1,
+        duration: 220,
+        ease: "Back.easeOut",
+      });
+    }
+  }
+
+  private tickCastReady(): void {
+    if (!this.opts.getCastReady) return;
+    if (this.opts.getCastReady()) {
+      const pulse = 0.6 + 0.4 * (0.5 + 0.5 * Math.sin(this.pulseMs / 320));
+      this.soulLabel.setColor(PALETTE.brass).setAlpha(pulse);
+    } else {
+      this.soulLabel.setColor(PALETTE.cream).setAlpha(1);
+    }
   }
 
   private renderRow(
@@ -176,4 +243,13 @@ export class HeartSoulHud {
       this.opts.onSustainedLowHeart();
     }
   }
+}
+
+/** Display tier for the combo flourish, aligned to the Soul-fill multiplier
+ *  steps (8 / 20 / 40). Used only to decide when to pop the "×N" scale tween. */
+function comboTierOf(combo: number): number {
+  if (combo >= 40) return 3;
+  if (combo >= 20) return 2;
+  if (combo >= 8) return 1;
+  return 0;
 }

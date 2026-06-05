@@ -14,6 +14,7 @@ import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLor
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
+import { SPELL_COST } from "../game/sessionStats";
 import { TypingInputController } from "../game/typingInput";
 import { pickAdaptiveWords, FORGE_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
@@ -168,6 +169,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
     new HeartSoulHud(this, {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
+      getCombo: () => this.typingInput.getStats().getCombo(),
+      getCastReady: () => this.typingInput.getStats().canCast(SPELL_COST),
       onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
     });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
@@ -1250,6 +1253,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
    *  golem and defeats it too. If no other golems are alive, the spell is
    *  still a defeat — just no arc target. */
   private chainSparkEffect(golem: Golem): void {
+    // Spend the Soul this chain was armed against (canCast was checked when the
+    // Alt-claim landed). The guard in spendSoul makes a stale arm a no-op.
+    this.typingInput.getStats().spendSoul(SPELL_COST);
     playSparkZap();
     this.defeatGolem(golem);
     const nearest = this.findNearestLiveGolem(golem);
@@ -1489,8 +1495,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
       playClack();
     }
     this.typingInput.handleChar(event.key, {
+      // Shift stays free: capitalized command golems are caseSensitive, so
+      // holding Shift is *required typing*, not a bonus — gating it on Soul
+      // could soft-lock a required golem when the meter is empty.
       spell: this.shiftHeld,
-      alt: this.altHeld,
+      // Alt is the chain-spark (a 2-for-1 bonus), so it costs Soul. When the
+      // meter is dry the Alt-claim falls through to a normal defeat — no chain,
+      // never a block.
+      alt: this.altHeld && this.typingInput.getStats().canCast(SPELL_COST),
     });
   }
 

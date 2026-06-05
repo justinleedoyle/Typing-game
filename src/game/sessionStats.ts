@@ -1,58 +1,106 @@
-// Rolling typing telemetry that drives the Heart/Soul HUD.
+// Rolling typing telemetry + the spell economy the Heart/Soul HUD reads.
 //
-// Heart is the rolling accuracy over the last HEART_WINDOW keystrokes —
-// every press counts, hits raise it, misses pull it down. It starts at 100
-// (clean slate) and the window means a long stretch of clean typing brings
-// it back up after a rough patch.
+// Heart is the rolling accuracy over the last HEART_WINDOW keystrokes — every
+// press counts, hits raise it, misses pull it down. It starts at 100 (clean
+// slate) and the window means a long stretch of clean typing brings it back
+// up after a rough patch.
 //
-// Soul is normalized CPM over the last SOUL_WINDOW_MS of *correct* presses —
-// it tracks how fast the player is actually advancing the words. It starts
-// at 0 (cold engine), climbs as typing flows, and decays when typing pauses
-// because old samples fall outside the window.
+// Soul is the player's SPELL FUEL — a stored 0–100 balance, not a speedometer.
+// Every clean keystroke pours Soul in, scaled by the current clean-streak
+// COMBO, so speed is rewarded twice: a fast typist lands more chars per second
+// AND climbs into the high-combo tiers sooner, on both counts filling faster.
+// A miss breaks the combo (you lose momentum, not your banked Soul). Casting a
+// modifier-spell SPENDS Soul — that spend is what makes it a resource instead
+// of the read-only readout it used to be.
 
 const HEART_WINDOW = 50;
-const SOUL_WINDOW_MS = 10_000;
-const SOUL_FLOOR_CPM = 30;
-const SOUL_CEIL_CPM = 90;
 
-interface KeystrokeRecord {
-  hit: boolean;
-  t: number;
+/** Soul is a 0–100 fuel tank. */
+const SOUL_MAX = 100;
+/** Base Soul poured in per clean keystroke, before the combo multiplier. */
+const SOUL_PER_CHAR = 3;
+/** Soul cost of one modifier-spell cast. SOUL_MAX / SPELL_COST = the number of
+ *  casts you can bank at a full meter (100 / 50 = 2). Exported so scenes gate
+ *  and spend against one shared number. Starting value — tune on the live build. */
+export const SPELL_COST = 50;
+
+/** Clean-streak combo → Soul-fill multiplier. Longer clean runs pour faster,
+ *  which is the lever that makes raw speed matter. */
+function comboMultiplier(combo: number): number {
+  if (combo >= 40) return 3;
+  if (combo >= 20) return 2;
+  if (combo >= 8) return 1.5;
+  return 1;
 }
 
 export class SessionStats {
-  private history: KeystrokeRecord[] = [];
+  private hits: boolean[] = [];
+  private soul = 0;
+  private combo = 0;
+  private bestCombo = 0;
 
   record(hit: boolean): void {
-    this.history.push({ hit, t: performance.now() });
+    this.hits.push(hit);
     const cap = HEART_WINDOW * 4;
-    if (this.history.length > cap) {
-      this.history.splice(0, this.history.length - cap);
+    if (this.hits.length > cap) {
+      this.hits.splice(0, this.hits.length - cap);
+    }
+    if (hit) {
+      this.combo += 1;
+      if (this.combo > this.bestCombo) this.bestCombo = this.combo;
+      this.soul = Math.min(
+        SOUL_MAX,
+        this.soul + SOUL_PER_CHAR * comboMultiplier(this.combo),
+      );
+    } else {
+      // A miss costs momentum (the combo), not the banked Soul. The difficulty
+      // tier already makes a miss cost word progress; draining Soul too would
+      // double-punish.
+      this.combo = 0;
     }
   }
 
   reset(): void {
-    this.history = [];
+    this.hits = [];
+    this.soul = 0;
+    this.combo = 0;
+    this.bestCombo = 0;
   }
 
   getHeart(): number {
-    if (this.history.length === 0) return 100;
-    const recent = this.history.slice(-HEART_WINDOW);
-    const hits = recent.reduce((n, r) => n + (r.hit ? 1 : 0), 0);
+    if (this.hits.length === 0) return 100;
+    const recent = this.hits.slice(-HEART_WINDOW);
+    const hits = recent.reduce((n, h) => n + (h ? 1 : 0), 0);
     return Math.round((hits / recent.length) * 100);
   }
 
+  /** Current Soul fuel, 0–100. The HUD renders this directly. */
   getSoul(): number {
-    if (this.history.length === 0) return 0;
-    const now = performance.now();
-    const recent = this.history.filter(
-      (r) => r.hit && now - r.t < SOUL_WINDOW_MS,
-    );
-    if (recent.length < 2) return 0;
-    const span = Math.max(now - recent[0].t, 1_000);
-    const cpm = (recent.length / span) * 60_000;
-    const normalized =
-      (cpm - SOUL_FLOOR_CPM) / (SOUL_CEIL_CPM - SOUL_FLOOR_CPM);
-    return Math.max(0, Math.min(100, Math.round(normalized * 100)));
+    return Math.round(this.soul);
+  }
+
+  /** Current clean-streak length — consecutive correct keystrokes. */
+  getCombo(): number {
+    return this.combo;
+  }
+
+  /** Longest clean streak this session (for end-of-run flourishes / score). */
+  getBestCombo(): number {
+    return this.bestCombo;
+  }
+
+  /** True if the player can afford a spell of the given Soul cost. Scenes arm
+   *  their spell modifier from this at claim-time. */
+  canCast(cost: number = SPELL_COST): boolean {
+    return this.soul >= cost;
+  }
+
+  /** Spend Soul for a cast. Returns true if it was affordable (and deducted),
+   *  false otherwise (no deduction). Call this when the cast actually fires —
+   *  the guard makes a stale claim-time arm safe. */
+  spendSoul(cost: number = SPELL_COST): boolean {
+    if (this.soul < cost) return false;
+    this.soul -= cost;
+    return true;
   }
 }

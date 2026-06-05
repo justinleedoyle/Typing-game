@@ -79,6 +79,12 @@ export interface SaveBackend {
 const STORAGE_KEY = "portalwrights-almanac.save.v1";
 const SUPABASE_TABLE = "player_saves";
 
+// The cloud save-load is best-effort: if Supabase is slow, paused, unreachable,
+// or the stored session token is stale, the boot must still proceed. After this
+// long, SyncedBackend.load() gives up on the cloud and boots from the local
+// save (guest/offline). Generous enough that a healthy cloud load wins easily.
+const CLOUD_LOAD_TIMEOUT_MS = 4000;
+
 export class LocalStorageBackend implements SaveBackend {
   async load(): Promise<SaveState | null> {
     try {
@@ -134,6 +140,24 @@ export class SyncedBackend implements SaveBackend {
   ) {}
 
   async load(): Promise<SaveState | null> {
+    // The cloud path must never hang the boot. supabase.auth.getSession() has no
+    // internal timeout — it can stall or throw when the project is paused/
+    // unreachable or the stored token is stale — and TitleScene awaits this
+    // before it shows anything. Race the cloud path against a timeout; on either
+    // a timeout OR an error, fall back to the local save so the game always
+    // boots, online or off. (The `.catch` also keeps a late cloud rejection,
+    // after the timeout already won, from surfacing as an unhandled rejection.)
+    const FALLBACK = Symbol("local-fallback");
+    const cloud = this.loadViaCloud().catch(() => FALLBACK);
+    const timeout = new Promise<typeof FALLBACK>((resolve) =>
+      window.setTimeout(() => resolve(FALLBACK), CLOUD_LOAD_TIMEOUT_MS),
+    );
+    const result = await Promise.race([cloud, timeout]);
+    // typeof guard (not `=== FALLBACK`) so TS narrows the symbol out of the union.
+    return typeof result === "symbol" ? this.local.load() : result;
+  }
+
+  private async loadViaCloud(): Promise<SaveState | null> {
     const { data: sessionData } = await supabase.auth.getSession();
     const signedIn = !!sessionData.session?.user;
     if (!signedIn) return this.local.load();

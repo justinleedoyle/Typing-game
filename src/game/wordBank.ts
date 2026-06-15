@@ -72,8 +72,11 @@ function findStruggleLetters(
 }
 
 function containsAny(word: string, letters: ReadonlySet<string>): boolean {
+  // Struggle letters are tracked lowercase, so compare case-insensitively —
+  // otherwise the capitalized half of a mixed-case command word (e.g. the
+  // "FORGE" in "reFORGE") would never match a struggle letter.
   for (const ch of word) {
-    if (letters.has(ch)) return true;
+    if (letters.has(ch.toLowerCase())) return true;
   }
   return false;
 }
@@ -185,6 +188,28 @@ export const FORGE_WORD_BANK = [
   "weld",
   "ember",
   "soot",
+] as const;
+
+/** Clockwork Forge COMMAND bank — mixed-case mid-word commands for the golem
+ *  encounters (canon §5.5.8: "three escalating golem encounters that demand
+ *  Shift-switching mid-word"). Each word is a lowercase head + a CAPITALIZED
+ *  imperative tail: the golem only obeys when the capitals are typed with Shift,
+ *  so completing one *requires* a clean mid-word Shift-switch. Used with
+ *  `caseSensitive: true` targets (required typing → free, never Soul-gated).
+ *  Themed: commands that reshape or subdue the brass. */
+export const FORGE_COMMAND_BANK = [
+  "reFORGE",
+  "igNITE",
+  "disARM",
+  "unBIND",
+  "temPER",
+  "harDEN",
+  "anNEAL",
+  "solDER",
+  "quenCH",
+  "reCAST",
+  "unSEAL",
+  "grIND",
 ] as const;
 
 /** Haunted Wood word bank — words with punctuation marks, atmospheric and eerie.

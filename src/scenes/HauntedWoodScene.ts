@@ -83,6 +83,12 @@ export class HauntedWoodScene extends Phaser.Scene {
   private wrenSprite!: Phaser.GameObjects.Image;
   private ghosts: HauntedGhost[] = [];
   private activeTargets: TextWordTarget[] = [];
+  /** Continuation to run when the current ghost wave is fully cleared. Each
+   *  spawner sets its own; checkGhostWaveComplete fires and clears it. This
+   *  replaces the old "read the narrator caption and substring-match it"
+   *  routing, which silently soft-locked the realm whenever a caption was
+   *  reworded (it had, at crossroads 1). */
+  private onWaveCleared: (() => void) | null = null;
 
   // Fork choices tracked for save state
   private fork1Choice: "offering" | "bone-flute" | null = null;
@@ -108,6 +114,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.store = data.store;
     this.ghosts = [];
     this.activeTargets = [];
+    this.onWaveCleared = null;
     this.fork1Choice = null;
     this.fork2Choice = null;
     this.companionChoice = null;
@@ -317,6 +324,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
     const directions: WoodDirection[] = ["west", "east", "north"];
     this.ghosts = [];
+    this.onWaveCleared = () => this.onCrossroads1Cleared();
     this.spawnGhostsByDirection(directions, 300);
     this.time.delayedCall(200, () =>
       this.narration.say("wood_crossroads1_intro"),
@@ -343,6 +351,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
     const directions: WoodDirection[] = ["north", "south", "east", "west"];
     this.ghosts = [];
+    this.onWaveCleared = () => this.onCrossroads2Cleared();
     this.spawnGhostsByDirection(directions, 280);
 
     // §5.5.10 — for a few seconds the ghosts speak his fragment instead of
@@ -378,6 +387,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
     const directions: WoodDirection[] = ["north", "north", "east", "west"];
     this.ghosts = [];
+    this.onWaveCleared = () => this.onCrossroads3Cleared();
     this.spawnGhostsByDirection(directions, 300);
   }
 
@@ -619,6 +629,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     // recognize the learned punctuation-direction mapping from Act 2.
     const directions: WoodDirection[] = ["west", "east", "north"];
     this.ghosts = [];
+    this.onWaveCleared = () => this.onBossWaveACleared();
     this.spawnGhostsByDirection(directions, 350);
   }
 
@@ -634,6 +645,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     // as the Ghost-King's hall rising up against Wren.
     const directions: WoodDirection[] = ["south", "south", "north"];
     this.ghosts = [];
+    this.onWaveCleared = () => this.onBossWaveBCleared();
     this.spawnGhostsByDirection(directions, 350);
   }
 
@@ -1147,27 +1159,15 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private checkGhostWaveComplete(): void {
-    if (!this.ghosts.every((g) => g.defeated)) return;
+    // The length guard is load-bearing: [].every() is true, so without it a
+    // call between waves (when ghosts is empty) would re-fire the last
+    // continuation. Only advance when a real wave is present and fully down.
+    if (this.ghosts.length === 0 || !this.ghosts.every((g) => g.defeated)) return;
 
-    // Determine which wave just completed by checking bossDefeated flag and
-    // the narrator text.
-    const narr = this.narration.currentText();
-    if (narr.includes("Ward them")) {
-      this.ghosts = [];
-      this.time.delayedCall(1000, () => this.onCrossroads1Cleared());
-    } else if (narr.includes("cold deepens")) {
-      this.ghosts = [];
-      this.time.delayedCall(1000, () => this.onCrossroads2Cleared());
-    } else if (narr.includes("Older")) {
-      this.ghosts = [];
-      this.time.delayedCall(1000, () => this.onCrossroads3Cleared());
-    } else if (narr.includes("first wave")) {
-      this.ghosts = [];
-      this.time.delayedCall(1000, () => this.onBossWaveBCleared());
-    } else if (narr.includes("Ghost-wave")) {
-      this.ghosts = [];
-      this.time.delayedCall(1000, () => this.onBossWaveACleared());
-    }
+    const onCleared = this.onWaveCleared;
+    this.ghosts = [];
+    this.onWaveCleared = null;
+    if (onCleared) this.time.delayedCall(1000, onCleared);
   }
 
   // ─── Mist roll mechanic ───────────────────────────────────────────────────

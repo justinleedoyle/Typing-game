@@ -17,7 +17,7 @@ import type { SaveStore } from "../game/saveState";
 import { SPELL_COST } from "../game/sessionStats";
 import { TypingInputController } from "../game/typingInput";
 import { WaveDirector } from "../game/waveDirector";
-import { pickAdaptiveWords, FORGE_WORD_BANK } from "../game/wordBank";
+import { pickAdaptiveWords, FORGE_COMMAND_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
 import forgeBackdrop from "../../art/references/clockwork-forge-clean.png";
@@ -443,20 +443,22 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.cameras.main.shake(220, 0.005);
     this.narration.say("forge_wave1_intro");
 
-    // Speed-axis director: a fast typist draws longer words and a faster
-    // advance. Count stays at the narrated three ("Three golems stir."); the
-    // concurrency lever is applied on wave 2, whose line states no total.
+    // Tier 1 signature: every golem is a mixed-case command (lowercase head,
+    // CAPITALIZED tail) — the brass only obeys when the capitals are typed with
+    // Shift, so each kill demands a clean mid-word Shift-switch (canon §5.5.8).
+    // Speed-axis director still scales word length + advance; count stays at the
+    // narrated three ("Three golems stir."), concurrency is applied on wave 2.
     const minLength = this.director.wordLengthBias();
     const advanceMs = this.director.advanceMs(GOLEM_ADVANCE_MS);
     const words = pickAdaptiveWords(
-      FORGE_WORD_BANK,
+      FORGE_COMMAND_BANK,
       3,
       this.store.get().keyStats,
       minLength,
     );
     const slots = shuffle(FLOOR_SLOTS).slice(0, 3);
     slots.forEach((slot, i) => {
-      const g = this.spawnAdvancingGolem(slot.x, slot.y, words[i], advanceMs, false);
+      const g = this.spawnAdvancingGolem(slot.x, slot.y, words[i], advanceMs, true);
       this.golems.push(g);
     });
 
@@ -498,44 +500,30 @@ export class ClockworkForgeScene extends Phaser.Scene {
       });
     }
 
-    // Normal golems + one CAPITALIZED golem. Speed-axis director: a fast typist
-    // gets longer words, a faster advance, and an extra normal golem — clamped
-    // so a slot is always reserved for the signature capitalized golem.
+    // Every golem is a mixed-case command now — the lone all-caps "VALVE" is
+    // retired; Tier 1 makes the whole wave demand the Shift-switch. Speed-axis
+    // director scales length, advance, AND concurrency here (the intro line
+    // states no fixed count), clamped to the floor slots.
     const minLength = this.director.wordLengthBias();
     const advanceMs = this.director.advanceMs(GOLEM_ADVANCE_MS * 0.85);
-    const normalCount = Math.min(
-      this.director.enemyCount(2),
-      FLOOR_SLOTS.length - 1,
-    );
-    const normalWords = pickAdaptiveWords(
-      FORGE_WORD_BANK,
-      normalCount,
+    const count = Math.min(this.director.enemyCount(3), FLOOR_SLOTS.length);
+    const words = pickAdaptiveWords(
+      FORGE_COMMAND_BANK,
+      count,
       this.store.get().keyStats,
       minLength,
     );
-    const slots = shuffle(FLOOR_SLOTS).slice(0, normalCount + 1);
-
-    // Normal golems
-    for (let i = 0; i < normalCount; i++) {
+    const slots = shuffle(FLOOR_SLOTS).slice(0, count);
+    for (let i = 0; i < count; i++) {
       const g = this.spawnAdvancingGolem(
         slots[i].x,
         slots[i].y,
-        normalWords[i],
+        words[i],
         advanceMs,
-        false,
+        true,
       );
       this.golems.push(g);
     }
-
-    // Last slot: capitalized — "VALVE" — spell mode fires command visual
-    const capGolem = this.spawnAdvancingGolem(
-      slots[normalCount].x,
-      slots[normalCount].y,
-      "VALVE",
-      advanceMs,
-      true,
-    );
-    this.golems.push(capGolem);
 
     this.watchForWaveClear(() => this.startFork1());
   }
@@ -763,108 +751,41 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private startBossPhase3(): void {
     this.clearActiveTargets();
     this.setNarrator(
-      "The golem's true name. Two words. Type them in sequence.",
+      "Its true name is a command turned on itself — half-spoken, half-SHOUTED. Type it as it reads.",
     );
 
-    // Two-target sequence, repeated twice. On second completion, boss falls.
+    // The Command-Golem's true name is ONE mixed-case phrase (canon §5.5.8):
+    // "stand" lowercase into "DOWN" capitalized — a single mid-phrase Shift-
+    // switch the player must land, not two separate tokens. Repeated twice;
+    // the second completion fells the boss. caseSensitive starts lowercase, so
+    // the claim never captures Shift → completion routes through onComplete.
     let repeatCount = 0;
     const runSequence = (): void => {
-      const targetStand = new TextWordTarget({
+      const target = new TextWordTarget({
         scene: this,
-        word: "stand",
-        x: this.bossContainer.x - 120,
+        word: "stand DOWN",
+        x: this.bossContainer.x,
         y: this.bossContainer.y - 220,
         fontSize: 38,
+        caseSensitive: true,
+        burstColor: PALETTE_HEX.ember,
         onComplete: () => {
           playChime();
-          this.clearActiveTargets();
-          this.time.delayedCall(400, () => {
-            const targetDown = new TextWordTarget({
-              scene: this,
-              word: "DOWN",
-              x: this.bossContainer.x + 120,
-              y: this.bossContainer.y - 220,
-              fontSize: 38,
-              caseSensitive: true,
-              onComplete: () => {
-                playChime();
-                this.cameras.main.shake(180, 0.004);
-                repeatCount++;
-                if (repeatCount >= 2) {
-                  this.time.delayedCall(600, () => this.bossDefeated());
-                } else {
-                  this.setNarrator(
-                    "The golem staggers. Once more — finish it.",
-                  );
-                  this.time.delayedCall(1000, runSequence);
-                }
-              },
-              onSpellComplete: () => {
-                this.cameras.main.flash(300, 220, 160, 20);
-                this.cameras.main.shake(250, 0.006);
-                playChime();
-                repeatCount++;
-                if (repeatCount >= 2) {
-                  this.time.delayedCall(600, () => this.bossDefeated());
-                } else {
-                  this.setNarrator(
-                    "The golem staggers hard. Once more — finish it.",
-                  );
-                  this.time.delayedCall(900, runSequence);
-                }
-              },
-            });
-            this.typingInput.register(targetDown);
-            this.activeTargets.push(targetDown);
-          });
-        },
-        onSpellComplete: () => {
-          playChime();
-          this.cameras.main.flash(200, 200, 140, 20);
-          this.clearActiveTargets();
-          this.time.delayedCall(350, () => {
-            const targetDown = new TextWordTarget({
-              scene: this,
-              word: "DOWN",
-              x: this.bossContainer.x + 120,
-              y: this.bossContainer.y - 220,
-              fontSize: 38,
-              caseSensitive: true,
-              onComplete: () => {
-                playChime();
-                this.cameras.main.shake(200, 0.005);
-                repeatCount++;
-                if (repeatCount >= 2) {
-                  this.time.delayedCall(500, () => this.bossDefeated());
-                } else {
-                  this.setNarrator(
-                    "The golem staggers. Once more — finish it.",
-                  );
-                  this.time.delayedCall(1000, runSequence);
-                }
-              },
-              onSpellComplete: () => {
-                this.cameras.main.flash(320, 220, 160, 20);
-                this.cameras.main.shake(300, 0.007);
-                playChime();
-                repeatCount++;
-                if (repeatCount >= 2) {
-                  this.time.delayedCall(500, () => this.bossDefeated());
-                } else {
-                  this.setNarrator(
-                    "The command rings through the forge. Once more.",
-                  );
-                  this.time.delayedCall(800, runSequence);
-                }
-              },
-            });
-            this.typingInput.register(targetDown);
-            this.activeTargets.push(targetDown);
-          });
+          this.cameras.main.flash(300, 220, 160, 20);
+          this.cameras.main.shake(260, 0.006);
+          repeatCount++;
+          if (repeatCount >= 2) {
+            this.time.delayedCall(600, () => this.bossDefeated());
+          } else {
+            this.setNarrator(
+              "The command rings through the forge. Once more — finish it.",
+            );
+            this.time.delayedCall(1000, runSequence);
+          }
         },
       });
-      this.typingInput.register(targetStand);
-      this.activeTargets.push(targetStand);
+      this.typingInput.register(target);
+      this.activeTargets.push(target);
     };
 
     runSequence();
@@ -975,12 +896,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
     );
 
     this.waveActive = true;
-    // Speed-axis director: a fast typist draws longer words and a faster
-    // advance. Count stays at the narrated two ("Two more golems rise…").
+    // Mixed-case command golems. Speed-axis director scales length + advance;
+    // count stays at the narrated two ("Two more golems rise…").
     const minLength = this.director.wordLengthBias();
     const advanceMs = this.director.advanceMs(GOLEM_ADVANCE_MS * 0.75);
     const words = pickAdaptiveWords(
-      FORGE_WORD_BANK,
+      FORGE_COMMAND_BANK,
       2,
       this.store.get().keyStats,
       minLength,
@@ -993,7 +914,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         slots[i].y,
         words[i],
         advanceMs,
-        false,
+        true,
       );
       this.golems.push(g);
     }
@@ -1251,15 +1172,22 @@ export class ClockworkForgeScene extends Phaser.Scene {
       x: golem.container.x,
       y: golem.restY - 100,
       fontSize: 32,
-      // Capitalized golems enforce case — lowercase typing now misses, so
-      // Gregor's tutorial line ("Lowercase moves them. CAPITALS command
-      // them.") finally describes a real mechanic instead of a cosmetic
-      // VFX gate. Lowercase-word golems remain case-insensitive.
+      // Mixed-case command golems enforce case — the CAPITALIZED tail misses
+      // unless typed with Shift, so Gregor's lesson ("Lowercase moves them.
+      // CAPITALS command them.") is a real mid-word demand, not a VFX gate.
       caseSensitive: golem.isCapitalized,
       // Forge-fire burst on completion. Reads as "ember bloom" rather
       // than the default brass.
       burstColor: PALETTE_HEX.ember,
-      onComplete: () => this.defeatGolem(golem),
+      // A mixed-case command starts lowercase, so the claim captures no Shift
+      // and routes here — but finishing it REQUIRED the mid-word Shift, so it
+      // earns the same "command lands" flourish a leading-capital would.
+      onComplete: golem.isCapitalized
+        ? () => {
+            this.defeatGolem(golem);
+            this.commandEffect(golem);
+          }
+        : () => this.defeatGolem(golem),
       onSpellComplete: () => {
         this.defeatGolem(golem);
         this.commandEffect(golem);

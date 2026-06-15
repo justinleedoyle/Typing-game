@@ -16,31 +16,43 @@ const MIN_SAMPLES = 5;
 const STRUGGLE_LETTER_COUNT = 3;
 
 /**
- * Pick `count` distinct words from `bank`, preferring ones that contain any
- * of the player's struggle letters. Falls back to random selection when no
- * stats exist yet or no preferred words are available.
+ * Pick `count` distinct words from `bank`, preferring ones that contain any of
+ * the player's struggle letters and (for a fast typist) ones that meet a target
+ * minimum length. Falls back to random selection when no stats exist yet and no
+ * length pressure is requested.
+ *
+ * `minLength` is the WaveDirector's speed-axis length bias: 0 (default) means no
+ * length pressure. It is a soft preference, not a filter — if the bank can't
+ * satisfy it the longest available words are simply favored, so small banks and
+ * short words degrade gracefully. Struggle-letter practice is weighted above
+ * length so the accuracy curriculum still dominates.
  */
 export function pickAdaptiveWords(
   bank: readonly string[],
   count: number,
   stats: Readonly<Record<string, KeyStat>>,
+  minLength = 0,
 ): string[] {
   const struggleLetters = findStruggleLetters(stats);
   const shuffled = shuffle(bank);
 
-  if (struggleLetters.size === 0) {
+  // Fast path: no adaptivity requested at all.
+  if (struggleLetters.size === 0 && minLength <= 0) {
     return shuffled.slice(0, count);
   }
 
-  const preferred: string[] = [];
-  const fallback: string[] = [];
-  for (const word of shuffled) {
-    if (containsAny(word, struggleLetters)) preferred.push(word);
-    else fallback.push(word);
-    if (preferred.length >= count) break;
-  }
-
-  return [...preferred, ...fallback].slice(0, count);
+  // Score each word, then take the top `count`. A struggle letter is worth more
+  // than meeting the length target, so the curriculum bias ranks above the
+  // speed-axis nudge; a word doing both ranks highest. V8's sort is stable, so
+  // equal-scored words keep their shuffled order and selection stays varied.
+  const scored = shuffled.map((word) => {
+    let score = 0;
+    if (struggleLetters.size > 0 && containsAny(word, struggleLetters)) score += 2;
+    if (minLength > 0 && word.length >= minLength) score += 1;
+    return { word, score };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, count).map((entry) => entry.word);
 }
 
 function findStruggleLetters(

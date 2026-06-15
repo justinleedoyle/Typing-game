@@ -15,6 +15,7 @@ import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
 import { SPELL_COST } from "../game/sessionStats";
 import { TypingInputController } from "../game/typingInput";
+import { WaveDirector } from "../game/waveDirector";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
 import {
@@ -174,6 +175,7 @@ const TRUE_NAME_REACTIONS = [
 export class WinterMountainScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
+  private director!: WaveDirector;
   private narration!: NarrationManager;
   private wolves: Wolf[] = [];
   private activeTargets: TextWordTarget[] = [];
@@ -282,6 +284,7 @@ export class WinterMountainScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.typingInput = new TypingInputController(this.store);
+    this.director = new WaveDirector(this.typingInput.getStats());
     this.typingInput.setKeystrokeHooks({
       onCorrect: () => {
         bobWrenSprite(this.wrenSprite);
@@ -613,11 +616,24 @@ export class WinterMountainScene extends Phaser.Scene {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
 
-    const slots = shuffle(SPAWN_SLOTS).slice(0, config.wolfCount);
+    // Speed-axis director: a fast, accurate typist draws faster-closing wolves
+    // and longer words on EVERY wave — the floor rises to meet them, all bounded
+    // by the director's tier cap. Concurrency escalates only on the pack wave,
+    // the one whose narration ("the pack closes") supports a variable count; the
+    // solo opener and the named pair state their counts in dialogue, so they
+    // keep them (and still escalate on advance-speed + word-length).
+    const advanceMs = this.director.advanceMs(config.advanceMs);
+    const minLength = this.director.wordLengthBias();
+    const wolfCount = config.hasBoss
+      ? Math.min(this.director.enemyCount(config.wolfCount), SPAWN_SLOTS.length)
+      : config.wolfCount;
+
+    const slots = shuffle(SPAWN_SLOTS).slice(0, wolfCount);
     const words = pickAdaptiveWords(
       WINTER_WORD_BANK,
-      config.wolfCount,
+      wolfCount,
       this.store.get().keyStats,
+      minLength,
     );
 
     slots.forEach((pos, i) => {
@@ -627,7 +643,7 @@ export class WinterMountainScene extends Phaser.Scene {
       // — `simultaneous` zeroes the per-wolf stagger so they arrive
       // together and force split-attention typing.
       const delay = config.simultaneous ? 0 : i * 200;
-      this.spawnWolf(startX, pos.x, pos.y, words[i], delay, config.advanceMs);
+      this.spawnWolf(startX, pos.x, pos.y, words[i], delay, advanceMs);
     });
 
     if (config.hasBoss) {
@@ -710,7 +726,9 @@ export class WinterMountainScene extends Phaser.Scene {
       word: BOSS_PHRASE,
       defeated: false,
       advanceTween: null,
-      advanceMs: BOSS_ADVANCE_MS,
+      // The alpha closes faster too for a fast typist — its titled phrase is
+      // long, so a shorter advance is a fair pressure, not a spike.
+      advanceMs: this.director.advanceMs(BOSS_ADVANCE_MS),
       isBoss: true,
       bodySprite,
     };

@@ -16,6 +16,7 @@ import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
 import { SPELL_COST } from "../game/sessionStats";
 import { TypingInputController } from "../game/typingInput";
+import { WaveDirector } from "../game/waveDirector";
 import { pickAdaptiveWords, FORGE_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
@@ -97,6 +98,7 @@ const BOSS_PHASE2_WORDS = ["HOLD", "STAND", "YIELD"] as const;
 export class ClockworkForgeScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
+  private director!: WaveDirector;
   private narration!: NarrationManager;
   private golems: Golem[] = [];
   private activeTargets: TextWordTarget[] = [];
@@ -158,6 +160,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.narration = new NarrationManager(this, { y: 150 });
 
     this.typingInput = new TypingInputController(this.store);
+    this.director = new WaveDirector(this.typingInput.getStats());
     this.typingInput.setKeystrokeHooks({
       onCorrect: () => bobWrenSprite(this.wrenSprite),
       onMiss: () => {
@@ -440,14 +443,20 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.cameras.main.shake(220, 0.005);
     this.narration.say("forge_wave1_intro");
 
+    // Speed-axis director: a fast typist draws longer words and a faster
+    // advance. Count stays at the narrated three ("Three golems stir."); the
+    // concurrency lever is applied on wave 2, whose line states no total.
+    const minLength = this.director.wordLengthBias();
+    const advanceMs = this.director.advanceMs(GOLEM_ADVANCE_MS);
     const words = pickAdaptiveWords(
       FORGE_WORD_BANK,
       3,
       this.store.get().keyStats,
+      minLength,
     );
     const slots = shuffle(FLOOR_SLOTS).slice(0, 3);
     slots.forEach((slot, i) => {
-      const g = this.spawnAdvancingGolem(slot.x, slot.y, words[i], GOLEM_ADVANCE_MS, false);
+      const g = this.spawnAdvancingGolem(slot.x, slot.y, words[i], advanceMs, false);
       this.golems.push(g);
     });
 
@@ -489,32 +498,41 @@ export class ClockworkForgeScene extends Phaser.Scene {
       });
     }
 
-    // Two normal golems + one CAPITALIZED golem
+    // Normal golems + one CAPITALIZED golem. Speed-axis director: a fast typist
+    // gets longer words, a faster advance, and an extra normal golem — clamped
+    // so a slot is always reserved for the signature capitalized golem.
+    const minLength = this.director.wordLengthBias();
+    const advanceMs = this.director.advanceMs(GOLEM_ADVANCE_MS * 0.85);
+    const normalCount = Math.min(
+      this.director.enemyCount(2),
+      FLOOR_SLOTS.length - 1,
+    );
     const normalWords = pickAdaptiveWords(
       FORGE_WORD_BANK,
-      2,
+      normalCount,
       this.store.get().keyStats,
+      minLength,
     );
-    const slots = shuffle(FLOOR_SLOTS).slice(0, 3);
+    const slots = shuffle(FLOOR_SLOTS).slice(0, normalCount + 1);
 
-    // First two: normal
-    for (let i = 0; i < 2; i++) {
+    // Normal golems
+    for (let i = 0; i < normalCount; i++) {
       const g = this.spawnAdvancingGolem(
         slots[i].x,
         slots[i].y,
         normalWords[i],
-        GOLEM_ADVANCE_MS * 0.85,
+        advanceMs,
         false,
       );
       this.golems.push(g);
     }
 
-    // Third: capitalized — "VALVE" — spell mode fires command visual
+    // Last slot: capitalized — "VALVE" — spell mode fires command visual
     const capGolem = this.spawnAdvancingGolem(
-      slots[2].x,
-      slots[2].y,
+      slots[normalCount].x,
+      slots[normalCount].y,
       "VALVE",
-      GOLEM_ADVANCE_MS * 0.85,
+      advanceMs,
       true,
     );
     this.golems.push(capGolem);
@@ -957,10 +975,15 @@ export class ClockworkForgeScene extends Phaser.Scene {
     );
 
     this.waveActive = true;
+    // Speed-axis director: a fast typist draws longer words and a faster
+    // advance. Count stays at the narrated two ("Two more golems rise…").
+    const minLength = this.director.wordLengthBias();
+    const advanceMs = this.director.advanceMs(GOLEM_ADVANCE_MS * 0.75);
     const words = pickAdaptiveWords(
       FORGE_WORD_BANK,
       2,
       this.store.get().keyStats,
+      minLength,
     );
     const slots = shuffle(FLOOR_SLOTS).slice(0, 2);
     this.golems = [];
@@ -969,7 +992,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         slots[i].x,
         slots[i].y,
         words[i],
-        GOLEM_ADVANCE_MS * 0.75,
+        advanceMs,
         false,
       );
       this.golems.push(g);

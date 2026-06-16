@@ -12,15 +12,24 @@
 
 import Phaser from "phaser";
 import { playBellToll } from "../audio/bellToll";
+import { isOffBeat, isOnBeat, windowMsFor } from "./beatGate";
 
-/** ms around each beat in which input is accepted. Anything outside is offbeat. */
+const DEFAULT_TEMPO_MS = 2000;
+/** ms around each beat in which input is accepted at the DEFAULT tempo. */
 const DEFAULT_WINDOW_MS = 350;
+/** Window as a fraction of the beat, so a faster tempo tightens the gate.
+ *  350/2000 keeps the slow-toll window identical to the old fixed constant. */
+const DEFAULT_WINDOW_FRACTION = DEFAULT_WINDOW_MS / DEFAULT_TEMPO_MS;
 
 interface BeatClockConfig {
   /** Tempo in ms between beats. Default 2000 (slow toll). */
   tempoMs?: number;
-  /** Width of the "in window" gate around each beat. Default 350ms. */
+  /** Pin an ABSOLUTE window width (ms). Overrides windowFraction — the gate is
+   *  then NOT tempo-scaled. Omit to get the tempo-scaled default. */
   windowMs?: number;
+  /** Window as a fraction of tempo (ignored if windowMs is set). Default 0.175
+   *  → 350ms at the 2000ms toll, 175ms when Phase 2 halves tempo to 1000ms. */
+  windowFraction?: number;
   /** Fired on each beat. Use to drive visuals, spawn things on-beat. */
   onBeat?: () => void;
   /** Whether to play a bell-toll audio cue on each beat. Default true. */
@@ -29,7 +38,9 @@ interface BeatClockConfig {
 
 export class BeatClock {
   private tempoMs: number;
-  private readonly windowMs: number;
+  /** Absolute window override (ms); undefined ⇒ tempo-scaled. */
+  private readonly fixedWindowMs?: number;
+  private readonly windowFraction: number;
   private readonly onBeat?: () => void;
   private readonly audio: boolean;
   private timer: Phaser.Time.TimerEvent | null = null;
@@ -42,8 +53,9 @@ export class BeatClock {
     private readonly scene: Phaser.Scene,
     config: BeatClockConfig = {},
   ) {
-    this.tempoMs = config.tempoMs ?? 2000;
-    this.windowMs = config.windowMs ?? DEFAULT_WINDOW_MS;
+    this.tempoMs = config.tempoMs ?? DEFAULT_TEMPO_MS;
+    this.fixedWindowMs = config.windowMs;
+    this.windowFraction = config.windowFraction ?? DEFAULT_WINDOW_FRACTION;
     this.onBeat = config.onBeat;
     this.audio = config.audio ?? true;
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.stop());
@@ -85,13 +97,29 @@ export class BeatClock {
     return this.tempoMs;
   }
 
-  /** True if right now is within ±windowMs/2 of the last beat. The
+  /** Current accept-window width in ms — tempo-scaled unless pinned via the
+   *  windowMs config. Exposed for the HUD and tests. */
+  getWindowMs(): number {
+    return windowMsFor(this.tempoMs, this.fixedWindowMs, this.windowFraction);
+  }
+
+  /** True if right now is within the on-beat window after the last toll. The
    *  asymmetric "since last beat only" gate matches how players actually
    *  perceive rhythm — you commit just after the beat hits, not before it. */
   isInWindow(): boolean {
     if (!this.running) return true;
     const since = this.scene.time.now - this.lastBeatAt;
-    return since <= this.windowMs;
+    return isOnBeat(since, this.getWindowMs());
+  }
+
+  /** True if right now is within the OFF-beat ("antiphon") window — the answer
+   *  the choir sings between the tolls. Centered on the half-beat. Returns true
+   *  when the clock isn't running (mirrors isInWindow, so free passages flow).
+   *  Used for the antiphon (off-beat) enemy encounter. */
+  isInOffbeatWindow(): boolean {
+    if (!this.running) return true;
+    const since = this.scene.time.now - this.lastBeatAt;
+    return isOffBeat(since, this.tempoMs, this.getWindowMs());
   }
 
   private scheduleNext(): void {

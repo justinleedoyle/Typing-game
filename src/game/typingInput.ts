@@ -133,6 +133,21 @@ export class TypingInputController {
     return this.claimed !== null;
   }
 
+  /** Next expected (lowercase) char of the claimed word, or null when nothing
+   *  is claimed. Rhythm scenes peek this to decide whether the next keystroke
+   *  crosses a beat boundary that must land in the window. */
+  peekClaimedNext(): string | null {
+    return this.claimed ? (this.claimed.remaining()[0] ?? null) : null;
+  }
+
+  /** Wipe the claimed word's typed progress without releasing the claim — a
+   *  de-sync stumble in a rhythm scene (the player must retype the metered
+   *  word, landing each beat). No-op if nothing is claimed or the target
+   *  doesn't support resetCursor. */
+  resetClaimedProgress(): void {
+    this.claimed?.resetCursor?.();
+  }
+
   /** Current unconfirmed typed prefix (before a target is claimed). */
   getTypingBuffer(): string {
     return this.typingBuffer;

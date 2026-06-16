@@ -8,6 +8,8 @@ import { playDamageThud } from "../audio/damageThud";
 import { playWaveSting } from "../audio/waveSting";
 import { flashDamageVignette } from "../game/vfx";
 import { BeatClock } from "../game/beatClock";
+import { decideBeatGate } from "../game/beatGate";
+import { BreathMeter } from "../game/breathMeter";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -64,6 +66,28 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private beatClock!: BeatClock;
   private beatRing!: Phaser.GameObjects.Graphics;
+  private offbeatRing!: Phaser.GameObjects.Graphics;
+
+  // Rhythm-gate state (Tier 1 — make the Bell's rhythm demanding):
+  //  - beatPhase "off" flips the accept window to the half-beat for the
+  //    antiphon (call-and-response) wave.
+  //  - beatLocked turns on mid-word de-sync (hyphen boundaries must land on
+  //    the beat) for the Warden's Phase 2.
+  private beatPhase: "on" | "off" = "on";
+  private beatLocked = false;
+
+  // "Air" stake — staying in rhythm lets Wren breathe; off-beat / de-sync
+  // stumbles cost air; empty = a non-terminal gasp knockback. Active only in
+  // the choir-wave combat.
+  private breath = new BreathMeter();
+  private breathActive = false;
+  private breathBar!: Phaser.GameObjects.Graphics;
+  private breathLabel!: Phaser.GameObjects.Text;
+
+  /** Explicit per-wave continuation, set by each spawner. Replaces the old
+   *  narrator-substring routing (which had soft-locked the first encounter,
+   *  same class of bug as the Haunted Wood fix #89). */
+  private onWaveCleared: (() => void) | null = null;
 
   private fork1Choice: "chant" | "force" | null = null;
   private fork2Choice: "free-aurland" | "claim-tongue" | null = null;
@@ -82,6 +106,11 @@ export class SunkenBellScene extends Phaser.Scene {
     this.store = data.store;
     this.ghosts = [];
     this.activeTargets = [];
+    this.beatPhase = "on";
+    this.beatLocked = false;
+    this.breath.reset();
+    this.breathActive = false;
+    this.onWaveCleared = null;
     this.fork1Choice = null;
     this.fork2Choice = null;
     this.quietLordIntruded =
@@ -128,10 +157,27 @@ export class SunkenBellScene extends Phaser.Scene {
     this.beatRing = this.add.graphics().setDepth(10).setAlpha(0);
     this.beatRing.x = WREN_X;
     this.beatRing.y = 960;
+    // Off-beat ("antiphon") ring — ember, pulses at the half-beat during the
+    // call-and-response wave so the off-beat answer window is visible.
+    this.offbeatRing = this.add.graphics().setDepth(10).setAlpha(0);
+    this.offbeatRing.x = WREN_X;
+    this.offbeatRing.y = 960;
+
+    // Air gauge — drawn above Wren, hidden until choir-wave combat begins.
+    this.breathBar = this.add.graphics().setDepth(11).setAlpha(0);
+    this.breathLabel = this.add
+      .text(WREN_X, WREN_Y + 48, "air", {
+        fontFamily: SERIF,
+        fontSize: "20px",
+        color: PALETTE.dim,
+      })
+      .setOrigin(0.5)
+      .setDepth(11)
+      .setAlpha(0);
 
     this.beatClock = new BeatClock(this, {
       tempoMs: 2000,
-      onBeat: () => this.pulseBeatRing(),
+      onBeat: () => this.onBeatTick(),
     });
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
@@ -211,6 +257,18 @@ export class SunkenBellScene extends Phaser.Scene {
 
   // ─── Beat mechanic ────────────────────────────────────────────────────────
 
+  /** Fired on every toll. Pulses the on-beat ring, and — during an antiphon
+   *  (off-beat) wave — schedules the half-beat counter-pulse so the player can
+   *  see the gap they must answer in. */
+  private onBeatTick(): void {
+    this.pulseBeatRing();
+    if (this.beatPhase === "off") {
+      this.time.delayedCall(this.beatClock.getTempo() / 2, () => {
+        if (this.beatPhase === "off") this.pulseOffbeatRing();
+      });
+    }
+  }
+
   /** Visible "type now" pulse — bright ring at the moment of the toll,
    *  expanding and fading across the claim window so the player sees
    *  exactly when their input is welcome. */
@@ -230,6 +288,66 @@ export class SunkenBellScene extends Phaser.Scene {
     this.cameras.main.flash(300, 0, 0, 0, false);
   }
 
+  /** Half-beat "answer now" pulse for the antiphon wave — ember, so it reads
+   *  as the response to the frost toll-ring rather than the toll itself. */
+  private pulseOffbeatRing(): void {
+    const ring = this.offbeatRing;
+    ring.clear();
+    ring.lineStyle(3, PALETTE_HEX.ember, 1);
+    ring.strokeCircle(0, 0, 26);
+    ring.setAlpha(0.9).setScale(1);
+    this.tweens.add({
+      targets: ring,
+      alpha: 0,
+      scale: 1.6,
+      duration: 480,
+      ease: "Sine.easeOut",
+    });
+  }
+
+  /** Turn the air stake on/off for an encounter. Resets to full when enabled;
+   *  hides the gauge when disabled. */
+  private setBreathActive(active: boolean): void {
+    this.breathActive = active;
+    if (active) this.breath.reset();
+    this.drawBreathBar();
+  }
+
+  /** Redraw the air gauge below Wren from the current breath fraction. Frost
+   *  when full, ember when low. Hidden entirely when the stake is inactive. */
+  private drawBreathBar(): void {
+    const bar = this.breathBar;
+    bar.clear();
+    if (!this.breathActive) {
+      bar.setAlpha(0);
+      this.breathLabel.setAlpha(0);
+      return;
+    }
+    bar.setAlpha(1);
+    this.breathLabel.setAlpha(0.8);
+    const w = 160;
+    const h = 14;
+    const x = WREN_X - w / 2;
+    const y = WREN_Y + 64;
+    const frac = this.breath.getFraction();
+    const low = frac < 0.4;
+    bar.lineStyle(2, PALETTE_HEX.frost, 0.7);
+    bar.strokeRoundedRect(x, y, w, h, 4);
+    bar.fillStyle(low ? PALETTE_HEX.ember : PALETTE_HEX.frost, low ? 0.95 : 0.8);
+    bar.fillRoundedRect(x + 1, y + 1, Math.max(0, (w - 2) * frac), h - 2, 3);
+  }
+
+  /** Out of air — a non-terminal shove (the Bell has no candle/game-over
+   *  economy). Dark flash + thud, then a partial breath back. The lost tempo
+   *  and the broken combo are the real cost. */
+  private gaspKnockback(): void {
+    this.cameras.main.flash(280, 0, 0, 0, false);
+    playDamageThud();
+    flashDamageVignette(this);
+    this.breath.gasp();
+    this.drawBreathBar();
+  }
+
   // ─── Input ────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
@@ -238,27 +356,57 @@ export class SunkenBellScene extends Phaser.Scene {
       togglePuristMode(this, this.store);
       return;
     }
-    if (event.key.length === 1 || event.key === " ") playClack();
 
-    // Mid-word typing flows freely — once a target is claimed, letters
-    // within the word aren't beat-gated (per §5.5.7: "letters within a
-    // word flow freely"). Only new claims must land on a beat.
-    if (this.typingInput.hasClaim()) {
-      this.typingInput.handleChar(event.key);
+    const key = event.key;
+    // Backspace / Escape always flow through — reverse or abort, never gated.
+    if (key === "Backspace" || key === "Escape") {
+      this.typingInput.handleChar(key);
+      return;
+    }
+    // Ignore bare modifiers / navigation keys (Shift on its own, arrows, etc.)
+    // so holding Shift for the caseSensitive OPEN isn't punished as off-beat.
+    const printable = key.length === 1 || key === " ";
+    if (!printable) return;
+
+    playClack();
+
+    // Resolve this encounter's accept window — on-beat normally, or the
+    // half-beat during an antiphon (off-beat) wave.
+    const inWindow =
+      this.beatPhase === "off"
+        ? this.beatClock.isInOffbeatWindow()
+        : this.beatClock.isInWindow();
+
+    const decision = decideBeatGate({
+      hasClaim: this.typingInput.hasClaim(),
+      inWindow,
+      nextChar: this.typingInput.peekClaimedNext(),
+      metered: this.beatLocked,
+    });
+
+    if (decision === "accept") {
+      this.typingInput.handleChar(key);
       return;
     }
 
-    // No claim yet — gate by the beat window.
-    if (this.beatClock.isInWindow()) {
-      this.typingInput.handleChar(event.key);
-      return;
-    }
+    // reject-newclaim (off-beat new claim) or desync (off-beat metered
+    // boundary). Both teach timing; de-sync also wipes the metered word.
+    this.registerStumble(decision === "desync");
+  }
 
-    // Offbeat new-claim attempt: punished as a miss. Heart drops, Wren
-    // flinches, camera shakes — teaches the player to wait for the toll.
+  /** Off-beat / de-sync penalty: Wren flinches, the camera shakes, the combo
+   *  breaks (Heart drops), and — when the air stake is live — breath drains
+   *  toward a gasp. A de-sync additionally wipes the claimed word's progress. */
+  private registerStumble(isDesync: boolean): void {
     flashWrenMiss(this.wrenSprite);
     this.cameras.main.shake(80, 0.0025);
     this.typingInput.getStats().record(false);
+    if (isDesync) this.typingInput.resetClaimedProgress();
+    if (this.breathActive) {
+      const emptied = this.breath.stumble();
+      this.drawBreathBar();
+      if (emptied) this.gaspKnockback();
+    }
   }
 
   // ─── Act 1: Arrival ───────────────────────────────────────────────────────
@@ -412,6 +560,9 @@ export class SunkenBellScene extends Phaser.Scene {
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
     this.ghosts = [];
+    // Combat begins — the air stake goes live for the choir waves.
+    this.setBreathActive(true);
+    this.onWaveCleared = () => this.onFirstEncounterCleared();
     const words = ["tide", "salt", "still"];
     const positions = [
       { x: -100, restX: 300, restY: 700, side: "left" as const },
@@ -440,6 +591,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private startWave1(): void {
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
+    this.onWaveCleared = () => this.onWave1Cleared();
     this.narration.say("sunken_choir_wave1");
     const words = pickAdaptiveWords(
       SUNKEN_BELL_WORD_BANK,
@@ -460,12 +612,49 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private onWave1Cleared(): void {
+    // §5.5.7 / Tier 1 — the choir answers off the beat before the splitter wave.
+    this.time.delayedCall(1200, () => this.startAntiphon());
+  }
+
+  // ─── Act 2: The Antiphon (off-beat call-and-response) ────────────────────
+
+  private startAntiphon(): void {
+    playWaveSting();
+    this.cameras.main.shake(140, 0.003);
+    this.ghosts = [];
+    // Flip the accept window to the half-beat — answer BETWEEN the tolls.
+    this.beatPhase = "off";
+    this.onWaveCleared = () => this.onAntiphonCleared();
+    this.narration.say("sunken_antiphon_intro");
+    // Short, non-hyphenated words — the demand is the syncopation, not mid-word
+    // metering. The half-beat ember ring (onBeatTick) shows the answer window.
+    const words = pickAdaptiveWords(
+      SUNKEN_BELL_WORD_BANK,
+      3,
+      this.store.get().keyStats,
+    );
+    const positions = [
+      { x: -100, restX: 360, restY: 700, side: "left" as const },
+      { x: this.scale.width + 100, restX: 1560, restY: 720, side: "right" as const },
+      { x: -100, restX: 720, restY: 760, side: "left" as const },
+    ];
+    words.forEach((word, i) => {
+      const pos = positions[i];
+      if (!pos) return;
+      this.spawnGhost(pos.x, pos.restX, pos.restY, word, i * 450, 15000, pos.side);
+    });
+  }
+
+  private onAntiphonCleared(): void {
+    // Back on the beat for the splitter wave.
+    this.beatPhase = "on";
     this.time.delayedCall(1200, () => this.startWave2());
   }
 
   private startWave2(): void {
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
+    this.onWaveCleared = () => this.onWave2Cleared();
     this.narration.say("sunken_choir_wave2");
 
     // §5.5.10 — the bell tolls, and for one peal the cathedral fills with a
@@ -516,6 +705,9 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Act 2: Bell-Keeper's Chamber ────────────────────────────────────────
 
   private startBellKeepersChamber(): void {
+    // Choir combat is over — retire the air gauge until the boss/fork section
+    // (which has its own tempo + de-sync stakes, not the breath economy).
+    this.setBreathActive(false);
     this.setNarrator("A room off the nave. Something on a stand.");
     const target = new TextWordTarget({
       scene: this,
@@ -594,6 +786,35 @@ export class SunkenBellScene extends Phaser.Scene {
     this.store.update((s) => {
       if (!s.satchel.includes("lock-bar")) s.satchel.push("lock-bar");
     });
+    // §5.5.7 Fork 1B: a single `OPEN` that must be typed with FORCE — Shift
+    // held AND on the beat. caseSensitive makes the all-caps word demand Shift
+    // for every letter (lowercase 'o' won't even match); the clock is still
+    // running, so its first letter is beat-gated like any new claim. (The old
+    // build had regressed this to a plain lowercase setNarrator("OPEN").)
+    this.setNarrator("Force the doors — OPEN, on the toll.");
+    this.time.delayedCall(700, () => {
+      const openTarget = new TextWordTarget({
+        scene: this,
+        word: "OPEN",
+        x: this.scale.width / 2,
+        y: this.scale.height - 200,
+        fontSize: 56,
+        caseSensitive: true,
+        burstColor: BELL_BURST_COLOR,
+        onComplete: () => {
+          this.clearActiveTargets();
+          this.cameras.main.shake(240, 0.006);
+          playDamageThud();
+          this.startFork1ForceBreak();
+        },
+      });
+      this.typingInput.register(openTarget);
+      this.activeTargets.push(openTarget);
+    });
+  }
+
+  /** The doors burst — four rapid free passages as they break (canon §5.5.7). */
+  private startFork1ForceBreak(): void {
     this.setNarrator("OPEN");
     const forcePhrases = ["crash", "crack", "clear", "we pass"];
     let step = 0;
@@ -619,7 +840,7 @@ export class SunkenBellScene extends Phaser.Scene {
       this.typingInput.register(target);
       this.activeTargets.push(target);
     };
-    this.time.delayedCall(600, advance);
+    this.time.delayedCall(400, advance);
   }
 
   private startAct3Corridor(): void {
@@ -735,8 +956,13 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private startWardenPhase2(wardenGraphics: Phaser.GameObjects.Graphics): void {
-    // Double tempo — the tide rises and the world speeds up.
+    // Double tempo — the tide rises and the world speeds up. The window
+    // tightens with it (tempo-scaled: ~175ms now).
     this.beatClock.setTempo(1000);
+    // De-sync ON: these hyphenated words must land EACH beat — the hyphen
+    // boundary is beat-gated, and mistiming it wipes the word (canon §5.5.7
+    // "two consecutive beats each").
+    this.beatLocked = true;
 
     this.narration.say("sunken_warden_phase2");
 
@@ -755,6 +981,8 @@ export class SunkenBellScene extends Phaser.Scene {
             remaining -= 1;
             if (remaining === 0) {
               this.clearActiveTargets();
+              // Phase 3's passage flows freely mid-word again — de-sync off.
+              this.beatLocked = false;
               // Brighten the warden's eyes
               this.redrawWardenPhase2(wardenGraphics, true);
               // Scratched fragment ~~Ag~~ — second letter pair of the
@@ -1191,6 +1419,12 @@ export class SunkenBellScene extends Phaser.Scene {
     // Show defeat flicker
     this.showQuietFlicker();
 
+    // A clean defeat in a choir wave = a breath.
+    if (this.breathActive) {
+      this.breath.inhale();
+      this.drawBreathBar();
+    }
+
     // Handle split
     if (ghost.splits) {
       const splitWords = ["ebb", "drift"];
@@ -1212,7 +1446,7 @@ export class SunkenBellScene extends Phaser.Scene {
       onComplete: () => ghost.container.destroy(),
     });
 
-    this.checkWaveComplete();
+    this.checkWaveCleared();
   }
 
   private showQuietFlicker(): void {
@@ -1268,22 +1502,18 @@ export class SunkenBellScene extends Phaser.Scene {
     });
   }
 
-  private checkWaveComplete(): void {
-    if (this.ghosts.every((g) => g.defeated)) {
-      this.ghosts = [];
-      const currentNarrator = this.narration.currentText();
-      // Determine which wave just ended by context
-      if (currentNarrator.includes("listening")) {
-        // First encounter
-        this.time.delayedCall(1200, () => this.onFirstEncounterCleared());
-      } else if (currentNarrator.includes("nave")) {
-        // Wave 1
-        this.time.delayedCall(1200, () => this.onWave1Cleared());
-      } else if (currentNarrator.includes("doubled") || currentNarrator.includes("More")) {
-        // Wave 2
-        this.time.delayedCall(1200, () => this.onWave2Cleared());
-      }
-    }
+  /** Fire the active wave's explicit continuation once every ghost is down.
+   *  Replaces the old narrator-substring routing, which matched none of the
+   *  live captions at the first encounter → the realm soft-locked there (same
+   *  class of bug as the Haunted Wood fix #89). The length guard avoids the
+   *  `[].every() === true` footgun when no wave is active (boss/forks). */
+  private checkWaveCleared(): void {
+    if (this.ghosts.length === 0) return;
+    if (!this.ghosts.every((g) => g.defeated)) return;
+    this.ghosts = [];
+    const cb = this.onWaveCleared;
+    this.onWaveCleared = null;
+    cb?.();
   }
 
   // ─── Beat-locked passage chain (used in Fork 1 Chant) ────────────────────

@@ -38,6 +38,12 @@ export interface TextWordTargetOptions {
    *  insensitive. Used by the Clockwork Forge's capital-as-command
    *  curriculum mechanic. */
   caseSensitive?: boolean;
+  /** When true, UNtyped punctuation marks (. , ? ! ; :) render as a neutral
+   *  placeholder (·) instead of the real glyph, so the player can't just read
+   *  the mark off the word — they must supply it from context. Typed marks show
+   *  real (correct-ward feedback). Matching is unaffected (display-only). Used
+   *  by the Haunted Wood's directional warding. Off by default. */
+  maskMarks?: boolean;
   /** Called when this target locks in to the typing controller (first matching
    *  letter typed). Use for character-facing reactions like Wren leaning toward
    *  the target. */
@@ -50,6 +56,12 @@ export interface TextWordTargetOptions {
     setTint?: (tint: number) => void;
     clearTint?: () => void;
   };
+}
+
+/** Replace punctuation marks with a neutral placeholder for masked display. */
+const WARD_MARK_PLACEHOLDER = "·";
+function maskWardMarks(text: string): string {
+  return text.replace(/[.,?!;:]/g, WARD_MARK_PLACEHOLDER);
 }
 
 export class TextWordTarget implements WordTarget {
@@ -291,8 +303,12 @@ export class TextWordTarget implements WordTarget {
     // Display uses the original case; matching uses the lowercased word.
     const typed = this.displayWord.slice(0, this.cursor);
     const remaining = this.displayWord.slice(this.cursor);
+    // Typed text always shows real glyphs (so a correctly-typed ward mark
+    // appears as confirmation); only the UNtyped remainder is masked.
     this.typedText.setText(typed);
-    this.remainingText.setText(remaining);
+    this.remainingText.setText(
+      this.opts.maskMarks ? maskWardMarks(remaining) : remaining,
+    );
     this.remainingText.x = this.typedText.width;
 
     const totalWidth = this.typedText.width + this.remainingText.width;

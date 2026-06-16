@@ -15,10 +15,11 @@ import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLor
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import {
+  HAUNTED_WOOD_BASE_BANK,
   pickAdaptiveWords,
   type WoodDirection,
   WOOD_DIRECTION_PUNCTUATION,
-  woodWordsForDirection,
+  woodWardWord,
 } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
@@ -404,13 +405,25 @@ export class HauntedWoodScene extends Phaser.Scene {
       east: 0,
       west: 0,
     };
+    // Pick DISTINCT base words for the whole batch up front. Same-direction
+    // ghosts (crossroads 3, boss wave B) share a mark, so distinct bases keep
+    // each full warded word unique — two identical words could never narrow to
+    // a single claim (an unclaimable wave), and two identical masked "ho·wl"
+    // would be impossible to tell apart anyway.
+    const bases = pickAdaptiveWords(
+      HAUNTED_WOOD_BASE_BANK,
+      directions.length,
+      this.store.get().keyStats,
+    );
     directions.forEach((dir, i) => {
       const slot = slotCounts[dir];
       slotCounts[dir] += 1;
-      const bank = woodWordsForDirection(dir);
-      const word =
-        pickAdaptiveWords(bank, 1, this.store.get().keyStats)[0] ?? bank[0];
-      if (!word) return;
+      // Insert the approach direction's ward mark mid-string; it's masked at the
+      // target, so clearing this ghost demands the player know direction → mark
+      // from the compass.
+      const base =
+        bases[i] ?? HAUNTED_WOOD_BASE_BANK[i % HAUNTED_WOOD_BASE_BANK.length];
+      const word = woodWardWord(base, dir);
       this.spawnGhost(dir, word, i * delayStepMs, slot);
     });
   }
@@ -1055,6 +1068,9 @@ export class HauntedWoodScene extends Phaser.Scene {
       // Wisp-themed pale gray-green burst on defeat — reads as a ghost going
       // down in mist, not the default brass.
       burstColor: GHOST_BURST_COLOR,
+      // Mask the ward mark — the player must supply the punctuation bound to
+      // this ghost's approach direction (read off the compass), not read it.
+      maskMarks: true,
       onComplete: () => this.defeatGhost(ghost),
     });
     ghost.target = target;

@@ -708,6 +708,14 @@ const SUNKEN_LINES: readonly RunaLine[] = [
     isNew: true,
   },
   {
+    id: "sunken_antiphon_intro",
+    scene: "sunken",
+    trigger: "SunkenBellScene.startAntiphon() — off-beat call-and-response wave (wired)",
+    text: "The choir answers back — between the tolls, not on them. Speak in the gaps.",
+    tone: "instruction",
+    isNew: true,
+  },
+  {
     id: "sunken_choir_wave2",
     scene: "sunken",
     trigger: "SunkenBellScene.startWave2() — escalation (wired)",
@@ -734,8 +742,8 @@ const SUNKEN_LINES: readonly RunaLine[] = [
   {
     id: "sunken_warden_phase2",
     scene: "sunken",
-    trigger: "SunkenBellScene.startWardenPhase2() — tempo doubles (wired)",
-    text: "The tide rises. The tempo doubles.",
+    trigger: "SunkenBellScene.startWardenPhase2() — tempo doubles, mid-word de-sync (wired)",
+    text: "The tide rises. The tempo doubles — hold every beat through the word, or it slips back.",
     tone: "urgent",
     isNew: true,
   },

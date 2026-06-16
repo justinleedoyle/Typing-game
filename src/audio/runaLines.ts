@@ -1002,7 +1002,7 @@ const WOOD_LINES: readonly RunaLine[] = [
     id: "wood_crossroads1_intro",
     scene: "wood",
     trigger: "HauntedWoodScene.startCrossroads1() — first crossroads encounter (wired)",
-    text: "Ghosts drift from the tree-line. Each carries a mark — match it to ward them.",
+    text: "Ghosts come from every side now. Each name hides one ward — the mark of the side it drifts from. Read the compass, and strike it in.",
     tone: "instruction",
     isNew: true,
   },

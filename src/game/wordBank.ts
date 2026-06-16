@@ -261,9 +261,26 @@ export const WOOD_DIRECTION_PUNCTUATION: Record<WoodDirection, string> = {
   west: ",",
 };
 
-export function woodWordsForDirection(dir: WoodDirection): readonly string[] {
-  const punct = WOOD_DIRECTION_PUNCTUATION[dir];
-  return HAUNTED_WOOD_WORD_BANK.filter((w) => w.endsWith(punct));
+/** Ghost base words — no punctuation. A ghost's typeable word is built by
+ *  inserting the approach direction's ward mark into the MIDDLE of one of these
+ *  (woodWardWord), and the mark is masked in the display — so the player must
+ *  know direction → mark (from the compass) to ward the ghost. All ≥4 chars so
+ *  the mid-string insert always leaves a letter on each side. */
+export const HAUNTED_WOOD_BASE_BANK = [
+  "howl", "drift", "pale", "wail", "cold", "linger", "grey", "hollow",
+  "whisper", "fading", "ancient", "still", "hush", "mist", "dusk", "shade",
+  "creep", "gloom", "haunt", "wisp", "eerie", "moan", "dread", "silent",
+  "shroud", "wander", "vanish", "echo", "lament",
+] as const;
+
+/** Insert a direction's ward mark into the MIDDLE of a base ghost word. The
+ *  ward "cuts" the ghost's name mid-string (not a trailing decoration), and
+ *  because the mark is masked in the display, the player must supply the mark
+ *  bound to the ghost's approach direction — the compass binding made real. */
+export function woodWardWord(base: string, dir: WoodDirection): string {
+  const mark = WOOD_DIRECTION_PUNCTUATION[dir];
+  const pos = Math.max(1, Math.floor(base.length / 2));
+  return base.slice(0, pos) + mark + base.slice(pos);
 }
 
 /** Winter-themed word bank for the wolf encounter. Short, lowercase,

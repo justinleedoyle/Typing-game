@@ -12,7 +12,7 @@ This file is the tier-level overview. For the full design see [`RESEARCH_AND_PLA
 | Tier | Theme | Status |
 |------|-------|--------|
 | **Tier 0** | Combat foundation | ✅ **Complete & live** |
-| **Tier 1** | Realm signature mechanics made demanding | 🔨 **In progress — 2 of 5 realms** |
+| **Tier 1** | Realm signature mechanics made demanding | 🔨 **In progress — 3 of 5 realms** |
 | **Tier 2** | Shared enemy behaviors | ◻ Planned |
 | **Tier 3** | Strategic capstone (the finale) | ◻ Planned |
 | **Tier 4** | Relics live in combat | ◻ Planned |
@@ -40,13 +40,13 @@ rises to meet a fast typist.
 - ✅ Boot-hang fix (cloud-load timeout/fallback) — **#86**
 - ✅ **Speed-axis wave director** — escalate advance-speed / word-length / concurrency from live WPM, all bounded — **#87**
 
-## Tier 1 — realm signature mechanics made demanding 🔨 IN PROGRESS (2 / 5)
+## Tier 1 — realm signature mechanics made demanding 🔨 IN PROGRESS (3 / 5)
 
 Each realm's signature mechanic, currently cosmetic vs its premise, made genuinely demanding.
 
 - ✅ **Forge** — mixed-case mid-word commands (`reFORGE`) across every golem encounter + boss true-name `stand DOWN` — **#88**
 - ✅ **Wood** — compass-warding: directional, mid-string, **masked** ward marks (player must know direction → mark from the compass; wrong ward misses) — **#90** _(plus a live soft-lock fix, **#89**)_
-- ◻ **Bell** — tempo-scaled timing window + off-beat de-sync mid-word (+ air/silence stake, off-beat "antiphon" enemy)
+- ✅ **Bell** — tempo-scaled timing window (gate tightens as tempo doubles) + off-beat **de-sync** mid-word (hyphen beats must land or the word wipes) + an off-beat **antiphon** wave + an **air** stake (breath drains on stumbles → non-terminal gasp) + fork-1B `OPEN` Shift+on-beat fix — **#92** _(plus a live first-encounter soft-lock fix, same class as #89)_
 - ◻ **Sky** — blur **eats** untyped letters (read-ahead pressure) + multi-banner triage + a no-miss "sealed scroll" temple
 - ◻ **Winter** — activate dormant **Alt** + case-sensitive boss capitals + non-refilling candle economy + splitter/circler enemy
 - ◻ **Forge follow-up** — `Ctrl` "true-name" modifier _(deferred — needs browser-shortcut handling)_
@@ -78,4 +78,4 @@ Give fork relics **in-combat effects** so the CYOA layer doubles as a build choi
 - **The real-time game can't be automated headlessly** (a backgrounded tab freezes Phaser's rAF loop),
   so PRs are verified via `tsc` + `vite build` + throwaway `npx tsx` logic harnesses against the real code.
 
-_Last updated: 2026-06-16 — Tier 0 complete; Tier 1 Forge + Wood done._
+_Last updated: 2026-06-16 — Tier 0 complete; Tier 1 Forge + Wood + Bell done (3/5). Remaining: Sky, Winter, + small Forge `Ctrl` follow-up._

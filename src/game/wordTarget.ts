@@ -44,6 +44,14 @@ export interface TextWordTargetOptions {
    *  real (correct-ward feedback). Matching is unaffected (display-only). Used
    *  by the Haunted Wood's directional warding. Off by default. */
   maskMarks?: boolean;
+  /** When true, a mid-claim miss snaps the cursor back to the word's start in
+   *  ALL difficulty modes (not just Standard/Purist) — the Sky-Island "sealed
+   *  scroll" no-miss temple: one slip and the scroll reseals. Off by default. */
+  resetOnMiss?: boolean;
+  /** Fired on every mid-claim miss (a wrong character typed). The sealed-scroll
+   *  temple uses it to flash the reseal. Independent of the controller's own
+   *  difficulty-based miss handling. */
+  onMiss?: () => void;
   /** Called when this target locks in to the typing controller (first matching
    *  letter typed). Use for character-facing reactions like Wren leaning toward
    *  the target. */
@@ -64,6 +72,15 @@ function maskWardMarks(text: string): string {
   return text.replace(/[.,?!;:]/g, WARD_MARK_PLACEHOLDER);
 }
 
+/** Replace every non-space char with a faded placeholder — the Sky-Island
+ *  lantern-beam "eats" the letters you haven't typed yet (read-ahead pressure).
+ *  Spaces are kept so word breaks don't collapse. Display-only; matching is
+ *  unaffected, so a player who read ahead can still type through the blur. */
+const SUFFIX_EAT_PLACEHOLDER = "·";
+export function maskSuffix(text: string): string {
+  return text.replace(/[^ ]/g, SUFFIX_EAT_PLACEHOLDER);
+}
+
 export class TextWordTarget implements WordTarget {
   private readonly typedText: Phaser.GameObjects.Text;
   private readonly remainingText: Phaser.GameObjects.Text;
@@ -78,6 +95,7 @@ export class TextWordTarget implements WordTarget {
   private spellClaimed = false;
   private altClaimed = false;
   private danger = 0;
+  private suffixMasked = false;
 
   readonly priority: number;
 
@@ -188,6 +206,19 @@ export class TextWordTarget implements WordTarget {
       duration: 80,
       ease: "Sine.easeOut",
     });
+    // Sealed-scroll no-miss: snap back to the start regardless of difficulty,
+    // then let the scene flash the reseal.
+    if (this.opts.resetOnMiss) this.resetCursor();
+    this.opts.onMiss?.();
+  }
+
+  /** Mask/unmask the untyped suffix — the Sky-Island lantern-beam "eats" the
+   *  letters you haven't typed yet. Display-only; matching is unaffected, so a
+   *  player who read ahead can still type through the blur. */
+  setSuffixMasked(masked: boolean): void {
+    if (this.suffixMasked === masked) return;
+    this.suffixMasked = masked;
+    this.relayout();
   }
 
   onClaim(mods: { spell: boolean; alt: boolean }): void {
@@ -303,12 +334,16 @@ export class TextWordTarget implements WordTarget {
     // Display uses the original case; matching uses the lowercased word.
     const typed = this.displayWord.slice(0, this.cursor);
     const remaining = this.displayWord.slice(this.cursor);
-    // Typed text always shows real glyphs (so a correctly-typed ward mark
-    // appears as confirmation); only the UNtyped remainder is masked.
+    // Typed text always shows real glyphs (so correctly-typed letters appear as
+    // confirmation); only the UNtyped remainder is masked. suffixMasked (the
+    // Sky-Island blur) eats the whole remainder and wins over maskMarks.
     this.typedText.setText(typed);
-    this.remainingText.setText(
-      this.opts.maskMarks ? maskWardMarks(remaining) : remaining,
-    );
+    const displayRemaining = this.suffixMasked
+      ? maskSuffix(remaining)
+      : this.opts.maskMarks
+        ? maskWardMarks(remaining)
+        : remaining;
+    this.remainingText.setText(displayRemaining);
     this.remainingText.x = this.typedText.width;
 
     const totalWidth = this.typedText.width + this.remainingText.width;

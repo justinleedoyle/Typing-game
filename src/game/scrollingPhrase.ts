@@ -9,6 +9,7 @@
 
 import Phaser from "phaser";
 import { PALETTE, PALETTE_HEX, SERIF } from "./palette";
+import { blurAlphaFor, bannerDangerAt, shouldEatSuffix } from "./skyBlur";
 import { TextWordTarget } from "./wordTarget";
 import type { TypingInputController } from "./typingInput";
 
@@ -118,8 +119,11 @@ export class ScrollingPhrase {
       duration: opts.durationMs,
       delay: opts.delayMs ?? 0,
       ease: "Linear",
-      onUpdate: () => {
+      onUpdate: (tween) => {
         this.target.setAnchorX(this.container.x);
+        // Triage urgency cue — the banner's text tints cream → ember as it
+        // nears the exit edge, so the player can prioritise among several.
+        this.target.setDanger(bannerDangerAt(tween.progress));
       },
       onComplete: () => this.handleMiss(),
     });
@@ -171,13 +175,15 @@ export class ScrollingPhrase {
     return this.container.x;
   }
 
-  /** Apply a per-frame blur amount in [0, 1]. 0 = fully clear, 1 = fully
-   *  obscured. Drops banner and target alpha together. No-op once resolved
-   *  so the completion / miss fade is not undone. */
+  /** Apply a per-frame blur amount in [0, 1]. 0 = fully clear, 1 = beam core.
+   *  In the beam core the untyped suffix is "eaten" (masked) so the player must
+   *  have read ahead; the banner also dims but stays locatable for triage.
+   *  No-op once resolved so the completion / miss fade is not undone. */
   setBlur(amount: number): void {
     if (this.resolved) return;
     const clamped = Math.max(0, Math.min(1, amount));
-    const alpha = 1 - clamped * 0.65;
+    this.target.setSuffixMasked(shouldEatSuffix(clamped));
+    const alpha = blurAlphaFor(clamped);
     this.container.setAlpha(alpha);
     this.target.setVisualAlpha(alpha);
   }

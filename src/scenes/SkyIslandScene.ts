@@ -12,6 +12,7 @@ import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, SERIF } from "../game/palette";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { ScrollingPhrase } from "../game/scrollingPhrase";
+import { blurAmountAt } from "../game/skyBlur";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
@@ -78,6 +79,12 @@ const TEMPLE_PHRASE_CONFIGS = [
 /** Y positions for stacked banners — keeps multiple in a temple from
  *  overlapping while leaving the narration row (y=150) untouched. */
 const PHRASE_BANNER_Y_SLOTS = [320, 430, 540] as const;
+
+/** The middle temple is a stationary "sealed scroll": no scroll timeout, but a
+ *  no-miss precision test — any wrong key reseals it (resets to the start) in
+ *  every difficulty. A change of pace between the scrolling-banner temples. */
+const SEALED_SCROLL_TEMPLE_IDX = 2;
+const SEALED_SCROLL_PHRASE = "every book is a window to the sky";
 
 /** Lantern light columns active during temple play. Each x is a vertical
  *  beam that obscures any phrase scrolling through it — the §5.5.4 sensory
@@ -411,6 +418,12 @@ export class SkyIslandScene extends Phaser.Scene {
       this.drawTempleLanterns();
     }
 
+    // The middle temple is the sealed-scroll no-miss test — a different stake.
+    if (idx === SEALED_SCROLL_TEMPLE_IDX) {
+      this.startSealedScrollTemple();
+      return;
+    }
+
     // §5.5.10 — a lantern's inscription flickers between two readings, one
     // beautiful, one his. Fires on the second temple so the player has just
     // settled into the scrolling-phrase rhythm before the disruption.
@@ -430,11 +443,11 @@ export class SkyIslandScene extends Phaser.Scene {
     }
 
     const templeNames = [
-      "The first temple gate. A scroll unrolls in the wind — read it aloud.",
-      "The second gate. The wind is faster here.",
-      "The third chamber. Two scrolls at once now.",
-      "The fourth chamber. They pass quicker. Three this time.",
-      "The fifth and final chamber. They fly. Type before they leave you.",
+      "The first gate. The lantern-beams eat the words you haven't typed yet — read ahead, and type before the light reaches them.",
+      "The second gate. Two scrolls now, on different winds. Read both; save what you can.",
+      "The third chamber. Two scrolls at once now.", // unused — idx 2 is the sealed scroll
+      "The fourth chamber. Three scrolls, and the beams are hungry. Triage.",
+      "The fifth and final chamber. They fly, three at once. Type before they leave you.",
     ];
     this.setNarrator(templeNames[idx] ?? "");
 
@@ -499,6 +512,95 @@ export class SkyIslandScene extends Phaser.Scene {
       });
       this.time.delayedCall(1400, () => this.startFork1());
     }
+  }
+
+  // ─── Sealed-scroll temple (no-miss precision test) ───────────────────────
+
+  /** A stationary scroll with no timeout — but it reseals (resets to the start)
+   *  on ANY wrong key, in every difficulty. The precision counterpart to the
+   *  speed-stake scrolling temples. */
+  private startSealedScrollTemple(): void {
+    this.setNarrator(
+      "A sealed scroll, pinned in still air. No haste here — but no mistakes. One slip and it reseals.",
+    );
+    // No scrolling banners this temple — clear the blur-driven list.
+    this.activePhrases = [];
+    this.templePhrasesRemaining = 0;
+
+    this.time.delayedCall(1600, () => {
+      const cx = this.scale.width / 2;
+      const cy = 720;
+      const seal = this.drawSealedScroll(cx, cy);
+      const target = new TextWordTarget({
+        scene: this,
+        word: SEALED_SCROLL_PHRASE,
+        x: cx,
+        y: cy,
+        fontSize: 32,
+        burstColor: 0xf5c842,
+        resetOnMiss: true,
+        onMiss: () => this.flashScrollReseal(seal),
+        onComplete: () => {
+          playChime();
+          this.clearActiveTargets();
+          this.tweens.add({
+            targets: seal,
+            alpha: 0,
+            scaleX: 1.1,
+            scaleY: 1.1,
+            duration: 500,
+            ease: "Sine.easeOut",
+            onComplete: () => seal.destroy(),
+          });
+          this.setNarrator("The scroll holds. The seal opens of its own accord.");
+          this.time.delayedCall(1400, () => this.onTempleCleared());
+        },
+      });
+      this.typingInput.register(target);
+      this.activeTargets.push(target);
+    });
+  }
+
+  /** Parchment backing + wax seal for the sealed-scroll temple. Created BEFORE
+   *  the phrase target so the (equal-depth) text renders on top of it. */
+  private drawSealedScroll(cx: number, cy: number): Phaser.GameObjects.Container {
+    const c = this.add.container(cx, cy);
+    const g = this.add.graphics();
+    const w = 920;
+    const h = 120;
+    g.fillStyle(0xf3ead2, 0.95);
+    g.fillRoundedRect(-w / 2, -h / 2, w, h, 14);
+    g.lineStyle(3, 0xc9a14a, 0.9);
+    g.strokeRoundedRect(-w / 2, -h / 2, w, h, 14);
+    // Rolled ends.
+    g.fillStyle(0xc9a14a, 0.85);
+    g.fillRoundedRect(-w / 2 - 14, -h / 2 - 6, 14, h + 12, 6);
+    g.fillRoundedRect(w / 2, -h / 2 - 6, 14, h + 12, 6);
+    c.add(g);
+    // Wax seal motif at the bottom edge.
+    const seal = this.add.graphics();
+    seal.fillStyle(0xa33b2a, 0.9);
+    seal.fillCircle(0, h / 2 - 8, 16);
+    seal.fillStyle(0x7a2a1e, 0.9);
+    seal.fillCircle(0, h / 2 - 8, 8);
+    c.add(seal);
+    return c;
+  }
+
+  /** Wax-red flash + shake when the sealed scroll reseals (a miss). The target's
+   *  resetOnMiss has already wiped the typed progress; this is the cue. */
+  private flashScrollReseal(seal: Phaser.GameObjects.Container): void {
+    this.cameras.main.shake(120, 0.003);
+    // Reset any in-flight flash so a flurry of misses can't strand the alpha.
+    this.tweens.killTweensOf(seal);
+    seal.setAlpha(1);
+    this.tweens.add({
+      targets: seal,
+      alpha: { from: 1, to: 0.45 },
+      yoyo: true,
+      duration: 150,
+      ease: "Sine.easeInOut",
+    });
   }
 
   // ─── Scholar Etta side encounter ─────────────────────────────────────────
@@ -1353,15 +1455,9 @@ export class SkyIslandScene extends Phaser.Scene {
   update(): void {
     if (this.activePhrases.length === 0) return;
     for (const phrase of this.activePhrases) {
-      const x = phrase.getX();
-      let minDist = Infinity;
-      for (const lanternX of LANTERN_BLUR_XS) {
-        const d = Math.abs(x - lanternX);
-        if (d < minDist) minDist = d;
-      }
-      const amount =
-        minDist < LANTERN_BLUR_RADIUS ? 1 - minDist / LANTERN_BLUR_RADIUS : 0;
-      phrase.setBlur(amount);
+      phrase.setBlur(
+        blurAmountAt(phrase.getX(), LANTERN_BLUR_XS, LANTERN_BLUR_RADIUS),
+      );
     }
   }
 

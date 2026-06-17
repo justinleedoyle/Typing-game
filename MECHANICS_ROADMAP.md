@@ -12,7 +12,7 @@ This file is the tier-level overview. For the full design see [`RESEARCH_AND_PLA
 | Tier | Theme | Status |
 |------|-------|--------|
 | **Tier 0** | Combat foundation | ✅ **Complete & live** |
-| **Tier 1** | Realm signature mechanics made demanding | 🔨 **In progress — 4 of 5 realms** |
+| **Tier 1** | Realm signature mechanics made demanding | ✅ **Realms done (5/5)** — optional `Ctrl` follow-up remains |
 | **Tier 2** | Shared enemy behaviors | ◻ Planned |
 | **Tier 3** | Strategic capstone (the finale) | ◻ Planned |
 | **Tier 4** | Relics live in combat | ◻ Planned |
@@ -40,16 +40,16 @@ rises to meet a fast typist.
 - ✅ Boot-hang fix (cloud-load timeout/fallback) — **#86**
 - ✅ **Speed-axis wave director** — escalate advance-speed / word-length / concurrency from live WPM, all bounded — **#87**
 
-## Tier 1 — realm signature mechanics made demanding 🔨 IN PROGRESS (4 / 5)
+## Tier 1 — realm signature mechanics made demanding ✅ REALMS DONE (5 / 5)
 
-Each realm's signature mechanic, currently cosmetic vs its premise, made genuinely demanding.
+Each realm's signature mechanic, once cosmetic vs its premise, now genuinely demanding.
 
 - ✅ **Forge** — mixed-case mid-word commands (`reFORGE`) across every golem encounter + boss true-name `stand DOWN` — **#88**
 - ✅ **Wood** — compass-warding: directional, mid-string, **masked** ward marks (player must know direction → mark from the compass; wrong ward misses) — **#90** _(plus a live soft-lock fix, **#89**)_
 - ✅ **Bell** — tempo-scaled timing window (gate tightens as tempo doubles) + off-beat **de-sync** mid-word (hyphen beats must land or the word wipes) + an off-beat **antiphon** wave + an **air** stake (breath drains on stumbles → non-terminal gasp) + fork-1B `OPEN` Shift+on-beat fix — **#92** _(plus a live first-encounter soft-lock fix, same class as #89)_
 - ✅ **Sky** — blur **eats** untyped letters (untyped suffix masked in the beam core → read-ahead pressure; was cosmetic alpha you could wait out) + multi-banner triage tint + a no-miss **sealed-scroll** temple (resets on any error) — **#93**
-- ◻ **Winter** — activate dormant **Alt** + case-sensitive boss capitals + non-refilling candle economy + splitter/circler enemy
-- ◻ **Forge follow-up** — `Ctrl` "true-name" modifier _(deferred — needs browser-shortcut handling)_
+- ✅ **Winter** — activate the dormant **`Alt`** spell (frost-shatter, alongside the Shift thunderclap) + **case-sensitive** boss capitals (lowercase-first so Shift stays free) + **non-refilling** candle economy (lose-all relights to a floor; clean waves earn candles back) + a **circler** (flanking, vertically-weaving) wolf — **#94**
+- ◻ **Forge follow-up** — `Ctrl` "true-name" modifier _(deferred — needs browser-shortcut handling; the one remaining Tier 1 tail)_
 
 ## Tier 2 — shared enemy behaviors ◻ PLANNED
 
@@ -78,4 +78,4 @@ Give fork relics **in-combat effects** so the CYOA layer doubles as a build choi
 - **The real-time game can't be automated headlessly** (a backgrounded tab freezes Phaser's rAF loop),
   so PRs are verified via `tsc` + `vite build` + throwaway `npx tsx` logic harnesses against the real code.
 
-_Last updated: 2026-06-16 — Tier 0 complete; Tier 1 Forge + Wood + Bell + Sky done (4/5). Remaining: Winter, + small Forge `Ctrl` follow-up._
+_Last updated: 2026-06-17 — Tier 0 complete; Tier 1 realms ALL done (5/5: Forge, Wood, Bell, Sky, Winter). Remaining before Tier 2: optional Forge `Ctrl` follow-up. Next major: Tier 2 (shared enemy behaviors)._

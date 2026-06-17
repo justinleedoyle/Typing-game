@@ -16,6 +16,12 @@ import type { SaveStore } from "../game/saveState";
 import { SPELL_COST } from "../game/sessionStats";
 import { TypingInputController } from "../game/typingInput";
 import { WaveDirector } from "../game/waveDirector";
+import {
+  candleAfterCleanWave,
+  candleAfterHit,
+  CANDLE_RESET_FLOOR,
+  circlerY,
+} from "../game/winterMechanics";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
 import {
@@ -48,6 +54,8 @@ interface Wolf {
   advanceMs: number;
   isBoss: boolean;
   bodySprite?: Phaser.GameObjects.Image;
+  /** Circler (flanking) wolf — weaves vertically as it closes. */
+  circles?: boolean;
 }
 
 // ─── Act 1 constants ──────────────────────────────────────────────────────────
@@ -89,7 +97,11 @@ const WAVE_CANDLES = 3;
 const WAVE_CHARGES = 2;
 const WOLF_KNOCKBACK_PAUSE_MS = 1500;
 
-const BOSS_PHRASE = "The Old One, Stirring.";
+// The Old One's true name is SPOKEN with its capitals — caseSensitive, so the
+// caps demand Shift (required typing, free). Starts lowercase so the claim
+// captures no Shift (else the first-letter Shift would fire the thunderclap
+// spell instead of claiming — same lowercase-first trick as the Forge commands).
+const BOSS_PHRASE = "the Old One, STIRRING.";
 const BOSS_ADVANCE_MS = 17_000;
 const BOSS_SPAWN_X = 1100;
 const BOSS_SPAWN_Y = 800;
@@ -195,6 +207,9 @@ export class WinterMountainScene extends Phaser.Scene {
   // (floor(soul / SPELL_COST)), cached so the pip row only redraws on change.
   private castableThunder = 0;
   private shiftHeld = false;
+  private altHeld = false;
+  /** Did a wolf snuff a candle this wave? Drives the clean-wave relight. */
+  private tookCandleHitThisWave = false;
   private waveActive = false;
   private waveIndex = 0;
 
@@ -233,6 +248,8 @@ export class WinterMountainScene extends Phaser.Scene {
     this.candles = WAVE_CANDLES;
     this.castableThunder = 0;
     this.shiftHeld = false;
+    this.altHeld = false;
+    this.tookCandleHitThisWave = false;
     this.waveActive = false;
     this.waveIndex = 0;
     this.foxSpared = false;
@@ -604,6 +621,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private startWave(idx: number): void {
     this.waveIndex = idx;
     this.waveActive = true;
+    this.tookCandleHitThisWave = false;
     this.wolves = [];
     // Thunder no longer refills per wave — it carries over as banked Soul, so
     // a fast clean wave can stockpile casts and a sloppy one starts dry.
@@ -643,7 +661,10 @@ export class WinterMountainScene extends Phaser.Scene {
       // — `simultaneous` zeroes the per-wolf stagger so they arrive
       // together and force split-attention typing.
       const delay = config.simultaneous ? 0 : i * 200;
-      this.spawnWolf(startX, pos.x, pos.y, words[i], delay, advanceMs);
+      // The pack wave fields one circler (flanking) wolf — it weaves vertically
+      // as it closes, so its word is harder to track than the straight-liners.
+      const circles = config.hasBoss && i === slots.length - 1;
+      this.spawnWolf(startX, pos.x, pos.y, words[i], delay, advanceMs, circles);
     });
 
     if (config.hasBoss) {
@@ -676,6 +697,7 @@ export class WinterMountainScene extends Phaser.Scene {
     word: string,
     delay: number,
     advanceMs: number,
+    circles = false,
   ): void {
     const facingLeft = startX > this.scale.width / 2;
     const container = this.add.container(startX, targetY);
@@ -692,6 +714,7 @@ export class WinterMountainScene extends Phaser.Scene {
       advanceTween: null,
       advanceMs,
       isBoss: false,
+      circles,
     };
 
     this.tweens.add({
@@ -808,11 +831,24 @@ export class WinterMountainScene extends Phaser.Scene {
         this.returnWrenToRest();
         this.defeatWolf(wolf);
       },
-      onSpellComplete: () => {
-        this.returnWrenToRest();
-        this.defeatWolf(wolf);
-        this.castThunderclap(wolf);
-      },
+      // The boss's true name is caseSensitive (its capitals must be Shifted in)
+      // and carries NO spell routes — you can't thunderclap or shatter it away,
+      // you name it. Regular wolves get both Soul spells: Shift = thunderclap
+      // (knock the pack back), Alt = frost-shatter (kill the nearest too).
+      ...(wolf.isBoss
+        ? { caseSensitive: true }
+        : {
+            onSpellComplete: () => {
+              this.returnWrenToRest();
+              this.defeatWolf(wolf);
+              this.castThunderclap(wolf);
+            },
+            onAltSpellComplete: () => {
+              this.returnWrenToRest();
+              this.defeatWolf(wolf);
+              this.frostShatterEffect(wolf);
+            },
+          }),
     });
     wolf.target = target;
     this.typingInput.register(target);
@@ -854,6 +890,10 @@ export class WinterMountainScene extends Phaser.Scene {
     const totalRange = Math.abs(wolf.spawnX - restX);
     const duration = wolf.advanceMs * Math.max(0.3, remaining / totalRange);
 
+    // A circler drives its own y from the advance progress — clear any idle-bob
+    // y-tween so they don't fight over container.y.
+    if (wolf.circles) this.tweens.killTweensOf(wolf.container);
+
     wolf.advanceTween = this.tweens.add({
       targets: wolf.container,
       x: restX,
@@ -862,6 +902,12 @@ export class WinterMountainScene extends Phaser.Scene {
       onUpdate: (tween) => {
         if (!wolf.target) return;
         wolf.target.setAnchorX(wolf.container.x);
+        // Circler: weave vertically as it closes, and keep the word pinned to
+        // the weaving body.
+        if (wolf.circles) {
+          wolf.container.y = circlerY(wolf.restY, tween.progress);
+          wolf.target.setAnchorY(wolf.container.y - 90);
+        }
         // Danger pulse — as the wolf crosses DANGER_RAMP_START of its
         // advance, the floating word shifts cream → ember. Communicates
         // "this one is about to land on you" without needing UI chrome.
@@ -913,6 +959,13 @@ export class WinterMountainScene extends Phaser.Scene {
 
     if (this.wolves.every((w) => w.defeated)) {
       this.waveActive = false;
+      // Clean-wave economy: clear a wave without losing a candle and you relight
+      // one (capped). Candles are a persistent pool now — skill refills it.
+      if (!this.tookCandleHitThisWave && this.candles < WAVE_CANDLES) {
+        this.candles = candleAfterCleanWave(this.candles, WAVE_CANDLES);
+        this.redrawCandles();
+        this.flashCandleRelight();
+      }
       if (wolf.isBoss) {
         this.narration.say("winter_boss_defeated");
         this.time.delayedCall(2200, () => this.onBossDefeated());
@@ -1138,7 +1191,8 @@ export class WinterMountainScene extends Phaser.Scene {
    *                 false means cold-decay in Act 1 (no wave reset).
    */
   private snuffCandle(combat: boolean): void {
-    this.candles = Math.max(0, this.candles - 1);
+    this.candles = candleAfterHit(this.candles);
+    if (combat) this.tookCandleHitThisWave = true;
     this.redrawCandles();
     this.flashHurt();
     if (combat && this.candles === 0) {
@@ -1173,9 +1227,24 @@ export class WinterMountainScene extends Phaser.Scene {
     this.time.delayedCall(1600, () => {
       this.wolves = [];
       this.activeTargets = [];
-      this.candles = WAVE_CANDLES;
+      // Non-refilling economy: a wipe relights only to the floor (1), not a
+      // full tank — you retry the wave on the brink. Clean play earns the rest
+      // back. (Was a free reset to 3, which made the candle stake theater.)
+      this.candles = CANDLE_RESET_FLOOR;
       this.redrawCandles();
       this.startWave(this.waveIndex);
+    });
+  }
+
+  /** Brief warm pulse on the candle row when a clean wave relights one. */
+  private flashCandleRelight(): void {
+    playChime();
+    this.tweens.add({
+      targets: this.candleGroup,
+      scale: { from: 1, to: 1.15 },
+      yoyo: true,
+      duration: 180,
+      ease: "Sine.easeOut",
     });
   }
 
@@ -1207,6 +1276,32 @@ export class WinterMountainScene extends Phaser.Scene {
         },
       });
     }
+  }
+
+  /** Alt spell — frost-shatter. The wolf whose name was typed with Alt held is
+   *  defeated, and the ice cracks to the nearest live pack wolf, taking it too
+   *  (a 2-for-1, distinct from the thunderclap's knock-back). Costs Soul; the
+   *  warded boss is never a target (no live target until the pack falls). */
+  private frostShatterEffect(source: Wolf): void {
+    this.typingInput.getStats().spendSoul(SPELL_COST);
+    this.refreshThunderPips();
+    this.cameras.main.flash(220, 150, 200, 240); // icy blue, vs thunderclap white
+    playChime();
+
+    const others = this.wolves.filter(
+      (w) => !w.defeated && w !== source && w.target,
+    );
+    if (others.length === 0) return;
+    let nearest = others[0];
+    let best = Infinity;
+    for (const w of others) {
+      const d = Math.abs(w.container.x - source.container.x);
+      if (d < best) {
+        best = d;
+        nearest = w;
+      }
+    }
+    if (nearest) this.defeatWolf(nearest);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1483,18 +1578,32 @@ export class WinterMountainScene extends Phaser.Scene {
       this.setShiftHeld(true);
       return;
     }
+    if (event.key === "Alt") {
+      this.setAltHeld(true);
+      // Browser default for Alt focuses the menu bar — preventDefault so it
+      // doesn't steal focus mid-spell.
+      event.preventDefault();
+      return;
+    }
     if (event.key.length === 1 || event.key === " ") {
       playClack();
     }
-    const spell =
-      this.shiftHeld &&
-      this.typingInput.getStats().canCast(SPELL_COST) &&
-      this.waveActive;
-    this.typingInput.handleChar(event.key, { spell });
+    const canCast =
+      this.typingInput.getStats().canCast(SPELL_COST) && this.waveActive;
+    // Shift = thunderclap (knock the pack back), Alt = frost-shatter (kill the
+    // nearest too). Both cost Soul; an empty meter falls through to a normal
+    // defeat, never a block. Alt wins if both held (the controller prioritises
+    // Alt). caseSensitive boss capitals still need Shift, but the boss claims
+    // lowercase-first so that Shift is free required typing, not a spell.
+    this.typingInput.handleChar(event.key, {
+      spell: this.shiftHeld && canCast,
+      alt: this.altHeld && canCast,
+    });
   }
 
   private onKeyUp(event: KeyboardEvent): void {
     if (event.key === "Shift") this.setShiftHeld(false);
+    if (event.key === "Alt") this.setAltHeld(false);
   }
 
   private setShiftHeld(held: boolean): void {
@@ -1503,11 +1612,17 @@ export class WinterMountainScene extends Phaser.Scene {
     this.updateWrenGlow();
   }
 
+  private setAltHeld(held: boolean): void {
+    if (this.altHeld === held) return;
+    this.altHeld = held;
+    this.updateWrenGlow();
+  }
+
   private updateWrenGlow(): void {
     // redrawCharges() calls this during create(), before typingInput exists.
     if (!this.typingInput) return;
     const armed =
-      this.shiftHeld &&
+      (this.shiftHeld || this.altHeld) &&
       this.typingInput.getStats().canCast(SPELL_COST) &&
       this.waveActive;
     this.wrenGlow.setAlpha(armed ? 0.55 : 0);

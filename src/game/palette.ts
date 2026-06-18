@@ -4,7 +4,7 @@
 export const PALETTE = {
   ink: "#0b0a0f",
   cream: "#f3ead2",
-  dim: "#8a8275",
+  dim: "#a59b89",
   brass: "#c9a14a",
   ember: "#d6754a",
   moss: "#6f8a5e",
@@ -14,7 +14,7 @@ export const PALETTE = {
 export const PALETTE_HEX = {
   ink: 0x0b0a0f,
   cream: 0xf3ead2,
-  dim: 0x8a8275,
+  dim: 0xa59b89,
   brass: 0xc9a14a,
   ember: 0xd6754a,
   moss: 0x6f8a5e,

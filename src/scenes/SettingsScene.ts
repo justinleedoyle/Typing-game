@@ -138,6 +138,7 @@ export class SettingsScene extends Phaser.Scene {
 
     this.drawRow(0, "Difficulty", difficultyLabel(state.difficulty));
     this.drawAction(0, "difficulty", () => this.handleDifficulty());
+    this.drawDifficultyHint(0);
 
     this.drawRow(1, "Sound", state.audioLevel);
     this.drawAction(1, "sound", () => this.handleSound());
@@ -202,6 +203,28 @@ export class SettingsScene extends Phaser.Scene {
     });
     this.typingInput.register(target);
     this.menuTargets.push(target);
+  }
+
+  /** Dim sub-hint under the Difficulty row that surfaces the otherwise-hidden
+   *  in-game shortcut. Cycling here works too, but players had no way to learn
+   *  about Ctrl+Shift+P, which works from any playing scene. Tracked in
+   *  `rowTexts` so it's torn down and redrawn with the rest of the menu. */
+  private drawDifficultyHint(index: number): void {
+    const y = ROW_START_Y + index * ROW_SPACING + ACTION_OFFSET_Y + 30;
+    const hint = this.add
+      .text(
+        ROW_X,
+        y,
+        "Forgiving → Standard → Purist. Also Ctrl+Shift+P while playing.",
+        {
+          fontFamily: SERIF,
+          fontSize: "20px",
+          color: PALETTE.dim,
+          fontStyle: "italic",
+        },
+      )
+      .setOrigin(0.5, 0.5);
+    this.rowTexts.push(hint);
   }
 
   // ─── Actions ────────────────────────────────────────────────────────────────

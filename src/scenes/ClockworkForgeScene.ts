@@ -13,6 +13,10 @@ import { NarrationManager } from "../game/narrationManager";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
+import {
+  type CombatLoadout,
+  resolveCombatLoadout,
+} from "../game/relicEffects";
 import type { SaveStore } from "../game/saveState";
 import { SPELL_COST } from "../game/sessionStats";
 import { TypingInputController } from "../game/typingInput";
@@ -108,6 +112,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private altHeld = false;
   private waveActive = false;
 
+  // Tier 4 — relics from earlier realms shape this realm's combat. The Forge is
+  // the only forward realm with a Soul-cast economy, so it's the home of
+  // soul-banked (king-aurland) and soul-thrift (bellows-hammer). Resolved once
+  // in create(); the hooks read it. `spellCost` folds in soul-thrift so every
+  // cast site charges one shared, discounted price. Grace is gated OUT of the
+  // Forge in the descriptor (no losable economy here).
+  private combat: CombatLoadout = resolveCombatLoadout([], "clockwork-forge");
+  private spellCost = SPELL_COST;
+  private waveForgivenessReady = false;
+
   /** Forge glow pools drawn on the floor. */
   private forgeGlowGraphics!: Phaser.GameObjects.Graphics;
 
@@ -161,9 +175,25 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
     this.typingInput = new TypingInputController(this.store);
     this.director = new WaveDirector(this.typingInput.getStats());
+
+    // Tier 4 — a revisit is a free-passage replay (no combat) → neutral loadout.
+    // soul-thrift folds into one shared spellCost used at every cast site.
+    this.combat = resolveCombatLoadout(
+      this.revisit ? [] : this.store.get().satchel,
+      "clockwork-forge",
+    );
+    this.spellCost = Math.ceil(SPELL_COST * this.combat.soulThriftMult);
+
     this.typingInput.setKeystrokeHooks({
       onCorrect: () => bobWrenSprite(this.wrenSprite),
       onMiss: () => {
+        // forgive-wave-miss (Shrine-Token): the first miss of a wave is spared
+        // the flinch. Revisit-only (Shrine-Token is a later realm's relic).
+        if (this.waveForgivenessReady) {
+          this.waveForgivenessReady = false;
+          this.flashForgiven();
+          return;
+        }
         flashWrenMiss(this.wrenSprite);
         this.cameras.main.shake(80, 0.002);
       },
@@ -173,7 +203,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
       getCombo: () => this.typingInput.getStats().getCombo(),
-      getCastReady: () => this.typingInput.getStats().canCast(SPELL_COST),
+      getCastReady: () => this.typingInput.getStats().canCast(this.spellCost),
       onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
     });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
@@ -388,6 +418,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private startTutorialGolemFight(): void {
+    // Tier 4 — announce the relic loadout once before the realm's first combat,
+    // then begin. Empty loadout (incl. revisits) passes straight through.
+    this.announceCombatLoadout(() => this.beginTutorialGolemFight());
+  }
+
+  private beginTutorialGolemFight(): void {
     this.clearActiveTargets();
     this.setNarrator(
       "Gregor nods. \"Now do it for real. That one won't wait.\"",
@@ -409,6 +445,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
     // Set up a watch: when all golems cleared, move to act 2
     this.golems.push(golem);
+    this.beginCombatWave();
     this.time.delayedCall(800, () => this.watchForWaveClear(() => {
       this.time.delayedCall(800, () => this.startAct2());
     }));
@@ -462,6 +499,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.golems.push(g);
     });
 
+    this.beginCombatWave();
     this.watchForWaveClear(() => this.startFornEncounter());
   }
 
@@ -525,6 +563,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.golems.push(g);
     }
 
+    this.beginCombatWave();
     this.watchForWaveClear(() => this.startFork1());
   }
 
@@ -919,6 +958,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.golems.push(g);
     }
 
+    this.beginCombatWave();
     this.watchForWaveClear(() => {
       this.waveActive = false;
       this.golems = [];
@@ -1206,7 +1246,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private chainSparkEffect(golem: Golem): void {
     // Spend the Soul this chain was armed against (canCast was checked when the
     // Alt-claim landed). The guard in spendSoul makes a stale arm a no-op.
-    this.typingInput.getStats().spendSoul(SPELL_COST);
+    // spellCost folds in soul-thrift (bellows-hammer) so arm + spend agree.
+    this.typingInput.getStats().spendSoul(this.spellCost);
     playSparkZap();
     this.defeatGolem(golem);
     const nearest = this.findNearestLiveGolem(golem);
@@ -1246,8 +1287,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const wrenX = this.scale.width / 2;
     const remaining = Math.abs(golem.container.x - wrenX);
     const totalRange = Math.abs(golem.spawnX - wrenX);
+    // Tier 4 — quiet-advance lengthens the close, capped. advanceMult is 1
+    // without a quiet-advance relic.
     const duration =
-      golem.advanceMs * Math.max(0.3, remaining / (totalRange || 1));
+      golem.advanceMs *
+      Math.max(0.3, remaining / (totalRange || 1)) *
+      this.combat.advanceMult;
 
     golem.advanceTween = this.tweens.add({
       targets: golem.container,
@@ -1452,8 +1497,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
       spell: this.shiftHeld,
       // Alt is the chain-spark (a 2-for-1 bonus), so it costs Soul. When the
       // meter is dry the Alt-claim falls through to a normal defeat — no chain,
-      // never a block.
-      alt: this.altHeld && this.typingInput.getStats().canCast(SPELL_COST),
+      // never a block. spellCost folds in soul-thrift (bellows-hammer).
+      alt: this.altHeld && this.typingInput.getStats().canCast(this.spellCost),
     });
   }
 
@@ -1466,6 +1511,87 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private setNarrator(text: string): void {
     this.narration.sayRaw(text);
+  }
+
+  // ─── Tier 4 relic helpers ───────────────────────────────────────────────────
+
+  /** Surface the active relic effects once, before the realm's first combat, so
+   *  the player sees their earlier-realm choices paying off. Empty loadout
+   *  (incl. revisits) passes straight through. */
+  private announceCombatLoadout(onDone: () => void): void {
+    const lines = this.combat.announcements;
+    if (lines.length === 0) {
+      onDone();
+      return;
+    }
+    let i = 0;
+    const showNext = (): void => {
+      if (i >= lines.length) {
+        this.time.delayedCall(700, onDone);
+        return;
+      }
+      this.setNarrator(lines[i]!);
+      i += 1;
+      this.time.delayedCall(2200, showNext);
+    };
+    showNext();
+  }
+
+  /** Per-combat-wave relic procs: re-arm forgive-wave-miss, pre-bank Soul
+   *  (soul-banked / king-aurland — a spell head-start), and mark the easiest
+   *  golem (auto-ease). Call at each golem-wave start. */
+  private beginCombatWave(): void {
+    this.waveForgivenessReady =
+      this.combat.perWaveProcs.includes("forgive-wave-miss");
+    this.typingInput.getStats().bankSoulFraction(this.combat.soulBankedFraction);
+    this.applyAutoEase();
+  }
+
+  /** auto-ease (Etta's Ledger): glow the easiest (shortest-word) golem of the
+   *  wave. Revisit-only in the Forge (Etta's Ledger is a later realm's relic).
+   *  No-op without the relic or with no golems. */
+  private applyAutoEase(): void {
+    if (!this.combat.perWaveProcs.includes("auto-ease")) return;
+    if (this.golems.length === 0) return;
+    let easiest = this.golems[0]!;
+    for (const g of this.golems) {
+      if (g.word.length < easiest.word.length) easiest = g;
+    }
+    const glow = this.add.graphics();
+    glow.fillStyle(PALETTE_HEX.brass, 0.22);
+    glow.fillEllipse(0, 0, 110, 150);
+    easiest.container.addAt(glow, 0);
+    this.tweens.add({
+      targets: glow,
+      alpha: { from: 0.22, to: 0.5 },
+      duration: 700,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  /** Gentle "forgiven" cue when forgive-wave-miss spares a slip — distinct from
+   *  the harsh miss flinch. */
+  private flashForgiven(): void {
+    const txt = this.add
+      .text(this.scale.width / 2, CATWALK_Y + 120, "forgiven", {
+        fontFamily: SERIF,
+        fontSize: "24px",
+        fontStyle: "italic",
+        color: PALETTE.brass,
+      })
+      .setOrigin(0.5)
+      .setDepth(60)
+      .setAlpha(0.9);
+    this.tweens.add({
+      targets: txt,
+      alpha: 0,
+      y: txt.y - 36,
+      duration: 900,
+      ease: "Sine.easeOut",
+      onComplete: () => txt.destroy(),
+    });
   }
 
   private clearActiveTargets(): void {

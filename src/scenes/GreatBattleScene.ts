@@ -152,9 +152,6 @@ export class GreatBattleScene extends Phaser.Scene {
   private runOver = false;
   private waveCandleLost = false;
 
-  // Input
-  private shiftHeld = false;
-
   // Phase 1
   private enemies: Enemy[] = [];
   private waveQueue: WaveDef[] = [];
@@ -162,11 +159,6 @@ export class GreatBattleScene extends Phaser.Scene {
 
   // Phase 1 — ally modifier state
   private waveCharges = WAVE_CHARGES; // may be bumped by king-aurland
-  // §5.5.11 — bellows-hammer: Shift-spell cooldown (ms) between spell-mode
-  // claims. Baseline 2000ms; halved to 1000ms when bellows-hammer is in
-  // satchel. Scoped to GreatBattleScene — no effect on other scenes.
-  private shiftSpellCooldownMs = 2000;
-  private lastShiftSpellAt = 0;
   // §5.5.11 — shrine-token: first miss per wave forgives the camera-shake
   // side effect. Accuracy still recorded (recordKeystroke path is inside
   // typingInput and not interceptable without deeper changes).
@@ -225,14 +217,11 @@ export class GreatBattleScene extends Phaser.Scene {
     this.charges = WAVE_CHARGES;
     this.runOver = false;
     this.waveCandleLost = false;
-    this.shiftHeld = false;
     this.phase2Round1Words = [];
     this.brightnessAlpha = 0;
 
     // Ally modifier state
     this.waveCharges = WAVE_CHARGES;
-    this.shiftSpellCooldownMs = 2000;
-    this.lastShiftSpellAt = 0;
     this.shrineTokenForgivenThisWave = false;
     this.untetheredWindSlowMult = 1.0;
     this.lastMissFeedbackAt = 0;
@@ -284,11 +273,6 @@ export class GreatBattleScene extends Phaser.Scene {
       this.untetheredWindSlowMult = 0.85;
     }
 
-    // §5.5.11 — bellows-hammer: halve the Shift-spell cooldown
-    if (satchel.includes("bellows-hammer")) {
-      this.shiftSpellCooldownMs = 1000;
-    }
-
     // Screen brightness overlay (phase 3)
     this.screenBrightnessOverlay = this.add.graphics().setDepth(30).setAlpha(0);
 
@@ -316,16 +300,8 @@ export class GreatBattleScene extends Phaser.Scene {
           flashDamageVignette(this);
         }
       },
-      // §5.5.11 — bellows-hammer: record when a Shift-spell claim lands so
-      // the cooldown window can be enforced on the next attempt.
-      onClaim: (spell) => {
-        if (spell) {
-          this.lastShiftSpellAt = Date.now();
-        }
-      },
     });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
-    this.input.keyboard?.on("keyup", this.onKeyUp, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, this.onShutdown, this);
 
     this.ambientHandle = playAmbientBattle();
@@ -337,7 +313,6 @@ export class GreatBattleScene extends Phaser.Scene {
   private onShutdown(): void {
     this.typingInput.reset();
     this.input.keyboard?.off("keydown", this.onKeyDown, this);
-    this.input.keyboard?.off("keyup", this.onKeyUp, this);
     this.ambientHandle?.stop();
     if (this.brassSongbirdStallTimer) {
       this.brassSongbirdStallTimer.remove();
@@ -348,24 +323,13 @@ export class GreatBattleScene extends Phaser.Scene {
   // ─── Input ──────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
-    if (event.key === "Shift") {
-      this.shiftHeld = true;
-      return;
-    }
+    // The finale's Phase-2 climax is mixed-case caseSensitive (unMAKE): the
+    // browser already encodes Shift into the keystroke's case, so no spell/Shift
+    // tracking is needed here. (The old bellows-hammer Shift-spell cooldown was
+    // inert — no finale target consumes the spell variant — and has been removed.)
     if (!event.key || (event.key.length !== 1 && event.key !== " ")) return;
     playClack();
-    // §5.5.11 — bellows-hammer: enforce a per-scene Shift-spell cooldown.
-    // If the player holds Shift but the cooldown window hasn't elapsed, the
-    // claim falls through as a normal (non-spell) attempt. The cooldown is
-    // 2000ms baseline, halved to 1000ms when bellows-hammer is in satchel.
-    const spellActive =
-      this.shiftHeld &&
-      Date.now() - this.lastShiftSpellAt >= this.shiftSpellCooldownMs;
-    this.typingInput.handleChar(event.key, { spell: spellActive });
-  }
-
-  private onKeyUp(event: KeyboardEvent): void {
-    if (event.key === "Shift") this.shiftHeld = false;
+    this.typingInput.handleChar(event.key);
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -479,7 +443,6 @@ export class GreatBattleScene extends Phaser.Scene {
     this.time.removeAllEvents();
     this.clearActiveTargets();
     this.input.keyboard?.off("keydown", this.onKeyDown, this);
-    this.input.keyboard?.off("keyup", this.onKeyUp, this);
     this.ambientHandle?.stop();
 
     this.cameras.main.shake(260, 0.008);

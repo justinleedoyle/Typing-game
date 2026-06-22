@@ -296,8 +296,19 @@ export class MovingWordEnemy {
 
   private startAdvance(): void {
     const { container, wrenX } = this.cfg;
-    const remaining = Math.abs(container.x - wrenX);
-    const totalRange = Math.abs(this.cfg.restX - wrenX);
+    const wrenY = this.cfg.wrenY;
+    // A diagonal close (Wood) scales duration by Euclidean distance; a straight or
+    // weaving close uses horizontal distance (the body's x-progress). Both reduce
+    // to the same fraction during a from-rest advance, but differ after a knock-back
+    // that only retreats x — there a diagonal ghost re-advances along its short axis.
+    const remaining =
+      wrenY !== undefined
+        ? Math.hypot(wrenX - container.x, wrenY - container.y)
+        : Math.abs(container.x - wrenX);
+    const totalRange =
+      wrenY !== undefined
+        ? Math.hypot(wrenX - this.cfg.restX, wrenY - this.cfg.restY)
+        : Math.abs(this.cfg.restX - wrenX);
     const duration = advanceDurationMs(
       this.cfg.advanceMs,
       remaining,

@@ -18,6 +18,7 @@ import {
 } from "../game/relicEffects";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
+import { MovingWordEnemy } from "../game/movingWordEnemy";
 import {
   HAUNTED_WOOD_BASE_BANK,
   pickAdaptiveWords,
@@ -36,19 +37,9 @@ interface HauntedWoodSceneData {
 
 // ─── Ghost enemy ──────────────────────────────────────────────────────────────
 
-interface HauntedGhost {
-  container: Phaser.GameObjects.Container;
-  target: TextWordTarget | null;
-  restX: number;
-  restY: number;
-  word: string;
-  defeated: boolean;
-  advanceTween: Phaser.Tweens.Tween | null;
-  advanceMs: number;
-  /** Compass direction the ghost approached from. Determines the punctuation
-   *  on its word and the side of Wren it advances toward. */
-  direction: WoodDirection;
-}
+// Wood ghosts are now the shared MovingWordEnemy. Their compass direction only
+// matters at spawn (it picks the punctuation + the off-screen start position), so
+// it's threaded through spawnGhost rather than stored on the enemy.
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -86,7 +77,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
   private wrenSprite!: Phaser.GameObjects.Image;
-  private ghosts: HauntedGhost[] = [];
+  private ghosts: MovingWordEnemy[] = [];
   private activeTargets: TextWordTarget[] = [];
   /** Continuation to run when the current ghost wave is fully cleared. Each
    *  spawner sets its own; checkGhostWaveComplete fires and clears it. This
@@ -961,33 +952,51 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.drawGhostInto(container, isPunctWord);
     container.setAlpha(0);
 
-    const advanceMs = isPunctWord ? GHOST_ADVANCE_FAST : GHOST_ADVANCE_SLOW;
-
-    const ghost: HauntedGhost = {
+    const ghost = new MovingWordEnemy({
+      scene: this,
+      typingInput: this.typingInput,
       container,
-      target: null,
+      word,
       restX: pos.restX,
       restY: pos.restY,
-      word,
-      defeated: false,
-      advanceTween: null,
-      advanceMs,
-      direction,
-    };
-
-    this.tweens.add({
-      targets: container,
-      x: pos.restX,
-      y: pos.restY,
-      alpha: 0.6,
-      duration: 900,
-      delay,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (ghost.defeated) return;
-        this.attachGhostTarget(ghost);
-        this.ghostIdleBob(container);
-        this.startGhostAdvance(ghost);
+      // Ghosts close in BOTH axes — N/S vertically, E/W horizontally — so the
+      // advance is diagonal (wrenY set) and its duration scales by Euclidean
+      // distance.
+      wrenX: WREN_X,
+      wrenY: WREN_Y,
+      // Punctuated words advance faster (the realm's speed-under-pressure beat).
+      advanceMs: isPunctWord ? GHOST_ADVANCE_FAST : GHOST_ADVANCE_SLOW,
+      advanceMult: this.combat.advanceMult,
+      entranceMs: 900,
+      entranceDelayMs: delay,
+      restAlpha: 0.6,
+      knockbackMs: 700,
+      knockbackPauseMs: GHOST_KNOCKBACK_PAUSE_MS,
+      dangerRampStart: DANGER_RAMP_START,
+      anchorOffsetY: -80,
+      idleBobDy: 7,
+      idleBobMs: 1000,
+      defeatRiseY: -50,
+      defeatMs: 500,
+      fontSize: 32,
+      // Wisp-themed pale gray-green burst — a ghost going down in mist, not brass.
+      burstColor: GHOST_BURST_COLOR,
+      // Mask the ward mark — the player supplies the punctuation bound to this
+      // ghost's approach direction (read off the compass), not read off the word.
+      maskMarks: true,
+      onTargetAttached: (t) => this.activeTargets.push(t),
+      onTargetDetached: (t) => {
+        const idx = this.activeTargets.indexOf(t);
+        if (idx >= 0) this.activeTargets.splice(idx, 1);
+      },
+      onDefeated: () => {
+        playChime();
+        this.checkGhostWaveComplete();
+      },
+      onReachWren: () => {
+        this.cameras.main.shake(180, 0.004);
+        playDamageThud();
+        flashDamageVignette(this);
       },
     });
 
@@ -1083,141 +1092,13 @@ export class HauntedWoodScene extends Phaser.Scene {
     c.add(g);
   }
 
-  private ghostIdleBob(c: Phaser.GameObjects.Container): void {
-    this.tweens.add({
-      targets: c,
-      y: { from: c.y, to: c.y - 7 },
-      duration: 1000,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.easeInOut",
-    });
-  }
-
-  private attachGhostTarget(ghost: HauntedGhost): void {
-    const target = new TextWordTarget({
-      scene: this,
-      word: ghost.word,
-      x: ghost.container.x,
-      y: ghost.restY - 80,
-      fontSize: 32,
-      // Wisp-themed pale gray-green burst on defeat — reads as a ghost going
-      // down in mist, not the default brass.
-      burstColor: GHOST_BURST_COLOR,
-      // Mask the ward mark — the player must supply the punctuation bound to
-      // this ghost's approach direction (read off the compass), not read it.
-      maskMarks: true,
-      onComplete: () => this.defeatGhost(ghost),
-    });
-    ghost.target = target;
-    this.typingInput.register(target);
-    this.activeTargets.push(target);
-  }
-
-  private startGhostAdvance(ghost: HauntedGhost): void {
-    // Advance toward Wren in both axes — ghosts from N/S close vertically,
-    // E/W close horizontally. Euclidean distance scales duration so
-    // farther starts get more time.
-    const dx = WREN_X - ghost.container.x;
-    const dy = WREN_Y - ghost.container.y;
-    const remaining = Math.hypot(dx, dy);
-    const totalRange = Math.hypot(WREN_X - ghost.restX, WREN_Y - ghost.restY);
-    // Tier 4 — quiet-advance lengthens the approach, capped.
-    const duration =
-      ghost.advanceMs *
-      Math.max(0.3, remaining / Math.max(1, totalRange)) *
-      this.combat.advanceMult;
-
-    ghost.advanceTween = this.tweens.add({
-      targets: ghost.container,
-      x: WREN_X,
-      y: WREN_Y,
-      duration,
-      ease: "Linear",
-      onUpdate: (tween) => {
-        if (!ghost.target) return;
-        ghost.target.setAnchorX(ghost.container.x);
-        ghost.target.setAnchorY(ghost.container.y - 80);
-        // Danger pulse — as the ghost crosses DANGER_RAMP_START of its
-        // advance, the floating word shifts cream → ember.
-        const dangerLevel = Math.max(
-          0,
-          (tween.progress - DANGER_RAMP_START) / (1 - DANGER_RAMP_START),
-        );
-        ghost.target.setDanger(dangerLevel);
-      },
-      onComplete: () => {
-        ghost.advanceTween = null;
-        if (!ghost.defeated) {
-          this.ghostReachesWren(ghost);
-        }
-      },
-    });
-  }
-
-  private defeatGhost(ghost: HauntedGhost): void {
-    if (ghost.defeated) return;
-    ghost.defeated = true;
-    playChime();
-
-    if (ghost.target) {
-      this.typingInput.unregister(ghost.target);
-      const idx = this.activeTargets.indexOf(ghost.target);
-      if (idx >= 0) this.activeTargets.splice(idx, 1);
-      ghost.target = null;
-    }
-    ghost.advanceTween?.stop();
-    ghost.advanceTween = null;
-    this.tweens.killTweensOf(ghost.container);
-
-    this.tweens.add({
-      targets: ghost.container,
-      alpha: 0,
-      y: ghost.container.y - 50,
-      duration: 500,
-      ease: "Sine.easeOut",
-      onComplete: () => ghost.container.destroy(),
-    });
-
-    this.checkGhostWaveComplete();
-  }
-
-  private ghostReachesWren(ghost: HauntedGhost): void {
-    this.cameras.main.shake(180, 0.004);
-    playDamageThud();
-    flashDamageVignette(this);
-
-    if (ghost.target) {
-      this.typingInput.unregister(ghost.target);
-      const idx = this.activeTargets.indexOf(ghost.target);
-      if (idx >= 0) this.activeTargets.splice(idx, 1);
-      ghost.target.destroy();
-      ghost.target = null;
-    }
-    this.tweens.killTweensOf(ghost.container);
-
-    this.tweens.add({
-      targets: ghost.container,
-      x: ghost.restX,
-      duration: 700,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (ghost.defeated) return;
-        this.time.delayedCall(GHOST_KNOCKBACK_PAUSE_MS, () => {
-          if (ghost.defeated) return;
-          this.ghostIdleBob(ghost.container);
-          this.attachGhostTarget(ghost);
-          this.startGhostAdvance(ghost);
-        });
-      },
-    });
-  }
-
   private checkGhostWaveComplete(): void {
     // The length guard is load-bearing: [].every() is true, so without it a
     // call between waves (when ghosts is empty) would re-fire the last
     // continuation. Only advance when a real wave is present and fully down.
-    if (this.ghosts.length === 0 || !this.ghosts.every((g) => g.defeated)) return;
+    if (this.ghosts.length === 0 || !this.ghosts.every((g) => g.isDefeated())) {
+      return;
+    }
 
     const onCleared = this.onWaveCleared;
     this.ghosts = [];
@@ -1266,7 +1147,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private setActiveGhostWordsHidden(hidden: boolean): void {
     for (const ghost of this.ghosts) {
-      if (ghost.defeated || !ghost.target) continue;
+      if (ghost.isDefeated() || !ghost.target) continue;
       ghost.target.setHidden(hidden);
     }
   }

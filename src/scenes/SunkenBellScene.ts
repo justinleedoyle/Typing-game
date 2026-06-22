@@ -14,6 +14,10 @@ import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
+import {
+  type CombatLoadout,
+  resolveCombatLoadout,
+} from "../game/relicEffects";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
@@ -84,6 +88,14 @@ export class SunkenBellScene extends Phaser.Scene {
   private breathBar!: Phaser.GameObjects.Graphics;
   private breathLabel!: Phaser.GameObjects.Text;
 
+  // Tier 4 — relics earned in EARLIER realms shape this realm's combat. The
+  // bounded loadout is resolved once in create() (neutral on a revisit); the
+  // hooks below read it. `graceSaves` is the per-realm grace pool (defensive
+  // relics); `waveForgivenessReady` is the per-wave forgive-a-slip proc.
+  private combat: CombatLoadout = resolveCombatLoadout([], "sunken-bell");
+  private graceSaves = 0;
+  private waveForgivenessReady = false;
+
   /** Explicit per-wave continuation, set by each spawner. Replaces the old
    *  narrator-substring routing (which had soft-locked the first encounter,
    *  same class of bug as the Haunted Wood fix #89). */
@@ -149,6 +161,14 @@ export class SunkenBellScene extends Phaser.Scene {
       getSoul: () => this.typingInput.getStats().getSoul(),
       onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
     });
+
+    // Tier 4 — resolve the in-realm relic loadout. A revisit is a free-passage
+    // replay (no combat), so it gets the neutral (empty-satchel) loadout.
+    this.combat = resolveCombatLoadout(
+      this.revisit ? [] : this.store.get().satchel,
+      "sunken-bell",
+    );
+    this.graceSaves = this.combat.gracePool;
 
     // Beat ring — bottom-center sonar pulse that emanates outward on each
     // bell toll. Bright + tight on the beat, fades + expands across the
@@ -285,7 +305,10 @@ export class SunkenBellScene extends Phaser.Scene {
       duration: 600,
       ease: "Sine.easeOut",
     });
-    this.cameras.main.flash(300, 0, 0, 0, false);
+    // Tier 4 — warm-light (Firefly Lantern / Beacon Spark / Pelt) shortens the
+    // per-toll echo-dim so words stay readable a little longer. Bounded to ≤33%,
+    // so the dim never disappears (it stays a real read-ahead hazard).
+    this.cameras.main.flash(300 * (1 - this.combat.warmLight), 0, 0, 0, false);
   }
 
   /** Half-beat "answer now" pulse for the antiphon wave — ember, so it reads
@@ -341,11 +364,106 @@ export class SunkenBellScene extends Phaser.Scene {
    *  economy). Dark flash + thud, then a partial breath back. The lost tempo
    *  and the broken combo are the real cost. */
   private gaspKnockback(): void {
+    // Tier 4 — a defensive relic (Lock-Bar / Golem Heart / Cairn-Token) catches
+    // the gasp: air back to the floor with a soft cue, no thud/knockback. Drawn
+    // from the per-realm grace pool (cap 2) — a finite cushion, not immunity.
+    if (this.spendGraceSave()) {
+      this.breath.gasp();
+      this.drawBreathBar();
+      this.flashGraceCue("held");
+      return;
+    }
     this.cameras.main.flash(280, 0, 0, 0, false);
     playDamageThud();
     flashDamageVignette(this);
     this.breath.gasp();
     this.drawBreathBar();
+  }
+
+  /** Spend one grace-pool save (a defensive relic). Returns true if one was
+   *  available and consumed. */
+  private spendGraceSave(): boolean {
+    if (this.graceSaves <= 0) return false;
+    this.graceSaves -= 1;
+    return true;
+  }
+
+  /** Gentle frost shimmer + a one-word caption when a relic spares Wren — the
+   *  legible "your relic just did something" beat, distinct from the harsh
+   *  damage cue. */
+  private flashGraceCue(label: "held" | "forgiven"): void {
+    this.cameras.main.flash(160, 120, 170, 200, false);
+    const txt = this.add
+      .text(WREN_X, WREN_Y - 70, label, {
+        fontFamily: SERIF,
+        fontSize: "24px",
+        fontStyle: "italic",
+        color: PALETTE.frost,
+      })
+      .setOrigin(0.5)
+      .setDepth(20)
+      .setAlpha(0.9);
+    this.tweens.add({
+      targets: txt,
+      alpha: 0,
+      y: txt.y - 36,
+      duration: 900,
+      ease: "Sine.easeOut",
+      onComplete: () => txt.destroy(),
+    });
+  }
+
+  /** Surface the active relic effects once, as a short pre-combat sequence, so
+   *  the player sees their earlier-realm choices paying off. An empty loadout
+   *  (incl. revisits) passes straight through. */
+  private announceCombatLoadout(onDone: () => void): void {
+    const lines = this.combat.announcements;
+    if (lines.length === 0) {
+      onDone();
+      return;
+    }
+    let i = 0;
+    const showNext = (): void => {
+      if (i >= lines.length) {
+        this.time.delayedCall(700, onDone);
+        return;
+      }
+      this.setNarrator(lines[i]!);
+      i += 1;
+      this.time.delayedCall(2200, showNext);
+    };
+    showNext();
+  }
+
+  /** Reset the per-wave relic procs at the start of each combat wave. */
+  private beginCombatWave(): void {
+    this.waveForgivenessReady =
+      this.combat.perWaveProcs.includes("forgive-wave-miss");
+    this.applyAutoEase();
+  }
+
+  /** auto-ease (Etta's Ledger): mark the easiest (shortest-word) ghost of the
+   *  wave with a soft glow so the player knows where to start — a small edge,
+   *  not a free kill. No-op without the relic or with no ghosts. */
+  private applyAutoEase(): void {
+    if (!this.combat.perWaveProcs.includes("auto-ease")) return;
+    if (this.ghosts.length === 0) return;
+    let easiest = this.ghosts[0]!;
+    for (const g of this.ghosts) {
+      if (g.word.length < easiest.word.length) easiest = g;
+    }
+    const glow = this.add.graphics();
+    glow.fillStyle(PALETTE_HEX.brass, 0.22);
+    glow.fillEllipse(0, 0, 96, 116);
+    easiest.container.addAt(glow, 0);
+    this.tweens.add({
+      targets: glow,
+      alpha: { from: 0.22, to: 0.5 },
+      duration: 700,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
   }
 
   // ─── Input ────────────────────────────────────────────────────────────────
@@ -398,6 +516,17 @@ export class SunkenBellScene extends Phaser.Scene {
    *  breaks (Heart drops), and — when the air stake is live — breath drains
    *  toward a gasp. A de-sync additionally wipes the claimed word's progress. */
   private registerStumble(isDesync: boolean): void {
+    // Tier 4 — forgive-wave-miss (Shrine-Token): the first slip of each wave
+    // costs no air and draws a gentle "forgiven" cue instead of a flinch. The
+    // broken combo and the de-sync rhythm correction still stand — the relic
+    // spares your breath, not the lesson.
+    if (this.waveForgivenessReady) {
+      this.waveForgivenessReady = false;
+      this.typingInput.getStats().record(false);
+      if (isDesync) this.typingInput.resetClaimedProgress();
+      this.flashGraceCue("forgiven");
+      return;
+    }
     flashWrenMiss(this.wrenSprite);
     this.cameras.main.shake(80, 0.0025);
     this.typingInput.getStats().record(false);
@@ -553,6 +682,12 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Act 1: First ghost encounter ────────────────────────────────────────
 
   private startFirstGhostEncounter(): void {
+    // Tier 4 — surface the relic loadout once before the realm's first combat,
+    // then begin. An empty loadout (incl. revisits) passes straight through.
+    this.announceCombatLoadout(() => this.beginFirstGhostEncounter());
+  }
+
+  private beginFirstGhostEncounter(): void {
     // Encounter bookend — softer than Winter Mountain's 220/0.005 to match
     // the Bell's "quiet listening" tone. Skipped in the truly reverent
     // moments earlier in Act 1 (descent, Olin); fires here because this is
@@ -575,6 +710,7 @@ export class SunkenBellScene extends Phaser.Scene {
       if (!pos) return;
       this.spawnGhost(pos.x, pos.restX, pos.restY, word, i * 400, 16000, pos.side);
     });
+    this.beginCombatWave();
   }
 
   private onFirstEncounterCleared(): void {
@@ -609,6 +745,7 @@ export class SunkenBellScene extends Phaser.Scene {
       if (!pos) return;
       this.spawnGhost(pos.x, pos.restX, pos.restY, word, i * 350, 14000, pos.side);
     });
+    this.beginCombatWave();
   }
 
   private onWave1Cleared(): void {
@@ -643,6 +780,7 @@ export class SunkenBellScene extends Phaser.Scene {
       if (!pos) return;
       this.spawnGhost(pos.x, pos.restX, pos.restY, word, i * 450, 15000, pos.side);
     });
+    this.beginCombatWave();
   }
 
   private onAntiphonCleared(): void {
@@ -696,6 +834,7 @@ export class SunkenBellScene extends Phaser.Scene {
       const splits = i === words.length - 1;
       this.spawnGhost(pos.x, pos.restX, pos.restY, word, i * 350, 13000, pos.side, splits);
     });
+    this.beginCombatWave();
   }
 
   private onWave2Cleared(): void {
@@ -1374,8 +1513,13 @@ export class SunkenBellScene extends Phaser.Scene {
     const wrenX = this.wrenContainer.x;
     const remaining = Math.abs(ghost.container.x - wrenX);
     const totalRange = Math.abs(ghost.spawnX - wrenX);
+    // Tier 4 — quiet-advance (Hunter's Horn / Quiet Chant / Untethered Wind)
+    // lengthens the advance, capped: ghosts close slower but the wave still
+    // bites. advanceMult is 1 with no such relic.
     const duration =
-      ghost.advanceMs * Math.max(0.3, remaining / Math.max(1, totalRange));
+      ghost.advanceMs *
+      Math.max(0.3, remaining / Math.max(1, totalRange)) *
+      this.combat.advanceMult;
 
     ghost.advanceTween = this.tweens.add({
       targets: ghost.container,

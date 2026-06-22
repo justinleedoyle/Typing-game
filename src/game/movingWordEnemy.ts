@@ -22,7 +22,13 @@
 // scroll-across-and-miss flavour, not advance-and-retry.
 
 import Phaser from "phaser";
-import { advanceDurationMs, dangerRamp } from "./movingWordMath";
+import {
+  advanceDurationMs,
+  dangerRamp,
+  type SplitChildPlacement,
+  type SplitChildSpec,
+  splitChildPositions,
+} from "./movingWordMath";
 import { PALETTE_HEX } from "./palette";
 import type { ClaimMods, TypingInputController } from "./typingInput";
 import { TextWordTarget } from "./wordTarget";
@@ -123,6 +129,17 @@ export interface MovingWordEnemyConfig {
    *  and the matching detach. */
   onTargetAttached?: (target: TextWordTarget) => void;
   onTargetDetached?: (target: TextWordTarget) => void;
+
+  /** On a player-completion defeat, shed child enemies where this one died — the
+   *  Sunken Bell's splitting ghost (→ ebb/drift). The enemy resolves each child's
+   *  placement with the tested splitChildPositions geometry; the realm's `spawn`
+   *  builds the body and registers the child as its own MovingWordEnemy. Children
+   *  are non-recursive unless themselves given a split. NOT fired by a programmatic
+   *  defeat (a chain-spark / dismiss) — only when the player typed the word. */
+  split?: {
+    children: readonly SplitChildSpec[];
+    spawn: (placement: SplitChildPlacement) => void;
+  };
 }
 
 export class MovingWordEnemy {
@@ -377,6 +394,18 @@ export class MovingWordEnemy {
       ease: "Sine.easeOut",
       onComplete: () => c.destroy(),
     });
+    // A splitter sheds children where it died — only on a real player completion,
+    // not a programmatic kill. The body's current x (not its rest) anchors them,
+    // matching the inline behaviour; geometry via the tested splitChildPositions.
+    if (this.completedByPlayer && this.cfg.split) {
+      const placements = splitChildPositions(
+        c.x,
+        this.cfg.restY,
+        this.cfg.split.children,
+        this.cfg.wrenX,
+      );
+      for (const p of placements) this.cfg.split.spawn(p);
+    }
   }
 
   private handleComplete(mods: ClaimMods): void {

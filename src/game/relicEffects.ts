@@ -26,6 +26,50 @@ import { RELICS } from "./relics";
  *  are "neutral": they sit off the force/kindness axis. */
 export type RelicAlignment = "force" | "kindness" | "neutral";
 
+// ─── Tier 4: in-realm combat effects ─────────────────────────────────────────
+//
+// A relic may carry an in-realm combat effect so the CYOA collection doubles as
+// a build choice (Tier 4). Effects are DECLARED here and CONSUMED by the realm
+// scenes — the descriptor names the effect + where it applies; the scene
+// switches on `effect` to apply Phaser behavior. All tuning numbers (per-relic
+// step, caps, grace-pool size, soul amounts) live in the resolver below, so the
+// math is in ONE place and the descriptor stays purely declarative.
+
+export type CombatEffectId =
+  | "quiet-advance"        // passive: enemies close slower (capped)
+  | "warm-light"           // passive: a vision hazard (dim/blur/mist) softens
+  | "soul-banked"          // passive: each wave starts with banked Soul
+  | "soul-thrift"          // passive: modifier-spells cost less Soul
+  | "ward-breach"          // 1-shot (defensive): survive one enemy reaching Wren
+  | "forgive-economy-miss" // 1-shot (defensive): forgive one realm-economy loss
+  | "unseal"               // 1-shot (defensive): forgive one Sky sealed-scroll reseal
+  | "toll-strike"          // 1-shot (offensive): clear the hardest live enemy
+  | "bind-beat"            // 1-shot (offensive): freeze all enemies briefly
+  | "jam-foe"              // 1-shot (offensive): disable the hardest enemy
+  | "auto-ease"            // per-wave: pre-mark the easiest enemy at wave start
+  | "forgive-wave-miss"    // per-wave: forgive the first miss of each wave
+  | "mist-clear";          // per-wave: the mist lifts briefly each wave (Wood)
+
+/** The three KINDS the whole vocabulary reduces to (the brief's
+ *  passive / one-shot / per-wave proc). */
+export type CombatEffectKind = "passive" | "oncePerRealm" | "perWaveProc";
+
+export interface RelicCombatEffect {
+  kind: CombatEffectKind;
+  effect: CombatEffectId;
+  /** Realm ids where this effect is meaningful AND wired. Omit ⇒ every realm
+   *  (a universal effect). A realm-specific effect lists only realms wired this
+   *  initiative, so the resolver never hands a scene an effect it can't honor
+   *  (which would announce a relic doing nothing). */
+  appliesIn?: readonly string[];
+  /** oncePerRealm only: a "save" that feeds the shared per-realm grace pool
+   *  (capped) instead of being its own button. Ignored for other kinds. */
+  defensive?: boolean;
+  /** One short, player-facing line surfaced on realm entry so a kid sees the
+   *  relic working — the build choice has to be legible. */
+  announce: string;
+}
+
 export interface RelicEffect {
   /** Which way this relic tips the Phase-2 duel (§5.5.11). Companions are
    *  "neutral" — they pay off on their own §5.5.9 axis, not the duel-shape one. */
@@ -34,6 +78,10 @@ export interface RelicEffect {
    *  the per-phase companion payoffs and the "any creature" phrase branches;
    *  they are mutually exclusive with force/kindness alignment. */
   isCompanion: boolean;
+  /** Tier 4 — the relic's in-realm combat effect, if any. Relics without one
+   *  are finale-only flavor (trident-token, ash-vial, bone-flute,
+   *  ghost-kings-promise, and the five companions). */
+  combat?: RelicCombatEffect;
 }
 
 // ─── The descriptor ──────────────────────────────────────────────────────────
@@ -44,44 +92,219 @@ export interface RelicEffect {
 // completeness + canon-match tests in tests/relicEffects.test.ts lock these
 // against RELICS and against the §5.5.11 alignment lists.
 
+// Realms whose signature hazard is a VISION one (Bell's echo-dim, Sky's
+// lantern-blur, Wood's mist-roll) that `warm-light` softens. Winter's snow-drift
+// qualifies thematically too, but Winter is realm 1 (no relics yet) and isn't
+// wired this initiative, so it's left off (appliesIn ⟺ wired).
+const VISION_HAZARD_REALMS = [
+  "sunken-bell",
+  "sky-island",
+  "haunted-wood",
+] as const;
+
+// Realms with a real Soul-spell CASTING economy (spendSoul/canCast), the only
+// place `soul-banked` / `soul-thrift` mean anything — elsewhere Soul just fills a
+// cosmetic meter, so announcing a soul effect there would be a lie. Winter has
+// the richest cast economy too, but it's realm 1 (no relics yet) and isn't wired
+// this initiative (appliesIn ⟺ wired). Bell / Sky / Wood have NO casts.
+const SPELL_ECONOMY_REALMS = ["clockwork-forge"] as const;
+
 export const RELIC_EFFECTS: Record<string, RelicEffect> = {
   // ─── Winter Mountain ───────────────────────────────────────────────────────
-  "hunters-horn": { alignment: "kindness", isCompanion: false },
-  "firefly-lantern": { alignment: "kindness", isCompanion: false },
-  "cairn-token": { alignment: "kindness", isCompanion: false },
-  "pelt-of-the-old-one": { alignment: "force", isCompanion: false },
+  "hunters-horn": {
+    alignment: "kindness",
+    isCompanion: false,
+    combat: {
+      kind: "passive",
+      effect: "quiet-advance",
+      announce: "the huntress's horn sounds — they come slower.",
+    },
+  },
+  "firefly-lantern": {
+    alignment: "kindness",
+    isCompanion: false,
+    combat: {
+      kind: "passive",
+      effect: "warm-light",
+      appliesIn: VISION_HAZARD_REALMS,
+      announce: "the firefly lantern steadies your sight.",
+    },
+  },
+  "cairn-token": {
+    alignment: "kindness",
+    isCompanion: false,
+    combat: {
+      kind: "oncePerRealm",
+      effect: "forgive-economy-miss",
+      defensive: true,
+      announce: "the cairn token forgives one slip.",
+    },
+  },
+  "pelt-of-the-old-one": {
+    alignment: "force",
+    isCompanion: false,
+    combat: {
+      kind: "passive",
+      effect: "warm-light",
+      appliesIn: VISION_HAZARD_REALMS,
+      announce: "the old one's pelt keeps the cold dark back.",
+    },
+  },
   "snow-fox-cub": { alignment: "neutral", isCompanion: true },
 
   // ─── Sunken Bell ───────────────────────────────────────────────────────────
-  "quiet-chant": { alignment: "kindness", isCompanion: false },
-  "lock-bar": { alignment: "force", isCompanion: false },
+  "quiet-chant": {
+    alignment: "kindness",
+    isCompanion: false,
+    combat: {
+      kind: "passive",
+      effect: "quiet-advance",
+      announce: "old olin's chant settles the air — they come slower.",
+    },
+  },
+  "lock-bar": {
+    alignment: "force",
+    isCompanion: false,
+    combat: {
+      kind: "oncePerRealm",
+      effect: "ward-breach",
+      defensive: true,
+      announce: "the lock-bar holds once when they break through.",
+    },
+  },
   // king-aurland: full merfolk army / +1 spell charge per wave — pure utility,
-  // off the force/kindness axis.
-  "king-aurland": { alignment: "neutral", isCompanion: false },
+  // off the force/kindness axis. In-realm: a wave starts with banked Soul.
+  "king-aurland": {
+    alignment: "neutral",
+    isCompanion: false,
+    combat: {
+      kind: "passive",
+      effect: "soul-banked",
+      appliesIn: SPELL_ECONOMY_REALMS,
+      announce: "king aurland's tide gives you an early spell.",
+    },
+  },
   "trident-token": { alignment: "kindness", isCompanion: false },
-  "bells-tongue": { alignment: "force", isCompanion: false },
+  "bells-tongue": {
+    alignment: "force",
+    isCompanion: false,
+    combat: {
+      kind: "oncePerRealm",
+      effect: "toll-strike",
+      announce: "the bell's tongue can strike the strongest foe, once.",
+    },
+  },
   "glass-fish": { alignment: "neutral", isCompanion: true },
 
   // ─── Clockwork Forge ───────────────────────────────────────────────────────
-  "bellows-hammer": { alignment: "kindness", isCompanion: false },
-  "sabotage-wrench": { alignment: "force", isCompanion: false },
-  "master-key": { alignment: "kindness", isCompanion: false },
-  "golem-heart": { alignment: "force", isCompanion: false },
+  "bellows-hammer": {
+    alignment: "kindness",
+    isCompanion: false,
+    combat: {
+      kind: "passive",
+      effect: "soul-thrift",
+      appliesIn: SPELL_ECONOMY_REALMS,
+      announce: "forn's hammer makes your spells cost less.",
+    },
+  },
+  "sabotage-wrench": {
+    alignment: "force",
+    isCompanion: false,
+    combat: {
+      kind: "oncePerRealm",
+      effect: "jam-foe",
+      announce: "the sabotage wrench can jam the strongest foe, once.",
+    },
+  },
+  "master-key": {
+    alignment: "kindness",
+    isCompanion: false,
+    combat: {
+      kind: "oncePerRealm",
+      effect: "unseal",
+      appliesIn: ["sky-island"],
+      defensive: true,
+      announce: "the master key reopens what reseals on you, once.",
+    },
+  },
+  "golem-heart": {
+    alignment: "force",
+    isCompanion: false,
+    combat: {
+      kind: "oncePerRealm",
+      effect: "ward-breach",
+      defensive: true,
+      announce: "the golem heart takes one blow meant for you.",
+    },
+  },
   "brass-songbird": { alignment: "neutral", isCompanion: true },
 
   // ─── Sky-Island of Lanterns ────────────────────────────────────────────────
-  "ettas-ledger": { alignment: "kindness", isCompanion: false },
-  "beacon-spark": { alignment: "force", isCompanion: false },
-  "wind-phrase": { alignment: "kindness", isCompanion: false },
-  "tether-cord": { alignment: "force", isCompanion: false },
+  "ettas-ledger": {
+    alignment: "kindness",
+    isCompanion: false,
+    combat: {
+      kind: "perWaveProc",
+      effect: "auto-ease",
+      announce: "etta's ledger marks the easiest foe each wave.",
+    },
+  },
+  "beacon-spark": {
+    alignment: "force",
+    isCompanion: false,
+    combat: {
+      kind: "passive",
+      effect: "warm-light",
+      appliesIn: VISION_HAZARD_REALMS,
+      announce: "the beacon spark burns through the gloom.",
+    },
+  },
+  "wind-phrase": {
+    alignment: "kindness",
+    isCompanion: false,
+    combat: {
+      kind: "perWaveProc",
+      effect: "mist-clear",
+      appliesIn: ["haunted-wood"],
+      announce: "the wind-phrase lifts the mist each wave.",
+    },
+  },
+  "tether-cord": {
+    alignment: "force",
+    isCompanion: false,
+    combat: {
+      kind: "oncePerRealm",
+      effect: "bind-beat",
+      announce: "the tether cord can bind them all for a breath.",
+    },
+  },
   // untethered-wind: enemy banners fall / slower advance — pure utility, off
-  // the force/kindness axis.
-  "untethered-wind": { alignment: "neutral", isCompanion: false },
+  // the force/kindness axis. In-realm: the same slow-advance, capped.
+  "untethered-wind": {
+    alignment: "neutral",
+    isCompanion: false,
+    combat: {
+      kind: "passive",
+      effect: "quiet-advance",
+      announce: "the untethered wind drags at them — they come slower.",
+    },
+  },
   "lantern-moth": { alignment: "neutral", isCompanion: true },
 
   // ─── Haunted Wood ──────────────────────────────────────────────────────────
+  // ash-vial, bone-flute, ghost-kings-promise stay finale-only flavor (no
+  // in-realm effect) — Wood is the last realm, so their in-realm payoff would
+  // only ever land on a revisit; keeping the set bounded is deliberate.
   "ash-vial": { alignment: "force", isCompanion: false },
-  "shrine-token": { alignment: "kindness", isCompanion: false },
+  "shrine-token": {
+    alignment: "kindness",
+    isCompanion: false,
+    combat: {
+      kind: "perWaveProc",
+      effect: "forgive-wave-miss",
+      announce: "the shrine forgives your first slip each wave.",
+    },
+  },
   "bone-flute": { alignment: "force", isCompanion: false },
   "ghost-kings-promise": { alignment: "kindness", isCompanion: false },
   "wisp-cat": { alignment: "neutral", isCompanion: true },
@@ -175,3 +398,136 @@ export function getActiveRelicEffects(
 /** Every relic in RELICS must have a descriptor entry (and vice versa). Exposed
  *  so the test can assert completeness against the canonical relic catalogue. */
 export const RELIC_IDS: readonly string[] = Object.keys(RELICS);
+
+// ─── Tier 4 aggregator: the in-realm combat loadout ──────────────────────────
+//
+// resolveCombatLoadout(satchel, realmId) is a realm scene's single entry point
+// for "what do my relics do in THIS realm" — the in-combat sibling of
+// getActiveRelicEffects. It OWNS the bounding (the finale's lesson: additive-only
+// trivializes; a relic-rich run must be HELPED, not made invincible). All the
+// tuning lives here so the descriptor stays declarative and the caps sit in one
+// auditable place.
+
+/** Passive ceilings + per-relic diminishing step. `step` is the fraction of the
+ *  REMAINING gap to `cap` that each owned relic closes — equal for every relic
+ *  of an effect, so the total is order-independent and a 3rd relic still does
+ *  something (no dead pickups) while the cap is never breached. */
+const PASSIVE_TUNING: Record<string, { step: number; cap: number }> = {
+  // 1 relic → +7.5%, 2 → +11.25%, 3 → +13.1% advance duration; ceiling +15%.
+  "quiet-advance": { step: 0.5, cap: 0.15 },
+  // 1 → 16.5%, 2 → 24.75%, 3 → 28.9% softening; ceiling 33% — the hazard always
+  // still bites (protects the Tier 1 work that made it demanding).
+  "warm-light": { step: 0.5, cap: 0.33 },
+};
+
+/** soul-banked: fraction of SOUL_MAX pre-poured at each wave start (king-aurland). */
+export const SOUL_BANKED_FRACTION = 0.25;
+/** soul-thrift: spell-cost multiplier — casts cost this × the base SPELL_COST
+ *  (bellows-hammer). */
+export const SOUL_THRIFT_MULT = 0.8;
+/** The shared per-realm grace-pool ceiling for DEFENSIVE one-shots. The single
+ *  lever that stops a protection-stacked satchel from going invulnerable: own
+ *  four "save me" relics, still get only this many saves per realm. */
+export const GRACE_POOL_CAP = 2;
+
+export interface CombatLoadout {
+  /** Multiply an enemy's advance DURATION by this (≥1 ⇒ slower). 1 = no change. */
+  readonly advanceMult: number;
+  /** Vision-hazard softening fraction, 0..warm-light cap. 0 = no change. */
+  readonly warmLight: number;
+  /** Fraction of SOUL_MAX to pre-bank at each wave start. 0 = none. */
+  readonly soulBankedFraction: number;
+  /** Spell-cost multiplier (<1 ⇒ cheaper). 1 = full price. */
+  readonly soulThriftMult: number;
+  /** Defensive "saves" available this realm (the grace pool), 0..GRACE_POOL_CAP.
+   *  What a save protects against is the REALM's call (a candle / a breath / a
+   *  reseal), not the relic's — the relic only grants the save. */
+  readonly gracePool: number;
+  /** Offensive single-use effects available this realm (each fired once). */
+  readonly oneShots: readonly CombatEffectId[];
+  /** Per-wave procs active this realm. */
+  readonly perWaveProcs: readonly CombatEffectId[];
+  /** One line per ACTIVE effect (a capped-out save doesn't announce) — scenes
+   *  surface these on entry so the build choice is visible. */
+  readonly announcements: readonly string[];
+}
+
+function effectAppliesIn(combat: RelicCombatEffect, realmId: string): boolean {
+  return combat.appliesIn === undefined || combat.appliesIn.includes(realmId);
+}
+
+/** Diminishing-returns total: `count` relics each closing `step` of the gap to
+ *  `cap`. Monotonic, bounded by `cap`, order-independent. */
+function diminishingTotal(count: number, step: number, cap: number): number {
+  let total = 0;
+  for (let i = 0; i < count; i++) total += (cap - total) * step;
+  return total;
+}
+
+/** Resolve the satchel into the BOUNDED set of in-combat effects active in
+ *  `realmId`. Pure (no Phaser) so it's unit-testable. Unknown ids and effects
+ *  whose `appliesIn` excludes this realm contribute nothing; duplicates collapse
+ *  (a Set), so a stale double-entry can't inflate the pool. */
+export function resolveCombatLoadout(
+  satchel: readonly string[],
+  realmId: string,
+): CombatLoadout {
+  const ids = new Set(satchel);
+  const passiveCounts: Record<string, number> = {};
+  let soulBanked = false;
+  let soulThrift = false;
+  let defensiveSaves = 0;
+  const oneShots: CombatEffectId[] = [];
+  const perWaveProcs: CombatEffectId[] = [];
+  const announcements: string[] = [];
+
+  for (const id of ids) {
+    const combat = RELIC_EFFECTS[id]?.combat;
+    if (!combat) continue;
+    if (!effectAppliesIn(combat, realmId)) continue;
+
+    let active = true;
+    switch (combat.kind) {
+      case "passive":
+        if (combat.effect === "soul-banked") soulBanked = true;
+        else if (combat.effect === "soul-thrift") soulThrift = true;
+        else passiveCounts[combat.effect] = (passiveCounts[combat.effect] ?? 0) + 1;
+        break;
+      case "oncePerRealm":
+        if (combat.defensive) {
+          defensiveSaves += 1;
+          // Past the cap an extra protective relic is inert HERE (it still helps
+          // the finale) — so it neither adds a save nor announces.
+          active = defensiveSaves <= GRACE_POOL_CAP;
+        } else {
+          oneShots.push(combat.effect);
+        }
+        break;
+      case "perWaveProc":
+        perWaveProcs.push(combat.effect);
+        break;
+    }
+    if (active) announcements.push(combat.announce);
+  }
+
+  return {
+    advanceMult:
+      1 +
+      diminishingTotal(
+        passiveCounts["quiet-advance"] ?? 0,
+        PASSIVE_TUNING["quiet-advance"].step,
+        PASSIVE_TUNING["quiet-advance"].cap,
+      ),
+    warmLight: diminishingTotal(
+      passiveCounts["warm-light"] ?? 0,
+      PASSIVE_TUNING["warm-light"].step,
+      PASSIVE_TUNING["warm-light"].cap,
+    ),
+    soulBankedFraction: soulBanked ? SOUL_BANKED_FRACTION : 0,
+    soulThriftMult: soulThrift ? SOUL_THRIFT_MULT : 1,
+    gracePool: Math.min(GRACE_POOL_CAP, defensiveSaves),
+    oneShots,
+    perWaveProcs,
+    announcements,
+  };
+}

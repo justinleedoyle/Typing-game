@@ -1413,6 +1413,14 @@ const FINALE_LINES: readonly RunaLine[] = [
     tone: "urgent",
     isNew: true,
   },
+  {
+    id: "finale_kindness_slip",
+    scene: "finale",
+    trigger: "GreatBattleScene.chargeKindnessMiss() — a slip in the kindness duel (wired)",
+    text: "Mercy asks for a clean hand. The slip costs you a candle.",
+    tone: "instruction",
+    isNew: true,
+  },
 ];
 
 export const RUNA_LINES: readonly RunaLine[] = [

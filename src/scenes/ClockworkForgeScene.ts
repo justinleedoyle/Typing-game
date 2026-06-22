@@ -19,8 +19,9 @@ import {
 } from "../game/relicEffects";
 import type { SaveStore } from "../game/saveState";
 import { SPELL_COST } from "../game/sessionStats";
-import { TypingInputController } from "../game/typingInput";
+import { type ClaimMods, TypingInputController } from "../game/typingInput";
 import { WaveDirector } from "../game/waveDirector";
+import { MovingWordEnemy } from "../game/movingWordEnemy";
 import { pickAdaptiveWords, FORGE_COMMAND_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
@@ -40,19 +41,12 @@ interface ForgeSceneData {
 
 // ─── Golem entity ─────────────────────────────────────────────────────────────
 
-interface Golem {
+// Advancing golems are now the shared MovingWordEnemy (this.golems). Only the
+// stationary tutorial golem needs a bespoke record — it never advances or carries
+// a word; Gregor's lesson drives it through golemTurnHead / golemCommandFlash.
+interface StaticGolem {
   container: Phaser.GameObjects.Container;
   eye: Phaser.GameObjects.Graphics;
-  target: TextWordTarget | null;
-  spawnX: number;
-  restY: number;
-  word: string;
-  defeated: boolean;
-  advanceTween: Phaser.Tweens.Tween | null;
-  advanceMs: number;
-  isBoss: boolean;
-  /** True if this golem slot requires Shift/spell to get the command visual. */
-  isCapitalized: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -104,7 +98,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private typingInput!: TypingInputController;
   private director!: WaveDirector;
   private narration!: NarrationManager;
-  private golems: Golem[] = [];
+  private golems: MovingWordEnemy[] = [];
   private activeTargets: TextWordTarget[] = [];
   private wrenSprite!: Phaser.GameObjects.Image;
 
@@ -364,7 +358,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.activeTargets.push(target);
   }
 
-  private gregorTutorialCommand(tutorialGolem: Golem): void {
+  private gregorTutorialCommand(tutorialGolem: StaticGolem): void {
     this.clearActiveTargets();
     this.setNarrator(
       "\"Now hold Shift and type 'TURN' — give it a command.\"",
@@ -430,12 +424,6 @@ export class ClockworkForgeScene extends Phaser.Scene {
     );
 
     const golem = this.spawnAdvancingGolem(1060, FLOOR_Y, "walk", GOLEM_ADVANCE_MS * 1.4, false);
-
-    // After the plain "walk" completes, also show a spell version
-    const origComplete = golem.target;
-    if (origComplete) {
-      // Already attached — let the wave system handle it
-    }
 
     this.waveActive = true;
     this.time.delayedCall(2000, () => {
@@ -1141,121 +1129,105 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── Golem spawning ───────────────────────────────────────────────────────────
 
   /** Spawn a static (non-advancing) tutorial golem. Returns the golem object. */
-  private spawnStaticGolem(x: number, y: number, _isBoss: boolean): Golem {
+  private spawnStaticGolem(x: number, y: number, _isBoss: boolean): StaticGolem {
     const container = this.add.container(x, y);
     const eye = this.drawGolemInto(container, false);
-    const golem: Golem = {
-      container,
-      eye,
-      target: null,
-      spawnX: x,
-      restY: y,
-      word: "",
-      defeated: false,
-      advanceTween: null,
-      advanceMs: 0,
-      isBoss: false,
-      isCapitalized: false,
-    };
     this.idleBob(container);
-    return golem;
+    return { container, eye };
   }
 
-  /** Spawn a golem that advances toward Wren and can be defeated. */
+  /** Spawn a golem that advances toward Wren and can be defeated — now the shared
+   *  MovingWordEnemy. The Forge keeps the body art (the eye it brightens on a
+   *  command) and the consequence (onGolemComplete); the enemy owns the
+   *  entrance / advance / knock-back / defeat lifecycle and the word target. */
   private spawnAdvancingGolem(
     x: number,
     y: number,
     word: string,
     advanceMs: number,
     isCapitalized: boolean,
-  ): Golem {
+  ): MovingWordEnemy {
     const startX = x < this.scale.width / 2 ? -120 : this.scale.width + 120;
     const container = this.add.container(startX, y);
     container.setAlpha(0);
     const eye = this.drawGolemInto(container, false);
 
-    const golem: Golem = {
-      container,
-      eye,
-      target: null,
-      spawnX: x,
-      restY: y,
-      word,
-      defeated: false,
-      advanceTween: null,
-      advanceMs,
-      isBoss: false,
-      isCapitalized,
-    };
-
-    this.tweens.add({
-      targets: container,
-      x,
-      alpha: 1,
-      duration: 700,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (golem.defeated) return;
-        this.attachGolemTarget(golem);
-        this.idleBob(container);
-        this.startGolemAdvance(golem);
-      },
-    });
-
-    return golem;
-  }
-
-  private attachGolemTarget(golem: Golem): void {
-    const target = new TextWordTarget({
+    return new MovingWordEnemy({
       scene: this,
-      word: golem.word,
-      x: golem.container.x,
-      y: golem.restY - 100,
+      typingInput: this.typingInput,
+      container,
+      word,
+      restX: x,
+      restY: y,
+      wrenX: this.scale.width / 2,
+      advanceMs,
+      advanceMult: this.combat.advanceMult,
+      entranceMs: 700,
+      knockbackMs: 600,
+      knockbackPauseMs: 1200,
+      dangerRampStart: DANGER_RAMP_START,
+      anchorOffsetY: -100,
       fontSize: 32,
+      // Forge-fire burst on completion — an "ember bloom" rather than brass.
+      burstColor: PALETTE_HEX.ember,
       // Mixed-case command golems enforce case — the CAPITALIZED tail misses
       // unless typed with Shift, so Gregor's lesson ("Lowercase moves them.
       // CAPITALS command them.") is a real mid-word demand, not a VFX gate.
-      caseSensitive: golem.isCapitalized,
-      // Forge-fire burst on completion. Reads as "ember bloom" rather
-      // than the default brass.
-      burstColor: PALETTE_HEX.ember,
-      // A mixed-case command starts lowercase, so the claim captures no Shift
-      // and routes here — but finishing it REQUIRED the mid-word Shift, so it
-      // earns the same "command lands" flourish a leading-capital would.
-      onComplete: golem.isCapitalized
-        ? () => {
-            this.defeatGolem(golem);
-            this.commandEffect(golem);
-          }
-        : () => this.defeatGolem(golem),
-      onSpellComplete: () => {
-        this.defeatGolem(golem);
-        this.commandEffect(golem);
+      caseSensitive: isCapitalized,
+      isWaveActive: () => this.waveActive,
+      onTargetAttached: (t) => this.activeTargets.push(t),
+      onTargetDetached: (t) => {
+        const idx = this.activeTargets.indexOf(t);
+        if (idx >= 0) this.activeTargets.splice(idx, 1);
       },
-      onAltSpellComplete: () => this.chainSparkEffect(golem),
+      onDefeated: () => playChime(),
+      onReachWren: () => {
+        // Golem retreats and tries again (no candle system in the Forge).
+        this.cameras.main.shake(180, 0.004);
+        playDamageThud();
+        flashDamageVignette(this);
+      },
+      onComplete: (mods, self) =>
+        this.onGolemComplete(self, eye, isCapitalized, mods),
     });
-    golem.target = target;
-    this.typingInput.register(target);
-    this.activeTargets.push(target);
   }
 
-  /** Alt-spell variant: chain spark. The golem whose word was typed with
-   *  Alt held is defeated as usual; the spark arcs to the nearest live
-   *  golem and defeats it too. If no other golems are alive, the spell is
-   *  still a defeat — just no arc target. */
-  private chainSparkEffect(golem: Golem): void {
+  /** Apply the Forge consequence after a player completes a golem's word. The
+   *  shared MovingWordEnemy has already felled this golem and chimed; here we add
+   *  the realm flourish, keyed on how the word was claimed:
+   *   - Alt → chain-spark to the nearest live golem.
+   *   - Shift, OR a mixed-case command finished with its required mid-word Shift
+   *     (`isCapitalized` — the claim captured no Shift but finishing it demanded
+   *     one) → the "command lands" flash (Gregor's lesson: CAPITALS command).
+   *   - a plain lowercase nudge → the defeat alone. */
+  private onGolemComplete(
+    self: MovingWordEnemy,
+    eye: Phaser.GameObjects.Graphics,
+    isCapitalized: boolean,
+    mods: ClaimMods,
+  ): void {
+    if (mods.alt) {
+      this.chainSpark(self);
+    } else if (mods.spell || isCapitalized) {
+      this.commandEffect(eye);
+    }
+  }
+
+  /** Alt-spell variant: chain spark. The Alt-claimed golem is already defeated by
+   *  the shared enemy; the spark arcs to the nearest live golem and fells it too.
+   *  If no other golems are alive, the spell is still a defeat — just no arc. */
+  private chainSpark(self: MovingWordEnemy): void {
     // Spend the Soul this chain was armed against (canCast was checked when the
     // Alt-claim landed). The guard in spendSoul makes a stale arm a no-op.
     // spellCost folds in soul-thrift (bellows-hammer) so arm + spend agree.
     this.typingInput.getStats().spendSoul(this.spellCost);
     playSparkZap();
-    this.defeatGolem(golem);
-    const nearest = this.findNearestLiveGolem(golem);
+    const nearest = this.findNearestLiveGolem(self);
     if (!nearest) return;
     playChainSpark(
       this,
-      golem.container.x,
-      golem.restY - 80,
+      self.container.x,
+      self.restY - 80,
       nearest.container.x,
       nearest.restY - 80,
       PALETTE_HEX.brass,
@@ -1263,15 +1235,17 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // Brief delay before the chain target falls — gives the arc time to
     // visually land before the second defeat fires its own burst.
     this.time.delayedCall(140, () => {
-      if (!nearest.defeated) this.defeatGolem(nearest);
+      if (!nearest.isDefeated()) nearest.defeat();
     });
   }
 
-  private findNearestLiveGolem(from: Golem): Golem | null {
-    let best: Golem | null = null;
+  private findNearestLiveGolem(
+    from: MovingWordEnemy,
+  ): MovingWordEnemy | null {
+    let best: MovingWordEnemy | null = null;
     let bestDist = Infinity;
     for (const g of this.golems) {
-      if (g === from || g.defeated) continue;
+      if (g === from || g.isDefeated()) continue;
       const dx = g.container.x - from.container.x;
       const dy = g.container.y - from.container.y;
       const d = Math.hypot(dx, dy);
@@ -1283,107 +1257,17 @@ export class ClockworkForgeScene extends Phaser.Scene {
     return best;
   }
 
-  private startGolemAdvance(golem: Golem): void {
-    const wrenX = this.scale.width / 2;
-    const remaining = Math.abs(golem.container.x - wrenX);
-    const totalRange = Math.abs(golem.spawnX - wrenX);
-    // Tier 4 — quiet-advance lengthens the close, capped. advanceMult is 1
-    // without a quiet-advance relic.
-    const duration =
-      golem.advanceMs *
-      Math.max(0.3, remaining / (totalRange || 1)) *
-      this.combat.advanceMult;
-
-    golem.advanceTween = this.tweens.add({
-      targets: golem.container,
-      x: wrenX,
-      duration,
-      ease: "Linear",
-      onUpdate: (tween) => {
-        if (!golem.target) return;
-        golem.target.setAnchorX(golem.container.x);
-        // Danger pulse — the floating word reddens as the golem closes,
-        // ramping in over the last 60% of its advance.
-        const dangerLevel = Math.max(
-          0,
-          (tween.progress - DANGER_RAMP_START) / (1 - DANGER_RAMP_START),
-        );
-        golem.target.setDanger(dangerLevel);
-      },
-      onComplete: () => {
-        golem.advanceTween = null;
-        if (!golem.defeated && this.waveActive) {
-          this.golemReachesWren(golem);
-        }
-      },
-    });
-  }
-
-  private defeatGolem(golem: Golem): void {
-    if (golem.defeated) return;
-    playChime();
-    golem.defeated = true;
-    if (golem.target) {
-      this.typingInput.unregister(golem.target);
-      const idx = this.activeTargets.indexOf(golem.target);
-      if (idx >= 0) this.activeTargets.splice(idx, 1);
-      golem.target = null;
-    }
-    golem.advanceTween?.stop();
-    golem.advanceTween = null;
-    this.tweens.killTweensOf(golem.container);
-    this.tweens.add({
-      targets: golem.container,
-      alpha: 0,
-      y: golem.container.y - 50,
-      duration: 480,
-      ease: "Sine.easeOut",
-      onComplete: () => golem.container.destroy(),
-    });
-  }
-
-  /** Visual "command" effect when the player uses Shift on a golem. */
-  private commandEffect(golem: Golem): void {
+  /** Visual "command" effect when the player uses Shift on a golem — the camera
+   *  flash and the eye brightening to brass before the body falls. */
+  private commandEffect(eye: Phaser.GameObjects.Graphics): void {
     this.cameras.main.flash(180, 200, 140, 20);
-    // Eye brightens briefly before golem falls
-    golem.eye.clear();
-    golem.eye.fillStyle(PALETTE_HEX.brass, 1);
-    golem.eye.fillCircle(14, -12, 5);
-  }
-
-  private golemReachesWren(golem: Golem): void {
-    // For simplicity: golem retreats and tries again (no candle system needed)
-    this.cameras.main.shake(180, 0.004);
-    playDamageThud();
-    flashDamageVignette(this);
-
-    if (golem.target) {
-      this.typingInput.unregister(golem.target);
-      const idx = this.activeTargets.indexOf(golem.target);
-      if (idx >= 0) this.activeTargets.splice(idx, 1);
-      golem.target.destroy();
-      golem.target = null;
-    }
-    this.tweens.killTweensOf(golem.container);
-    this.tweens.add({
-      targets: golem.container,
-      x: golem.spawnX,
-      duration: 600,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (golem.defeated || !this.waveActive) return;
-        this.time.delayedCall(1200, () => {
-          if (golem.defeated || !this.waveActive) return;
-          this.idleBob(golem.container);
-          this.attachGolemTarget(golem);
-          this.startGolemAdvance(golem);
-        });
-      },
-    });
+    eye.clear();
+    eye.fillStyle(PALETTE_HEX.brass, 1);
+    eye.fillCircle(14, -12, 5);
   }
 
   /** Visual effect for tutorial golem head-turn. */
-  private golemTurnHead(golem: Golem): void {
+  private golemTurnHead(golem: StaticGolem): void {
     this.tweens.add({
       targets: golem.container,
       x: golem.container.x - 20,
@@ -1394,7 +1278,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   /** Visual effect for full-command response. */
-  private golemCommandFlash(golem: Golem): void {
+  private golemCommandFlash(golem: StaticGolem): void {
     this.cameras.main.flash(200, 200, 140, 20);
     golem.eye.clear();
     golem.eye.fillStyle(PALETTE_HEX.brass, 1);
@@ -1417,10 +1301,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
    */
   private watchForWaveClear(onClear: () => void): void {
     const check = (): void => {
-      if (this.golems.length > 0 && this.golems.every((g) => g.defeated)) {
+      if (this.golems.length > 0 && this.golems.every((g) => g.isDefeated())) {
         this.waveActive = false;
         onClear();
-      } else if (this.waveActive || this.golems.some((g) => !g.defeated)) {
+      } else if (this.waveActive || this.golems.some((g) => !g.isDefeated())) {
         this.time.delayedCall(300, check);
       }
     };

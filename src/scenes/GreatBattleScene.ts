@@ -14,6 +14,12 @@ import {
   KINDNESS_RELICS,
   selectFinalPhrase,
 } from "../game/relicAlignment";
+import {
+  type Facet,
+  type FacetId,
+  type FacetResolution,
+  resolveFacets,
+} from "../game/finaleFacets";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import {
@@ -43,6 +49,22 @@ const BATTLE_WORD_BANK = [
   "name", "ring", "light", "true", "still", "turn",
   "last", "kept", "long", "clear", "break", "found",
 ] as const;
+
+// §5.5.11 — counter-loadout: how long Wren has to type a facet's defense word
+// before it lands (uncountered facets only). "Tune on live build."
+const FACET_CHALLENGE_MS = 6000;
+
+// Per-facet narration ids. Kept as string literals here (not built dynamically)
+// so the sayResolution test's id-shaped-token scan over the scene source can
+// verify each one resolves to a real Runa line. telegraph = the Lord channels
+// it; countered = a relic answers it.
+const FACET_LINES: Record<FacetId, { telegraph: string; countered: string }> = {
+  cold: { telegraph: "finale_facet_cold_telegraph", countered: "finale_facet_cold_countered" },
+  toll: { telegraph: "finale_facet_toll_telegraph", countered: "finale_facet_toll_countered" },
+  armor: { telegraph: "finale_facet_armor_telegraph", countered: "finale_facet_armor_countered" },
+  light: { telegraph: "finale_facet_light_telegraph", countered: "finale_facet_light_countered" },
+  grief: { telegraph: "finale_facet_grief_telegraph", countered: "finale_facet_grief_countered" },
+};
 
 // ─── Wave definition ───────────────────────────────────────────────────────────
 
@@ -876,8 +898,105 @@ export class GreatBattleScene extends Phaser.Scene {
 
     this.time.delayedCall(1400, () => {
       this.setNarrator(descLine);
-      this.time.delayedCall(3200, () => this.startPhase2a());
+      this.time.delayedCall(3200, () => this.startFacetPhase());
     });
+  }
+
+  // ─── PHASE 2 — facet sequence (§5.5.11 counter-loadout) ─────────────────────
+  //
+  // The Lord channels one facet per cleared realm. A relic that counters it
+  // neutralizes the facet (skip); a missing counter forces a timed defense —
+  // failing it snuffs a candle. This is the duel's opening movement; the
+  // existing counter rounds (startPhase2a onward) follow.
+
+  private startFacetPhase(): void {
+    if (this.runOver) return;
+    const state = this.store.get();
+    const clearedRealmIds = WAVE_DEFS.map((w) => w.realmId).filter(
+      (id) => state.realms[id]?.cleared,
+    );
+    const facets = resolveFacets(clearedRealmIds, state.satchel);
+    if (facets.length === 0) {
+      // No cleared realms → nothing to channel. Straight to the counter rounds.
+      this.startPhase2a();
+      return;
+    }
+    this.narration.say("finale_facets_intro");
+    this.time.delayedCall(2000, () => this.runFacetSequence(facets, 0));
+  }
+
+  private runFacetSequence(facets: FacetResolution[], idx: number): void {
+    if (this.runOver) return;
+    if (idx >= facets.length) {
+      this.time.delayedCall(700, () => this.startPhase2a());
+      return;
+    }
+    const { facet, counteredBy } = facets[idx]!;
+    // Telegraph — name the facet so the player learns the counter over replays.
+    this.narration.say(FACET_LINES[facet.id].telegraph);
+    this.time.delayedCall(1700, () => {
+      if (this.runOver) return;
+      if (counteredBy) {
+        // A relic answers it — neutralized, no challenge. The Lord flickers.
+        this.narration.say(FACET_LINES[facet.id].countered);
+        this.tweens.add({
+          targets: this.quietLordContainer,
+          alpha: { from: this.quietLordContainer.alpha, to: 0.7 },
+          duration: 260,
+          yoyo: true,
+        });
+        this.time.delayedCall(1800, () => this.runFacetSequence(facets, idx + 1));
+      } else {
+        // No counter — survive the facet by typing its defense word in time.
+        this.runFacetChallenge(facet, () => this.runFacetSequence(facets, idx + 1));
+      }
+    });
+  }
+
+  private runFacetChallenge(facet: Facet, onDone: () => void): void {
+    if (this.runOver) return;
+    // Dynamic prompt (the word varies) — same shape as the Phase-2c spell cue.
+    this.setNarrator(`${facet.name} crashes down — type:  ${facet.defenseWord}`);
+
+    let resolved = false;
+    const finish = (): void => {
+      if (this.runOver) return;
+      this.time.delayedCall(1200, () => {
+        if (!this.runOver) onDone();
+      });
+    };
+
+    const timer = this.time.delayedCall(FACET_CHALLENGE_MS, () => {
+      if (resolved) return;
+      resolved = true;
+      this.clearActiveTargets();
+      // It lands — the realms' hit cue + a candle gutters.
+      this.cameras.main.shake(220, 0.006);
+      playDamageThud();
+      flashDamageVignette(this);
+      this.narration.say("finale_facet_lands");
+      this.loseCandle();
+      finish(); // no-op if loseCandle emptied the pool (runOver guards it)
+    });
+
+    const target = new TextWordTarget({
+      scene: this,
+      word: facet.defenseWord,
+      x: this.scale.width / 2,
+      y: 500,
+      fontSize: 46,
+      onComplete: () => {
+        if (resolved) return;
+        resolved = true;
+        timer.remove();
+        playChime();
+        this.clearActiveTargets();
+        this.narration.say("finale_facet_held");
+        finish();
+      },
+    });
+    this.typingInput.register(target);
+    this.activeTargets.push(target);
   }
 
   private startPhase2a(): void {

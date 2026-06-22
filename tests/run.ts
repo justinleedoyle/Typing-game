@@ -12,6 +12,7 @@ console.log("Running logic test suites…\n");
 await import("./runaLines.test.ts");
 await import("./sayResolution.test.ts");
 await import("./pureMath.test.ts");
+await import("./relicEffects.test.ts");
 await import("./saveState.test.ts");
 
 console.log("\nAll logic test suites passed.");

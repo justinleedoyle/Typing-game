@@ -2,40 +2,19 @@
 // by which relics are in the satchel — "force" relics push the duel louder,
 // "kindness" relics push it quieter, and a few specific pairings unlock
 // their own phrases.
+//
+// The alignment/companion lists themselves now live in relicEffects.ts (the
+// single source of truth shared with Tier 4). They're re-exported here so the
+// finale's existing imports keep working and selectFinalPhrase reads them. The
+// canon-match test asserts the derived sets still equal the §5.5.11 lists.
 
-export const FORCE_RELICS: ReadonlySet<string> = new Set([
-  "bells-tongue",
-  "lock-bar",
-  "sabotage-wrench",
-  "pelt-of-the-old-one",
-  "ash-vial",
-  "beacon-spark",
-  "golem-heart",
-  "bone-flute",
-  "tether-cord",
-]);
+export {
+  FORCE_RELICS,
+  KINDNESS_RELICS,
+  COMPANION_IDS,
+} from "./relicEffects";
 
-export const KINDNESS_RELICS: ReadonlySet<string> = new Set([
-  "hunters-horn",
-  "firefly-lantern",
-  "cairn-token",
-  "quiet-chant",
-  "trident-token",
-  "bellows-hammer",
-  "master-key",
-  "ettas-ledger",
-  "wind-phrase",
-  "shrine-token",
-  "ghost-kings-promise",
-]);
-
-export const COMPANION_IDS: readonly string[] = [
-  "snow-fox-cub",
-  "glass-fish",
-  "brass-songbird",
-  "lantern-moth",
-  "wisp-cat",
-];
+import { FORCE_RELICS, KINDNESS_RELICS, COMPANION_IDS } from "./relicEffects";
 
 /**
  * Pick the final phrase Wren types in Phase 3 of the Great Battle. Implements

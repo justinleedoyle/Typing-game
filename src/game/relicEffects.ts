@@ -102,6 +102,13 @@ const VISION_HAZARD_REALMS = [
   "haunted-wood",
 ] as const;
 
+// Realms with a real Soul-spell CASTING economy (spendSoul/canCast), the only
+// place `soul-banked` / `soul-thrift` mean anything — elsewhere Soul just fills a
+// cosmetic meter, so announcing a soul effect there would be a lie. Winter has
+// the richest cast economy too, but it's realm 1 (no relics yet) and isn't wired
+// this initiative (appliesIn ⟺ wired). Bell / Sky / Wood have NO casts.
+const SPELL_ECONOMY_REALMS = ["clockwork-forge"] as const;
+
 export const RELIC_EFFECTS: Record<string, RelicEffect> = {
   // ─── Winter Mountain ───────────────────────────────────────────────────────
   "hunters-horn": {
@@ -173,6 +180,7 @@ export const RELIC_EFFECTS: Record<string, RelicEffect> = {
     combat: {
       kind: "passive",
       effect: "soul-banked",
+      appliesIn: SPELL_ECONOMY_REALMS,
       announce: "king aurland's tide gives you an early spell.",
     },
   },
@@ -195,6 +203,7 @@ export const RELIC_EFFECTS: Record<string, RelicEffect> = {
     combat: {
       kind: "passive",
       effect: "soul-thrift",
+      appliesIn: SPELL_ECONOMY_REALMS,
       announce: "forn's hammer makes your spells cost less.",
     },
   },

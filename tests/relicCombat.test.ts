@@ -198,16 +198,22 @@ await suite("resolveCombatLoadout: warm-light only in vision-hazard realms", () 
 
 // ─── Passive soul effects ─────────────────────────────────────────────────────
 
-await suite("resolveCombatLoadout: soul-banked / soul-thrift are binary", () => {
+await suite("resolveCombatLoadout: soul effects are binary and Forge-gated", () => {
   const banked = resolveCombatLoadout(["king-aurland"], "clockwork-forge");
   assertEqual(banked.soulBankedFraction, SOUL_BANKED_FRACTION, "king-aurland banks soul");
   assertEqual(banked.soulThriftMult, 1, "but no thrift");
   const thrift = resolveCombatLoadout(["bellows-hammer"], "clockwork-forge");
   assertEqual(thrift.soulThriftMult, SOUL_THRIFT_MULT, "bellows-hammer cheapens casts");
   assertEqual(thrift.soulBankedFraction, 0, "but no banking");
-  const both = resolveCombatLoadout(["king-aurland", "bellows-hammer"], "sky-island");
+  const both = resolveCombatLoadout(["king-aurland", "bellows-hammer"], "clockwork-forge");
   assertEqual(both.soulBankedFraction, SOUL_BANKED_FRACTION, "both: banked");
   assertEqual(both.soulThriftMult, SOUL_THRIFT_MULT, "both: thrift");
+  // Soul effects mean nothing in a realm with no casting economy (Bell/Sky/Wood)
+  // — they must be INERT and SILENT there, never announcing a no-op to the kid.
+  const inBell = resolveCombatLoadout(["king-aurland", "bellows-hammer"], "sunken-bell");
+  assertEqual(inBell.soulBankedFraction, 0, "soul-banked inert outside the spell realm");
+  assertEqual(inBell.soulThriftMult, 1, "soul-thrift inert outside the spell realm");
+  assertEqual(inBell.announcements.length, 0, "and silent there");
 });
 
 // ─── Bounding rule 2: the shared grace pool ───────────────────────────────────
@@ -312,7 +318,9 @@ await suite("resolveCombatLoadout: a maxed Wood satchel is helped, not invincibl
   assert(l.advanceMult > 1 && l.advanceMult <= 1.15 + 1e-9, "advance helped but ≤ +15%");
   assert(l.warmLight > 0 && l.warmLight < 0.33, "vision helped but hazard still bites");
   assertEqual(l.gracePool, GRACE_POOL_CAP, "saves capped at the pool, not stacked");
-  assert(l.soulBankedFraction > 0 && l.soulThriftMult < 1, "soul economy eased");
+  // Wood has no casting economy → the soul relics are inert here (appliesIn gating).
+  assertEqual(l.soulBankedFraction, 0, "soul-banked inert in Wood");
+  assertEqual(l.soulThriftMult, 1, "soul-thrift inert in Wood");
   // Duplicating the whole satchel must not change a single bounded value.
   const doubled = resolveCombatLoadout([...maxed, ...maxed], "haunted-wood");
   assertEqual(doubled.advanceMult, l.advanceMult, "dup-proof: advance");

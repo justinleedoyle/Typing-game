@@ -14,7 +14,7 @@ This file is the tier-level overview. For the full design see [`RESEARCH_AND_PLA
 | **Tier 0** | Combat foundation | ✅ **Complete & live** |
 | **Tier 1** | Realm signature mechanics made demanding | ✅ **Realms done (5/5)** — optional `Ctrl` follow-up remains |
 | **Tier 2** | Shared enemy behaviors | ◻ Planned |
-| **Tier 3** | Strategic capstone (the finale) | ◻ Planned |
+| **Tier 3** | Strategic capstone (the finale) | ✅ **Complete** (#96–#100) |
 | **Tier 4** | Relics live in combat | ◻ Planned |
 
 ## The four design dimensions
@@ -56,13 +56,17 @@ Each realm's signature mechanic, once cosmetic vs its premise, now genuinely dem
 Promote `TimedWordTarget` / `MovingWordTarget` / `SplittingWordTarget` / `MultiWordTarget`
 into reusable target types shared across realms.
 
-## Tier 3 — strategic capstone (the finale) ◻ PLANNED
+## Tier 3 — strategic capstone (the finale) ✅ COMPLETE
 
-Turn the Great Battle from an inverted capstone into a real climax:
+The Great Battle, once an inverted capstone, is now the real climax:
 
-- A real **fail state** (canon "we begin again") — today candles never decrement.
-- Satchel as a **counter-loadout** vs telegraphed Phase-2 facets — today relics are strictly additive (more relics = easier).
-- Force-vs-kindness as a real **mechanical fork** — today it's cosmetic flash-vs-shrink; some relics should *raise* intensity so collecting is a wager.
+- ✅ A real **fail state** — candles are a losable economy (breach/fumble snuff; clean waves relight); zero candles → the canon "we begin again" loss ending → hub (progress kept) — **#97**
+- ✅ Satchel as a **counter-loadout** — the duel opens with one facet per cleared realm (Cold/Toll/Armor/Light/Grief); the right relic neutralizes it, a missing counter forces a timed defense (a candle at risk, never an auto-loss) — **#98**
+- ✅ Force-vs-kindness as a real **mechanical fork** — force≥3 chains a deeper mixed-case counter (past the Forge boss) + cracks; kindness≥3 shrinks the Lord but a duel miss costs a candle (cleaner play) — **#99**
+- ✅ **Phase-2 input depth** — the climax is a mixed-case case-sensitive counter (`unMAKE`), Forge-boss parity; force adds a second. (Mixed-case/Shift, not Alt — Alt+letter is dead-keyed on macOS) — **#99**
+- ✅ The **"Again." period click-in** — the accumulating word completes when the period SNAPS in at the win seal (a discrete beat + a period-snap sting), §5.5.10 — **#100**
+
+Throughout, the empty-satchel **"Walked Alone"** path stays a first-class, winnable outcome (asserted in tests at each step).
 
 **Phase-0 bridge — ✅ DONE.** `src/game/relicEffects.ts` is the single source of
 truth for relic semantics (alignment + companion-ness), consumed by BOTH the
@@ -87,4 +91,4 @@ Give fork relics **in-combat effects** so the CYOA layer doubles as a build choi
 - **The real-time game can't be automated headlessly** (a backgrounded tab freezes Phaser's rAF loop),
   so PRs are verified via `tsc` + `vite build` + throwaway `npx tsx` logic harnesses against the real code.
 
-_Last updated: 2026-06-22 — Tier 0 complete; Tier 1 realms ALL done (5/5). **Tier 3 started: Phase-0 relic-effects bridge landed** (`relicEffects.ts` — shared descriptor + aggregator; alignment sets now derived from it). Next: finale fail state (reuse the Winter candle economy)._
+_Last updated: 2026-06-22 — Tier 0 + Tier 1 (5/5) + **Tier 3 finale rebuild COMPLETE** (#96 bridge · #97 fail state · #98 counter-loadout · #99 fork + input depth · #100 "Again." seal). Next major: **Tier 4** (relics live in the five realms — consumes `relicEffects.ts`), then the **Tier 2** shared-target refactor. Optional Forge `Ctrl` follow-up still open._

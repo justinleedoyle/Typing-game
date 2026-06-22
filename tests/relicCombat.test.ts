@@ -325,7 +325,9 @@ await suite("resolveCombatLoadout: a maxed Wood satchel is helped, not invincibl
   const l = resolveCombatLoadout(maxed, "haunted-wood");
   assert(l.advanceMult > 1 && l.advanceMult <= 1.15 + 1e-9, "advance helped but ≤ +15%");
   assert(l.warmLight > 0 && l.warmLight < 0.33, "vision helped but hazard still bites");
-  assertEqual(l.gracePool, GRACE_POOL_CAP, "saves capped at the pool, not stacked");
+  // Wood (like the Forge) has no losable economy, so grace is gated out — the
+  // defensive relics helped in Bell/Sky earlier, not here.
+  assertEqual(l.gracePool, 0, "grace inert in Wood (no economy to save)");
   // Wood has no casting economy → the soul relics are inert here (appliesIn gating).
   assertEqual(l.soulBankedFraction, 0, "soul-banked inert in Wood");
   assertEqual(l.soulThriftMult, 1, "soul-thrift inert in Wood");

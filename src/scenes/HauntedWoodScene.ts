@@ -12,6 +12,10 @@ import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, SERIF } from "../game/palette";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
+import {
+  type CombatLoadout,
+  resolveCombatLoadout,
+} from "../game/relicEffects";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import {
@@ -98,6 +102,15 @@ export class HauntedWoodScene extends Phaser.Scene {
   /** True after the Quiet Lord's §5.5.10 intrusion has fired this playthrough. */
   private quietLordIntruded = false;
 
+  // Tier 4 — relics from earlier realms shape this realm's combat. Wood is the
+  // last realm, so this is the richest satchel: warm-light softens the mist's
+  // blind, wind-phrase's mist-clear lifts it entirely, Etta's Ledger's auto-ease
+  // marks the easiest ghost, and quiet-advance slows the approach. (Grace is
+  // gated out — a Wood breach costs no resource.) Resolved once in create();
+  // neutral on a revisit, which has no combat.
+  private combat: CombatLoadout = resolveCombatLoadout([], "haunted-wood");
+  private waveForgivenessReady = false;
+
   private mistTimer: Phaser.Time.TimerEvent | null = null;
   /** Four faint punctuation glyphs at N/S/E/W around Wren — teaches the
    *  direction-punctuation mapping diegetically. Drawn on first ghost
@@ -145,6 +158,14 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.typingInput.setKeystrokeHooks({
       onCorrect: () => bobWrenSprite(this.wrenSprite),
       onMiss: () => {
+        // forgive-wave-miss (Shrine-Token): spare the first miss of a wave its
+        // flinch. Dormant on a forward run (Shrine-Token is earned here, at the
+        // end), wired for consistency + revisit-combat forward-compat.
+        if (this.waveForgivenessReady) {
+          this.waveForgivenessReady = false;
+          this.flashForgiven();
+          return;
+        }
         flashWrenMiss(this.wrenSprite);
         this.cameras.main.shake(80, 0.002);
       },
@@ -155,6 +176,12 @@ export class HauntedWoodScene extends Phaser.Scene {
       getSoul: () => this.typingInput.getStats().getSoul(),
       onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
     });
+
+    // Tier 4 — a revisit is a free-passage replay (no combat) → neutral loadout.
+    this.combat = resolveCombatLoadout(
+      this.revisit ? [] : this.store.get().satchel,
+      "haunted-wood",
+    );
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
@@ -320,6 +347,12 @@ export class HauntedWoodScene extends Phaser.Scene {
   // Encounter 1: 3 ghosts — west, east, north. Introduces 3 of 4 directions
   // gently so the player can learn each punctuation glyph in turn.
   private startCrossroads1(): void {
+    // Tier 4 — announce the relic loadout once before the realm's first combat,
+    // then begin. Empty loadout (incl. revisits) passes straight through.
+    this.announceCombatLoadout(() => this.beginCrossroads1());
+  }
+
+  private beginCrossroads1(): void {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
 
@@ -426,6 +459,9 @@ export class HauntedWoodScene extends Phaser.Scene {
       const word = woodWardWord(base, dir);
       this.spawnGhost(dir, word, i * delayStepMs, slot);
     });
+    // Tier 4 — every ghost wave funnels through here, so re-arm the per-wave
+    // procs (forgive-wave-miss + auto-ease) once per wave at this chokepoint.
+    this.beginCombatWave();
   }
 
   private onCrossroads3Cleared(): void {
@@ -1086,8 +1122,11 @@ export class HauntedWoodScene extends Phaser.Scene {
     const dy = WREN_Y - ghost.container.y;
     const remaining = Math.hypot(dx, dy);
     const totalRange = Math.hypot(WREN_X - ghost.restX, WREN_Y - ghost.restY);
+    // Tier 4 — quiet-advance lengthens the approach, capped.
     const duration =
-      ghost.advanceMs * Math.max(0.3, remaining / Math.max(1, totalRange));
+      ghost.advanceMs *
+      Math.max(0.3, remaining / Math.max(1, totalRange)) *
+      this.combat.advanceMult;
 
     ghost.advanceTween = this.tweens.add({
       targets: ghost.container,
@@ -1189,6 +1228,13 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Mist roll mechanic ───────────────────────────────────────────────────
 
   private triggerMistRoll(): void {
+    // Tier 4 — mist-clear (Wind-Phrase): the mist still rolls (ambiance) but
+    // never blinds. warm-light (Firefly / Beacon / Pelt): the blind is shorter,
+    // capped. Both bounded so the realm's signature mist still reads as a hazard.
+    const mistClears = this.combat.perWaveProcs.includes("mist-clear");
+    const peakAlpha = 0.45 * (1 - this.combat.warmLight);
+    const blindMs = 800 * (1 - this.combat.warmLight);
+
     const mist = this.add.graphics();
     mist.fillStyle(0xe8eee8, 0);
     mist.fillRect(0, 0, this.scale.width, this.scale.height);
@@ -1196,15 +1242,16 @@ export class HauntedWoodScene extends Phaser.Scene {
 
     this.tweens.add({
       targets: mist,
-      alpha: 0.45,
+      alpha: peakAlpha,
       duration: 600,
       ease: "Sine.easeIn",
       onComplete: () => {
         // Mist peak: obscure ghost words for the hold duration. Player must
-        // clear words before the roll, or hold their nerve and type blind.
-        this.setActiveGhostWordsHidden(true);
-        this.time.delayedCall(800, () => {
-          this.setActiveGhostWordsHidden(false);
+        // clear words before the roll, or hold their nerve and type blind —
+        // unless the wind-phrase lifts the mist (words stay readable).
+        if (!mistClears) this.setActiveGhostWordsHidden(true);
+        this.time.delayedCall(blindMs, () => {
+          if (!mistClears) this.setActiveGhostWordsHidden(false);
           this.tweens.add({
             targets: mist,
             alpha: 0,
@@ -1276,6 +1323,84 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private setNarrator(text: string): void {
     this.narration.sayRaw(text);
+  }
+
+  // ─── Tier 4 relic helpers ───────────────────────────────────────────────────
+
+  /** Surface the active relic effects once, before the realm's first combat, so
+   *  the player sees their earlier-realm choices paying off. Empty loadout
+   *  (incl. revisits) passes straight through. */
+  private announceCombatLoadout(onDone: () => void): void {
+    const lines = this.combat.announcements;
+    if (lines.length === 0) {
+      onDone();
+      return;
+    }
+    let i = 0;
+    const showNext = (): void => {
+      if (i >= lines.length) {
+        this.time.delayedCall(700, onDone);
+        return;
+      }
+      this.setNarrator(lines[i]!);
+      i += 1;
+      this.time.delayedCall(2200, showNext);
+    };
+    showNext();
+  }
+
+  /** Re-arm the per-wave relic procs at each ghost wave's start. */
+  private beginCombatWave(): void {
+    this.waveForgivenessReady =
+      this.combat.perWaveProcs.includes("forgive-wave-miss");
+    this.applyAutoEase();
+  }
+
+  /** auto-ease (Etta's Ledger — owned by the time Wren reaches the Wood): mark
+   *  the easiest (shortest-word) ghost of the wave with a soft glow. A small
+   *  edge against the all-sides pressure, not a free kill. */
+  private applyAutoEase(): void {
+    if (!this.combat.perWaveProcs.includes("auto-ease")) return;
+    if (this.ghosts.length === 0) return;
+    let easiest = this.ghosts[0]!;
+    for (const g of this.ghosts) {
+      if (g.word.length < easiest.word.length) easiest = g;
+    }
+    const glow = this.add.graphics();
+    glow.fillStyle(0xc9a14a, 0.22);
+    glow.fillEllipse(0, 0, 90, 110);
+    easiest.container.addAt(glow, 0);
+    this.tweens.add({
+      targets: glow,
+      alpha: { from: 0.22, to: 0.5 },
+      duration: 700,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  /** Gentle "forgiven" cue when forgive-wave-miss spares a slip — distinct from
+   *  the harsh miss flinch. */
+  private flashForgiven(): void {
+    const txt = this.add
+      .text(WREN_X, WREN_Y - 120, "forgiven", {
+        fontFamily: SERIF,
+        fontSize: "24px",
+        fontStyle: "italic",
+        color: PALETTE.brass,
+      })
+      .setOrigin(0.5)
+      .setDepth(60)
+      .setAlpha(0.9);
+    this.tweens.add({
+      targets: txt,
+      alpha: 0,
+      y: txt.y - 36,
+      duration: 900,
+      ease: "Sine.easeOut",
+      onComplete: () => txt.destroy(),
+    });
   }
 
   private clearActiveTargets(): void {

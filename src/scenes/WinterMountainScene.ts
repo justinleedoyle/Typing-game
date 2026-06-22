@@ -22,6 +22,7 @@ import {
   CANDLE_RESET_FLOOR,
   circlerY,
 } from "../game/winterMechanics";
+import { MovingWordEnemy } from "../game/movingWordEnemy";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
 import {
@@ -43,20 +44,9 @@ interface WinterSceneData {
   revisit?: boolean;
 }
 
-interface Wolf {
-  container: Phaser.GameObjects.Container;
-  target: TextWordTarget | null;
-  spawnX: number;
-  restY: number;
-  word: string;
-  defeated: boolean;
-  advanceTween: Phaser.Tweens.Tween | null;
-  advanceMs: number;
-  isBoss: boolean;
-  bodySprite?: Phaser.GameObjects.Image;
-  /** Circler (flanking) wolf — weaves vertically as it closes. */
-  circles?: boolean;
-}
+// Wolves (and the Pack-Leader boss) are now the shared MovingWordEnemy. The boss
+// is tracked separately (this.boss) so the pack-vs-boss gate and its body-sprite
+// ward flash stay legible.
 
 // ─── Act 1 constants ──────────────────────────────────────────────────────────
 
@@ -189,7 +179,11 @@ export class WinterMountainScene extends Phaser.Scene {
   private typingInput!: TypingInputController;
   private director!: WaveDirector;
   private narration!: NarrationManager;
-  private wolves: Wolf[] = [];
+  private wolves: MovingWordEnemy[] = [];
+  /** The Pack-Leader, also a wolf in `this.wolves`; held separately for the
+   *  pack-cleared ward gate and the body-sprite tint on release. */
+  private boss: MovingWordEnemy | null = null;
+  private bossBodySprite: Phaser.GameObjects.Image | null = null;
   private activeTargets: TextWordTarget[] = [];
 
   private wrenContainer!: Phaser.GameObjects.Container;
@@ -244,6 +238,8 @@ export class WinterMountainScene extends Phaser.Scene {
     this.heldurDialogText = null;
     this.huntressSprite = null;
     this.wolves = [];
+    this.boss = null;
+    this.bossBodySprite = null;
     this.activeTargets = [];
     this.candles = WAVE_CANDLES;
     this.castableThunder = 0;
@@ -623,6 +619,8 @@ export class WinterMountainScene extends Phaser.Scene {
     this.waveActive = true;
     this.tookCandleHitThisWave = false;
     this.wolves = [];
+    this.boss = null;
+    this.bossBodySprite = null;
     // Thunder no longer refills per wave — it carries over as banked Soul, so
     // a fast clean wave can stockpile casts and a sloppy one starts dry.
     this.refreshThunderPips();
@@ -704,31 +702,49 @@ export class WinterMountainScene extends Phaser.Scene {
     this.drawWolfInto(container, facingLeft);
     container.setAlpha(0);
 
-    const wolf: Wolf = {
+    const wolf = new MovingWordEnemy({
+      scene: this,
+      typingInput: this.typingInput,
       container,
-      target: null,
-      spawnX: targetX,
-      restY: targetY,
       word,
-      defeated: false,
-      advanceTween: null,
+      restX: targetX,
+      restY: targetY,
+      wrenX: this.scale.width / 2,
       advanceMs,
-      isBoss: false,
-      circles,
-    };
-
-    this.tweens.add({
-      targets: container,
-      x: targetX,
-      alpha: 1,
-      duration: 700,
-      delay,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (!this.waveActive || wolf.defeated) return;
-        this.attachWolfTarget(wolf);
-        this.idleBob(container);
-        this.startWolfAdvance(wolf);
+      entranceMs: 700,
+      entranceDelayMs: delay,
+      knockbackMs: 700,
+      knockbackPauseMs: WOLF_KNOCKBACK_PAUSE_MS,
+      dangerRampStart: DANGER_RAMP_START,
+      anchorOffsetY: -90,
+      idleBobDy: 6,
+      idleBobMs: 900,
+      defeatRiseY: -60,
+      defeatMs: 500,
+      fontSize: 32,
+      // Frost burst on completion — wolves go "down in snow," not "down in brass."
+      burstColor: PALETTE_HEX.frost,
+      // The circler (flanking) wolf weaves vertically as it closes.
+      verticalOffset: circles ? circlerY : undefined,
+      isWaveActive: () => this.waveActive,
+      onTargetAttached: (t) => this.activeTargets.push(t),
+      onTargetDetached: (t) => {
+        const idx = this.activeTargets.indexOf(t);
+        if (idx >= 0) this.activeTargets.splice(idx, 1);
+      },
+      onClaim: () => this.leanWrenToward(container.x),
+      onRelease: () => this.returnWrenToRest(),
+      onDefeated: (self) => {
+        playChime();
+        this.afterWolfDefeated(self);
+      },
+      onReachWren: () => this.onWolfHit(),
+      // Shift = thunderclap (knock the pack back), Alt = frost-shatter (kill the
+      // nearest too). Any claim first returns Wren to rest.
+      onComplete: (mods, self) => {
+        this.returnWrenToRest();
+        if (mods.alt) this.frostShatter(self);
+        else if (mods.spell) this.castThunderclap(self);
       },
     });
 
@@ -738,52 +754,71 @@ export class WinterMountainScene extends Phaser.Scene {
   private spawnBoss(delayMs: number = 600): void {
     const startX = -200;
     const container = this.add.container(startX, BOSS_SPAWN_Y);
-    const bodySprite = this.drawBossInto(container);
+    this.bossBodySprite = this.drawBossInto(container);
     container.setAlpha(0);
 
-    const boss: Wolf = {
+    const boss = new MovingWordEnemy({
+      scene: this,
+      typingInput: this.typingInput,
       container,
-      target: null,
-      spawnX: BOSS_SPAWN_X,
-      restY: BOSS_SPAWN_Y,
       word: BOSS_PHRASE,
-      defeated: false,
-      advanceTween: null,
-      // The alpha closes faster too for a fast typist — its titled phrase is
-      // long, so a shorter advance is a fair pressure, not a spike.
+      restX: BOSS_SPAWN_X,
+      restY: BOSS_SPAWN_Y,
+      wrenX: this.scale.width / 2,
+      // The alpha closes faster for a fast typist — its titled phrase is long, so
+      // a shorter advance is fair pressure, not a spike.
       advanceMs: this.director.advanceMs(BOSS_ADVANCE_MS),
-      isBoss: true,
-      bodySprite,
-    };
-
-    this.tweens.add({
-      targets: container,
-      x: BOSS_SPAWN_X,
-      alpha: 1,
-      duration: 1100,
-      delay: delayMs,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (!this.waveActive || boss.defeated) return;
-        this.idleBob(container);
-        this.startWolfAdvance(boss);
+      entranceMs: 1100,
+      entranceDelayMs: delayMs,
+      knockbackMs: 700,
+      knockbackPauseMs: WOLF_KNOCKBACK_PAUSE_MS,
+      dangerRampStart: DANGER_RAMP_START,
+      anchorOffsetY: -90,
+      idleBobDy: 6,
+      idleBobMs: 900,
+      defeatRiseY: -60,
+      defeatMs: 500,
+      fontSize: 32,
+      burstColor: PALETTE_HEX.frost,
+      // Warded: the boss advances mute until the pack falls; releaseBossWard()
+      // attaches its true name then.
+      manualAttach: true,
+      // The Old One's true name is SPOKEN with its capitals — caseSensitive, so the
+      // caps demand Shift (required typing, free). No spell routes — you name it,
+      // you can't thunderclap or shatter it away.
+      caseSensitive: true,
+      isWaveActive: () => this.waveActive,
+      onTargetAttached: (t) => this.activeTargets.push(t),
+      onTargetDetached: (t) => {
+        const idx = this.activeTargets.indexOf(t);
+        if (idx >= 0) this.activeTargets.splice(idx, 1);
       },
+      onClaim: () => this.leanWrenToward(container.x),
+      onRelease: () => this.returnWrenToRest(),
+      onDefeated: (self) => {
+        playChime();
+        this.afterWolfDefeated(self);
+      },
+      onReachWren: () => this.onWolfHit(),
+      onComplete: () => this.returnWrenToRest(),
     });
 
+    this.boss = boss;
     this.wolves.push(boss);
   }
 
-  private releaseBossWard(boss: Wolf): void {
-    if (boss.target || boss.defeated) return;
+  private releaseBossWard(): void {
+    const boss = this.boss;
+    if (!boss || boss.isDefeated() || boss.target) return;
     // Snow-drift sensory beat: 2s of falling snow obscures words briefly
     this.triggerSnowDrift(() => {
       this.narration.say("winter_boss_rise");
-      if (boss.bodySprite) {
-        boss.bodySprite.setTintFill(0xffd277);
-        this.time.delayedCall(140, () => boss.bodySprite?.clearTint());
+      if (this.bossBodySprite) {
+        this.bossBodySprite.setTintFill(0xffd277);
+        this.time.delayedCall(140, () => this.bossBodySprite?.clearTint());
       }
       this.cameras.main.shake(180, 0.003);
-      this.attachWolfTarget(boss);
+      boss.attachWord();
     });
   }
 
@@ -815,46 +850,6 @@ export class WinterMountainScene extends Phaser.Scene {
     });
   }
 
-  private attachWolfTarget(wolf: Wolf): void {
-    const target = new TextWordTarget({
-      scene: this,
-      word: wolf.word,
-      x: wolf.container.x,
-      y: wolf.restY - 90,
-      fontSize: 32,
-      // Frost burst on completion — wolves go "down in snow," not "down in
-      // brass." Reads as a hit, not a UI dismissal.
-      burstColor: PALETTE_HEX.frost,
-      onClaim: () => this.leanWrenToward(wolf.container.x),
-      onRelease: () => this.returnWrenToRest(),
-      onComplete: () => {
-        this.returnWrenToRest();
-        this.defeatWolf(wolf);
-      },
-      // The boss's true name is caseSensitive (its capitals must be Shifted in)
-      // and carries NO spell routes — you can't thunderclap or shatter it away,
-      // you name it. Regular wolves get both Soul spells: Shift = thunderclap
-      // (knock the pack back), Alt = frost-shatter (kill the nearest too).
-      ...(wolf.isBoss
-        ? { caseSensitive: true }
-        : {
-            onSpellComplete: () => {
-              this.returnWrenToRest();
-              this.defeatWolf(wolf);
-              this.castThunderclap(wolf);
-            },
-            onAltSpellComplete: () => {
-              this.returnWrenToRest();
-              this.defeatWolf(wolf);
-              this.frostShatterEffect(wolf);
-            },
-          }),
-    });
-    wolf.target = target;
-    this.typingInput.register(target);
-    this.activeTargets.push(target);
-  }
-
   /** While the player is typing this wolf's name, Wren leans toward it —
    *  enough lateral travel to read as action, not so much that he leaves
    *  centre stage. */
@@ -882,82 +877,22 @@ export class WinterMountainScene extends Phaser.Scene {
     });
   }
 
-  private startWolfAdvance(wolf: Wolf): void {
-    // Wolves advance toward Wren's rest position, not his current position —
-    // otherwise typing-driven lean would pull them off-course.
-    const restX = this.scale.width / 2;
-    const remaining = Math.abs(wolf.container.x - restX);
-    const totalRange = Math.abs(wolf.spawnX - restX);
-    const duration = wolf.advanceMs * Math.max(0.3, remaining / totalRange);
-
-    // A circler drives its own y from the advance progress — clear any idle-bob
-    // y-tween so they don't fight over container.y.
-    if (wolf.circles) this.tweens.killTweensOf(wolf.container);
-
-    wolf.advanceTween = this.tweens.add({
-      targets: wolf.container,
-      x: restX,
-      duration,
-      ease: "Linear",
-      onUpdate: (tween) => {
-        if (!wolf.target) return;
-        wolf.target.setAnchorX(wolf.container.x);
-        // Circler: weave vertically as it closes, and keep the word pinned to
-        // the weaving body.
-        if (wolf.circles) {
-          wolf.container.y = circlerY(wolf.restY, tween.progress);
-          wolf.target.setAnchorY(wolf.container.y - 90);
-        }
-        // Danger pulse — as the wolf crosses DANGER_RAMP_START of its
-        // advance, the floating word shifts cream → ember. Communicates
-        // "this one is about to land on you" without needing UI chrome.
-        const dangerLevel = Math.max(
-          0,
-          (tween.progress - DANGER_RAMP_START) / (1 - DANGER_RAMP_START),
-        );
-        wolf.target.setDanger(dangerLevel);
-      },
-      onComplete: () => {
-        wolf.advanceTween = null;
-        if (!wolf.defeated && this.waveActive) {
-          this.wolfReachesWren(wolf);
-        }
-      },
-    });
+  /** The hit feel when a wolf reaches Wren — shared by pack and boss. Snuffing a
+   *  candle may end the wave (a wipe at zero), which the enemy's reachWren detects
+   *  and halts on, so there's nothing to knock back. */
+  private onWolfHit(): void {
+    this.cameras.main.shake(220, 0.005);
+    playDamageThud();
+    flashDamageVignette(this);
+    this.snuffCandle(true);
   }
 
-  private idleBob(c: Phaser.GameObjects.Container): void {
-    this.tweens.add({
-      targets: c,
-      y: { from: c.y, to: c.y - 6 },
-      duration: 900,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.easeInOut",
-    });
-  }
-
-  private defeatWolf(wolf: Wolf): void {
-    if (wolf.defeated) return;
-    playChime();
-    wolf.defeated = true;
-    if (wolf.target) {
-      this.typingInput.unregister(wolf.target);
-      wolf.target = null;
-    }
-    wolf.advanceTween?.stop();
-    wolf.advanceTween = null;
-    this.tweens.killTweensOf(wolf.container);
-    this.tweens.add({
-      targets: wolf.container,
-      alpha: 0,
-      y: wolf.container.y - 60,
-      duration: 500,
-      ease: "Sine.easeOut",
-      onComplete: () => wolf.container.destroy(),
-    });
-
-    if (this.wolves.every((w) => w.defeated)) {
+  /** Wave bookkeeping after a wolf is felled (player completion OR a frost-shatter
+   *  chain). The enemy handled the body teardown + chime; here we relight a candle
+   *  on a clean clear, fire the wave/boss transition, or release the boss ward once
+   *  the pack is down. NOT called for a candle-loss wipe (that uses dismiss()). */
+  private afterWolfDefeated(self: MovingWordEnemy): void {
+    if (this.wolves.every((w) => w.isDefeated())) {
       this.waveActive = false;
       // Clean-wave economy: clear a wave without losing a candle and you relight
       // one (capped). Candles are a persistent pool now — skill refills it.
@@ -966,7 +901,7 @@ export class WinterMountainScene extends Phaser.Scene {
         this.redrawCandles();
         this.flashCandleRelight();
       }
-      if (wolf.isBoss) {
+      if (self === this.boss) {
         this.narration.say("winter_boss_defeated");
         this.time.delayedCall(2200, () => this.onBossDefeated());
       } else {
@@ -975,13 +910,13 @@ export class WinterMountainScene extends Phaser.Scene {
       return;
     }
 
-    // Release boss ward when all regular wolves are down
-    const boss = this.wolves.find((w) => w.isBoss);
-    if (boss && !boss.defeated && !boss.target) {
+    // Release boss ward when all regular wolves are down.
+    const boss = this.boss;
+    if (boss && !boss.isDefeated() && !boss.target) {
       const regularsAllDown = this.wolves
-        .filter((w) => !w.isBoss)
-        .every((w) => w.defeated);
-      if (regularsAllDown) this.releaseBossWard(boss);
+        .filter((w) => w !== this.boss)
+        .every((w) => w.isDefeated());
+      if (regularsAllDown) this.releaseBossWard();
     }
   }
 
@@ -1153,39 +1088,6 @@ export class WinterMountainScene extends Phaser.Scene {
 
   // ─── Stakes: wolf reaches Wren ───────────────────────────────────────────
 
-  private wolfReachesWren(wolf: Wolf): void {
-    this.cameras.main.shake(220, 0.005);
-    playDamageThud();
-    flashDamageVignette(this);
-    this.snuffCandle(true);
-
-    if (!this.waveActive) return;
-
-    if (wolf.target) {
-      this.typingInput.unregister(wolf.target);
-      const idx = this.activeTargets.indexOf(wolf.target);
-      if (idx >= 0) this.activeTargets.splice(idx, 1);
-      wolf.target.destroy();
-      wolf.target = null;
-    }
-    this.tweens.killTweensOf(wolf.container);
-    this.tweens.add({
-      targets: wolf.container,
-      x: wolf.spawnX,
-      duration: 700,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (wolf.defeated || !this.waveActive) return;
-        this.time.delayedCall(WOLF_KNOCKBACK_PAUSE_MS, () => {
-          if (wolf.defeated || !this.waveActive) return;
-          this.idleBob(wolf.container);
-          this.attachWolfTarget(wolf);
-          this.startWolfAdvance(wolf);
-        });
-      },
-    });
-  }
-
   /**
    * @param combat - true means a wolf knocked it out (wave-reset on 0);
    *                 false means cold-decay in Act 1 (no wave reset).
@@ -1205,27 +1107,13 @@ export class WinterMountainScene extends Phaser.Scene {
     this.waveActive = false;
     this.narration.say("winter_wave_reset");
 
-    for (const w of this.wolves) {
-      if (w.target) {
-        this.typingInput.unregister(w.target);
-        w.target.destroy();
-        w.target = null;
-      }
-      w.advanceTween?.stop();
-      w.advanceTween = null;
-      this.tweens.killTweensOf(w.container);
-      this.tweens.add({
-        targets: w.container,
-        alpha: 0,
-        duration: 350,
-        onComplete: () => w.container.destroy(),
-      });
-      w.defeated = true;
-    }
+    for (const w of this.wolves) w.dismiss();
 
     this.cameras.main.flash(300, 20, 18, 30);
     this.time.delayedCall(1600, () => {
       this.wolves = [];
+      this.boss = null;
+      this.bossBodySprite = null;
       this.activeTargets = [];
       // Non-refilling economy: a wipe relights only to the floor (1), not a
       // full tank — you retry the wave on the brink. Clean play earns the rest
@@ -1250,49 +1138,35 @@ export class WinterMountainScene extends Phaser.Scene {
 
   // ─── Thunderclap (Shift spell) ────────────────────────────────────────────
 
-  private castThunderclap(source: Wolf): void {
+  private castThunderclap(source: MovingWordEnemy): void {
     this.typingInput.getStats().spendSoul(SPELL_COST);
     this.refreshThunderPips();
     this.cameras.main.flash(220, 240, 230, 200);
     playChime();
 
+    // Shove the rest of the pack back to their rest points and pause before they
+    // re-advance — breathing room, words intact (no kill, no candle cost).
     for (const w of this.wolves) {
-      if (w.defeated || w === source) continue;
-      w.advanceTween?.stop();
-      w.advanceTween = null;
-      this.tweens.killTweensOf(w.container);
-      this.tweens.add({
-        targets: w.container,
-        x: w.spawnX,
-        duration: 450,
-        ease: "Sine.easeOut",
-        onComplete: () => {
-          if (w.target) w.target.setAnchorX(w.container.x);
-          this.time.delayedCall(2500, () => {
-            if (w.defeated || !this.waveActive) return;
-            this.idleBob(w.container);
-            this.startWolfAdvance(w);
-          });
-        },
-      });
+      if (w.isDefeated() || w === source) continue;
+      w.knockBack(450, 2500);
     }
   }
 
   /** Alt spell — frost-shatter. The wolf whose name was typed with Alt held is
-   *  defeated, and the ice cracks to the nearest live pack wolf, taking it too
-   *  (a 2-for-1, distinct from the thunderclap's knock-back). Costs Soul; the
-   *  warded boss is never a target (no live target until the pack falls). */
-  private frostShatterEffect(source: Wolf): void {
+   *  already defeated by the enemy; the ice cracks to the nearest live pack wolf,
+   *  taking it too (a 2-for-1, distinct from the thunderclap's knock-back). Costs
+   *  Soul; the warded boss is never a target (no live target until the pack falls). */
+  private frostShatter(source: MovingWordEnemy): void {
     this.typingInput.getStats().spendSoul(SPELL_COST);
     this.refreshThunderPips();
     this.cameras.main.flash(220, 150, 200, 240); // icy blue, vs thunderclap white
     playChime();
 
     const others = this.wolves.filter(
-      (w) => !w.defeated && w !== source && w.target,
+      (w) => !w.isDefeated() && w !== source && w.target,
     );
     if (others.length === 0) return;
-    let nearest = others[0];
+    let nearest = others[0]!;
     let best = Infinity;
     for (const w of others) {
       const d = Math.abs(w.container.x - source.container.x);
@@ -1301,7 +1175,7 @@ export class WinterMountainScene extends Phaser.Scene {
         nearest = w;
       }
     }
-    if (nearest) this.defeatWolf(nearest);
+    nearest.defeat();
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

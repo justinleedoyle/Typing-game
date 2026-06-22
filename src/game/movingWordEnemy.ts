@@ -56,8 +56,14 @@ export interface MovingWordEnemyConfig {
   // ── feel constants (defaults = the shared values; override per realm) ──────
   /** Entrance sweep duration. Default 800 (Forge uses 700). */
   entranceMs?: number;
+  /** Delay before the entrance sweep starts — staggers a wave's arrivals. Default 0. */
+  entranceDelayMs?: number;
   /** Body alpha at rest. Default 1 (the Bell/Wood ghosts rest semi-transparent). */
   restAlpha?: number;
+  /** When true the entrance does NOT attach a word — the body advances mute until
+   *  the realm calls attachWord() (the Winter boss's ward, released when the pack
+   *  falls). A knock-back still re-attaches, matching the inline behaviour. */
+  manualAttach?: boolean;
   /** Knock-back retreat duration. Default 600 (Wood uses 700). */
   knockbackMs?: number;
   /** Pause at the rest point after a knock-back before re-advancing. Default
@@ -96,6 +102,9 @@ export interface MovingWordEnemyConfig {
   /** Fired when the word is claimed (Shift/Alt captured). Realms use it for a
    *  character reaction (Wren leaning in). */
   onClaim?: (mods: ClaimMods) => void;
+  /** Fired when a mid-claim word is released without completing (backspaced out).
+   *  Realms use it to undo an onClaim reaction (Wren returning to rest). */
+  onRelease?: () => void;
   /** Fired the moment this enemy is defeated (player completion OR a programmatic
    *  `defeat()` such as a chain-spark), before the body fade — for the realm's
    *  defeat audio (the completion chime). */
@@ -125,6 +134,7 @@ export class MovingWordEnemy {
 
   // resolved feel constants
   private readonly entranceMs: number;
+  private readonly entranceDelayMs: number;
   private readonly restAlpha: number;
   private readonly knockbackMs: number;
   private readonly knockbackPauseMs: number;
@@ -140,6 +150,7 @@ export class MovingWordEnemy {
   constructor(config: MovingWordEnemyConfig) {
     this.cfg = config;
     this.entranceMs = config.entranceMs ?? 800;
+    this.entranceDelayMs = config.entranceDelayMs ?? 0;
     this.restAlpha = config.restAlpha ?? 1;
     this.knockbackMs = config.knockbackMs ?? 600;
     this.knockbackPauseMs = config.knockbackPauseMs ?? 1500;
@@ -158,10 +169,12 @@ export class MovingWordEnemy {
       x: config.restX,
       alpha: this.restAlpha,
       duration: this.entranceMs,
+      delay: this.entranceDelayMs,
       ease: "Sine.easeOut",
       onComplete: () => {
-        if (this.defeated) return;
-        this.attachTarget();
+        if (this.defeated || !this.waveActive()) return;
+        // A ward-gated enemy (the Winter boss) advances mute until attachWord().
+        if (!this.cfg.manualAttach) this.attachTarget();
         this.idleBob();
         this.startAdvance();
       },
@@ -190,6 +203,58 @@ export class MovingWordEnemy {
     return this.defeated;
   }
 
+  /** Attach the word to a `manualAttach` enemy (the Winter boss's ward release).
+   *  No-op if already attached or defeated, so it composes with the knock-back
+   *  re-attach that can beat the ward. */
+  attachWord(): void {
+    if (this.defeated || this.wordTarget) return;
+    this.attachTarget();
+  }
+
+  /** Shove the body back to its rest point and re-advance after a pause, KEEPING
+   *  the word — the Winter thunderclap's pack-wide knock-back (breathing room, not
+   *  a kill, no candle cost, unlike reaching Wren). No-op once defeated. */
+  knockBack(retreatMs: number, pauseMs: number): void {
+    if (this.defeated) return;
+    this.advanceTween?.stop();
+    this.advanceTween = null;
+    const c = this.cfg.container;
+    this.cfg.scene.tweens.killTweensOf(c);
+    this.cfg.scene.tweens.add({
+      targets: c,
+      x: this.knockbackToX,
+      duration: retreatMs,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        this.wordTarget?.setAnchorX(c.x);
+        this.cfg.scene.time.delayedCall(pauseMs, () => {
+          if (this.defeated || !this.waveActive()) return;
+          this.idleBob();
+          this.startAdvance();
+        });
+      },
+    });
+  }
+
+  /** Quiet teardown for a wave wipe (the Winter candle loss) — no chime, no
+   *  defeat flourish: drop the word, stop the advance, and fade the body out.
+   *  Distinct from defeat(), which is the "you felled it" kill. */
+  dismiss(fadeMs = 350): void {
+    if (this.defeated) return;
+    this.defeated = true;
+    this.dropTarget(true);
+    this.advanceTween?.stop();
+    this.advanceTween = null;
+    const c = this.cfg.container;
+    this.cfg.scene.tweens.killTweensOf(c);
+    this.cfg.scene.tweens.add({
+      targets: c,
+      alpha: 0,
+      duration: fadeMs,
+      onComplete: () => c.destroy(),
+    });
+  }
+
   // ── lifecycle ───────────────────────────────────────────────────────────────
 
   private attachTarget(): void {
@@ -203,6 +268,7 @@ export class MovingWordEnemy {
       caseSensitive: this.cfg.caseSensitive,
       maskMarks: this.cfg.maskMarks,
       onClaim: (mods) => this.cfg.onClaim?.(mods),
+      onRelease: () => this.cfg.onRelease?.(),
       // All three variants route to one handler so the realm's onComplete always
       // learns whether Shift/Alt were held. Identical to omitting the variants
       // when the realm ignores mods (TextWordTarget falls back to onComplete),
@@ -270,6 +336,11 @@ export class MovingWordEnemy {
     if (!this.cfg.verticalOffset && this.cfg.wrenY !== undefined) {
       props.y = this.cfg.wrenY;
     }
+    // A weave owns the body's y, so clear the idle-bob y-tween first — otherwise
+    // the two fight over container.y (the Winter circler did this inline).
+    if (this.cfg.verticalOffset) {
+      this.cfg.scene.tweens.killTweensOf(container);
+    }
     this.advanceTween = this.cfg.scene.tweens.add(props);
   }
 
@@ -305,10 +376,13 @@ export class MovingWordEnemy {
   }
 
   private reachWren(): void {
-    // Drop the timed-out word (it never completed → destroy it), then let the
-    // realm play its hit feel, then knock the body back and come again.
-    this.dropTarget(true);
+    // The hit feel runs FIRST — it may end the wave (a Winter candle loss tears
+    // every enemy down via dismiss()). If it did, stop here: the scene owns
+    // teardown and there's nothing to knock back. Otherwise drop the timed-out
+    // word, knock the body back, and come again.
     this.cfg.onReachWren?.(this);
+    if (this.defeated || !this.waveActive()) return;
+    this.dropTarget(true);
     const c = this.cfg.container;
     this.cfg.scene.tweens.killTweensOf(c);
     this.cfg.scene.tweens.add({

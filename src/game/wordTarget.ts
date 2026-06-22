@@ -50,8 +50,13 @@ export interface TextWordTargetOptions {
   resetOnMiss?: boolean;
   /** Fired on every mid-claim miss (a wrong character typed). The sealed-scroll
    *  temple uses it to flash the reseal. Independent of the controller's own
-   *  difficulty-based miss handling. */
+   *  difficulty-based miss handling. NOT fired when the miss is pardoned by a
+   *  forgive-reset (see setForgiveResets) — onResetForgiven fires instead. */
   onMiss?: () => void;
+  /** Fired instead of onMiss when a would-be cursor reset is PARDONED by a
+   *  forgive-reset token (Tier 4 `unseal` — the Master Key reopening a resealed
+   *  scroll). The typed progress is kept. */
+  onResetForgiven?: () => void;
   /** Called when this target locks in to the typing controller (first matching
    *  letter typed). Use for character-facing reactions like Wren leaning toward
    *  the target. */
@@ -81,6 +86,31 @@ export function maskSuffix(text: string): string {
   return text.replace(/[^ ]/g, SUFFIX_EAT_PLACEHOLDER);
 }
 
+/** State for the Tier 4 forgive-reset (unseal) machine. `tokens` = pardons
+ *  left; `pending` collapses the TWO resetCursor() calls a single miss triggers
+ *  (the target's resetOnMiss path + the controller's difficulty path) into ONE
+ *  token spend. Callers clear `pending` at the start of each miss. */
+export interface ForgiveResetState {
+  tokens: number;
+  pending: boolean;
+}
+
+/** Pure decision for one resetCursor() call: pardon (keep progress) while a
+ *  token is available or a pardon is already in flight this miss, else reset.
+ *  Exported so the subtle double-call guard is unit-testable without Phaser. */
+export function applyForgiveReset(s: ForgiveResetState): {
+  didReset: boolean;
+  next: ForgiveResetState;
+} {
+  if (s.tokens > 0 || s.pending) {
+    if (!s.pending) {
+      return { didReset: false, next: { tokens: s.tokens - 1, pending: true } };
+    }
+    return { didReset: false, next: { tokens: s.tokens, pending: true } };
+  }
+  return { didReset: true, next: s };
+}
+
 export class TextWordTarget implements WordTarget {
   private readonly typedText: Phaser.GameObjects.Text;
   private readonly remainingText: Phaser.GameObjects.Text;
@@ -96,6 +126,12 @@ export class TextWordTarget implements WordTarget {
   private altClaimed = false;
   private danger = 0;
   private suffixMasked = false;
+  // Tier 4 `unseal`: number of cursor-resets to PARDON (keep progress) before
+  // the target resets for real. `resetForgivenPending` collapses the two
+  // resetCursor() calls a single miss triggers (the target's own resetOnMiss +
+  // the controller's difficulty reset) into ONE token spend.
+  private forgiveResets = 0;
+  private resetForgivenPending = false;
 
   readonly priority: number;
 
@@ -175,8 +211,27 @@ export class TextWordTarget implements WordTarget {
    * Used by purist mode — a typo wipes typing progress on the claimed word
    * but the target stays selected, so the player doesn't have to re-find it.
    */
+  /** Tier 4 `unseal`: pardon the next `n` cursor-resets (keep typed progress)
+   *  before the target resets for real. Used by the Sky sealed-scroll temple,
+   *  fed from the grace pool. */
+  setForgiveResets(n: number): void {
+    this.forgiveResets = Math.max(0, n);
+  }
+
   resetCursor(): void {
     if (this.cursor === 0) return;
+    // A pardon spends ONE token per miss even though a miss can call this twice
+    // (the target's resetOnMiss path + the controller's difficulty path).
+    // `resetForgivenPending` (cleared at the top of miss()) lets the second call
+    // skip free; with no token left, the reset proceeds for real. The decision
+    // is the pure applyForgiveReset() so the guard is unit-tested.
+    const { didReset, next } = applyForgiveReset({
+      tokens: this.forgiveResets,
+      pending: this.resetForgivenPending,
+    });
+    this.forgiveResets = next.tokens;
+    this.resetForgivenPending = next.pending;
+    if (!didReset) return;
     this.cursor = 0;
     this.complete = false;
     this.relayout();
@@ -207,9 +262,18 @@ export class TextWordTarget implements WordTarget {
       ease: "Sine.easeOut",
     });
     // Sealed-scroll no-miss: snap back to the start regardless of difficulty,
-    // then let the scene flash the reseal.
+    // then let the scene flash the reseal — UNLESS a forgive-reset token pardons
+    // this miss (Tier 4 `unseal`), in which case progress is kept and the gentle
+    // onResetForgiven cue fires instead of the harsh reseal.
+    this.resetForgivenPending = false;
+    const pardoned =
+      this.opts.resetOnMiss && this.cursor > 0 && this.forgiveResets > 0;
     if (this.opts.resetOnMiss) this.resetCursor();
-    this.opts.onMiss?.();
+    if (pardoned) {
+      this.opts.onResetForgiven?.();
+    } else {
+      this.opts.onMiss?.();
+    }
   }
 
   /** Mask/unmask the untyped suffix — the Sky-Island lantern-beam "eats" the

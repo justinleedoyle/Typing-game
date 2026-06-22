@@ -14,6 +14,10 @@ import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLor
 import { ScrollingPhrase } from "../game/scrollingPhrase";
 import { blurAmountAt } from "../game/skyBlur";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
+import {
+  type CombatLoadout,
+  resolveCombatLoadout,
+} from "../game/relicEffects";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import {
@@ -150,6 +154,12 @@ export class SkyIslandScene extends Phaser.Scene {
   // Temple state — which temple are we on
   private templeIndex = 0;
 
+  // Tier 4 — relics from earlier realms shape this realm's combat. Sky is the
+  // showcase for warm-light (the lantern-blur softens) and unseal (the Master
+  // Key pardons sealed-scroll reseals via the grace pool). Resolved once in
+  // create() (neutral on a revisit, which has no combat); the hooks read it.
+  private combat: CombatLoadout = resolveCombatLoadout([], "sky-island");
+
   private ambientHandle?: AmbientHandle;
   private revisit = false;
 
@@ -207,6 +217,13 @@ export class SkyIslandScene extends Phaser.Scene {
       getSoul: () => this.typingInput.getStats().getSoul(),
       onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
     });
+
+    // Tier 4 — a revisit is a free-passage replay (no combat) → neutral loadout.
+    this.combat = resolveCombatLoadout(
+      this.revisit ? [] : this.store.get().satchel,
+      "sky-island",
+    );
+
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
@@ -362,6 +379,12 @@ export class SkyIslandScene extends Phaser.Scene {
   // ─── First lantern-spirit encounter ──────────────────────────────────────
 
   private startFirstSpiritEncounter(): void {
+    // Tier 4 — announce the relic loadout once before the realm's first combat,
+    // then begin. Empty loadout (incl. revisits) passes straight through.
+    this.announceCombatLoadout(() => this.beginFirstSpiritEncounter());
+  }
+
+  private beginFirstSpiritEncounter(): void {
     // Wave-start bookend — same audio + shake pattern as the temple waves so
     // the first spirit encounter lands with the same weight.
     playWaveSting();
@@ -466,7 +489,8 @@ export class SkyIslandScene extends Phaser.Scene {
         phrase,
         fromSide: i % 2 === 0 ? "left" : "right",
         y: PHRASE_BANNER_Y_SLOTS[i] ?? PHRASE_BANNER_Y_SLOTS[0],
-        durationMs: cfg.durationMs,
+        // Tier 4 — quiet-advance buys more time before a banner scrolls off.
+        durationMs: cfg.durationMs * this.combat.advanceMult,
         delayMs: i * cfg.staggerMs,
         onComplete: () => this.onPhraseResolved(true),
         onMiss: () => this.onPhraseResolved(false),
@@ -540,6 +564,9 @@ export class SkyIslandScene extends Phaser.Scene {
         burstColor: 0xf5c842,
         resetOnMiss: true,
         onMiss: () => this.flashScrollReseal(seal),
+        // Tier 4 unseal — the Master Key (via the grace pool) reopens a reseal:
+        // progress is kept and a gentle gold cue replaces the wax-red snap.
+        onResetForgiven: () => this.flashSealForgiven(seal),
         onComplete: () => {
           playChime();
           this.clearActiveTargets();
@@ -556,6 +583,9 @@ export class SkyIslandScene extends Phaser.Scene {
           this.time.delayedCall(1400, () => this.onTempleCleared());
         },
       });
+      // Tier 4 — feed the grace pool (Master Key / Lock-Bar / Golem Heart /
+      // Cairn-Token) into the no-miss temple as forgive-reset tokens (cap 2).
+      target.setForgiveResets(this.combat.gracePool);
       this.typingInput.register(target);
       this.activeTargets.push(target);
     });
@@ -601,6 +631,61 @@ export class SkyIslandScene extends Phaser.Scene {
       duration: 150,
       ease: "Sine.easeInOut",
     });
+  }
+
+  /** Tier 4 unseal — the gentle counterpart to flashScrollReseal: a soft gold
+   *  shimmer + "the key holds" when the Master Key pardons a reseal (progress
+   *  kept), so the player reads it as a relic saving them, not a slip. */
+  private flashSealForgiven(seal: Phaser.GameObjects.Container): void {
+    this.tweens.killTweensOf(seal);
+    seal.setAlpha(1);
+    this.tweens.add({
+      targets: seal,
+      alpha: { from: 1, to: 0.7 },
+      yoyo: true,
+      duration: 220,
+      ease: "Sine.easeInOut",
+    });
+    const txt = this.add
+      .text(this.scale.width / 2, 640, "the key holds", {
+        fontFamily: SERIF,
+        fontSize: "24px",
+        fontStyle: "italic",
+        color: PALETTE.brass,
+      })
+      .setOrigin(0.5)
+      .setDepth(60)
+      .setAlpha(0.9);
+    this.tweens.add({
+      targets: txt,
+      alpha: 0,
+      y: txt.y - 30,
+      duration: 1000,
+      ease: "Sine.easeOut",
+      onComplete: () => txt.destroy(),
+    });
+  }
+
+  /** Surface the active relic effects once, before the realm's first combat, so
+   *  the player sees their earlier-realm choices paying off. Empty loadout
+   *  (incl. revisits) passes straight through. */
+  private announceCombatLoadout(onDone: () => void): void {
+    const lines = this.combat.announcements;
+    if (lines.length === 0) {
+      onDone();
+      return;
+    }
+    let i = 0;
+    const showNext = (): void => {
+      if (i >= lines.length) {
+        this.time.delayedCall(700, onDone);
+        return;
+      }
+      this.setNarrator(lines[i]!);
+      i += 1;
+      this.time.delayedCall(2200, showNext);
+    };
+    showNext();
   }
 
   // ─── Scholar Etta side encounter ─────────────────────────────────────────
@@ -1238,8 +1323,11 @@ export class SkyIslandScene extends Phaser.Scene {
     const wrenX = this.wrenContainer.x;
     const remaining = Math.abs(spirit.container.x - wrenX);
     const totalRange = Math.abs(spirit.spawnX - wrenX);
+    // Tier 4 — quiet-advance lengthens the spirit's close, capped.
     const duration =
-      spirit.advanceMs * Math.max(0.3, remaining / Math.max(1, totalRange));
+      spirit.advanceMs *
+      Math.max(0.3, remaining / Math.max(1, totalRange)) *
+      this.combat.advanceMult;
 
     spirit.advanceTween = this.tweens.add({
       targets: spirit.container,
@@ -1454,9 +1542,14 @@ export class SkyIslandScene extends Phaser.Scene {
    *  alpha drops as a banner enters a lantern's beam, restores between. */
   update(): void {
     if (this.activePhrases.length === 0) return;
+    // Tier 4 — warm-light (Firefly Lantern / Beacon Spark / Pelt) softens the
+    // lantern blur that eats untyped letters, capped at 33% so the read-ahead
+    // hazard still bites. 1 − 0 = full blur with no such relic.
+    const blurScale = 1 - this.combat.warmLight;
     for (const phrase of this.activePhrases) {
       phrase.setBlur(
-        blurAmountAt(phrase.getX(), LANTERN_BLUR_XS, LANTERN_BLUR_RADIUS),
+        blurAmountAt(phrase.getX(), LANTERN_BLUR_XS, LANTERN_BLUR_RADIUS) *
+          blurScale,
       );
     }
   }

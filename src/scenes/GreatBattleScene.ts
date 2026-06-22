@@ -5,7 +5,9 @@ import { playClack } from "../audio/clack";
 import { playDamageThud } from "../audio/damageThud";
 import { NarrationManager } from "../game/narrationManager";
 import { flashDamageVignette } from "../game/vfx";
+import { flashQuietLordFragment } from "../game/quietLordIntrusion";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
+import { candleAfterHit, candleAfterCleanWave } from "../game/winterMechanics";
 import {
   COMPANION_IDS,
   FORCE_RELICS,
@@ -122,6 +124,15 @@ export class GreatBattleScene extends Phaser.Scene {
   private candles = WAVE_CANDLES;
   private charges = WAVE_CHARGES;
 
+  // Fail state (Tier 3) — candles are now a real, losable economy across the
+  // whole finale (not the old never-decrementing prop). A breach in Phase 1 or
+  // a fumbled counter in Phase 2 snuffs a candle (candleAfterHit); a clean
+  // Phase-1 wave relights one (candleAfterCleanWave, capped). At zero candles
+  // the run is LOST → the canon "we begin again" loss ending (§5.5.11), not a
+  // game-over. `runOver` severs the in-flight phase flow once that fires.
+  private runOver = false;
+  private waveCandleLost = false;
+
   // Input
   private shiftHeld = false;
 
@@ -187,6 +198,8 @@ export class GreatBattleScene extends Phaser.Scene {
     this.currentWaveIdx = -1;
     this.candles = WAVE_CANDLES;
     this.charges = WAVE_CHARGES;
+    this.runOver = false;
+    this.waveCandleLost = false;
     this.shiftHeld = false;
     this.phase2Round1Words = [];
     this.brightnessAlpha = 0;
@@ -388,11 +401,81 @@ export class GreatBattleScene extends Phaser.Scene {
     }
   }
 
-  private restoreOneCandle(): void {
-    if (this.candles < WAVE_CANDLES) {
-      this.candles += 1;
-      this.redrawCandles();
+  /** Snuff one candle — a Phase-1 breach or a fumbled Phase-2 counter. Reuses
+   *  the Winter candle economy (candleAfterHit). At zero, the run is lost → the
+   *  canon "we begin again" loss ending. No-op once the run is already over. */
+  private loseCandle(): void {
+    if (this.runOver) return;
+    this.candles = candleAfterHit(this.candles);
+    this.redrawCandles();
+    if (this.candles <= 0) {
+      this.runLossEnding();
     }
+  }
+
+  /** A Phase-1 enemy reached the wall undefeated — it breaks through, costs a
+   *  candle, and leaves the board (so the wave can still clear). Marked
+   *  `defeated` only to take it off the board: no chime/burst (it wasn't a
+   *  kill), and the realms' hit cue (shake + thud + edge vignette) fires. */
+  private breachEnemy(enemy: Enemy): void {
+    if (enemy.defeated || this.runOver) return;
+    enemy.defeated = true;
+    if (enemy.target) {
+      this.typingInput.unregister(enemy.target);
+      const idx = this.activeTargets.indexOf(enemy.target);
+      if (idx >= 0) this.activeTargets.splice(idx, 1);
+      enemy.target = null;
+    }
+    this.cameras.main.shake(180, 0.006);
+    playDamageThud();
+    flashDamageVignette(this);
+    this.tweens.add({
+      targets: enemy.graphic,
+      alpha: 0,
+      duration: 250,
+      onComplete: () => enemy.graphic.destroy(),
+    });
+    this.waveCandleLost = true;
+    this.loseCandle();
+  }
+
+  /** The candles are out — the canon loss ending (§5.5.11). The Lord still
+   *  whispers "Again."; Runa closes with "we begin again, then." A losing run
+   *  is its own ending, not a game-over: we return to the hub with all realm
+   *  progress + the satchel intact so the finale can be re-entered, and the
+   *  great-battle realm is deliberately NOT marked cleared. */
+  private runLossEnding(): void {
+    if (this.runOver) return;
+    this.runOver = true;
+    // Sever the in-flight phase flow: cancel every pending timer, drop all live
+    // targets, and stop listening for keystrokes.
+    this.time.removeAllEvents();
+    this.clearActiveTargets();
+    this.input.keyboard?.off("keydown", this.onKeyDown, this);
+    this.input.keyboard?.off("keyup", this.onKeyUp, this);
+    this.ambientHandle?.stop();
+
+    this.cameras.main.shake(260, 0.008);
+    const dim = this.add.graphics().setDepth(40).setAlpha(0);
+    dim.fillStyle(0x05050a, 1);
+    dim.fillRect(0, 0, this.scale.width, this.scale.height);
+    this.tweens.add({ targets: dim, alpha: 0.55, duration: 900, ease: "Sine.easeIn" });
+
+    // His word lands. On a loss the period is simply there (his victory); the
+    // triumphant period click-in is the WIN seal, saved for the Phase-3 rebuild.
+    this.time.delayedCall(700, () =>
+      flashQuietLordFragment(this, { text: "Again.", durationMs: 2600 }),
+    );
+    this.time.delayedCall(2600, () =>
+      this.narration.say("finale_loss_we_begin_again"),
+    );
+    this.time.delayedCall(7000, () => {
+      this.cameras.main.fadeOut(1200, 0, 0, 0);
+      this.cameras.main.once(
+        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+        () => this.scene.start("PortalChamberScene", { store: this.store }),
+      );
+    });
   }
 
   // ─── PHASE 1 — The Wall ─────────────────────────────────────────────────────
@@ -436,6 +519,7 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private runNextWave(): void {
+    if (this.runOver) return;
     const satchel = this.store.get().satchel;
 
     if (this.waveQueue.length === 0) {
@@ -455,6 +539,9 @@ export class GreatBattleScene extends Phaser.Scene {
     this.redrawCharges();
     // §5.5.11 — shrine-token: each new wave gets a fresh forgiveness slot
     this.shrineTokenForgivenThisWave = false;
+    // Fail state: track whether this wave costs a candle, for the clean-wave
+    // relight in onWaveCleared.
+    this.waveCandleLost = false;
 
     this.setNarrator(`The ${waveDef.label} pour over the wall.`);
 
@@ -569,14 +656,17 @@ export class GreatBattleScene extends Phaser.Scene {
     this.typingInput.register(target);
     this.activeTargets.push(target);
 
-    // §5.5.11 — untethered-wind: slow enemy advance by ~15% via longer tween
-    // Enemy advance is visualised by a slow downward drift toward the player
+    // §5.5.11 — untethered-wind: slow enemy advance by ~15% via longer tween.
+    // Enemy advance is a slow downward drift toward the wall; if it completes
+    // before the enemy is defeated, the line is breached → a candle is snuffed
+    // (the fail-state stake). untethered-wind buys more time to clear it.
     const advanceDuration = 12000 * (1 / this.untetheredWindSlowMult);
     this.tweens.add({
       targets: graphic,
       y: `+=${80}`,
       duration: advanceDuration,
       ease: "Linear",
+      onComplete: () => this.breachEnemy(enemy),
     });
   }
 
@@ -634,6 +724,7 @@ export class GreatBattleScene extends Phaser.Scene {
   private watchForWaveClear(waveDef: WaveDef): void {
     const waveIdx = this.currentWaveIdx;
     const check = (): void => {
+      if (this.runOver) return;
       const waveEnemies = this.enemies.filter((e) => e.waveIdx === waveIdx);
       if (waveEnemies.length > 0 && waveEnemies.every((e) => e.defeated)) {
         this.onWaveCleared(waveDef);
@@ -645,11 +736,22 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private onWaveCleared(waveDef: WaveDef): void {
+    if (this.runOver) return;
     const satchel = this.store.get().satchel;
+
+    // Clean-wave recovery (§5.5.11 economy, mirrors Winter): clearing a wave
+    // without a breach relights one candle, capped — skill refills the pool, so
+    // the fail state is real but recoverable. A wave that cost a candle earns
+    // nothing back here.
+    if (!this.waveCandleLost) {
+      const before = this.candles;
+      this.candles = candleAfterCleanWave(this.candles, WAVE_CANDLES);
+      if (this.candles !== before) this.redrawCandles();
+    }
+
     if (satchel.includes(waveDef.companionId)) {
       // Show companion cameo
       this.setNarrator(waveDef.companionLine);
-      this.restoreOneCandle();
       this.time.delayedCall(2500, () => this.runNextWave());
     } else {
       // Brief pause, no cameo
@@ -1307,6 +1409,7 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private startPhase2c(): void {
+    if (this.runOver) return;
     const satchel = this.store.get().satchel;
     let spellWord = "speak";
     if (satchel.includes("bells-tongue")) {
@@ -1344,6 +1447,10 @@ export class GreatBattleScene extends Phaser.Scene {
         playDamageThud();
         flashDamageVignette(this);
         this.clearActiveTargets();
+        // Fail state: his word landing in the duel snuffs a candle. If that
+        // empties the pool, runLossEnding takes over — don't schedule a retry.
+        this.loseCandle();
+        if (this.runOver) return;
         this.setNarrator(`Hold Shift while typing: ${spellWord}`);
         this.time.delayedCall(800, () => this.startPhase2c());
       },

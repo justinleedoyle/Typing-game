@@ -1268,27 +1268,11 @@ const FINALE_LINES: readonly RunaLine[] = [
     isNew: true,
   },
   {
-    id: "finale_relic_pelt",
-    scene: "finale",
-    trigger: "GreatBattleScene — Pelt of the Old One survives a cold strike (wired)",
-    text: "The Pelt wraps you. One cold strike will not move you.",
-    tone: "instruction",
-    isNew: true,
-  },
-  {
     id: "finale_phase3_word_burns",
     scene: "finale",
     trigger: "GreatBattleScene — the final word lands (wired)",
     text: "The word on him burns.",
     tone: "wonder",
-    isNew: true,
-  },
-  {
-    id: "finale_relic_pelt_retry",
-    scene: "finale",
-    trigger: "GreatBattleScene — Pelt absorbs a miss, retry (wired)",
-    text: "The Pelt holds. Try again.",
-    tone: "instruction",
     isNew: true,
   },
   {

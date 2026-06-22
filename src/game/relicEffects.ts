@@ -109,6 +109,14 @@ const VISION_HAZARD_REALMS = [
 // this initiative (appliesIn ⟺ wired). Bell / Sky / Wood have NO casts.
 const SPELL_ECONOMY_REALMS = ["clockwork-forge"] as const;
 
+// Realms with a LOSABLE combat economy a defensive "save" can absorb (Bell's
+// air-gasp, Sky's sealed-scroll reseal, Wood's ghost breach). The Forge is
+// deliberately excluded: a golem reaching Wren just retreats and re-engages —
+// there's no resource to lose, so a grace save would protect nothing (and
+// announcing one would be a lie). Winter (candles) qualifies but is realm 1 /
+// not wired this initiative.
+const GRACE_REALMS = ["sunken-bell", "sky-island", "haunted-wood"] as const;
+
 export const RELIC_EFFECTS: Record<string, RelicEffect> = {
   // ─── Winter Mountain ───────────────────────────────────────────────────────
   "hunters-horn": {
@@ -136,6 +144,7 @@ export const RELIC_EFFECTS: Record<string, RelicEffect> = {
     combat: {
       kind: "oncePerRealm",
       effect: "forgive-economy-miss",
+      appliesIn: GRACE_REALMS,
       defensive: true,
       announce: "the cairn token forgives one slip.",
     },
@@ -168,6 +177,7 @@ export const RELIC_EFFECTS: Record<string, RelicEffect> = {
     combat: {
       kind: "oncePerRealm",
       effect: "ward-breach",
+      appliesIn: GRACE_REALMS,
       defensive: true,
       announce: "the lock-bar holds once when they break through.",
     },
@@ -233,6 +243,7 @@ export const RELIC_EFFECTS: Record<string, RelicEffect> = {
     combat: {
       kind: "oncePerRealm",
       effect: "ward-breach",
+      appliesIn: GRACE_REALMS,
       defensive: true,
       announce: "the golem heart takes one blow meant for you.",
     },

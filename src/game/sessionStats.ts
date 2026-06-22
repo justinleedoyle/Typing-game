@@ -152,4 +152,12 @@ export class SessionStats {
     this.soul -= cost;
     return true;
   }
+
+  /** Pre-pour Soul as a fraction of the full tank — the Tier 4 `soul-banked`
+   *  relic (king-aurland) gives a wave a spell head-start. Clamped to the max;
+   *  a fraction ≤ 0 is a no-op. Keeps SOUL_MAX encapsulated here. */
+  bankSoulFraction(fraction: number): void {
+    if (fraction <= 0) return;
+    this.soul = Math.min(SOUL_MAX, this.soul + fraction * SOUL_MAX);
+  }
 }

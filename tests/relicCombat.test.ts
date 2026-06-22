@@ -237,6 +237,14 @@ await suite("resolveCombatLoadout: defensive one-shots share a capped grace pool
     GRACE_POOL_CAP,
     "a capped-out (inert) save does not announce",
   );
+  // The Forge has no losable economy — grace saves protect nothing there, so
+  // the same defensive satchel must resolve to an empty, silent pool.
+  const inForge = resolveCombatLoadout(
+    ["lock-bar", "golem-heart", "cairn-token"],
+    "clockwork-forge",
+  );
+  assertEqual(inForge.gracePool, 0, "grace pool inert in the Forge (no economy)");
+  assertEqual(inForge.announcements.length, 0, "and silent there");
 });
 
 await suite("resolveCombatLoadout: unseal is Sky-only and feeds the pool there", () => {

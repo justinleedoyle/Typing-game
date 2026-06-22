@@ -21,6 +21,7 @@ import {
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
+import { MovingWordEnemy } from "../game/movingWordEnemy";
 import { pickAdaptiveWords, SUNKEN_BELL_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
@@ -41,19 +42,8 @@ interface SunkenBellSceneData {
   revisit?: boolean;
 }
 
-interface Ghost {
-  container: Phaser.GameObjects.Container;
-  target: TextWordTarget | null;
-  spawnX: number;
-  spawnSide: "left" | "right";
-  restY: number;
-  word: string;
-  defeated: boolean;
-  advanceTween: Phaser.Tweens.Tween | null;
-  advanceMs: number;
-  /** Set true for the ghost that splits on defeat */
-  splits?: boolean;
-}
+// Choir ghosts are now the shared MovingWordEnemy. The splitting ghost is the
+// canonical use of the enemy's declarative `split` capability (ebb/drift children).
 
 const GHOST_KNOCKBACK_PAUSE_MS = 2000;
 const WREN_X = 960;
@@ -63,7 +53,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
-  private ghosts: Ghost[] = [];
+  private ghosts: MovingWordEnemy[] = [];
   private activeTargets: TextWordTarget[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
@@ -708,7 +698,7 @@ export class SunkenBellScene extends Phaser.Scene {
     words.forEach((word, i) => {
       const pos = positions[i];
       if (!pos) return;
-      this.spawnGhost(pos.x, pos.restX, pos.restY, word, i * 400, 16000, pos.side);
+      this.spawnGhost(pos.x, pos.restX, pos.restY, word, i * 400, 16000);
     });
     this.beginCombatWave();
   }
@@ -743,7 +733,7 @@ export class SunkenBellScene extends Phaser.Scene {
     words.forEach((word, i) => {
       const pos = positions[i];
       if (!pos) return;
-      this.spawnGhost(pos.x, pos.restX, pos.restY, word, i * 350, 14000, pos.side);
+      this.spawnGhost(pos.x, pos.restX, pos.restY, word, i * 350, 14000);
     });
     this.beginCombatWave();
   }
@@ -778,7 +768,7 @@ export class SunkenBellScene extends Phaser.Scene {
     words.forEach((word, i) => {
       const pos = positions[i];
       if (!pos) return;
-      this.spawnGhost(pos.x, pos.restX, pos.restY, word, i * 450, 15000, pos.side);
+      this.spawnGhost(pos.x, pos.restX, pos.restY, word, i * 450, 15000);
     });
     this.beginCombatWave();
   }
@@ -832,7 +822,7 @@ export class SunkenBellScene extends Phaser.Scene {
       const pos = positions[i];
       if (!pos) return;
       const splits = i === words.length - 1;
-      this.spawnGhost(pos.x, pos.restX, pos.restY, word, i * 350, 13000, pos.side, splits);
+      this.spawnGhost(pos.x, pos.restX, pos.restY, word, i * 350, 13000, splits);
     });
     this.beginCombatWave();
   }
@@ -1429,39 +1419,69 @@ export class SunkenBellScene extends Phaser.Scene {
     word: string,
     delay: number,
     advanceMs: number,
-    side: "left" | "right",
     splits = false,
   ): void {
     const container = this.add.container(startX, restY);
     this.drawGhostInto(container);
     container.setAlpha(0);
 
-    const ghost: Ghost = {
+    const ghost = new MovingWordEnemy({
+      scene: this,
+      typingInput: this.typingInput,
       container,
-      target: null,
-      spawnX: restX,
-      spawnSide: side,
-      restY,
       word,
-      defeated: false,
-      advanceTween: null,
+      restX,
+      restY,
+      wrenX: this.wrenContainer.x,
       advanceMs,
-      splits,
-    };
-
-    this.tweens.add({
-      targets: container,
-      x: restX,
-      alpha: 0.7,
-      duration: 900,
-      delay,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (ghost.defeated) return;
-        this.attachGhostTarget(ghost);
-        this.ghostIdleBob(container);
-        this.startGhostAdvance(ghost);
+      advanceMult: this.combat.advanceMult,
+      entranceMs: 900,
+      entranceDelayMs: delay,
+      restAlpha: 0.7,
+      knockbackMs: 700,
+      knockbackPauseMs: GHOST_KNOCKBACK_PAUSE_MS,
+      dangerRampStart: DANGER_RAMP_START,
+      anchorOffsetY: -80,
+      idleBobDy: 8,
+      idleBobMs: 1100,
+      defeatRiseY: -50,
+      defeatMs: 500,
+      fontSize: 32,
+      // Sea-green burst — the ghost dissolves into deep water, not brass.
+      burstColor: BELL_BURST_COLOR,
+      onTargetAttached: (t) => this.activeTargets.push(t),
+      onTargetDetached: (t) => {
+        const idx = this.activeTargets.indexOf(t);
+        if (idx >= 0) this.activeTargets.splice(idx, 1);
       },
+      // On completion: the quiet-them flicker, a breath in the choir wave, then the
+      // wave check. The split children (if any) are spawned by the enemy's `split`
+      // BEFORE this runs, so checkWaveCleared sees them and the wave stays open.
+      onComplete: () => {
+        this.showQuietFlicker();
+        if (this.breathActive) {
+          this.breath.inhale();
+          this.drawBreathBar();
+        }
+        this.checkWaveCleared();
+      },
+      onReachWren: () => {
+        this.cameras.main.flash(300, 0, 0, 0, false);
+        playDamageThud();
+        flashDamageVignette(this);
+      },
+      // The splitting ghost sheds "ebb"/"drift" where it dies (±60px, a quick
+      // 5000ms close, non-recursive). Geometry via the shared splitChildPositions.
+      split: splits
+        ? {
+            children: [
+              { word: "ebb", dx: -60 },
+              { word: "drift", dx: 60 },
+            ],
+            spawn: (p) =>
+              this.spawnGhost(p.restX, p.restX, p.restY, p.word, 0, 5000),
+          }
+        : undefined,
     });
 
     this.ghosts.push(ghost);
@@ -1480,117 +1500,6 @@ export class SunkenBellScene extends Phaser.Scene {
     g.fillCircle(-12, -8, 5);
     g.fillCircle(12, -8, 5);
     c.add(g);
-  }
-
-  private ghostIdleBob(c: Phaser.GameObjects.Container): void {
-    this.tweens.add({
-      targets: c,
-      y: { from: c.y, to: c.y - 8 },
-      duration: 1100,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.easeInOut",
-    });
-  }
-
-  private attachGhostTarget(ghost: Ghost): void {
-    const target = new TextWordTarget({
-      scene: this,
-      word: ghost.word,
-      x: ghost.container.x,
-      y: ghost.restY - 80,
-      fontSize: 32,
-      // Sea-green burst — ghost dissolves into deep water, not brass.
-      burstColor: BELL_BURST_COLOR,
-      onComplete: () => this.defeatGhost(ghost),
-    });
-    ghost.target = target;
-    this.typingInput.register(target);
-    this.activeTargets.push(target);
-  }
-
-  private startGhostAdvance(ghost: Ghost): void {
-    const wrenX = this.wrenContainer.x;
-    const remaining = Math.abs(ghost.container.x - wrenX);
-    const totalRange = Math.abs(ghost.spawnX - wrenX);
-    // Tier 4 — quiet-advance (Hunter's Horn / Quiet Chant / Untethered Wind)
-    // lengthens the advance, capped: ghosts close slower but the wave still
-    // bites. advanceMult is 1 with no such relic.
-    const duration =
-      ghost.advanceMs *
-      Math.max(0.3, remaining / Math.max(1, totalRange)) *
-      this.combat.advanceMult;
-
-    ghost.advanceTween = this.tweens.add({
-      targets: ghost.container,
-      x: wrenX,
-      duration,
-      ease: "Linear",
-      onUpdate: (tween) => {
-        if (!ghost.target) return;
-        ghost.target.setAnchorX(ghost.container.x);
-        // Danger pulse — ramps over the last 60% of the advance so the
-        // word reads cream while readable, then shifts ember as the ghost
-        // closes. Communicates urgency without UI chrome.
-        const dangerLevel = Math.max(
-          0,
-          (tween.progress - DANGER_RAMP_START) / (1 - DANGER_RAMP_START),
-        );
-        ghost.target.setDanger(dangerLevel);
-      },
-      onComplete: () => {
-        ghost.advanceTween = null;
-        if (!ghost.defeated) {
-          this.ghostReachesWren(ghost);
-        }
-      },
-    });
-  }
-
-  private defeatGhost(ghost: Ghost): void {
-    if (ghost.defeated) return;
-    ghost.defeated = true;
-    if (ghost.target) {
-      this.typingInput.unregister(ghost.target);
-      const idx = this.activeTargets.indexOf(ghost.target);
-      if (idx >= 0) this.activeTargets.splice(idx, 1);
-      ghost.target = null;
-    }
-    ghost.advanceTween?.stop();
-    ghost.advanceTween = null;
-    this.tweens.killTweensOf(ghost.container);
-
-    // Show defeat flicker
-    this.showQuietFlicker();
-
-    // A clean defeat in a choir wave = a breath.
-    if (this.breathActive) {
-      this.breath.inhale();
-      this.drawBreathBar();
-    }
-
-    // Handle split
-    if (ghost.splits) {
-      const splitWords = ["ebb", "drift"];
-      const offsets = [-60, 60];
-      splitWords.forEach((w, i) => {
-        const sx = ghost.container.x + (offsets[i] ?? 0);
-        const sy = ghost.restY;
-        this.spawnGhost(sx, sx, sy, w, 0, 5000,
-          sx < WREN_X ? "left" : "right");
-      });
-    }
-
-    this.tweens.add({
-      targets: ghost.container,
-      alpha: 0,
-      y: ghost.container.y - 50,
-      duration: 500,
-      ease: "Sine.easeOut",
-      onComplete: () => ghost.container.destroy(),
-    });
-
-    this.checkWaveCleared();
   }
 
   private showQuietFlicker(): void {
@@ -1613,39 +1522,6 @@ export class SunkenBellScene extends Phaser.Scene {
     });
   }
 
-  private ghostReachesWren(ghost: Ghost): void {
-    // Dark flash, knockback, no wave reset
-    this.cameras.main.flash(300, 0, 0, 0, false);
-    playDamageThud();
-    flashDamageVignette(this);
-
-    if (ghost.target) {
-      this.typingInput.unregister(ghost.target);
-      const idx = this.activeTargets.indexOf(ghost.target);
-      if (idx >= 0) this.activeTargets.splice(idx, 1);
-      ghost.target.destroy();
-      ghost.target = null;
-    }
-    this.tweens.killTweensOf(ghost.container);
-
-    // Push back to spawn
-    this.tweens.add({
-      targets: ghost.container,
-      x: ghost.spawnX,
-      duration: 700,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (ghost.defeated) return;
-        this.time.delayedCall(GHOST_KNOCKBACK_PAUSE_MS, () => {
-          if (ghost.defeated) return;
-          this.ghostIdleBob(ghost.container);
-          this.attachGhostTarget(ghost);
-          this.startGhostAdvance(ghost);
-        });
-      },
-    });
-  }
-
   /** Fire the active wave's explicit continuation once every ghost is down.
    *  Replaces the old narrator-substring routing, which matched none of the
    *  live captions at the first encounter → the realm soft-locked there (same
@@ -1653,7 +1529,7 @@ export class SunkenBellScene extends Phaser.Scene {
    *  `[].every() === true` footgun when no wave is active (boss/forks). */
   private checkWaveCleared(): void {
     if (this.ghosts.length === 0) return;
-    if (!this.ghosts.every((g) => g.defeated)) return;
+    if (!this.ghosts.every((g) => g.isDefeated())) return;
     this.ghosts = [];
     const cb = this.onWaveCleared;
     this.onWaveCleared = null;

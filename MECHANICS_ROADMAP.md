@@ -13,7 +13,7 @@ This file is the tier-level overview. For the full design see [`RESEARCH_AND_PLA
 |------|-------|--------|
 | **Tier 0** | Combat foundation | ✅ **Complete & live** |
 | **Tier 1** | Realm signature mechanics made demanding | ✅ **Realms done (5/5)** — optional `Ctrl` follow-up remains |
-| **Tier 2** | Shared enemy behaviors | ◻ Planned |
+| **Tier 2** | Shared enemy behaviors | ✅ **Complete** (#107–#110) |
 | **Tier 3** | Strategic capstone (the finale) | ✅ **Complete** (#96–#100) |
 | **Tier 4** | Relics live in combat | ✅ **Complete** (#101–#105) |
 
@@ -24,7 +24,7 @@ The audit identified four gap dimensions; the user asked for all four. Rough pro
 | Dimension | Where it's addressed | Progress |
 |-----------|----------------------|----------|
 | Difficulty / ceiling | Tier 0 (miss-cost floor + speed-axis director) | ~mostly done |
-| Per-realm variety / encounters | Tier 1 (signature mechanics) | in progress |
+| Per-realm variety / encounters | Tier 1 (signature mechanics) + Tier 2 (shared enemy types) | done |
 | Input depth (modifiers) | Tier 0 Soul spells + Tier 1 case/modifier work | partial |
 | Strategy / meta layer | Tier 0 Soul economy; Tier 3/4 finale + relics | partial |
 
@@ -51,10 +51,36 @@ Each realm's signature mechanic, once cosmetic vs its premise, now genuinely dem
 - ✅ **Winter** — activate the dormant **`Alt`** spell (frost-shatter, alongside the Shift thunderclap) + **case-sensitive** boss capitals (lowercase-first so Shift stays free) + **non-refilling** candle economy (lose-all relights to a floor; clean waves earn candles back) + a **circler** (flanking, vertically-weaving) wolf — **#94**
 - ◻ **Forge follow-up** — `Ctrl` "true-name" modifier _(deferred — needs browser-shortcut handling; the one remaining Tier 1 tail)_
 
-## Tier 2 — shared enemy behaviors ◻ PLANNED
+## Tier 2 — shared enemy behaviors ✅ COMPLETE
 
-Promote `TimedWordTarget` / `MovingWordTarget` / `SplittingWordTarget` / `MultiWordTarget`
-into reusable target types shared across realms.
+The advancing word-bearing enemy — re-implemented inline in four realms (Winter
+`Wolf` / Bell `Ghost` / Forge `Golem` / Wood `HauntedGhost`) with the same
+six-step lifecycle and the same two formulas — is now **one shared type**.
+
+- ✅ **The type** — `src/game/movingWordEnemy.ts` (a Phaser wrapper, sibling to
+  `ScrollingPhrase`) owns the spawn → entrance → attach `TextWordTarget` → idle-bob
+  → advance (anchor + danger ramp) → defeat | reach-Wren (knock-back + retry)
+  lifecycle on a realm-supplied container. The two formulas (advance duration,
+  danger ramp) + the split geometry live in the pure, unit-tested
+  `src/game/movingWordMath.ts`. Per-realm feel constants are options whose defaults
+  are the shared values, so each migration changed no numbers.
+- ✅ **Forge** — the cleanest core (straight advance, caseSensitive commands,
+  spell/alt routing, retry-on-reach). Fixed a latent chain-spark word orphan — **#107**.
+- ✅ **Winter** — adds the circler weave (`verticalOffset`), the Pack-Leader's ward
+  (`manualAttach` + `attachWord`), the thunderclap's pack `knockBack`, the candle-loss
+  `dismiss`, and `onRelease` (Wren's lean) — **#108**.
+- ✅ **Wood** — the first diagonal close (Euclidean duration when `wrenY` is set) +
+  the compass `maskMarks` warding + the mist's `setHidden` passthrough — **#109**.
+- ✅ **Bell** — the declarative `split` capability (the splitting ghost's ebb/drift
+  children, via `splitChildPositions`); the beat-gate + breath stay orthogonal
+  (keystroke-level) — **#110**.
+
+The conceptual TimedWord / MovingWord / SplittingWord / MultiWord collapse to one
+type + facets: **MovingWord** is the type; **TimedWord** is its advance deadline;
+**SplittingWord** is the `split` option; **MultiWord** is the controller's existing
+first-letter triage (a wave of N enemies). The fork-pick-one + sequential-passage
+helpers were deferred by design. Sky's `ScrollingPhrase` stays a sibling (the
+scroll-across-and-miss flavour). Net ≈ −410 scene lines across the four realms.
 
 ## Tier 3 — strategic capstone (the finale) ✅ COMPLETE
 
@@ -122,4 +148,4 @@ effect no-ops at zero.
 - **The real-time game can't be automated headlessly** (a backgrounded tab freezes Phaser's rAF loop),
   so PRs are verified via `tsc` + `vite build` + throwaway `npx tsx` logic harnesses against the real code.
 
-_Last updated: 2026-06-22 — Tier 0 + Tier 1 (5/5) + **Tier 3 finale rebuild COMPLETE** (#96–#100) + **Tier 4 relics-live COMPLETE** (#101 bridge · #102 Bell · #103 Forge+cleanup · #104 Sky · #105 Wood). Relics now shape combat in all five realms, bounded so a rich run is helped not trivialized. Next major: the **Tier 2** shared-target refactor. Open tails: offensive one-shots (need a keyboard invocation UX) + companions in-realm; the optional Forge `Ctrl` modifier. Whole-arc feel-tuning playthrough still gates "done"._
+_Last updated: 2026-06-22 — Tier 0 + Tier 1 (5/5) + **Tier 2 shared-enemy refactor COMPLETE** (#107 Forge+the shared type · #108 Winter · #109 Wood · #110 Bell+split) + Tier 3 finale (#96–#100) + Tier 4 relics-live (#101–#105). The advancing word-enemy is now one `MovingWordEnemy` (pure math in `movingWordMath.ts`), feel-identical across the four realms; Sky's `ScrollingPhrase` stays a sibling. **All four roadmap tiers + the finale are now done.** Open tails: offensive one-shots (need a keyboard invocation UX) + companions in-realm; the optional Forge `Ctrl` modifier; the deferred MultiWord fork/passage helpers. The whole-arc feel-tuning playthrough still gates "done"._

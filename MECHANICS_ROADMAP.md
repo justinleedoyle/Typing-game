@@ -64,6 +64,15 @@ Turn the Great Battle from an inverted capstone into a real climax:
 - Satchel as a **counter-loadout** vs telegraphed Phase-2 facets — today relics are strictly additive (more relics = easier).
 - Force-vs-kindness as a real **mechanical fork** — today it's cosmetic flash-vs-shrink; some relics should *raise* intensity so collecting is a wager.
 
+**Phase-0 bridge — ✅ DONE.** `src/game/relicEffects.ts` is the single source of
+truth for relic semantics (alignment + companion-ness), consumed by BOTH the
+finale (Tier 3) and relics-live-in-combat (Tier 4) so meaning is encoded once.
+`getActiveRelicEffects(satchel)` resolves the per-phase counts/flags scenes
+read. The canon §5.5.11 force/kindness lists (formerly hand-maintained in
+`relicAlignment.ts`) are now DERIVED from this descriptor; a canon-match test
+guards drift. Freeze-extensible — the counter-loadout's `countersFacet` and any
+Tier-4 combat block get added to `RelicEffect` here, not re-encoded at call sites.
+
 ## Tier 4 — relics live ◻ PLANNED
 
 Give fork relics **in-combat effects** so the CYOA layer doubles as a build choice
@@ -78,4 +87,4 @@ Give fork relics **in-combat effects** so the CYOA layer doubles as a build choi
 - **The real-time game can't be automated headlessly** (a backgrounded tab freezes Phaser's rAF loop),
   so PRs are verified via `tsc` + `vite build` + throwaway `npx tsx` logic harnesses against the real code.
 
-_Last updated: 2026-06-17 — Tier 0 complete; Tier 1 realms ALL done (5/5: Forge, Wood, Bell, Sky, Winter). Remaining before Tier 2: optional Forge `Ctrl` follow-up. Next major: Tier 2 (shared enemy behaviors)._
+_Last updated: 2026-06-22 — Tier 0 complete; Tier 1 realms ALL done (5/5). **Tier 3 started: Phase-0 relic-effects bridge landed** (`relicEffects.ts` — shared descriptor + aggregator; alignment sets now derived from it). Next: finale fail state (reuse the Winter candle economy)._

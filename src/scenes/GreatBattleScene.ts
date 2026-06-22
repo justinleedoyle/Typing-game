@@ -8,12 +8,8 @@ import { flashDamageVignette } from "../game/vfx";
 import { flashQuietLordFragment } from "../game/quietLordIntrusion";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { candleAfterHit, candleAfterCleanWave } from "../game/winterMechanics";
-import {
-  COMPANION_IDS,
-  FORCE_RELICS,
-  KINDNESS_RELICS,
-  selectFinalPhrase,
-} from "../game/relicAlignment";
+import { COMPANION_IDS, selectFinalPhrase } from "../game/relicAlignment";
+import { getActiveRelicEffects } from "../game/relicEffects";
 import {
   type Facet,
   type FacetId,
@@ -188,8 +184,14 @@ export class GreatBattleScene extends Phaser.Scene {
   // Phase 2 — relic state
   private bellsTongueSuperHitAvailable = false;
   private masterKeyFlankUsed = false;
-  private peltKnockbackForgiven = false;
   private tetherCordBindUsed = false;
+  // §5.5.11 fork — the duel alignment (≥3 force / ≥3 kindness), resolved once at
+  // startPhase2 from getActiveRelicEffects. Force RAISES the input ceiling (a
+  // SECOND mixed-case counter); kindness demands cleaner play (a duel miss costs
+  // a candle). kindnessMissCharged throttles that to one per beat.
+  private isForceDuel = false;
+  private isKindnessDuel = false;
+  private kindnessMissCharged = false;
   // §5.5.11 — Wind-Phrase + Quiet Chant (both): the Lord's whirlwind attack
   // is permanently canceled. First cancel is narrated; subsequent calls skip
   // silently so the duel just flows past where the whirlwind would have been.
@@ -237,8 +239,10 @@ export class GreatBattleScene extends Phaser.Scene {
     // Phase 2 relic state
     this.bellsTongueSuperHitAvailable = false;
     this.masterKeyFlankUsed = false;
-    this.peltKnockbackForgiven = false;
     this.tetherCordBindUsed = false;
+    this.isForceDuel = false;
+    this.isKindnessDuel = false;
+    this.kindnessMissCharged = false;
     this.whirlwindCanceled = false;
     this.whirlwindCancelAnnounced = false;
 
@@ -792,29 +796,20 @@ export class GreatBattleScene extends Phaser.Scene {
   private startPhase2(): void {
     const satchel = this.store.get().satchel;
 
-    // §5.5.11 — compute force/kindness counts for duel-shape rules
-    const forceCount = satchel.filter((id) => FORCE_RELICS.has(id)).length;
-    const kindnessCount = satchel.filter((id) => KINDNESS_RELICS.has(id)).length;
+    // §5.5.11 fork — resolve the duel alignment once via the shared aggregator
+    // (≥3 force = louder/harder; ≥3 kindness = quieter but cleaner-play).
+    const effects = getActiveRelicEffects(satchel);
+    this.isForceDuel = effects.isForceDuel;
+    this.isKindnessDuel = effects.isKindnessDuel;
 
     // Stash relic availability for later methods
     this.bellsTongueSuperHitAvailable = satchel.includes("bells-tongue");
-    this.peltKnockbackForgiven = satchel.includes("pelt-of-the-old-one");
     this.tetherCordBindUsed = false;
     this.whirlwindCanceled =
       satchel.includes("wind-phrase") && satchel.includes("quiet-chant");
     this.whirlwindCancelAnnounced = false;
 
-    // §5.5.11 — ≥3 force relics: music swells
-    if (forceCount >= 3) {
-      // TODO: swap to a louder ambient track or crank SFX gain when audio layer supports it
-      // For now, a brief screen camera flash indicates the duel going louder
-    }
-
-    // §5.5.11 — ≥3 kindness relics: duel goes quieter — lower SFX volume
-    // TODO: expose ambient volume knob; for now captured as a flag passed to drawQuietLord
-    const kindnessDuel = kindnessCount >= 3;
-
-    this.drawQuietLord(forceCount >= 3, kindnessDuel);
+    this.drawQuietLord(this.isForceDuel, this.isKindnessDuel);
     this.showQuietLordDescription();
   }
 
@@ -1055,11 +1050,8 @@ export class GreatBattleScene extends Phaser.Scene {
       onComplete: () => {
         playChime();
 
-        const satchel = this.store.get().satchel;
-        const forceCount = satchel.filter((id) => FORCE_RELICS.has(id)).length;
-
-        // §5.5.11 — ≥3 force relics: camera flash + shake on each defeat
-        if (forceCount >= 3) {
+        // §5.5.11 — force duel: camera flash + shake on each defeat
+        if (this.isForceDuel) {
           this.cameras.main.flash(200, 255, 180, 100, false);
           this.cameras.main.shake(180, 0.006);
         }
@@ -1427,12 +1419,6 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private startPhase2bRound2(): void {
-    // §5.5.11 — pelt-of-the-old-one: Wren survives one knock without resetting
-    // The pelt is consumed on first use; here we show a ready-cue if available
-    if (this.peltKnockbackForgiven) {
-      this.narration.say("finale_relic_pelt");
-    }
-
     // Round 2: 3 more words with no overlap
     const allWords = (BATTLE_WORD_BANK as readonly string[]).filter(
       (w) => !this.phase2Round1Words.includes(w),
@@ -1476,18 +1462,14 @@ export class GreatBattleScene extends Phaser.Scene {
   private onPhase2Round2Done(): void {
     this.narration.say("finale_phase3_word_burns");
 
-    const satchel = this.store.get().satchel;
-    const forceCount = satchel.filter((id) => FORCE_RELICS.has(id)).length;
-    const kindnessCount = satchel.filter((id) => KINDNESS_RELICS.has(id)).length;
-
-    // §5.5.11 — ≥3 force relics: Lord visually cracks open (camera shake)
-    if (forceCount >= 3) {
+    // §5.5.11 — force duel: Lord visually cracks open (camera shake)
+    if (this.isForceDuel) {
       this.cameras.main.shake(300, 0.01);
     }
 
-    // §5.5.11 — ≥3 kindness relics: Lord shrinks rather than cracks
-    const targetScale = kindnessCount >= 3 ? 0.6 : 1.0;
-    const targetAlpha = kindnessCount >= 3 ? 0.5 : 0.4;
+    // §5.5.11 — kindness duel: Lord shrinks rather than cracks
+    const targetScale = this.isKindnessDuel ? 0.6 : 1.0;
+    const targetAlpha = this.isKindnessDuel ? 0.5 : 0.4;
 
     this.tweens.add({
       targets: this.quietLordContainer,
@@ -1523,64 +1505,72 @@ export class GreatBattleScene extends Phaser.Scene {
     });
 
     this.time.delayedCall(1400, () =>
-      this.runWhirlwindAttack(() => this.startPhase2c()),
+      this.runWhirlwindAttack(() => this.startPhase2Depth()),
     );
   }
 
-  private startPhase2c(): void {
-    if (this.runOver) return;
-    const satchel = this.store.get().satchel;
-    let spellWord = "speak";
-    if (satchel.includes("bells-tongue")) {
-      spellWord = "ring";
-    } else if (satchel.includes("hunters-horn")) {
-      spellWord = "call";
-    } else if (satchel.includes("brass-songbird")) {
-      spellWord = "sing";
-    } else if (satchel.includes("ghost-kings-promise")) {
-      spellWord = "name";
-    }
+  // ─── PHASE 2 — input-depth climax (§5.5.11 fork + goal 4) ───────────────────
+  //
+  // The duel's last counter is MIXED-CASE case-sensitive (`unMAKE` — lowercase
+  // head, Shift for the capital tail), matching the Forge boss's `stand DOWN`
+  // peak demand. A FORCE duel chains a SECOND mixed-case counter (past the Forge
+  // boss). A KINDNESS duel keeps one, but punishes a slip: the first miss on a
+  // word costs a candle (cleaner play demanded). Mixed-case (Shift) is used
+  // rather than Alt: holding Alt while typing produces dead-keys/special chars
+  // on macOS, which would make a required-Alt beat untypeable there.
 
-    this.setNarrator(`Hold the shift key and type: ${spellWord}`);
+  private startPhase2Depth(): void {
+    if (this.runOver) return;
+    // Lowercase head so the claim captures no Shift (routes onComplete); the
+    // capital tail then requires Shift via case-sensitive matching. Force gets a
+    // second, deeper counter.
+    const words = this.isForceDuel ? ["unMAKE", "unBIND"] : ["unMAKE"];
+    this.runDepthWords(words, 0);
+  }
+
+  private runDepthWords(words: string[], idx: number): void {
+    if (this.runOver) return;
+    if (idx >= words.length) {
+      this.onSpellWordComplete();
+      return;
+    }
+    const word = words[idx]!;
+    this.kindnessMissCharged = false; // throttle: one candle per beat
+    const lead =
+      idx === 0
+        ? "Answer in his own hand — mind the capitals:"
+        : "Again, deeper — his name this time:";
+    this.setNarrator(`${lead}  ${word}`);
 
     const target = new TextWordTarget({
       scene: this,
-      word: spellWord,
+      word,
       x: this.scale.width / 2,
       y: 520,
       fontSize: 52,
+      caseSensitive: true,
+      onMiss: this.isKindnessDuel ? () => this.chargeKindnessMiss() : undefined,
       onComplete: () => {
-        // Miss — re-register with hint
-        // §5.5.11 — pelt: forgive first knockback / re-register without penalty once
-        if (this.peltKnockbackForgiven) {
-          this.peltKnockbackForgiven = false; // consume
-          this.narration.say("finale_relic_pelt_retry");
-          this.clearActiveTargets();
-          this.time.delayedCall(600, () => this.startPhase2c());
-          return;
-        }
-        // Damage-feedback parity (#73): the counter fumbles and his word lands
-        // — the realms' hit feedback (shake + thud + edge vignette). The Pelt
-        // branch above returns first, so a forgiven knockback stays clean.
-        this.cameras.main.shake(240, 0.006);
-        playDamageThud();
-        flashDamageVignette(this);
-        this.clearActiveTargets();
-        // Fail state: his word landing in the duel snuffs a candle. If that
-        // empties the pool, runLossEnding takes over — don't schedule a retry.
-        this.loseCandle();
         if (this.runOver) return;
-        this.setNarrator(`Hold Shift while typing: ${spellWord}`);
-        this.time.delayedCall(800, () => this.startPhase2c());
-      },
-      onSpellComplete: () => {
         playChime();
         this.clearActiveTargets();
-        this.onSpellWordComplete();
+        this.time.delayedCall(idx + 1 < words.length ? 500 : 0, () =>
+          this.runDepthWords(words, idx + 1),
+        );
       },
     });
     this.typingInput.register(target);
     this.activeTargets.push(target);
+  }
+
+  // §5.5.11 kindness duel: a slip during a counter beat costs a candle, but at
+  // most once per beat (kindnessMissCharged is reset when the beat spawns) so a
+  // single fumble doesn't cascade into an instant loss.
+  private chargeKindnessMiss(): void {
+    if (this.runOver || this.kindnessMissCharged) return;
+    this.kindnessMissCharged = true;
+    this.narration.say("finale_kindness_slip");
+    this.loseCandle();
   }
 
   private onSpellWordComplete(): void {

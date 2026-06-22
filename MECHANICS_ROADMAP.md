@@ -15,7 +15,7 @@ This file is the tier-level overview. For the full design see [`RESEARCH_AND_PLA
 | **Tier 1** | Realm signature mechanics made demanding | ✅ **Realms done (5/5)** — optional `Ctrl` follow-up remains |
 | **Tier 2** | Shared enemy behaviors | ◻ Planned |
 | **Tier 3** | Strategic capstone (the finale) | ✅ **Complete** (#96–#100) |
-| **Tier 4** | Relics live in combat | ◻ Planned |
+| **Tier 4** | Relics live in combat | 🔨 **In progress** — bridge landed; wiring realm by realm |
 
 ## The four design dimensions
 
@@ -77,10 +77,30 @@ read. The canon §5.5.11 force/kindness lists (formerly hand-maintained in
 guards drift. Freeze-extensible — the counter-loadout's `countersFacet` and any
 Tier-4 combat block get added to `RelicEffect` here, not re-encoded at call sites.
 
-## Tier 4 — relics live ◻ PLANNED
+## Tier 4 — relics live 🔨 IN PROGRESS
 
 Give fork relics **in-combat effects** so the CYOA layer doubles as a build choice
-(today relics only matter in the finale, never inside the five realms).
+(today relics only matter in the finale, never inside the five realms). Realms run
+in a **fixed order** (Winter → Bell → Forge → Sky → Wood), so a relic earned in
+realm *N* arms realms *N+1…5* — collection becomes a forward-looking wager.
+
+**The vocabulary — three effect KINDS, two bounding rules.** Every in-realm effect
+is `passive` (always on), `oncePerRealm` (single-use, resets on re-enter), or
+`perWaveProc` (≤ once per wave). The finale's lesson — *additive-only is
+anticlimactic* — is enforced by two rules that live in **one place** (the resolver):
+(1) same-effect passives diminish to a hard cap and a targeted passive *softens* a
+realm's signature hazard, never cancels it; (2) defensive one-shots share a per-realm
+**grace pool capped at 2**. So a relic-rich run is clearly helped but every realm
+still bites.
+
+- ✅ **Bridge** — `combat` block on `RelicEffect` + `resolveCombatLoadout(satchel, realmId)`
+  (the bounded aggregator scenes read) + 18 relic effects + a 12-suite guard. Pure module,
+  no scene wiring yet. _Mirrors the #96 finale bridge: semantics in one module, behavior at the consumers._
+- ◻ **Bell / Forge / Sky / Wood** — each realm consumes the loadout (≈ one PR per realm,
+  mirroring Tier 1). Folds in the #99 cleanup (bellows-hammer's inert finale Shift-cooldown
+  plumbing → its real in-realm job `soul-thrift`; orphaned `finale_relic_pelt*` lines).
+- ◻ **Companions in-realm** — optional later layer (snow-fox / glass-fish / brass-songbird /
+  lantern-moth / wisp-cat); relics-only for the core.
 
 ---
 
@@ -91,4 +111,4 @@ Give fork relics **in-combat effects** so the CYOA layer doubles as a build choi
 - **The real-time game can't be automated headlessly** (a backgrounded tab freezes Phaser's rAF loop),
   so PRs are verified via `tsc` + `vite build` + throwaway `npx tsx` logic harnesses against the real code.
 
-_Last updated: 2026-06-22 — Tier 0 + Tier 1 (5/5) + **Tier 3 finale rebuild COMPLETE** (#96 bridge · #97 fail state · #98 counter-loadout · #99 fork + input depth · #100 "Again." seal). Next major: **Tier 4** (relics live in the five realms — consumes `relicEffects.ts`), then the **Tier 2** shared-target refactor. Optional Forge `Ctrl` follow-up still open._
+_Last updated: 2026-06-22 — Tier 0 + Tier 1 (5/5) + **Tier 3 finale rebuild COMPLETE** (#96–#100). **Tier 4 STARTED** — the relics-live bridge landed (`combat` block + bounded `resolveCombatLoadout`); realms wired next, one PR each. Then the **Tier 2** shared-target refactor. Optional Forge `Ctrl` follow-up still open._

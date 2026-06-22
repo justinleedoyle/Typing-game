@@ -15,7 +15,7 @@ This file is the tier-level overview. For the full design see [`RESEARCH_AND_PLA
 | **Tier 1** | Realm signature mechanics made demanding | ✅ **Realms done (5/5)** — optional `Ctrl` follow-up remains |
 | **Tier 2** | Shared enemy behaviors | ◻ Planned |
 | **Tier 3** | Strategic capstone (the finale) | ✅ **Complete** (#96–#100) |
-| **Tier 4** | Relics live in combat | 🔨 **In progress** — bridge landed; wiring realm by realm |
+| **Tier 4** | Relics live in combat | ✅ **Complete** (#101–#105) |
 
 ## The four design dimensions
 
@@ -77,12 +77,12 @@ read. The canon §5.5.11 force/kindness lists (formerly hand-maintained in
 guards drift. Freeze-extensible — the counter-loadout's `countersFacet` and any
 Tier-4 combat block get added to `RelicEffect` here, not re-encoded at call sites.
 
-## Tier 4 — relics live 🔨 IN PROGRESS
+## Tier 4 — relics live ✅ COMPLETE
 
-Give fork relics **in-combat effects** so the CYOA layer doubles as a build choice
-(today relics only matter in the finale, never inside the five realms). Realms run
-in a **fixed order** (Winter → Bell → Forge → Sky → Wood), so a relic earned in
-realm *N* arms realms *N+1…5* — collection becomes a forward-looking wager.
+Fork relics now have **in-combat effects** so the CYOA layer doubles as a build choice
+(before, relics only mattered in the finale). Realms run in a **fixed order** (Winter →
+Bell → Forge → Sky → Wood), so a relic earned in realm *N* arms realms *N+1…5* —
+collection became a forward-looking wager.
 
 **The vocabulary — three effect KINDS, two bounding rules.** Every in-realm effect
 is `passive` (always on), `oncePerRealm` (single-use, resets on re-enter), or
@@ -94,13 +94,24 @@ realm's signature hazard, never cancels it; (2) defensive one-shots share a per-
 still bites.
 
 - ✅ **Bridge** — `combat` block on `RelicEffect` + `resolveCombatLoadout(satchel, realmId)`
-  (the bounded aggregator scenes read) + 18 relic effects + a 12-suite guard. Pure module,
-  no scene wiring yet. _Mirrors the #96 finale bridge: semantics in one module, behavior at the consumers._
-- ◻ **Bell / Forge / Sky / Wood** — each realm consumes the loadout (≈ one PR per realm,
-  mirroring Tier 1). Folds in the #99 cleanup (bellows-hammer's inert finale Shift-cooldown
-  plumbing → its real in-realm job `soul-thrift`; orphaned `finale_relic_pelt*` lines).
-- ◻ **Companions in-realm** — optional later layer (snow-fox / glass-fish / brass-songbird /
-  lantern-moth / wisp-cat); relics-only for the core.
+  (the bounded aggregator scenes read) + relic effects + a guard suite — **#101**. _Mirrors
+  the #96 finale bridge: semantics in one module, behavior at the consumers._
+- ✅ **Bell** — quiet-advance, warm-light (toll echo-dim), grace pool (air-gasp save) — **#102**.
+- ✅ **Forge** — the soul economy (soul-banked / soul-thrift) + quiet-advance; folds in the
+  **#99 cleanup** (bellows-hammer's inert finale Shift-cooldown plumbing → its real `soul-thrift`
+  job; orphaned `finale_relic_pelt*` lines). Grace gated out (no losable economy) — **#103**.
+- ✅ **Sky** — warm-light (lantern blur) + `unseal` (Master Key pardons sealed-scroll reseals,
+  via a new `TextWordTarget.setForgiveResets`) + quiet-advance — **#104**.
+- ✅ **Wood** — mist-clear (Wind-Phrase) + auto-ease (Etta's Ledger) + warm-light + quiet-advance;
+  grace gated out — **#105**.
+
+Soul effects are gated to the Forge (the only forward realm with a cast economy); grace to
+Bell + Sky (the only realms with a losable economy). The empty-satchel run is unaffected — every
+effect no-ops at zero.
+
+- ◻ **Optional follow-ups** — the offensive one-shots (`toll-strike` / `bind-beat` / `jam-foe`,
+  declared but deferred — they need a keyboard-native invocation UX) and companions in-realm
+  (snow-fox / glass-fish / brass-songbird / lantern-moth / wisp-cat).
 
 ---
 
@@ -111,4 +122,4 @@ still bites.
 - **The real-time game can't be automated headlessly** (a backgrounded tab freezes Phaser's rAF loop),
   so PRs are verified via `tsc` + `vite build` + throwaway `npx tsx` logic harnesses against the real code.
 
-_Last updated: 2026-06-22 — Tier 0 + Tier 1 (5/5) + **Tier 3 finale rebuild COMPLETE** (#96–#100). **Tier 4 STARTED** — the relics-live bridge landed (`combat` block + bounded `resolveCombatLoadout`); realms wired next, one PR each. Then the **Tier 2** shared-target refactor. Optional Forge `Ctrl` follow-up still open._
+_Last updated: 2026-06-22 — Tier 0 + Tier 1 (5/5) + **Tier 3 finale rebuild COMPLETE** (#96–#100) + **Tier 4 relics-live COMPLETE** (#101 bridge · #102 Bell · #103 Forge+cleanup · #104 Sky · #105 Wood). Relics now shape combat in all five realms, bounded so a rich run is helped not trivialized. Next major: the **Tier 2** shared-target refactor. Open tails: offensive one-shots (need a keyboard invocation UX) + companions in-realm; the optional Forge `Ctrl` modifier. Whole-arc feel-tuning playthrough still gates "done"._

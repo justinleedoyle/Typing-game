@@ -3,6 +3,7 @@ import { type AmbientHandle, playAmbientBattle } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playDamageThud } from "../audio/damageThud";
+import { playPeriodSnapSting } from "../audio/quietLordSting";
 import { NarrationManager } from "../game/narrationManager";
 import { flashDamageVignette } from "../game/vfx";
 import { flashQuietLordFragment } from "../game/quietLordIntrusion";
@@ -838,9 +839,11 @@ export class GreatBattleScene extends Phaser.Scene {
 
     this.quietLordContainer.add(g);
 
-    // "Again." text with strikethrough effect
+    // The accumulating word, WITHOUT its period (§5.5.10): the realms revealed
+    // it letter by letter (A → Ag → … → Again, no period); the period only
+    // clicks into place at the win seal (runPeriodSeal). With strikethrough.
     this.againText = this.add
-      .text(0, 280, "Again.", {
+      .text(0, 280, "Again", {
         fontFamily: SERIF,
         fontSize: "52px",
         color: "#3a3060",
@@ -1710,7 +1713,53 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private onFinalPhraseComplete(): void {
     this.clearActiveTargets();
+    // §5.5.10 — the period click-in. The word the realms spelled out letter by
+    // letter (A → Ag → … → Again, no period) completes HERE: after a still beat
+    // on "Again", the period SNAPS into place — "that's been the word the whole
+    // time." A discrete beat before the white-out.
+    this.runPeriodSeal(() => this.runWinFlash());
+  }
 
+  private runPeriodSeal(onDone: () => void): void {
+    // The period, slammed in at the right edge of the centered "Again". Same
+    // serif/size/colour so it reads as the word completing, not a new element.
+    const rightEdge = this.scale.width / 2 + this.againText.width / 2;
+    const period = this.add
+      .text(rightEdge, this.againText.y, ".", {
+        fontFamily: SERIF,
+        fontSize: "72px",
+        color: "#d4b8ff",
+      })
+      .setOrigin(0, 0.5)
+      .setDepth(10)
+      .setAlpha(0)
+      .setScale(3);
+
+    // A still beat on "Again" (no period) so the absence registers — then snap.
+    this.time.delayedCall(800, () => {
+      playPeriodSnapSting();
+      this.cameras.main.shake(120, 0.004);
+      this.tweens.add({
+        targets: period,
+        alpha: 1,
+        scale: 1,
+        duration: 160,
+        ease: "Back.easeOut",
+      });
+      // A small punch on the whole word as the period seats.
+      this.tweens.add({
+        targets: this.againText,
+        scale: { from: 1, to: 1.06 },
+        duration: 160,
+        yoyo: true,
+        ease: "Sine.easeOut",
+      });
+      // Hold the realization, then carry on to the white-out.
+      this.time.delayedCall(1700, onDone);
+    });
+  }
+
+  private runWinFlash(): void {
     // White flash
     const whiteFlash = this.add.graphics().setDepth(50);
     whiteFlash.fillStyle(0xffffff, 1);

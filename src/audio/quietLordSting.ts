@@ -160,3 +160,45 @@ export function playQuietLordFragmentSting(): void {
   noise.start(now);
   noise.stop(now + duration);
 }
+
+/** The period click-in (§5.5.10). A single sharp, final SNAP — the moment the
+ *  period lands and the accumulating word becomes "Again." for good. Much
+ *  shorter and harder than the reveal stings: a high click transient over a low
+ *  thump, no whisper tail. Keeps the Lord's low fundamental (D2, 73 Hz) so the
+ *  snap is unmistakably his — the lock clicking shut on himself. */
+export function playPeriodSnapSting(): void {
+  const audio = getAudioContext();
+  const now = audio.currentTime;
+
+  // Low thump — the weight of the period landing. A fast downward pitch drop
+  // into the Lord's D2 fundamental gives it a "thunk", struck once and gone.
+  const thumpGain = audio.createGain();
+  thumpGain.gain.setValueAtTime(0.0001, now);
+  thumpGain.gain.linearRampToValueAtTime(0.24, now + 0.005);
+  thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+  thumpGain.connect(getMasterGain());
+  const osc = audio.createOscillator();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(140, now);
+  osc.frequency.exponentialRampToValueAtTime(73, now + 0.09);
+  osc.connect(thumpGain);
+  osc.start(now);
+  osc.stop(now + 0.32);
+
+  // Click transient — a brief high-passed noise burst: the articulation of the
+  // key striking, the lock clicking shut.
+  const click = audio.createBufferSource();
+  click.buffer = createNoiseBuffer(audio, 0.05);
+  const highpass = audio.createBiquadFilter();
+  highpass.type = "highpass";
+  highpass.frequency.value = 2400;
+  const clickGain = audio.createGain();
+  clickGain.gain.setValueAtTime(0.0001, now);
+  clickGain.gain.linearRampToValueAtTime(0.18, now + 0.002);
+  clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+  click.connect(highpass);
+  highpass.connect(clickGain);
+  clickGain.connect(getMasterGain());
+  click.start(now);
+  click.stop(now + 0.06);
+}

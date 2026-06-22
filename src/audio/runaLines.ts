@@ -1299,6 +1299,14 @@ const FINALE_LINES: readonly RunaLine[] = [
     tone: "tender",
     isNew: true,
   },
+  {
+    id: "finale_loss_we_begin_again",
+    scene: "finale",
+    trigger: "GreatBattleScene.runLossEnding() — candles out, the canon loss ending (wired)",
+    text: "The last candle gutters out. He is still standing. Runa's voice, quiet and unbroken: we begin again, then.",
+    tone: "intimate",
+    isNew: true,
+  },
 ];
 
 export const RUNA_LINES: readonly RunaLine[] = [

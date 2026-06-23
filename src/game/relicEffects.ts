@@ -526,6 +526,10 @@ export interface CombatLoadout {
   /** One line per ACTIVE effect (a capped-out save doesn't announce) — scenes
    *  surface these on entry so the build choice is visible. */
   readonly announcements: readonly string[];
+  /** Relic ids whose effect is active here but is NOT an offensive one-shot —
+   *  the "always on" satchel contents the console band shows as icons. One-shots
+   *  are excluded (they get their own charge cards). */
+  readonly passiveRelicIds: readonly string[];
 }
 
 function effectAppliesIn(combat: RelicCombatEffect, realmId: string): boolean {
@@ -556,6 +560,7 @@ export function resolveCombatLoadout(
   const oneShots: CombatEffectId[] = [];
   const perWaveProcs: CombatEffectId[] = [];
   const announcements: string[] = [];
+  const passiveRelicIds: string[] = [];
 
   for (const id of ids) {
     const combat = RELIC_EFFECTS[id]?.combat;
@@ -563,6 +568,7 @@ export function resolveCombatLoadout(
     if (!effectAppliesIn(combat, realmId)) continue;
 
     let active = true;
+    let isOneShot = false;
     switch (combat.kind) {
       case "passive":
         if (combat.effect === "soul-banked") soulBanked = true;
@@ -577,13 +583,17 @@ export function resolveCombatLoadout(
           active = defensiveSaves <= GRACE_POOL_CAP;
         } else {
           oneShots.push(combat.effect);
+          isOneShot = true;
         }
         break;
       case "perWaveProc":
         perWaveProcs.push(combat.effect);
         break;
     }
-    if (active) announcements.push(combat.announce);
+    if (active) {
+      announcements.push(combat.announce);
+      if (!isOneShot) passiveRelicIds.push(id);
+    }
   }
 
   return {
@@ -605,5 +615,6 @@ export function resolveCombatLoadout(
     oneShots,
     perWaveProcs,
     announcements,
+    passiveRelicIds,
   };
 }

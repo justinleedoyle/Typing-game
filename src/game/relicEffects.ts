@@ -203,7 +203,20 @@ export const RELIC_EFFECTS: Record<string, RelicEffect> = {
       announce: "the bell's tongue can strike the strongest foe, once.",
     },
   },
-  "glass-fish": { alignment: "neutral", isCompanion: true },
+  // The tamed creatures (§5.5.9) earn their keep in the finale, but four of the
+  // five also help IN-REALM, each effect paralleling its finale role — a relic-
+  // grade companion that does something a kid can see. glass-fish lit the dark
+  // corridor in the duel; in-realm it feeds the (capped) warm-light pool.
+  "glass-fish": {
+    alignment: "neutral",
+    isCompanion: true,
+    combat: {
+      kind: "passive",
+      effect: "warm-light",
+      appliesIn: VISION_HAZARD_REALMS,
+      announce: "the glass-fish lights the dark water — your sight steadies.",
+    },
+  },
 
   // ─── Clockwork Forge ───────────────────────────────────────────────────────
   "bellows-hammer": {
@@ -236,6 +249,19 @@ export const RELIC_EFFECTS: Record<string, RelicEffect> = {
       announce: "the master key reopens what reseals on you, once.",
     },
   },
+  // brass-songbird "sings one note and the golems stop and listen" (its flavor +
+  // finale stall-hint). In-realm that reads as a (capped) quiet-advance — foes
+  // slow to listen. quiet-advance is universal, so no appliesIn; it's naturally
+  // forward-limited to the Sky + Wood by when the songbird is earned (the Forge).
+  "brass-songbird": {
+    alignment: "neutral",
+    isCompanion: true,
+    combat: {
+      kind: "passive",
+      effect: "quiet-advance",
+      announce: "the brass songbird sings — they slow to listen.",
+    },
+  },
   "golem-heart": {
     alignment: "force",
     isCompanion: false,
@@ -247,7 +273,6 @@ export const RELIC_EFFECTS: Record<string, RelicEffect> = {
       announce: "the golem heart takes one blow meant for you.",
     },
   },
-  "brass-songbird": { alignment: "neutral", isCompanion: true },
 
   // ─── Sky-Island of Lanterns ────────────────────────────────────────────────
   "ettas-ledger": {
@@ -299,7 +324,18 @@ export const RELIC_EFFECTS: Record<string, RelicEffect> = {
       announce: "the untethered wind drags at them — they come slower.",
     },
   },
-  "lantern-moth": { alignment: "neutral", isCompanion: true },
+  // lantern-moth lit the throne room in the duel; in-realm it joins the (capped)
+  // warm-light pool. Earned in the Sky, so it pays off forward in the Wood.
+  "lantern-moth": {
+    alignment: "neutral",
+    isCompanion: true,
+    combat: {
+      kind: "passive",
+      effect: "warm-light",
+      appliesIn: VISION_HAZARD_REALMS,
+      announce: "the lantern-moth's wings glow — the dark pulls back.",
+    },
+  },
 
   // ─── Haunted Wood ──────────────────────────────────────────────────────────
   // ash-vial, bone-flute, ghost-kings-promise stay finale-only flavor (no

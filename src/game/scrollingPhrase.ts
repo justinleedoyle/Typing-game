@@ -10,6 +10,7 @@
 import Phaser from "phaser";
 import { PALETTE, PALETTE_HEX, SERIF } from "./palette";
 import { blurAlphaFor, bannerDangerAt, shouldEatSuffix } from "./skyBlur";
+import { playWordCompleteBurst } from "./vfx";
 import { TextWordTarget } from "./wordTarget";
 import type { TypingInputController } from "./typingInput";
 
@@ -42,6 +43,16 @@ export class ScrollingPhrase {
   private readonly target: TextWordTarget;
   private scrollTween: Phaser.Tweens.Tween | null = null;
   private resolved = false;
+  /** Latest scroll progress 0..1 (1 = at the exit edge). Stored each frame so
+   *  the offensive one-shots can rank banners by urgency even after a freeze. */
+  private progress = 0;
+  /** Tier 4 jam-foe — true while the banner is frozen (scroll halted, but the
+   *  word stays typeable). bind-beat is Wood-only (MovingWordEnemy), so a
+   *  scrolling banner's freeze is always the permanent single-foe seize. */
+  private frozen = false;
+  private frozenOverlay: Phaser.GameObjects.Graphics | null = null;
+  private readonly bannerW: number;
+  private readonly bannerH: number;
 
   constructor(private readonly opts: ScrollingPhraseOptions) {
     const screenW = opts.scene.scale.width;
@@ -59,6 +70,8 @@ export class ScrollingPhrase {
 
     const bannerW = phraseW + BANNER_PADDING_X * 2;
     const bannerH = phraseH + BANNER_PADDING_Y * 2;
+    this.bannerW = bannerW;
+    this.bannerH = bannerH;
 
     const startX =
       opts.fromSide === "left" ? -bannerW / 2 - 40 : screenW + bannerW / 2 + 40;
@@ -120,6 +133,7 @@ export class ScrollingPhrase {
       delay: opts.delayMs ?? 0,
       ease: "Linear",
       onUpdate: (tween) => {
+        this.progress = tween.progress;
         this.target.setAnchorX(this.container.x);
         // Triage urgency cue — the banner's text tints cream → ember as it
         // nears the exit edge, so the player can prioritise among several.
@@ -173,6 +187,82 @@ export class ScrollingPhrase {
    *  to compute proximity to scene-level features (e.g. Sky-Island lanterns). */
   getX(): number {
     return this.container.x;
+  }
+
+  /** Scroll progress 0..1 (1 = at the exit edge). The offensive one-shots rank
+   *  banners by this — the nearest-to-exit is the "strongest" (most urgent). */
+  getProgress(): number {
+    return this.progress;
+  }
+
+  /** The phrase's character count — the one-shots' tiebreak among banners at
+   *  equal scroll progress (the longer sentence is the "stronger" foe). */
+  getPhraseLength(): number {
+    return this.opts.phrase.length;
+  }
+
+  /** True once typed, missed, or struck — i.e. no longer a live threat. */
+  isResolved(): boolean {
+    return this.resolved;
+  }
+
+  /** True while jam-frozen (halted but not yet typed). A one-shot shouldn't be
+   *  spent re-targeting an already-seized banner, so the threat list drops these. */
+  isFrozen(): boolean {
+    return this.frozen;
+  }
+
+  /** Tier 4 toll-strike — fell this banner as a clean clear (the bell's tongue).
+   *  Counts toward the wave like a completion (no miss penalty): halt the scroll,
+   *  tear down the still-live typing target, burst + dissolve, and fire onComplete.
+   *  No-op once resolved. */
+  strike(): void {
+    if (this.resolved) return;
+    this.resolved = true;
+    this.scrollTween?.stop();
+    this.scrollTween = null;
+    this.frozenOverlay?.destroy();
+    this.frozenOverlay = null;
+    // The word was never typed, so the target is still registered — drop it.
+    this.opts.typingInput.unregister(this.target);
+    this.target.destroy();
+    playWordCompleteBurst(this.opts.scene, this.container.x, this.opts.y, {
+      color: PALETTE_HEX.ember,
+      count: 16,
+      radius: 60,
+    });
+    this.opts.scene.tweens.add({
+      targets: this.container,
+      alpha: 0,
+      scale: 1.15,
+      duration: 320,
+      ease: "Sine.easeOut",
+      onComplete: () => this.container.destroy(),
+    });
+    this.opts.onComplete?.();
+  }
+
+  /** Tier 4 jam-foe — halt the banner's drift so it can't scroll off (no miss),
+   *  but KEEP the word typeable so the player mops it up at leisure. A frost
+   *  overlay reads the seized state. Stays held until typed or torn down. No-op
+   *  once resolved or already frozen. */
+  freeze(): void {
+    if (this.resolved || this.frozen) return;
+    this.frozen = true;
+    this.scrollTween?.stop();
+    this.scrollTween = null;
+    const g = this.opts.scene.add.graphics();
+    g.fillStyle(PALETTE_HEX.frost, 0.12);
+    g.fillRoundedRect(-this.bannerW / 2, -this.bannerH / 2, this.bannerW, this.bannerH, 10);
+    g.lineStyle(2, PALETTE_HEX.frost, 0.9);
+    g.strokeRoundedRect(-this.bannerW / 2, -this.bannerH / 2, this.bannerW, this.bannerH, 10);
+    this.container.add(g);
+    this.frozenOverlay = g;
+    playWordCompleteBurst(this.opts.scene, this.container.x, this.opts.y, {
+      color: PALETTE_HEX.frost,
+      count: 10,
+      radius: 40,
+    });
   }
 
   /** Apply a per-frame blur amount in [0, 1]. 0 = fully clear, 1 = beam core.

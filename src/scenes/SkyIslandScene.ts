@@ -36,11 +36,21 @@ import {
 import { TextWordTarget } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
 import skyIslandBackdrop from "../../art/references/sky-island-clean.png";
+import lanternSpiritSprite from "../../art/sky/lantern-spirit.png";
+import scholarSpiritSprite from "../../art/sky/scholar-spirit.png";
 
 // Danger ramps in over the LAST 60% of a spirit's advance — earlier portion
 // stays cream so players can read the word, then it shifts red as the spirit
 // closes. Mirrors the Winter Mountain ramp so the typing feel is consistent.
 const DANGER_RAMP_START = 0.4;
+
+// Painted-sprite display heights (px), matching the old procedural body heights
+// so the word anchor + hit feel line up. The lantern-spirit replaces the 46×60
+// amber body ellipse (the separate glow halo is kept as-is). The Scholar-Spirit
+// boss replaces the head+torso silhouette (head top ≈ -60, torso bottom ≈ +100,
+// so ~160 tall). Sizing is tune-later. */
+const LANTERN_SPIRIT_HEIGHT = 60;
+const SCHOLAR_SPIRIT_HEIGHT = 160;
 
 interface SkyIslandSceneData {
   store: SaveStore;
@@ -49,7 +59,8 @@ interface SkyIslandSceneData {
 
 interface LanternSpirit {
   container: Phaser.GameObjects.Container;
-  lanternGfx: Phaser.GameObjects.Graphics;
+  /** Painted lantern-spirit body (replaces the old amber body ellipse). */
+  lanternSprite: Phaser.GameObjects.Image;
   glowGfx: Phaser.GameObjects.Graphics;
   pulseTween: Phaser.Tweens.Tween | null;
   target: TextWordTarget | null;
@@ -153,6 +164,8 @@ export class SkyIslandScene extends Phaser.Scene {
 
   // Boss state
   private bossContainer: Phaser.GameObjects.Container | null = null;
+  /** Painted Scholar-Spirit boss body — kept so beats can tint-flash it. */
+  private bossSprite: Phaser.GameObjects.Image | null = null;
   private bossRingTween: Phaser.Tweens.Tween | null = null;
   private quietLordFiredInPhase2 = false;
   /** True after the realm-level §5.5.10 intrusion has fired this playthrough.
@@ -191,6 +204,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.ettaDone = false;
     this.companionChoice = null;
     this.bossContainer = null;
+    this.bossSprite = null;
     this.bossRingTween = null;
     this.quietLordFiredInPhase2 =
       this.store.get().realms["sky-island"]?.quietLordFragmentRevealed ?? false;
@@ -201,6 +215,8 @@ export class SkyIslandScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image("sky-island-backdrop", skyIslandBackdrop);
+    this.load.image("sky-lantern-spirit", lanternSpiritSprite);
+    this.load.image("scholar-spirit", scholarSpiritSprite);
     preloadWren(this);
   }
 
@@ -973,6 +989,7 @@ export class SkyIslandScene extends Phaser.Scene {
         onComplete: () => {
           playChime();
           this.clearActiveTargets();
+          this.flashBossEyes();
           this.setNarrator("The spirit's eyes shift colour. Something else stirs within it.");
           this.time.delayedCall(1800, () => {
             if (!this.quietLordFiredInPhase2) {
@@ -1054,6 +1071,7 @@ export class SkyIslandScene extends Phaser.Scene {
         onComplete: () => {
           this.bossContainer?.destroy();
           this.bossContainer = null;
+          this.bossSprite = null;
         },
       });
       // Spawn floating lantern particles effect
@@ -1325,19 +1343,15 @@ export class SkyIslandScene extends Phaser.Scene {
     glowGfx.fillEllipse(0, 0, 90, 90);
     container.add(glowGfx);
 
-    // Lantern body — translucent amber ellipse
-    const lanternGfx = this.add.graphics();
-    lanternGfx.fillStyle(0xe8a020, 0.6);
-    lanternGfx.fillEllipse(0, 0, 46, 60);
-    // Bright core
-    lanternGfx.fillStyle(0xfdedb0, 0.85);
-    lanternGfx.fillEllipse(0, 0, 18, 20);
-    container.add(lanternGfx);
+    // Lantern body — painted sprite, scaled to the old 60px body ellipse height.
+    const lanternSprite = this.add.image(0, 0, "sky-lantern-spirit");
+    lanternSprite.setScale(LANTERN_SPIRIT_HEIGHT / lanternSprite.height);
+    container.add(lanternSprite);
     container.setAlpha(0);
 
     const spirit: LanternSpirit = {
       container,
-      lanternGfx,
+      lanternSprite,
       glowGfx,
       pulseTween: null,
       target: null,
@@ -1358,10 +1372,10 @@ export class SkyIslandScene extends Phaser.Scene {
       ease: "Sine.easeOut",
       onComplete: () => {
         if (spirit.defeated) return;
-        // Idle pulse
+        // Idle pulse — a soft alpha breathe on the painted body.
         spirit.pulseTween = this.tweens.add({
-          targets: lanternGfx,
-          alpha: { from: 0.6, to: 0.9 },
+          targets: lanternSprite,
+          alpha: { from: 0.75, to: 1 },
           duration: 1000,
           yoyo: true,
           repeat: -1,
@@ -1457,12 +1471,10 @@ export class SkyIslandScene extends Phaser.Scene {
       duration: 700,
       ease: "Sine.easeOut",
     });
-    // Fully light lantern core
-    spirit.lanternGfx.clear();
-    spirit.lanternGfx.fillStyle(0xfff4b0, 1);
-    spirit.lanternGfx.fillEllipse(0, 0, 52, 68);
-    spirit.lanternGfx.fillStyle(0xffffff, 0.9);
-    spirit.lanternGfx.fillEllipse(0, 0, 22, 26);
+    // Bloom: the spirit flares to full light — a white tint flash on the body
+    // (replaces the old fully-lit-core ellipse redraw now that it's a sprite).
+    spirit.lanternSprite.setAlpha(1);
+    spirit.lanternSprite.setTint(0xfff4b0);
 
     this.tweens.add({
       targets: spirit.container,
@@ -1727,43 +1739,15 @@ export class SkyIslandScene extends Phaser.Scene {
     const by = 400;
     const c = this.add.container(bx, by);
 
-    // Body silhouette — loose humanoid shape from concentric ellipses
-    const bodyGfx = this.add.graphics();
-    // Torso
-    bodyGfx.fillStyle(0xd49020, 0.25);
-    bodyGfx.fillEllipse(0, 40, 80, 120);
-    // Head
-    bodyGfx.fillStyle(0xe8b040, 0.3);
-    bodyGfx.fillEllipse(0, -30, 60, 60);
-    c.add(bodyGfx);
+    // Painted Scholar-Spirit body, scaled to the old ~160px silhouette height
+    // (head + torso). Replaces the concentric-ellipse figure, orbiting dot
+    // rings, and amber "eyes" — those reads now live in the painting.
+    const sprite = this.add.image(0, 0, "scholar-spirit");
+    sprite.setScale(SCHOLAR_SPIRIT_HEIGHT / sprite.height);
+    c.add(sprite);
+    this.bossSprite = sprite;
 
-    // Three rings of orbiting amber dots
-    const ringConfigs = [
-      { radius: 80, dotCount: 8, speed: 0.015, dotSize: 5 },
-      { radius: 120, dotCount: 12, speed: -0.010, dotSize: 4 },
-      { radius: 55, dotCount: 6, speed: 0.022, dotSize: 3 },
-    ];
-
-    ringConfigs.forEach(({ radius, dotCount, dotSize }) => {
-      const ringGfx = this.add.graphics();
-      for (let i = 0; i < dotCount; i++) {
-        const angle = (i / dotCount) * Math.PI * 2;
-        const dx = Math.cos(angle) * radius;
-        const dy = Math.sin(angle) * radius * 0.55; // flatten to ellipse
-        ringGfx.fillStyle(0xf5c842, 0.75);
-        ringGfx.fillCircle(dx, dy, dotSize);
-      }
-      c.add(ringGfx);
-    });
-
-    // "Eyes" — two amber dots
-    const eyeGfx = this.add.graphics();
-    eyeGfx.fillStyle(0xfff4b0, 0.95);
-    eyeGfx.fillCircle(-12, -28, 5);
-    eyeGfx.fillCircle(12, -28, 5);
-    c.add(eyeGfx);
-
-    // Animate the container with a slow rotation shimmer using scale oscillation
+    // Slow shimmer — the same scale oscillation as before, on the container.
     this.bossRingTween = this.tweens.add({
       targets: c,
       scaleX: { from: 1, to: 1.04 },
@@ -1775,6 +1759,14 @@ export class SkyIslandScene extends Phaser.Scene {
     });
 
     return c;
+  }
+
+  /** "The spirit's eyes shift colour" — a brief tint flash on the boss body,
+   *  the painted-sprite stand-in for the old amber-eye redraw. */
+  private flashBossEyes(): void {
+    if (!this.bossSprite) return;
+    this.bossSprite.setTint(0x8ab4f5);
+    this.time.delayedCall(600, () => this.bossSprite?.clearTint());
   }
 
   private tweenBossBow(): void {

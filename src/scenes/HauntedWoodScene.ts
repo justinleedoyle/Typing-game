@@ -40,6 +40,8 @@ import {
 import { TextWordTarget } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
 import hauntedWoodBackdrop from "../../art/references/haunted-wood-clean.png";
+import woodGhostSprite from "../../art/wood/ghost.png";
+import ghostKingSprite from "../../art/wood/ghost-king.png";
 
 interface HauntedWoodSceneData {
   store: SaveStore;
@@ -73,6 +75,13 @@ const DANGER_RAMP_START = 0.5;
 // Wisp-themed pale gray-green burst — frame ghost defeats as "down in mist,"
 // not the default brass. Matches the ghost body tint.
 const GHOST_BURST_COLOR = 0xdde8dd;
+
+// Painted-sprite display heights (px), matching the old procedural body heights
+// so the word anchor + hit feel line up. The ghost body was a 76px-tall ellipse;
+// the king figure (crown down through the body ellipse, throne excluded) spanned
+// ~232px. Both drawn at native 1:1 (no scaled container). Tune on live.
+const WOOD_GHOST_SPRITE_HEIGHT = 84;
+const GHOST_KING_SPRITE_HEIGHT = 232;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -147,6 +156,8 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image("haunted-wood-backdrop", hauntedWoodBackdrop);
+    this.load.image("wood-ghost", woodGhostSprite);
+    this.load.image("ghost-king", ghostKingSprite);
     preloadWren(this);
   }
 
@@ -1112,24 +1123,15 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private drawGhostInto(
     c: Phaser.GameObjects.Container,
-    punctuated: boolean,
+    _punctuated: boolean,
   ): void {
-    const g = this.add.graphics();
-    // Translucent white-grey body
-    const bodyColor = punctuated ? 0xdde8dd : 0xe8eee8;
-    g.fillStyle(bodyColor, 0.55);
-    g.fillEllipse(0, 0, 56, 76);
-    // Inner glow — smaller, lighter ellipse
-    g.fillStyle(0xf4faf4, 0.25);
-    g.fillEllipse(0, -6, 32, 44);
-    // Wispy bottom fade
-    g.fillStyle(0xc8d8c8, 0.25);
-    g.fillEllipse(0, 32, 46, 26);
-    // Eyes — two small dim circles
-    g.fillStyle(0x1a261a, 0.7);
-    g.fillCircle(-10, -6, 4);
-    g.fillCircle(10, -6, 4);
-    c.add(g);
+    // Painted wraith sprite replaces the old translucent-ellipse graphics. Scaled
+    // to the procedural body height so the word anchor + hit feel line up. The
+    // enemy applies restAlpha (0.6) to the whole container, keeping the ghostly
+    // translucence the flat shape used to bake in.
+    const sprite = this.add.image(0, 0, "wood-ghost");
+    sprite.setScale(WOOD_GHOST_SPRITE_HEIGHT / sprite.height);
+    c.add(sprite);
   }
 
   private checkGhostWaveComplete(): void {
@@ -1455,44 +1457,30 @@ export class HauntedWoodScene extends Phaser.Scene {
   private drawGhostKing(): void {
     const gkx = 1400;
     const gky = 560;
-    const g = this.add.graphics();
-    g.setAlpha(0);
 
-    // Root throne — dark brown rectangles at the base
-    g.fillStyle(0x1e1208, 1);
+    // Root throne — kept as graphics (the painted sprite is just the king).
+    const throne = this.add.graphics();
+    throne.setAlpha(0);
+    throne.fillStyle(0x1e1208, 1);
     for (const rx of [-80, -50, -20, 20, 50, 80]) {
       const rh = 60 + Math.abs(rx) * 0.4;
-      g.fillRect(gkx + rx - 6, gky + 180, 12, rh);
+      throne.fillRect(gkx + rx - 6, gky + 180, 12, rh);
     }
     // Throne seat slab
-    g.fillStyle(0x282018, 1);
-    g.fillRect(gkx - 100, gky + 170, 200, 20);
+    throne.fillStyle(0x282018, 1);
+    throne.fillRect(gkx - 100, gky + 170, 200, 20);
 
-    // Ghost-King body — tall translucent figure
-    g.fillStyle(0xd8e4d8, 0.45);
-    g.fillEllipse(gkx, gky + 60, 90, 200);
-    // Inner glow
-    g.fillStyle(0xecf4ec, 0.18);
-    g.fillEllipse(gkx, gky + 40, 50, 120);
-    // Head
-    g.fillStyle(0xd8e4d8, 0.5);
-    g.fillEllipse(gkx, gky - 30, 70, 80);
-    // Crown — small grey arcs
-    g.lineStyle(2, 0xb8c8b8, 0.7);
-    for (let i = -2; i <= 2; i++) {
-      const cx = gkx + i * 14;
-      g.beginPath();
-      g.arc(cx, gky - 72, 10, Math.PI, 0, false);
-      g.strokePath();
-    }
-    // Eyes
-    g.fillStyle(0x0a180a, 0.7);
-    g.fillCircle(gkx - 14, gky - 32, 5);
-    g.fillCircle(gkx + 14, gky - 32, 5);
+    // Ghost-King figure — painted sprite replaces the old translucent body +
+    // head + crown + eye graphics. Scaled to the procedural figure height (crown
+    // through body, throne excluded) and anchored on the figure's vertical
+    // midpoint (~gky+44) so it sits on the throne the same way the flat shape did.
+    const sprite = this.add.image(gkx, gky + 44, "ghost-king");
+    sprite.setScale(GHOST_KING_SPRITE_HEIGHT / sprite.height);
+    sprite.setAlpha(0);
 
-    // Fade in
+    // Fade both in together.
     this.tweens.add({
-      targets: g,
+      targets: [throne, sprite],
       alpha: 1,
       duration: 1200,
       ease: "Sine.easeIn",

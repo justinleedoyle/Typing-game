@@ -93,6 +93,8 @@ export interface MovingWordEnemyConfig {
   burstColor?: number | null;
   caseSensitive?: boolean;
   maskMarks?: boolean;
+  /** UI-cohesion: a dark legibility stroke around the enemy's word. */
+  outline?: boolean;
 
   /** Optional vertical weave during the advance: given (restY, progress 0..1) →
    *  the body's y that frame. The Winter circler passes `circlerY`. When set, the
@@ -363,6 +365,7 @@ export class MovingWordEnemy {
       burstColor: this.cfg.burstColor ?? PALETTE_HEX.brass,
       caseSensitive: this.cfg.caseSensitive,
       maskMarks: this.cfg.maskMarks,
+      outline: this.cfg.outline,
       onClaim: (mods) => this.cfg.onClaim?.(mods),
       onRelease: () => this.cfg.onRelease?.(),
       // All three variants route to one handler so the realm's onComplete always

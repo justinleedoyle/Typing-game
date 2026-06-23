@@ -447,6 +447,10 @@ export const GRACE_POOL_CAP = 2;
  *  it must mean the same thing in Bell/Sky/Wood, which have no spell casts. Below
  *  SOUL_MAX (100) so a full charge is reachable in one clean run. Tune on live. */
 export const ONESHOT_SOUL_COST = 60;
+/** bind-beat (tether-cord) — how long every live foe is frozen by one cast. A
+ *  breather to catch up, not a kill: long enough to clear a word or two, short
+ *  enough that the wave resumes its pressure. Tune on the live build. */
+export const BIND_BEAT_FREEZE_MS = 3000;
 
 export interface CombatLoadout {
   /** Multiply an enemy's advance DURATION by this (≥1 ⇒ slower). 1 = no change. */

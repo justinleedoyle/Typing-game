@@ -148,6 +148,10 @@ export class MovingWordEnemy {
   private advanceTween: Phaser.Tweens.Tween | null = null;
   private defeated = false;
   private completedByPlayer = false;
+  // Tier 4 freeze (jam-foe / bind-beat): advance halted, word kept typeable.
+  private frozen = false;
+  private freezeTimer: Phaser.Time.TimerEvent | null = null;
+  private frostOverlay: Phaser.GameObjects.Graphics | null = null;
 
   // resolved feel constants
   private readonly entranceMs: number;
@@ -259,6 +263,7 @@ export class MovingWordEnemy {
   dismiss(fadeMs = 350): void {
     if (this.defeated) return;
     this.defeated = true;
+    this.clearFreeze();
     this.dropTarget(true);
     this.advanceTween?.stop();
     this.advanceTween = null;
@@ -270,6 +275,61 @@ export class MovingWordEnemy {
       duration: fadeMs,
       onComplete: () => c.destroy(),
     });
+  }
+
+  /** True while jam/bind-frozen (advance halted, word still typeable). The
+   *  one-shot threat list drops these so a second one-shot isn't wasted on an
+   *  already-seized foe. */
+  isFrozen(): boolean {
+    return this.frozen;
+  }
+
+  /** Tier 4 jam-foe / bind-beat — halt the advance so the enemy can't reach Wren,
+   *  but KEEP the word typeable so the player can fell it at leisure. A frost halo
+   *  reads the held state. With `durationMs` it thaws and re-advances from where it
+   *  stopped (bind-beat's brief room-wide hold); without, it stays frozen until
+   *  defeated or the wave ends (jam-foe's single-foe seize). No-op once defeated;
+   *  re-freezing refreshes the hold. */
+  freeze(durationMs?: number): void {
+    if (this.defeated) return;
+    this.frozen = true;
+    this.advanceTween?.stop();
+    this.advanceTween = null;
+    const c = this.cfg.container;
+    this.cfg.scene.tweens.killTweensOf(c);
+    if (!this.frostOverlay) {
+      const frost = this.cfg.scene.add.graphics();
+      frost.fillStyle(PALETTE_HEX.frost, 0.16);
+      frost.fillEllipse(0, 0, 130, 160);
+      frost.lineStyle(2, PALETTE_HEX.frost, 0.7);
+      frost.strokeEllipse(0, 0, 130, 160);
+      c.addAt(frost, 0);
+      this.frostOverlay = frost;
+    }
+    this.freezeTimer?.remove();
+    this.freezeTimer = null;
+    if (durationMs !== undefined) {
+      this.freezeTimer = this.cfg.scene.time.delayedCall(durationMs, () =>
+        this.thaw(),
+      );
+    }
+  }
+
+  private thaw(): void {
+    if (this.defeated || !this.frozen) return;
+    this.frozen = false;
+    this.clearFreeze();
+    // startAdvance recomputes its duration from the body's CURRENT position, so
+    // the enemy resumes from where it froze (it's guarded against a dead wave).
+    this.startAdvance();
+  }
+
+  /** Drop the freeze timer + frost halo (on thaw, defeat, or dismiss). */
+  private clearFreeze(): void {
+    this.freezeTimer?.remove();
+    this.freezeTimer = null;
+    this.frostOverlay?.destroy();
+    this.frostOverlay = null;
   }
 
   // ── lifecycle ───────────────────────────────────────────────────────────────
@@ -312,6 +372,9 @@ export class MovingWordEnemy {
   }
 
   private startAdvance(): void {
+    // Frozen enemies hold position — every re-advance path (entrance/knock-back/
+    // reach-Wren resume, and thaw) funnels through here, so one guard covers them.
+    if (this.defeated || this.frozen || !this.waveActive()) return;
     const { container, wrenX } = this.cfg;
     const wrenY = this.cfg.wrenY;
     // A diagonal close (Wood) scales duration by Euclidean distance; a straight or
@@ -377,6 +440,7 @@ export class MovingWordEnemy {
   defeat(): void {
     if (this.defeated) return;
     this.defeated = true;
+    this.clearFreeze();
     this.cfg.onDefeated?.(this);
     // On a player completion the TextWordTarget animates and destroys ITSELF, so
     // we only drop the reference; a programmatic defeat (the word was never

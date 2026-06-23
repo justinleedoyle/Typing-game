@@ -28,6 +28,8 @@ import { pickAdaptiveWords, SUNKEN_BELL_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
 import sunkenBellBackdrop from "../../art/references/sunken-bell-clean.png";
+import bellGhostSprite from "../../art/bell/ghost.png";
+import bellWardenSprite from "../../art/bell/bell-warden.png";
 
 // Danger ramps in over the LAST 60% of a ghost's advance — earlier portion
 // stays cream so players can read the word, then it shifts red as the ghost
@@ -50,6 +52,20 @@ interface SunkenBellSceneData {
 const GHOST_KNOCKBACK_PAUSE_MS = 2000;
 const WREN_X = 960;
 const WREN_Y = 820;
+
+// Painted-sprite display heights (px), matching the old procedural body heights
+// so the word anchor + hit feel line up. The ghost body spanned ~90px (oval +
+// wispy tail); the Warden spanned ~320px (bell knob down through the rim). The
+// Warden is drawn at absolute coords (not in a scaled container), so its height
+// is used directly. Tune on live.
+const GHOST_SPRITE_HEIGHT = 96;
+const WARDEN_SPRITE_HEIGHT = 320;
+
+// The Warden's painted sprite sits at the same anchor the procedural bell used
+// (trapezoid centred at bx, vertical mid-point ~by+110). Keep these in sync with
+// the values the procedural drawWarden baked in.
+const WARDEN_X = 1400;
+const WARDEN_Y = 610;
 
 export class SunkenBellScene extends Phaser.Scene {
   private store!: SaveStore;
@@ -123,6 +139,8 @@ export class SunkenBellScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image("sunken-bell-backdrop", sunkenBellBackdrop);
+    this.load.image("bell-ghost", bellGhostSprite);
+    this.load.image("bell-warden", bellWardenSprite);
     preloadWren(this);
   }
 
@@ -992,51 +1010,30 @@ export class SunkenBellScene extends Phaser.Scene {
 
   // ─── Act 3: The Bell-Warden ───────────────────────────────────────────────
 
-  private drawWarden(): Phaser.GameObjects.Graphics {
-    const g = this.add.graphics();
-    // Large bell shape at centre-right (trapezoid)
-    const bx = 1400;
-    const by = 500;
-    g.fillStyle(0x2a2832, 1);
-    // Bell body — trapezoid: wider at bottom
-    g.beginPath();
-    g.moveTo(bx - 80, by);
-    g.lineTo(bx + 80, by);
-    g.lineTo(bx + 140, by + 260);
-    g.lineTo(bx - 140, by + 260);
-    g.closePath();
-    g.fillPath();
-    // Bell top knob
-    g.fillRect(bx - 20, by - 40, 40, 44);
-    // Curved rim at bottom
-    g.fillStyle(0x1e1a28, 1);
-    g.fillEllipse(bx, by + 260, 280, 40);
-    // Merfolk head fused into bell mouth area
-    g.fillStyle(0x3a3050, 1);
-    g.fillEllipse(bx, by + 200, 90, 80); // head
-    // Fin suggestions on either side
-    g.fillEllipse(bx - 80, by + 190, 40, 20);
-    g.fillEllipse(bx + 80, by + 190, 40, 20);
-    // Closed eyes (phase 1)
-    g.fillStyle(0x0d0c14, 1);
-    g.fillRect(bx - 22, by + 192, 14, 4);
-    g.fillRect(bx + 8, by + 192, 14, 4);
-    return g;
+  /** Add the painted Bell-Warden boss sprite at the bell's old anchor, scaled to
+   *  the procedural body height so the word anchors + feel line up. Returns the
+   *  Image so the phase-2 "eyes open" beat can tint it (replacing the old
+   *  redrawWardenPhase2 graphics). Drawn at absolute coords (no scaled container),
+   *  same as the procedural bell. */
+  private drawWarden(): Phaser.GameObjects.Image {
+    const sprite = this.add.image(WARDEN_X, WARDEN_Y, "bell-warden");
+    sprite.setScale(WARDEN_SPRITE_HEIGHT / sprite.height);
+    return sprite;
   }
 
   private startAct3(): void {
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
     this.ghosts = [];
-    const wardenGraphics = this.drawWarden();
+    const wardenSprite = this.drawWarden();
     // Phase 1
     this.narration.say("sunken_warden_rise");
     this.time.delayedCall(1200, () => {
-      this.startWardenPhase1(wardenGraphics);
+      this.startWardenPhase1(wardenSprite);
     });
   }
 
-  private startWardenPhase1(wardenGraphics: Phaser.GameObjects.Graphics): void {
+  private startWardenPhase1(wardenSprite: Phaser.GameObjects.Image): void {
     const words = ["weight", "silence", "deep"];
     let remaining = words.length;
 
@@ -1053,10 +1050,9 @@ export class SunkenBellScene extends Phaser.Scene {
             this.clearActiveTargets();
             this.time.delayedCall(800, () => {
               this.setNarrator("Its eyes open.");
-              wardenGraphics.clear();
-              this.redrawWardenPhase2(wardenGraphics, false);
+              this.flashWardenAwake(wardenSprite, false);
               this.time.delayedCall(1400, () =>
-                this.startWardenPhase2(wardenGraphics),
+                this.startWardenPhase2(wardenSprite),
               );
             });
           }
@@ -1067,36 +1063,18 @@ export class SunkenBellScene extends Phaser.Scene {
     });
   }
 
-  private redrawWardenPhase2(
-    g: Phaser.GameObjects.Graphics,
-    bright: boolean,
+  /** The Warden wakes — its eyes open. Replaces the old phase-2 graphics redraw
+   *  (which repainted glowing eyes) now that the Warden is a painted sprite: tint
+   *  it cyan to read as "awake". `intense` brightens the tint for the phase-2→3
+   *  surge; the dim cyan is the first eyes-open beat. */
+  private flashWardenAwake(
+    sprite: Phaser.GameObjects.Image,
+    intense: boolean,
   ): void {
-    g.clear();
-    const bx = 1400;
-    const by = 500;
-    g.fillStyle(0x2a2832, 1);
-    g.beginPath();
-    g.moveTo(bx - 80, by);
-    g.lineTo(bx + 80, by);
-    g.lineTo(bx + 140, by + 260);
-    g.lineTo(bx - 140, by + 260);
-    g.closePath();
-    g.fillPath();
-    g.fillRect(bx - 20, by - 40, 40, 44);
-    g.fillStyle(0x1e1a28, 1);
-    g.fillEllipse(bx, by + 260, 280, 40);
-    g.fillStyle(0x3a3050, 1);
-    g.fillEllipse(bx, by + 200, 90, 80);
-    g.fillEllipse(bx - 80, by + 190, 40, 20);
-    g.fillEllipse(bx + 80, by + 190, 40, 20);
-    // Open glowing eyes
-    const eyeColor = bright ? 0x8de8ff : 0x4ab8d6;
-    g.fillStyle(eyeColor, 1);
-    g.fillCircle(bx - 16, by + 196, 6);
-    g.fillCircle(bx + 16, by + 196, 6);
+    sprite.setTint(intense ? 0x8de8ff : 0x4ab8d6);
   }
 
-  private startWardenPhase2(wardenGraphics: Phaser.GameObjects.Graphics): void {
+  private startWardenPhase2(wardenSprite: Phaser.GameObjects.Image): void {
     // Double tempo — the tide rises and the world speeds up. The window
     // tightens with it (tempo-scaled: ~175ms now).
     this.beatClock.setTempo(1000);
@@ -1125,7 +1103,7 @@ export class SunkenBellScene extends Phaser.Scene {
               // Phase 3's passage flows freely mid-word again — de-sync off.
               this.beatLocked = false;
               // Brighten the warden's eyes
-              this.redrawWardenPhase2(wardenGraphics, true);
+              this.flashWardenAwake(wardenSprite, true);
               // Scratched fragment ~~Ag~~ — second letter pair of the
               // accumulating word. Once per playthrough.
               const alreadyRevealedBell =
@@ -1499,19 +1477,14 @@ export class SunkenBellScene extends Phaser.Scene {
     this.ghosts.push(ghost);
   }
 
+  /** Add the painted choir-ghost sprite into a container, scaled to the old
+   *  procedural body height (~90px) so the word anchor + hit feel still line up.
+   *  The container drives alpha (restAlpha 0.7) + the danger-ramp tint, so this
+   *  just places the art. */
   private drawGhostInto(c: Phaser.GameObjects.Container): void {
-    const g = this.add.graphics();
-    // Translucent white oval body
-    g.fillStyle(0xddeeff, 0.7);
-    g.fillEllipse(0, 0, 60, 80);
-    // Wispy bottom
-    g.fillStyle(0xaaccee, 0.4);
-    g.fillEllipse(0, 35, 50, 30);
-    // Eyes — use PALETTE_HEX.ink for depth
-    g.fillStyle(PALETTE_HEX.ink, 0.9);
-    g.fillCircle(-12, -8, 5);
-    g.fillCircle(12, -8, 5);
-    c.add(g);
+    const sprite = this.add.image(0, 0, "bell-ghost");
+    sprite.setScale(GHOST_SPRITE_HEIGHT / sprite.height);
+    c.add(sprite);
   }
 
   private showQuietFlicker(): void {

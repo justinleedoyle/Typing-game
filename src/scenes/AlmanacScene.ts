@@ -39,6 +39,48 @@ const COMPANION_IDS: readonly string[] = [
   "wisp-cat",
 ];
 
+// Painted satchel icons — bulk-imported so a new relic/companion art file is
+// picked up without editing a list here. The relic id IS its icon filename
+// (art/relics/<id>.png); companions reuse their creature sprite
+// (art/companions/<file>.png), and only the snow-fox's file name differs from its
+// id. Missing files just fall back to a text bullet, so partial art is fine.
+const RELIC_ICON_URLS = import.meta.glob("../../art/relics/*.png", {
+  eager: true,
+  query: "?url",
+  import: "default",
+}) as Record<string, string>;
+const COMPANION_ICON_URLS = import.meta.glob("../../art/companions/*.png", {
+  eager: true,
+  query: "?url",
+  import: "default",
+}) as Record<string, string>;
+
+const COMPANION_ICON_FILE: Record<string, string> = {
+  "snow-fox-cub": "snow-fox",
+  "glass-fish": "glass-fish",
+  "brass-songbird": "brass-songbird",
+  "lantern-moth": "lantern-moth",
+  "wisp-cat": "wisp-cat",
+};
+
+/** Resolve `<dir>/<name>.png` to its bundled URL from a glob map. */
+function globUrl(urls: Record<string, string>, name: string): string | undefined {
+  for (const [path, url] of Object.entries(urls)) {
+    if (path.endsWith(`/${name}.png`)) return url;
+  }
+  return undefined;
+}
+
+/** The Phaser texture key + source URL for a satchel id's icon, or null if no
+ *  art file exists for it yet. */
+function iconFor(id: string): { key: string; url: string } | null {
+  const file = COMPANION_ICON_FILE[id];
+  const url = file
+    ? globUrl(COMPANION_ICON_URLS, file)
+    : globUrl(RELIC_ICON_URLS, id);
+  return url ? { key: `almanac-icon-${id}`, url } : null;
+}
+
 // Quiet Lord's fragment per cleared-realm count, per §5.5.10. The period
 // only clicks in at the finale, not at the 5th realm boss — so count=5 is
 // "Again", not "Again."
@@ -74,6 +116,15 @@ export class AlmanacScene extends Phaser.Scene {
     this.currentPage = 0;
     this.pageTexts = [];
     this.pageStack = [];
+  }
+
+  preload(): void {
+    // Load every satchel icon that has art (relics + companions). Keyed by id;
+    // ids without a file are simply skipped (the row falls back to a bullet).
+    for (const id of Object.keys(RELICS)) {
+      const icon = iconFor(id);
+      if (icon) this.load.image(icon.key, icon.url);
+    }
   }
 
   create(): void {
@@ -222,12 +273,7 @@ export class AlmanacScene extends Phaser.Scene {
         },
       );
       realmRelics.forEach((r, i) => {
-        this.addPageText(
-          RIGHT_PAGE_X,
-          relicsY + 40 + i * 40,
-          `• ${r.name}`,
-          { fontSize: "26px", color: PAGE_INK },
-        );
+        this.addSatchelRow(RIGHT_PAGE_X, relicsY + 40 + i * 44, r.id, r.name);
       });
     }
 
@@ -461,11 +507,11 @@ export class AlmanacScene extends Phaser.Scene {
       });
     } else {
       collectedCompanions.forEach((c, i) => {
-        this.addPageText(
+        this.addSatchelRow(
           RIGHT_PAGE_X,
-          TOP_TEXT_Y + 60 + i * 44,
-          `✦  ${c.name}`,
-          { fontSize: "26px", color: PAGE_INK },
+          TOP_TEXT_Y + 60 + i * 48,
+          c.id,
+          c.name,
         );
       });
     }
@@ -518,6 +564,24 @@ export class AlmanacScene extends Phaser.Scene {
     );
 
     this.renderPageFooter();
+  }
+
+  /** A satchel collection row: the painted icon on the left, the name beside it.
+   *  Falls back to a text bullet when the id has no art yet. Both objects join
+   *  pageTexts so they're cleared on page turn. */
+  private addSatchelRow(x: number, y: number, id: string, name: string): void {
+    const icon = iconFor(id);
+    if (icon && this.textures.exists(icon.key)) {
+      const img = this.add.image(x + 17, y + 14, icon.key).setOrigin(0.5, 0.5);
+      img.setScale(34 / Math.max(1, img.height));
+      this.pageTexts.push(img);
+      this.addPageText(x + 46, y, name, { fontSize: "26px", color: PAGE_INK });
+    } else {
+      this.addPageText(x, y, `•  ${name}`, {
+        fontSize: "26px",
+        color: PAGE_INK,
+      });
+    }
   }
 
   private addPageText(

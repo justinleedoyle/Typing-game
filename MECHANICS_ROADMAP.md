@@ -146,8 +146,10 @@ effect no-ops at zero.
   - ✅ **Forge** — `toll-strike` (bells-tongue, earned on the Bell's force fork) fells the strongest
     live golem with a bell toll — **#TBD**. (Forge is the only forward realm where an offensive
     one-shot is usable: Winter awards none, so the Bell can't fire one forward.)
-  - ◻ **Sky** — adds `jam-foe` (sabotage-wrench, earned in the Forge): seize the strongest foe for
-    the wave (needs a `jam` capability on `MovingWordEnemy`).
+  - ✅ **Sky** — adds `jam-foe` (sabotage-wrench, earned in the Forge) + `toll-strike`, both acting
+    on the scrolling banners. New `ScrollingPhrase.strike()` (toll kill, counts as a clear) +
+    `freeze()` (jam: halt the drift, keep the word typeable — a sitting duck you mop up). The
+    stationary sealed-scroll temple is excluded (a precision puzzle, not an advancing foe) — **#TBD**.
   - ◻ **Wood** — adds `bind-beat` (tether-cord, earned in the Sky): briefly freeze every live foe
     (needs a `freeze` capability) — richest satchel, can hold all three.
 - ◻ **Companions in-realm** — snow-fox / glass-fish / brass-songbird / lantern-moth / wisp-cat.

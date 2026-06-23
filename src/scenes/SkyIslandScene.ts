@@ -6,7 +6,14 @@ import { playClaim } from "../audio/claim";
 import { pickLowHeartLine } from "../audio/runaLines";
 import { playDamageThud } from "../audio/damageThud";
 import { playWaveSting } from "../audio/waveSting";
+import { playBellToll } from "../audio/bellToll";
+import { playSparkZap } from "../audio/sparkZap";
 import { flashDamageVignette } from "../game/vfx";
+import {
+  isOffensiveOneShot,
+  type OffensiveOneShot,
+} from "../game/oneShotInvocation";
+import { OneShotInvoker, type OneShotThreat } from "../game/oneShotInvoker";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, SERIF } from "../game/palette";
@@ -16,6 +23,7 @@ import { blurAmountAt } from "../game/skyBlur";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import {
   type CombatLoadout,
+  ONESHOT_SOUL_COST,
   resolveCombatLoadout,
 } from "../game/relicEffects";
 import type { SaveStore } from "../game/saveState";
@@ -159,6 +167,10 @@ export class SkyIslandScene extends Phaser.Scene {
   // Key pardons sealed-scroll reseals via the grace pool). Resolved once in
   // create() (neutral on a revisit, which has no combat); the hooks read it.
   private combat: CombatLoadout = resolveCombatLoadout([], "sky-island");
+  // Tier 4 — Soul-charged typed invocation for offensive one-shots. In the Sky
+  // that's toll-strike (bells-tongue) + jam-foe (sabotage-wrench, earned in the
+  // Forge), both acting on the scrolling banners. Null until create().
+  private oneShotInvoker: OneShotInvoker<ScrollingPhrase> | null = null;
 
   private ambientHandle?: AmbientHandle;
   private revisit = false;
@@ -172,6 +184,8 @@ export class SkyIslandScene extends Phaser.Scene {
     this.store = data.store;
     this.spirits = [];
     this.activeTargets = [];
+    this.activePhrases = [];
+    this.oneShotInvoker = null;
     this.fork1Choice = null;
     this.fork2Choice = null;
     this.ettaDone = false;
@@ -224,9 +238,30 @@ export class SkyIslandScene extends Phaser.Scene {
       "sky-island",
     );
 
+    // Tier 4 — offensive one-shots act on the scrolling banners. The widget sits
+    // in the open band between the banner lanes (y≤540) and Wren (y≈900); it only
+    // shows while a scrolling temple has live banners (the sealed-scroll temple
+    // and the between-temple lulls clear activePhrases, so it hides there).
+    const offensiveOneShots = this.combat.oneShots.filter(isOffensiveOneShot);
+    this.oneShotInvoker = new OneShotInvoker<ScrollingPhrase>({
+      scene: this,
+      typingInput: this.typingInput,
+      available: offensiveOneShots,
+      cost: ONESHOT_SOUL_COST,
+      getSoul: () => this.typingInput.getStats().getSoul(),
+      spendSoul: (cost) => this.typingInput.getStats().spendSoul(cost),
+      getThreats: () => this.liveBannerThreats(),
+      applyEffect: (effect, targets) => this.applyOneShot(effect, targets),
+      isActive: () => this.activePhrases.some((p) => !p.isResolved()),
+      announce: (text) => this.setNarrator(text),
+      baseY: 800,
+    });
+
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
+      this.oneShotInvoker?.destroy();
+      this.oneShotInvoker = null;
       this.bossRingTween?.stop();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
@@ -664,6 +699,45 @@ export class SkyIslandScene extends Phaser.Scene {
       ease: "Sine.easeOut",
       onComplete: () => txt.destroy(),
     });
+  }
+
+  /** The live scrolling banners summarised for an offensive one-shot's "strongest
+   *  foe" pick. Progress is how far a banner has scrolled toward its exit (nearest
+   *  = most urgent); the phrase length breaks ties. Resolved banners drop out. The
+   *  stationary sealed-scroll temple isn't here — it's a precision puzzle, not an
+   *  advancing foe — so a one-shot can't trivialise it. */
+  private liveBannerThreats(): OneShotThreat<ScrollingPhrase>[] {
+    const threats: OneShotThreat<ScrollingPhrase>[] = [];
+    for (const p of this.activePhrases) {
+      if (p.isResolved() || p.isFrozen()) continue;
+      threats.push({
+        enemy: p,
+        progress: p.getProgress(),
+        wordLength: p.getPhraseLength(),
+      });
+    }
+    return threats;
+  }
+
+  /** Run an offensive one-shot's consequence on the scrolling banners. The invoker
+   *  has already picked the target, spent the Soul, and consumed the once-per-realm
+   *  charge. toll-strike fells the strongest banner (the bell's tongue); jam-foe
+   *  freezes it in place (still typeable, but no longer scrolling off). bind-beat
+   *  isn't reachable in the Sky (tether-cord is earned here → Wood). */
+  private applyOneShot(
+    effect: OffensiveOneShot,
+    targets: readonly ScrollingPhrase[],
+  ): void {
+    const target = targets[0];
+    if (!target) return;
+    if (effect === "toll-strike") {
+      playBellToll();
+      this.cameras.main.shake(160, 0.004);
+      target.strike();
+    } else if (effect === "jam-foe") {
+      playSparkZap();
+      target.freeze();
+    }
   }
 
   /** Surface the active relic effects once, before the realm's first combat, so

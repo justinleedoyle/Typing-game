@@ -570,6 +570,386 @@ Run `python3 scripts/key_wolf.py` after dropping the raw renders into
 
 ---
 
+## Enemy sprites — the other four realms
+
+The advancing foes in Bell / Forge / Sky / Wood are still drawn as flat procedural
+shapes in code (`drawGolemInto`, `drawGhostInto`, the lantern-spirit, etc.). These
+prompts give each a painted sprite that matches its current palette. Same workflow
+as the wolves: isolated, full-body, on solid magenta `#ff00ff` for chroma keying,
+`wren-character-sheet.png` as the style reference. Each faces/reads neutrally so it
+can be mirrored per spawn side. Drop raw renders in `art/references/<name>.png`,
+key them, save to the path noted under each.
+
+### Clockwork Forge — command golem (enemy)
+
+```
+[STYLE ANCHOR]
+Single creature sprite, isolated on solid bright magenta background (#ff00ff)
+for chroma keying. Chibi-proportioned clockwork command-golem, squat and boxy:
+dark iron-grey body (deep charcoal #282828) with thin brass trim lines (#c9a14a)
+outlining a blocky chest plate and head, heavy stubby legs, broad simple
+shoulders. A single round glowing amber-ember eye (#d6754a) set to one side of
+the head. Industrial, geometric, built to be commanded; faint forge-soot on the
+lower legs. Full body visible head to toe with no cropping, no shadow on the
+magenta background. Same flat stylized illustration style and palette as the
+attached character reference sheet.
+```
+
+Save the keyed result as `art/forge/golem.png` (raw → `references/forge-golem.png`).
+
+### Sunken Bell — drowned-choir ghost (enemy)
+
+```
+[STYLE ANCHOR]
+Single creature sprite, isolated on solid bright magenta background (#ff00ff)
+for chroma keying. A drowned-choir ghost: a translucent pale blue-white wraith
+(#ddeeff), a softly glowing vertical teardrop body that frays into a wispy
+trailing dissolve at the bottom (muted blue #aaccee), two small dark sorrowful
+eyes. Ethereal and formless — a singing voice lost underwater — with a faint
+bioluminescent edge glow. Full body visible with no cropping, no shadow on the
+magenta background. Same flat stylized illustration style and palette as the
+attached character reference sheet.
+```
+
+Save the keyed result as `art/bell/ghost.png` (raw → `references/bell-ghost.png`).
+
+### Sky-Island — lantern-spirit (enemy)
+
+```
+[STYLE ANCHOR]
+Single creature sprite, isolated on solid bright magenta background (#ff00ff)
+for chroma keying. A lantern-spirit: a small floating paper-lantern given life,
+warm golden glow (core #fdedb0, soft amber shell), a gently rounded lantern body
+with a brighter glowing heart inside, faint paper ribs and a little curl of wisp
+beneath. No face — pure, gentle light; an ambient guardian of the island's
+lanterns. Full shape visible with no cropping, no shadow on the magenta
+background. Same flat stylized illustration style and palette as the attached
+character reference sheet.
+```
+
+Save the keyed result as `art/sky/lantern-spirit.png` (raw → `references/sky-lantern-spirit.png`).
+
+### Haunted Wood — ghost of the wood (enemy)
+
+```
+[STYLE ANCHOR]
+Single creature sprite, isolated on solid bright magenta background (#ff00ff)
+for chroma keying. A ghost of the haunted wood: a translucent pale grey-green
+wraith (#e8eee8), a tall soft floating ellipse with a gentle inner glow that
+frays into mist at the bottom (#c8d8c8), two tiny dark eyes. Sorrowful, foggy,
+lost — a spirit that remembers grief; cooler and mistier than the water or fire
+ghosts. Full body visible with no cropping, no shadow on the magenta background.
+Same flat stylized illustration style and palette as the attached character
+reference sheet.
+```
+
+Save the keyed result as `art/wood/ghost.png` (raw → `references/wood-ghost.png`).
+
+---
+
+## Boss sprites
+
+Each realm's capstone is a distinct character (not just a mechanic). Bigger and
+more imposing than the regular foe, but the same palette. Isolated, full-figure,
+magenta-keyed.
+
+### Clockwork Forge — the Command-Golem (boss)
+
+```
+[STYLE ANCHOR]
+Single boss creature sprite, isolated on solid bright magenta background
+(#ff00ff) for chroma keying. A larger, heavier clockwork COMMAND-golem, clearly
+the leader of the golems: dark iron body (#242424) with a broad brass crown
+across the top of the head and a thick brass collar band (#c9a14a), much wider
+shoulders than a regular golem, a massive imposing frame. A large bright
+amber-gold eye (#d6754a) ringed with a glowing outline. The authority at the
+heart of the Forge's hierarchy. Full body visible head to toe with no cropping,
+no shadow on the magenta background. Same flat stylized illustration style and
+palette as the attached character reference sheet.
+```
+
+Save the keyed result as `art/forge/command-golem.png` (raw → `references/command-golem.png`).
+
+### Sunken Bell — the Bell-Warden (boss)
+
+```
+[STYLE ANCHOR]
+Single boss sprite, isolated on solid bright magenta background (#ff00ff) for
+chroma keying. The Bell-Warden: a stone-faced merfolk fused into a massive
+barnacled bronze bell. The bell forms the body (dark blue-charcoal #2a2832,
+aged bronze rim, encrusted); the merfolk head and shoulders emerge from the
+bell's mouth — dark muted-violet skin (#3a3050), faint fin shapes at the sides
+of the head — eyes closed and still (a thin dark line). Ancient, sorrowful,
+immovable, the keeper of a hundred years of silence. Full figure visible with no
+cropping, no shadow on the magenta background. Same flat stylized illustration
+style and palette as the attached character reference sheet.
+```
+
+Save the keyed result as `art/bell/bell-warden.png` (raw → `references/bell-warden.png`).
+*(Optional phase-2 variant: same figure with the eyes OPEN and glowing
+cyan #8de8ff — save as `art/bell/bell-warden-awake.png`.)*
+
+### Sky-Island — the Scholar-Spirit (boss)
+
+```
+[STYLE ANCHOR]
+Single boss sprite, isolated on solid bright magenta background (#ff00ff) for
+chroma keying. The Scholar-Spirit: an almost-human figure of warm amber light
+(#d49020 with #f5c842 highlights), a softly glowing robed silhouette with
+concentric rings of small amber dots and a few drifting open scrolls orbiting it
+like turning pages, two bright amber eyes (#fff4b0). Wise, patient, imposing — a
+guardian of preserved knowledge that poses riddles rather than attacks. Full
+figure visible with no cropping, no shadow on the magenta background. Same flat
+stylized illustration style and palette as the attached character reference sheet.
+```
+
+Save the keyed result as `art/sky/scholar-spirit.png` (raw → `references/scholar-spirit.png`).
+
+### Haunted Wood — the Ghost-King (boss)
+
+```
+[STYLE ANCHOR]
+Single boss sprite, isolated on solid bright magenta background (#ff00ff) for
+chroma keying. The Ghost-King: a tall, formal, translucent pale grey-green royal
+spirit (#d8e4d8) with a soft inner glow — a large dignified head wearing a simple
+five-point crown of pale grey arcs (#b8c8b8), deep dark eyes, a long robe-like
+lower body fraying into mist. Ancient nobility held in grief: imposing but not
+cruel, a king who can be reasoned with. Full figure visible with no cropping, no
+shadow on the magenta background. Same flat stylized illustration style and
+palette as the attached character reference sheet.
+```
+
+Save the keyed result as `art/wood/ghost-king.png` (raw → `references/ghost-king.png`).
+*(Optional: the dark gnarled root-throne #1e1208 he sits on, as a separate prop
+`art/wood/ghost-king-throne.png`, if you want him enthroned.)*
+
+---
+
+## NPC sprites — the fork-givers (Bell / Forge / Sky)
+
+The characters Wren talks to and chooses between, currently narration-only or a
+rough procedural shape. Same treatment as Heldur/huntress: isolated, full-body,
+magenta-keyed, `wren-character-sheet.png` as style reference.
+
+### Smith Forn (Clockwork Forge)
+
+```
+[STYLE ANCHOR]
+Single character sprite, isolated on solid bright magenta background (#ff00ff)
+for chroma keying. Chibi-proportioned old forge smith, broad and sturdy: a
+soot-darkened leather apron over a rolled-sleeve tunic, thick work gloves, grey
+beard, a warm tired face lit by forge-fire, a brass-headed hammer held in one
+hand. Burnt-orange and brass forge palette, soot-black hands. Steady, weathered,
+keeper of the old order. Standing facing forward, full body visible head to toe
+with no cropping, no shadow on the magenta background. Same flat stylized
+illustration style and palette as the attached character reference sheet.
+```
+
+Save the keyed result as `art/forge/forn.png` (raw → `references/forn.png`).
+
+### Old Olin (Sunken Bell)
+
+```
+[STYLE ANCHOR]
+Single character sprite, isolated on solid bright magenta background (#ff00ff)
+for chroma keying. Chibi-proportioned very old merfolk priest, hunched and
+patient: faded deep-teal and blue-grey robes, a frail bowed posture leaning on a
+simple worn staff, long thin white hair, half-deaf (one ear turned), kind clouded
+eyes, webbed hands, an aged bronze pendant. Quiet and gentle — a survivor who
+listens rather than speaks. Standing and leaning, full body visible with no
+cropping, no shadow on the magenta background. Same flat stylized illustration
+style and palette as the attached character reference sheet.
+```
+
+Save the keyed result as `art/bell/olin.png` (raw → `references/olin.png`).
+
+### King Aurland (Sunken Bell)
+
+```
+[STYLE ANCHOR]
+Single character sprite, isolated on solid bright magenta background (#ff00ff)
+for chroma keying. Chibi-proportioned merfolk king, newly freed: regal but worn,
+a deep teal-and-bronze scaled torso, a simple aged bronze crown, flowing dark
+blue-green hair and beard, a trident-motif clasp, a calm grateful expression,
+faint bioluminescent accents. Noble, oceanic, ancient. Standing tall facing
+forward, full body visible with no cropping, no shadow on the magenta background.
+Same flat stylized illustration style and palette as the attached character
+reference sheet.
+```
+
+Save the keyed result as `art/bell/aurland.png` (raw → `references/aurland.png`).
+
+### Scholar Etta (Sky-Island)
+
+```
+[STYLE ANCHOR]
+Single character sprite, isolated on solid bright magenta background (#ff00ff)
+for chroma keying. A small, gentle scholar-spirit child: a softly glowing
+pale-amber translucent figure (#f5c842) cradling a single unburned book to her
+chest, round spectacles, a kind quiet face, a faint halo of drifting paper scraps
+and tiny lantern-light. Smaller and dimmer than the imposing Scholar-Spirit boss
+— a tender of light and lost pages, not a riddle-asker. Full figure visible with
+no cropping, no shadow on the magenta background. Same flat stylized illustration
+style and palette as the attached character reference sheet.
+```
+
+Save the keyed result as `art/sky/etta.png` (raw → `references/etta.png`).
+
+---
+
+## Companion sprites — the five tamed creatures
+
+The §5.5.9 companions: small, characterful creatures Wren can tame. Each now also
+acts in combat (warm-light, the fox's trip) and pays off in the finale, but has no
+art. Small sprites, isolated, magenta-keyed. A cropped/scaled version of each
+doubles as its satchel/Almanac icon (so the companions are NOT in the relic-icon
+list below).
+
+### Snow-Fox Cub (Winter)
+
+```
+[STYLE ANCHOR]
+Single creature sprite, isolated on solid bright magenta background (#ff00ff)
+for chroma keying. A tiny chibi snow-fox cub: fluffy white-and-pale-blue fur, big
+dark eyes, oversized ears, a bushy tail curled around its paws, sitting alert and
+sweet, with a faint frost sparkle on the fur. Small, silent, loyal. Full body
+visible with no cropping, no shadow on the magenta background. Same flat stylized
+illustration style and palette as the attached character reference sheet.
+```
+
+Save the keyed result as `art/companions/snow-fox.png` (raw → `references/snow-fox.png`).
+
+### Glass-Fish (Sunken Bell)
+
+```
+[STYLE ANCHOR]
+Single creature sprite, isolated on solid bright magenta background (#ff00ff)
+for chroma keying. A small translucent glass-fish: coin-sized, a see-through pale
+blue-green body with faint glassy highlights and a softly glowing core, delicate
+fins, entirely still. Quiet, delicate, sudden. Full body visible with no cropping,
+no shadow on the magenta background. Same flat stylized illustration style and
+palette as the attached character reference sheet.
+```
+
+Save the keyed result as `art/companions/glass-fish.png` (raw → `references/glass-fish.png`).
+
+### Brass Songbird (Clockwork Forge)
+
+```
+[STYLE ANCHOR]
+Single creature sprite, isolated on solid bright magenta background (#ff00ff)
+for chroma keying. A small clockwork brass songbird: a polished brass-and-copper
+body with fine clockwork seams and a little wind-up key on its back, a bright bead
+eye, wings slightly open as if about to sing. Mechanical made musical. Full body
+visible with no cropping, no shadow on the magenta background. Same flat stylized
+illustration style and palette as the attached character reference sheet.
+```
+
+Save the keyed result as `art/companions/brass-songbird.png` (raw → `references/brass-songbird.png`).
+
+### Lantern-Moth (Sky-Island)
+
+```
+[STYLE ANCHOR]
+Single creature sprite, isolated on solid bright magenta background (#ff00ff)
+for chroma keying. A large gentle lantern-moth: soft dusky wings lit from within
+with a warm golden glow, a small round glowing lantern-body, feathery antennae,
+faint trailing light motes. Ephemeral, guiding, beautiful in the dark. Full body
+visible wings spread with no cropping, no shadow on the magenta background. Same
+flat stylized illustration style and palette as the attached character reference
+sheet.
+```
+
+Save the keyed result as `art/companions/lantern-moth.png` (raw → `references/lantern-moth.png`).
+
+### Wisp-Cat (Haunted Wood)
+
+```
+[STYLE ANCHOR]
+Single creature sprite, isolated on solid bright magenta background (#ff00ff)
+for chroma keying. A slender ghostly wisp-cat: a softly glowing pale blue-green
+semi-translucent cat with a long curling tail that trails into wisp, bright calm
+eyes, a faint will-o-wisp light around it. Liminal, knowing — she always finds the
+path out. Full body visible with no cropping, no shadow on the magenta background.
+Same flat stylized illustration style and palette as the attached character
+reference sheet.
+```
+
+Save the keyed result as `art/companions/wisp-cat.png` (raw → `references/wisp-cat.png`).
+
+---
+
+## Relic icons
+
+Small collectible icons for the satchel + Almanac (text-only today). Different
+shape from the character sprites — a single ISOLATED OBJECT, centered, square
+framing — so they get their own short style line instead of the full Style Anchor.
+22 icons (the 5 companions reuse their creature sprite as their icon).
+
+### Relic icon style
+
+Paste at the start of every relic-icon prompt (in place of `[STYLE ANCHOR]`).
+
+```
+[ICON STYLE]
+Single game inventory icon — one object, centered and isolated on a solid bright
+magenta background (#ff00ff) for chroma keying. Flat stylized illustration with
+subtle soft shading, a limited muted earthy palette with a warm brass accent, a
+clean silhouette readable at small scale, dark-fantasy cozy aesthetic. No text,
+no border, no extra background elements. Square, 512x512.
+```
+
+Then one object per relic (prepend `[ICON STYLE]`). Save each to `art/relics/<id>.png`.
+
+**Winter Mountain**
+- `hunters-horn` — A spiral ivory hunting horn with a worn leather strap and a small brass band.
+- `firefly-lantern` — A small folded-paper lantern glowing warm gold, three tiny fireflies inside.
+- `cairn-token` — A flat grey river stone carved with a simple spiral, a dusting of snow.
+- `pelt-of-the-old-one` — A folded heavy grey wolf pelt, frost glinting on the fur tips.
+
+**Sunken Bell**
+- `quiet-chant` — A small open hymn-scroll with faint glowing notation, washed in underwater blue.
+- `lock-bar` — A heavy iron cross-bar with a simple keyhole plate, sea-rusted.
+- `king-aurland` — A sealed letter in tide-worn bronze-green wax stamped with a trident crest.
+- `trident-token` — A small three-pronged bronze trident charm on a cord.
+- `bells-tongue` — A large worn iron bell-clapper (the tongue), faintly humming with light.
+
+**Clockwork Forge**
+- `bellows-hammer` — A brass-headed forge hammer, still warm, a faint ember glow on the head.
+- `sabotage-wrench` — A bent brass wrench, slightly twisted, well-used.
+- `master-key` — An ornate old brass key with forge-gear teeth.
+- `golem-heart` — A pulsing brass clockwork core, gears visible, warm amber light within.
+
+**Sky-Island**
+- `ettas-ledger` — A small leather scholar's notebook open to a page of sky-island maps.
+- `beacon-spark` — A bright shard of golden beacon-light in a tiny brass clip, still lit.
+- `wind-phrase` — A rolled scroll of flowing sky-script with faint wind-curl lines around it.
+- `tether-cord` — A cut mooring rope with a frayed end and a brass eyelet.
+- `untethered-wind` — A swirl of pale wind made visible, a few drifting feathers and leaves.
+
+**Haunted Wood**
+- `ash-vial` — A small corked glass vial of soft grey grove-ash, faintly warm-glowing.
+- `shrine-token` — A small carved wooden token with a simple shrine-and-leaf mark, mossy.
+- `bone-flute` — A pale carved bone flute, ancient, fine cracks, eerie.
+- `ghost-kings-promise` — A folded pale parchment bound with a thin grey ribbon and a faint ghostly seal.
+
+---
+
+## Keying the new sprites
+
+All the character/creature/boss/NPC/companion prompts render on magenta `#ff00ff`,
+same as the wolves/NPCs. The existing key scripts are per-batch
+(`scripts/key_wolf.py`, `key_winter_npcs.py`, `key_quiet_lord.py`). For this larger
+batch, a single generic `scripts/key_sprites.py` (reads `art/references/<name>.png`
+→ writes the keyed PNG to its destination) is the cleanest — ask Claude to generate
+it once the raw renders are in. Relic icons key the same way (the magenta drops out).
+
+Wiring each finished PNG into its scene (replacing the procedural `drawXInto` with
+a sprite + the chroma-key load, exactly as Winter does for the wolves) is a code
+follow-up once the art exists.
+
+---
+
 ## Reference image checklist
 
 Drop these files into `art/references/` (filenames are what `PROMPTS.md` expects above):
@@ -618,3 +998,40 @@ Drop these files into `art/references/` (filenames are what `PROMPTS.md` expects
 - [ ] `wren-cast.png`
 - [ ] `wren-hurt.png`
 - [ ] `wren-back.png`
+
+### Enemy sprites — the other four realms
+
+- [ ] `forge/golem.png` — clockwork command golem (grey + brass, amber eye)
+- [ ] `bell/ghost.png` — drowned-choir ghost (pale blue-white wraith)
+- [ ] `sky/lantern-spirit.png` — floating paper-lantern spirit (golden, faceless)
+- [ ] `wood/ghost.png` — ghost of the wood (pale grey-green wraith)
+
+### Boss sprites
+
+- [ ] `forge/command-golem.png` — the Command-Golem (brass crown + collar)
+- [ ] `bell/bell-warden.png` — merfolk fused into the bronze bell *(optional: `bell-warden-awake.png`)*
+- [ ] `sky/scholar-spirit.png` — amber riddle-spirit with orbiting scrolls
+- [ ] `wood/ghost-king.png` — crowned grey-green royal spirit *(optional: `ghost-king-throne.png`)*
+
+### NPC sprites — Bell / Forge / Sky
+
+- [ ] `forge/forn.png` — Smith Forn (old smith, apron, hammer)
+- [ ] `bell/olin.png` — Old Olin (hunched half-deaf merfolk priest)
+- [ ] `bell/aurland.png` — King Aurland (freed merfolk king, crown)
+- [ ] `sky/etta.png` — Scholar Etta (small amber book-spirit child)
+
+### Companion sprites (also serve as satchel icons)
+
+- [ ] `companions/snow-fox.png`
+- [ ] `companions/glass-fish.png`
+- [ ] `companions/brass-songbird.png`
+- [ ] `companions/lantern-moth.png`
+- [ ] `companions/wisp-cat.png`
+
+### Relic icons (22 — companions reuse their sprite)
+
+- [ ] Winter: `hunters-horn` · `firefly-lantern` · `cairn-token` · `pelt-of-the-old-one`
+- [ ] Bell: `quiet-chant` · `lock-bar` · `king-aurland` · `trident-token` · `bells-tongue`
+- [ ] Forge: `bellows-hammer` · `sabotage-wrench` · `master-key` · `golem-heart`
+- [ ] Sky: `ettas-ledger` · `beacon-spark` · `wind-phrase` · `tether-cord` · `untethered-wind`
+- [ ] Wood: `ash-vial` · `shrine-token` · `bone-flute` · `ghost-kings-promise`

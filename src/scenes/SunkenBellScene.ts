@@ -16,8 +16,10 @@ import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import {
   type CombatLoadout,
+  COMPANION_TRIP_DELAY_MS,
   resolveCombatLoadout,
 } from "../game/relicEffects";
+import { tripMostAdvancedFoe } from "../game/companionTrip";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
@@ -430,6 +432,16 @@ export class SunkenBellScene extends Phaser.Scene {
     this.waveForgivenessReady =
       this.combat.perWaveProcs.includes("forgive-wave-miss");
     this.applyAutoEase();
+    this.applyCompanionTrip();
+  }
+
+  /** companion-trip (snow-fox-cub): a short while into each wave the fox darts in
+   *  and trips the most-advanced ghost (a stumble). No-op without the relic. */
+  private applyCompanionTrip(): void {
+    if (!this.combat.perWaveProcs.includes("companion-trip")) return;
+    this.time.delayedCall(COMPANION_TRIP_DELAY_MS, () =>
+      tripMostAdvancedFoe(this, this.ghosts),
+    );
   }
 
   /** auto-ease (Etta's Ledger): mark the easiest (shortest-word) ghost of the

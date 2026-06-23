@@ -64,6 +64,7 @@ const CANON_COMBAT: Array<
   ["glass-fish", "passive", "warm-light", false],
   ["lantern-moth", "passive", "warm-light", false],
   ["brass-songbird", "passive", "quiet-advance", false],
+  ["snow-fox-cub", "perWaveProc", "companion-trip", false],
 ];
 
 // Relics that stay finale-only (no in-realm combat), transcribed independently.
@@ -72,9 +73,7 @@ const CANON_FINALE_ONLY = [
   "ash-vial",
   "bone-flute",
   "ghost-kings-promise",
-  // snow-fox-cub gains companion-trip in the next PR; wisp-cat stays finale-only
-  // (earned in the last realm — no forward realm to act in).
-  "snow-fox-cub",
+  // wisp-cat stays finale-only — earned in the last realm, no forward realm to act in.
   "wisp-cat",
 ];
 
@@ -92,6 +91,7 @@ const KNOWN_EFFECTS = new Set<CombatEffectId>([
   "auto-ease",
   "forgive-wave-miss",
   "mist-clear",
+  "companion-trip",
 ]);
 
 // ─── Coverage: the descriptor matches the design spec exactly ─────────────────
@@ -101,7 +101,7 @@ await suite("relicCombat: combat blocks match the canon assignment exactly", () 
   // together they cover all 27 relics — so a new relic can't silently miss a
   // (deliberate) decision about its in-realm effect.
   const withCombat = RELIC_IDS.filter((id) => RELIC_EFFECTS[id]!.combat);
-  assertEqual(withCombat.length, CANON_COMBAT.length, "21 relics carry a combat block");
+  assertEqual(withCombat.length, CANON_COMBAT.length, "22 relics carry a combat block");
   assertEqual(
     CANON_COMBAT.length + CANON_FINALE_ONLY.length,
     RELIC_IDS.length,

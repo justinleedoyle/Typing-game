@@ -224,6 +224,25 @@ export class MovingWordEnemy {
     return this.defeated;
   }
 
+  /** How far this enemy has closed on Wren, 0..1 (1 = arrived) — Euclidean when
+   *  the advance is diagonal (wrenY set), else horizontal. The shared "how
+   *  dangerous is this foe" signal the offensive one-shots rank by and the
+   *  snow-fox trip targets. Mirrors the startAdvance geometry. */
+  advanceProgress(): number {
+    const c = this.cfg.container;
+    const { wrenX, wrenY } = this.cfg;
+    const remaining =
+      wrenY !== undefined
+        ? Math.hypot(wrenX - c.x, wrenY - c.y)
+        : Math.abs(wrenX - c.x);
+    const total =
+      wrenY !== undefined
+        ? Math.hypot(wrenX - this.cfg.restX, wrenY - this.cfg.restY)
+        : Math.abs(wrenX - this.cfg.restX);
+    if (total <= 0) return 0;
+    return Math.min(1, Math.max(0, 1 - remaining / total));
+  }
+
   /** Attach the word to a `manualAttach` enemy (the Winter boss's ward release).
    *  No-op if already attached or defeated, so it composes with the knock-back
    *  re-attach that can beat the ward. */

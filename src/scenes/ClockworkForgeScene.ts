@@ -41,6 +41,7 @@ import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../ga
 import forgeBackdrop from "../../art/references/clockwork-forge-clean.png";
 import forgeGolemSprite from "../../art/forge/golem.png";
 import forgeCommandGolemSprite from "../../art/forge/command-golem.png";
+import fornSprite from "../../art/forge/forn.png";
 
 // Danger ramps in over the LAST 60% of a golem's advance — earlier portion
 // stays cream so players can read the word, then it shifts ember as the
@@ -76,6 +77,11 @@ const GOLEM_ADVANCE_MS = 15000;
 // so its on-screen height is COMMAND_GOLEM_SPRITE_HEIGHT × 1.8. Tune on live.
 const GOLEM_SPRITE_HEIGHT = 132;
 const COMMAND_GOLEM_SPRITE_HEIGHT = 150;
+
+// Smith Forn's standing portrait — a believable character height (px). He's a
+// narration NPC, so this only affects his on-screen figure, not any hit/word
+// anchor. Tune on live. Placed left-third, feet near FLOOR_Y.
+const FORN_SPRITE_HEIGHT = 360;
 
 /** Spawn slots on the foundry floor — same pattern as WinterMountainScene. */
 const FLOOR_SLOTS = [
@@ -122,6 +128,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private golems: MovingWordEnemy[] = [];
   private activeTargets: TextWordTarget[] = [];
   private wrenSprite!: Phaser.GameObjects.Image;
+  /** Smith Forn's standing portrait — only on screen during the Fork 1 beat. */
+  private fornSprite?: Phaser.GameObjects.Image;
 
   private shiftHeld = false;
   private altHeld = false;
@@ -179,6 +187,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.load.image("forge-backdrop", forgeBackdrop);
     this.load.image("forge-golem", forgeGolemSprite);
     this.load.image("forge-command-golem", forgeCommandGolemSprite);
+    this.load.image("forn", fornSprite);
     preloadWren(this);
   }
 
@@ -257,6 +266,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.input.keyboard?.off("keyup", this.onKeyUp, this);
       this.ambientHandle?.stop();
+      this.fornSprite?.destroy();
+      this.fornSprite = undefined;
     });
 
     this.ambientHandle = playAmbientForge();
@@ -607,11 +618,44 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   // ─── Fork 1 ──────────────────────────────────────────────────────────────────
 
+  /** Fade Smith Forn's standing portrait in on the foundry floor, left-third,
+   *  feet near FLOOR_Y. Narration NPC only — no word/hit anchor. Idempotent. */
+  private showFornSprite(): void {
+    if (this.fornSprite) return;
+    const sprite = this.add.image(400, FLOOR_Y, "forn");
+    sprite.setOrigin(0.5, 1); // feet on the floor line
+    sprite.setScale(FORN_SPRITE_HEIGHT / sprite.height);
+    sprite.setDepth(40); // above backdrop (-100), below narration band (y≈150)
+    sprite.setAlpha(0);
+    this.tweens.add({
+      targets: sprite,
+      alpha: 1,
+      duration: 700,
+      ease: "Sine.easeOut",
+    });
+    this.fornSprite = sprite;
+  }
+
+  /** Fade Forn out and destroy him as the realm moves on past the fork. */
+  private hideFornSprite(): void {
+    const sprite = this.fornSprite;
+    if (!sprite) return;
+    this.fornSprite = undefined;
+    this.tweens.add({
+      targets: sprite,
+      alpha: 0,
+      duration: 600,
+      ease: "Sine.easeIn",
+      onComplete: () => sprite.destroy(),
+    });
+  }
+
   private startFork1(): void {
     this.clearActiveTargets();
     this.golems = [];
     this.waveActive = false;
     this.narration.say("forge_fork1_intro");
+    this.showFornSprite();
 
     const helpForn = new TextWordTarget({
       scene: this,
@@ -675,6 +719,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private afterFork1(choice: "forn" | "cabal", relicId: string): void {
+    // The fork is resolved — the realm moves on to the boss; Forn leaves.
+    this.hideFornSprite();
     // Almanac lore page 3 — Forn's hammer song OR the Apprentices' manifesto.
     // Mutually exclusive per fork branch.
     const lorePageId =

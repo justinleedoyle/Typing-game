@@ -38,6 +38,7 @@ import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../ga
 import skyIslandBackdrop from "../../art/references/sky-island-clean.png";
 import lanternSpiritSprite from "../../art/sky/lantern-spirit.png";
 import scholarSpiritSprite from "../../art/sky/scholar-spirit.png";
+import ettaSprite from "../../art/sky/etta.png";
 
 // Danger ramps in over the LAST 60% of a spirit's advance — earlier portion
 // stays cream so players can read the word, then it shifts red as the spirit
@@ -51,6 +52,15 @@ const DANGER_RAMP_START = 0.4;
 // so ~160 tall). Sizing is tune-later. */
 const LANTERN_SPIRIT_HEIGHT = 60;
 const SCHOLAR_SPIRIT_HEIGHT = 160;
+// Painted Scholar Etta — a small amber book-spirit child shown during her side
+// encounter. Smallish (~280px) and translucent (resting alpha 0.9). Positioning
+// is tune-later: left of centre (x≈520) so she's clear of the centred typed
+// targets, depth above the backdrop (-100) and below the narration band (y≈150).
+const ETTA_SPRITE_HEIGHT = 280;
+const ETTA_SPRITE_X = 520;
+const ETTA_SPRITE_Y = 760;
+const ETTA_SPRITE_DEPTH = 50;
+const ETTA_RESTING_ALPHA = 0.9;
 
 interface SkyIslandSceneData {
   store: SaveStore;
@@ -160,6 +170,10 @@ export class SkyIslandScene extends Phaser.Scene {
   private fork1Choice: "help-etta" | "steal-flame" | null = null;
   private fork2Choice: "answer-kindly" | "cut-tether" | null = null;
   private ettaDone = false;      // Etta side encounter completed
+  /** Painted Scholar Etta figure, shown only while her encounter is on screen.
+   *  Faded in when her encounter begins, faded/destroyed out when it resolves;
+   *  also cleaned up on SHUTDOWN as a safety net. */
+  private ettaSprite: Phaser.GameObjects.Image | null = null;
   private companionChoice: "take" | "let-go" | null = null;
 
   // Boss state
@@ -202,6 +216,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.fork1Choice = null;
     this.fork2Choice = null;
     this.ettaDone = false;
+    this.ettaSprite = null;
     this.companionChoice = null;
     this.bossContainer = null;
     this.bossSprite = null;
@@ -217,6 +232,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.load.image("sky-island-backdrop", skyIslandBackdrop);
     this.load.image("sky-lantern-spirit", lanternSpiritSprite);
     this.load.image("scholar-spirit", scholarSpiritSprite);
+    this.load.image("etta", ettaSprite);
     preloadWren(this);
   }
 
@@ -283,6 +299,8 @@ export class SkyIslandScene extends Phaser.Scene {
       this.ambientHandle?.stop();
       this.templeLanterns.forEach((g) => g.destroy());
       this.templeLanterns = [];
+      this.ettaSprite?.destroy();
+      this.ettaSprite = null;
     });
 
     this.ambientHandle = playAmbientSkyIsland();
@@ -784,6 +802,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.setNarrator(
       "A side chamber off the temple path. A spirit scholar crouches over a single unburned book.",
     );
+    this.showEtta();
     this.time.delayedCall(2000, () => {
       this.setNarrator(ETTA_LINE);
       this.time.delayedCall(600, () => {
@@ -808,6 +827,7 @@ export class SkyIslandScene extends Phaser.Scene {
           fontSize: 36,
           onComplete: () => {
             this.clearActiveTargets();
+            this.hideEtta();
             this.setNarrator("The scholar watches you go in silence.");
             this.time.delayedCall(1600, () => this.startTemple(nextTempleIdx));
           },
@@ -851,6 +871,7 @@ export class SkyIslandScene extends Phaser.Scene {
                 this.setNarrator(
                   "Scholar Etta's Last Volume — a page appears in the Almanac.",
                 );
+                this.hideEtta();
                 this.time.delayedCall(2200, () => this.startTemple(nextTempleIdx));
               },
             });
@@ -861,6 +882,40 @@ export class SkyIslandScene extends Phaser.Scene {
       });
       this.typingInput.register(liftTarget);
       this.activeTargets.push(liftTarget);
+    });
+  }
+
+  /** Fade Scholar Etta in on the platform. Visual only — additive, and safe to
+   *  call more than once (the side encounter and the fork-1 help path both use
+   *  it). Stored in `ettaSprite` so it can be faded out / cleaned up. */
+  private showEtta(): void {
+    if (this.ettaSprite) return;
+    const sprite = this.add
+      .image(ETTA_SPRITE_X, ETTA_SPRITE_Y, "etta")
+      .setOrigin(0.5, 1)
+      .setDepth(ETTA_SPRITE_DEPTH)
+      .setAlpha(0);
+    sprite.setScale(ETTA_SPRITE_HEIGHT / sprite.height);
+    this.ettaSprite = sprite;
+    this.tweens.add({
+      targets: sprite,
+      alpha: ETTA_RESTING_ALPHA,
+      duration: 700,
+      ease: "Sine.easeOut",
+    });
+  }
+
+  /** Fade Scholar Etta out and destroy her. No-op if she isn't on screen. */
+  private hideEtta(): void {
+    const sprite = this.ettaSprite;
+    if (!sprite) return;
+    this.ettaSprite = null;
+    this.tweens.add({
+      targets: sprite,
+      alpha: 0,
+      duration: 600,
+      ease: "Sine.easeIn",
+      onComplete: () => sprite.destroy(),
     });
   }
 
@@ -907,6 +962,7 @@ export class SkyIslandScene extends Phaser.Scene {
         }
       });
     }
+    this.showEtta();
     this.setNarrator("You carry her books to the shelves. The beacon brightens.");
     this.time.delayedCall(1800, () => {
       this.runPassageChain(
@@ -917,7 +973,10 @@ export class SkyIslandScene extends Phaser.Scene {
           "She says nothing, but the lanterns flicker warmly.",
           "The great beacon above brightens. It was watching.",
         ],
-        () => this.startAct3(),
+        () => {
+          this.hideEtta();
+          this.startAct3();
+        },
       );
     });
   }

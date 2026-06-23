@@ -8,6 +8,7 @@
 import Phaser from "phaser";
 import { PALETTE, PALETTE_HEX, SERIF } from "./palette";
 import type { WordTarget } from "./typingInput";
+import { UI_HEX } from "./ui/uiTheme";
 import { playWordCompleteBurst } from "./vfx";
 
 export interface TextWordTargetOptions {
@@ -69,6 +70,12 @@ export interface TextWordTargetOptions {
     setTint?: (tint: number) => void;
     clearTint?: () => void;
   };
+  /** UI-cohesion pass: a dark legibility stroke around the glyphs so a word reads
+   *  cleanly against busy painted art (TTT's outlined in-world words). Off by default. */
+  outline?: boolean;
+  /** UI-cohesion pass: draw a framed dark plate behind the word — used for choice
+   *  "banners" so a fork reads as a pickable option, not bare floating text. */
+  frame?: "banner";
 }
 
 /** Replace punctuation marks with a neutral placeholder for masked display. */
@@ -162,6 +169,25 @@ export class TextWordTarget implements WordTarget {
     this.container = opts.scene.add
       .container(opts.x, opts.y, [this.typedText, this.remainingText])
       .setSize(this.remainingText.width, this.remainingText.height);
+
+    // UI-cohesion: a dark stroke makes the word legible on busy painted art.
+    if (opts.outline) {
+      this.typedText.setStroke("#0b0a0f", 5);
+      this.remainingText.setStroke("#0b0a0f", 5);
+    }
+    // UI-cohesion: a framed plate behind the word turns a fork into a clear,
+    // pickable banner. Sized to the full word (measured at construction) and
+    // inserted behind the glyphs so the cream text reads on the dark plate.
+    if (opts.frame === "banner") {
+      const w = this.remainingText.width + 44;
+      const h = this.remainingText.height + 22;
+      const plate = opts.scene.add.graphics();
+      plate.fillStyle(UI_HEX.panel, 0.85);
+      plate.fillRoundedRect(-w / 2, -h / 2, w, h, 9);
+      plate.lineStyle(2, UI_HEX.brass, 0.9);
+      plate.strokeRoundedRect(-w / 2, -h / 2, w, h, 9);
+      this.container.addAt(plate, 0);
+    }
 
     this.relayout();
   }

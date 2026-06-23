@@ -9,6 +9,7 @@
 
 import Phaser from "phaser";
 import { PALETTE, PALETTE_HEX, SERIF } from "./palette";
+import { cornerTicks, UI_HEX } from "./ui/uiTheme";
 
 const PIP_COUNT = 8;
 const PIP_W = 16;
@@ -38,6 +39,10 @@ interface HudOptions {
    *  the only ready-cue in realms (e.g. Forge) that have no charge pips. */
   getCastReady?: () => boolean;
   onSustainedLowHeart?: () => void;
+  /** UI-cohesion pass: render as a crafted "console" — brass-framed panel with
+   *  corner brackets (matches the dialogue card + the TTT console) instead of the
+   *  thin ink plate. Opt-in so only re-skinned scenes change. */
+  console?: boolean;
 }
 
 /** Streak length at which the combo flourish first appears. */
@@ -81,17 +86,27 @@ export class HeartSoulHud {
     // Plate spans from the left edge of the labels to slightly past the right edge
     // of the pip rows, centered on the HUD content.
     const plateCenterX = padX - plateW / 2;
+    const consoleStyle = opts.console === true;
     const plate = scene.add
       .rectangle(
         plateCenterX,
         ROW_GAP / 2,
         plateW,
         plateH,
-        PALETTE_HEX.ink,
-        0.55,
+        consoleStyle ? UI_HEX.panel : PALETTE_HEX.ink,
+        consoleStyle ? 0.82 : 0.55,
       )
-      .setStrokeStyle(1, PALETTE_HEX.dim, 0.4);
+      .setStrokeStyle(
+        consoleStyle ? 2 : 1,
+        consoleStyle ? UI_HEX.brass : PALETTE_HEX.dim,
+        consoleStyle ? 0.9 : 0.4,
+      );
     this.container.add(plate);
+    if (consoleStyle) {
+      const ticks = cornerTicks(scene, plateW, plateH, { inset: 5, size: 8 });
+      ticks.setPosition(plateCenterX, ROW_GAP / 2);
+      this.container.add(ticks);
+    }
 
     const heartLabel = scene.add
       .text(-rowW - LABEL_GAP, 0, "heart", {

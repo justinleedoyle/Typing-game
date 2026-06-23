@@ -36,7 +36,7 @@ import { type ClaimMods, TypingInputController } from "../game/typingInput";
 import { WaveDirector } from "../game/waveDirector";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import { pickAdaptiveWords, FORGE_COMMAND_BANK } from "../game/wordBank";
-import { TextWordTarget } from "../game/wordTarget";
+import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
 import forgeBackdrop from "../../art/references/clockwork-forge-clean.png";
 import forgeGolemSprite from "../../art/forge/golem.png";
@@ -202,7 +202,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.drawCatwalk();
     this.drawWren(this.scale.width / 2, CATWALK_Y + 20);
 
-    this.narration = new NarrationManager(this, { y: 150 });
+    this.narration = new NarrationManager(this, { y: 150, framed: true });
 
     this.typingInput = new TypingInputController(this.store);
     this.director = new WaveDirector(this.typingInput.getStats());
@@ -236,6 +236,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       getCombo: () => this.typingInput.getStats().getCombo(),
       getCastReady: () => this.typingInput.getStats().canCast(this.spellCost),
       onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
+      console: true,
     });
 
     // Tier 4 — offensive one-shots fired by a Soul-charged, typed invocation
@@ -317,7 +318,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       }
       const word = words[idx];
       if (word === undefined) return;
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word,
         x: this.scale.width / 2,
@@ -350,7 +351,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const word = CATWALK_WORDS[idx];
     const narration = CATWALK_NARRATIONS[idx];
     const x = this.scale.width / 2 + (idx - 1) * 300;
-    const target = new TextWordTarget({
+    const target = this.makeWord({
       scene: this,
       word,
       x,
@@ -374,7 +375,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     );
 
     // First exchange: Wren types "i know."
-    const reply1 = new TextWordTarget({
+    const reply1 = this.makeWord({
       scene: this,
       word: "i know.",
       x: this.scale.width / 2,
@@ -401,7 +402,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // Spawn a tutorial golem that doesn't advance
     const tutorialGolem = this.spawnStaticGolem(860, FLOOR_Y, false);
 
-    const target = new TextWordTarget({
+    const target = this.makeWord({
       scene: this,
       word: "turn",
       x: this.scale.width / 2,
@@ -425,7 +426,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       "\"Now hold Shift and type 'TURN' — give it a command.\"",
     );
 
-    const target = new TextWordTarget({
+    const target = this.makeWord({
       scene: this,
       word: "TURN",
       x: this.scale.width / 2,
@@ -657,20 +658,22 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.narration.say("forge_fork1_intro");
     this.showFornSprite();
 
-    const helpForn = new TextWordTarget({
+    const helpForn = this.makeWord({
       scene: this,
       word: "help smith forn",
       x: this.scale.width / 2 - 420,
       y: this.scale.height - 200,
       fontSize: 32,
+      frame: "banner",
       onComplete: () => this.startFornBranch(),
     });
-    const joinCabal = new TextWordTarget({
+    const joinCabal = this.makeWord({
       scene: this,
       word: "join the apprentices",
       x: this.scale.width / 2 + 420,
       y: this.scale.height - 200,
       fontSize: 32,
+      frame: "banner",
       onComplete: () => this.startCabalBranch(),
     });
     this.typingInput.register(helpForn);
@@ -789,7 +792,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         return;
       }
       const word = BOSS_PHASE1_WORDS[phaseIdx];
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word,
         x: this.bossContainer.x,
@@ -830,7 +833,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         return;
       }
       const word = BOSS_PHASE2_WORDS[phaseIdx];
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word,
         x: this.bossContainer.x,
@@ -881,7 +884,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // the claim never captures Shift → completion routes through onComplete.
     let repeatCount = 0;
     const runSequence = (): void => {
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word: "stand DOWN",
         x: this.bossContainer.x,
@@ -953,23 +956,25 @@ export class ClockworkForgeScene extends Phaser.Scene {
       "The Command-Golem lies still. What now? Type a choice.",
     );
 
-    const peaceful = new TextWordTarget({
+    const peaceful = this.makeWord({
       scene: this,
       word: "give the peaceful order",
       x: this.scale.width / 2 - 400,
       y: this.scale.height - 200,
       fontSize: 32,
+      frame: "banner",
       onComplete: () => {
         this.fork2Choice = "peaceful";
         this.startFork2PeacefulBranch();
       },
     });
-    const fight = new TextWordTarget({
+    const fight = this.makeWord({
       scene: this,
       word: "fight to the end",
       x: this.scale.width / 2 + 400,
       y: this.scale.height - 200,
       fontSize: 32,
+      frame: "banner",
       onComplete: () => {
         this.fork2Choice = "fought";
         this.startFork2FightBranch();
@@ -987,7 +992,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     );
 
     // Type "STAND DOWN" (capitalized, spell mode preferred)
-    const standDown = new TextWordTarget({
+    const standDown = this.makeWord({
       scene: this,
       word: "STAND DOWN",
       x: this.scale.width / 2,
@@ -1080,20 +1085,22 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.setNarrator(
         "A small brass shape perches on a cooling pipe. It trills softly. Do you call to it?",
       );
-      const whistle = new TextWordTarget({
+      const whistle = this.makeWord({
         scene: this,
         word: "whistle softly",
         x: this.scale.width / 2 - 340,
         y: this.scale.height - 200,
         fontSize: 32,
+        frame: "banner",
         onComplete: () => this.awardSongbird(),
       });
-      const leave = new TextWordTarget({
+      const leave = this.makeWord({
         scene: this,
         word: "leave it be",
         x: this.scale.width / 2 + 340,
         y: this.scale.height - 200,
         fontSize: 32,
+        frame: "banner",
         onComplete: () => this.startTrueNamePassage(),
       });
       this.typingInput.register(whistle);
@@ -1267,6 +1274,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       // unless typed with Shift, so Gregor's lesson ("Lowercase moves them.
       // CAPITALS command them.") is a real mid-word demand, not a VFX gate.
       caseSensitive: isCapitalized,
+      outline: true,
       isWaveActive: () => this.waveActive,
       onTargetAttached: (t) => this.activeTargets.push(t),
       onTargetDetached: (t) => {
@@ -1432,7 +1440,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         advance();
         return;
       }
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word,
         x: this.scale.width / 2,
@@ -1632,6 +1640,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
     target.defeat();
   }
 
+  /** UI-cohesion: every Forge word target goes through here so it picks up the
+   *  legibility outline by default (TTT-style). Choices pass frame: "banner". */
+  private makeWord(opts: TextWordTargetOptions): TextWordTarget {
+    return new TextWordTarget({ outline: true, ...opts });
+  }
+
   private clearActiveTargets(): void {
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
@@ -1666,25 +1680,23 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private drawCatwalk(): void {
+    // A quiet stone-and-iron ledge for Wren to stand on. The old version drew a
+    // bright brass railing line + grating dashes that read as a UI overlay across
+    // the painting; this is a low-key ledge that sits in the world instead.
     const g = this.add.graphics();
-    // Main catwalk bar
-    g.fillStyle(0x2a2020, 1);
-    g.fillRect(0, CATWALK_Y, this.scale.width, 22);
-    // Brass railing
-    g.lineStyle(3, PALETTE_HEX.brass, 0.7);
-    g.beginPath();
-    g.moveTo(0, CATWALK_Y - 2);
-    g.lineTo(this.scale.width, CATWALK_Y - 2);
-    g.strokePath();
-    // Grating slots
-    g.fillStyle(0x141010, 0.6);
-    for (let i = 0; i < 60; i++) {
-      g.fillRect(i * 32 + 4, CATWALK_Y + 4, 14, 14);
-    }
-    // Support struts
-    g.fillStyle(0x382828, 1);
+    const w = this.scale.width;
+    g.fillStyle(0x241c18, 1);
+    g.fillRect(0, CATWALK_Y, w, 26);
+    // A soft forge-lit top edge — a hint of warm metal, not a drawn line.
+    g.fillStyle(0x4a3a2a, 0.85);
+    g.fillRect(0, CATWALK_Y, w, 3);
+    // A faint shadow just beneath, to seat the ledge on the backdrop.
+    g.fillStyle(0x000000, 0.22);
+    g.fillRect(0, CATWALK_Y + 26, w, 8);
+    // Subtle support struts.
+    g.fillStyle(0x2c2220, 1);
     for (const sx of [280, 680, 1080, 1480, 1780]) {
-      g.fillRect(sx, CATWALK_Y + 22, 10, 140);
+      g.fillRect(sx, CATWALK_Y + 26, 10, 130);
     }
   }
 

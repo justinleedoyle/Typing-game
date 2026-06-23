@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { playClack } from "../audio/clack";
 import { setAudioLevel } from "../audio/context";
+import { applyDevUnlock, parseDevTarget } from "../game/devUnlock";
 import { PALETTE, SERIF } from "../game/palette";
 import {
   SaveStore,
@@ -92,10 +93,24 @@ export class TitleScene extends Phaser.Scene {
     if (this.transitioning) return;
     this.transitioning = true;
     this.store = await this.storePromise;
+    // Dev unlock (opt-in via ?dev) — unlock every realm + fill the satchel, and
+    // with ?dev=<realmId> jump straight into that realm. For art + feel-tuning;
+    // a no-op in normal play. The unlock persists to the cloud save (the login).
+    const dev = parseDevTarget(
+      typeof location !== "undefined" ? location.search : "",
+    );
+    if (dev.unlock && this.store) this.store.update(applyDevUnlock);
     this.cameras.main.fadeOut(600, 11, 10, 15);
     this.cameras.main.once(
       Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
       () => {
+        if (dev.realmSceneKey) {
+          this.scene.start(dev.realmSceneKey, {
+            store: this.store,
+            revisit: false,
+          });
+          return;
+        }
         this.scene.start("PortalChamberScene", { store: this.store });
       },
     );

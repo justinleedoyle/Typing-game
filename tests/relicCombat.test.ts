@@ -56,6 +56,14 @@ const CANON_COMBAT: Array<
   ["ettas-ledger", "perWaveProc", "auto-ease", false],
   ["shrine-token", "perWaveProc", "forgive-wave-miss", false],
   ["wind-phrase", "perWaveProc", "mist-clear", false],
+  // Companions (§5.5.9) that also help in-realm, each effect paralleling its
+  // finale role: glass-fish + lantern-moth lit the dark → warm-light; brass-
+  // songbird made foes "stop and listen" → quiet-advance. (snow-fox = companion-
+  // trip, added with its scene wiring; wisp-cat stays finale-only — earned in the
+  // last realm, it has no forward realm to act in.)
+  ["glass-fish", "passive", "warm-light", false],
+  ["lantern-moth", "passive", "warm-light", false],
+  ["brass-songbird", "passive", "quiet-advance", false],
 ];
 
 // Relics that stay finale-only (no in-realm combat), transcribed independently.
@@ -64,11 +72,9 @@ const CANON_FINALE_ONLY = [
   "ash-vial",
   "bone-flute",
   "ghost-kings-promise",
-  // the 5 companions
+  // snow-fox-cub gains companion-trip in the next PR; wisp-cat stays finale-only
+  // (earned in the last realm — no forward realm to act in).
   "snow-fox-cub",
-  "glass-fish",
-  "brass-songbird",
-  "lantern-moth",
   "wisp-cat",
 ];
 
@@ -95,7 +101,7 @@ await suite("relicCombat: combat blocks match the canon assignment exactly", () 
   // together they cover all 27 relics — so a new relic can't silently miss a
   // (deliberate) decision about its in-realm effect.
   const withCombat = RELIC_IDS.filter((id) => RELIC_EFFECTS[id]!.combat);
-  assertEqual(withCombat.length, CANON_COMBAT.length, "18 relics carry a combat block");
+  assertEqual(withCombat.length, CANON_COMBAT.length, "21 relics carry a combat block");
   assertEqual(
     CANON_COMBAT.length + CANON_FINALE_ONLY.length,
     RELIC_IDS.length,

@@ -30,6 +30,8 @@ import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../ga
 import sunkenBellBackdrop from "../../art/references/sunken-bell-clean.png";
 import bellGhostSprite from "../../art/bell/ghost.png";
 import bellWardenSprite from "../../art/bell/bell-warden.png";
+import olinSprite from "../../art/bell/olin.png";
+import aurlandSprite from "../../art/bell/aurland.png";
 
 // Danger ramps in over the LAST 60% of a ghost's advance — earlier portion
 // stays cream so players can read the word, then it shifts red as the ghost
@@ -61,6 +63,13 @@ const WREN_Y = 820;
 const GHOST_SPRITE_HEIGHT = 96;
 const WARDEN_SPRITE_HEIGHT = 320;
 
+// Painted NPC display heights (px). Olin is a small hunched figure — the old
+// procedural body (head ~742px down to staff foot ~870px) spanned ~130px, so
+// ~180px reads as a slightly-larger painted figure on the same pew. King
+// Aurland is a tall, freed-king beat — drawn larger and standing. Tune on live.
+const OLIN_SPRITE_HEIGHT = 180;
+const AURLAND_SPRITE_HEIGHT = 360;
+
 // The Warden's painted sprite sits at the same anchor the procedural bell used
 // (trapezoid centred at bx, vertical mid-point ~by+110). Keep these in sync with
 // the values the procedural drawWarden baked in.
@@ -75,6 +84,9 @@ export class SunkenBellScene extends Phaser.Scene {
   private activeTargets: TextWordTarget[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
+  /** King Aurland's painted sprite — fades in when he's freed at fork 2 and is
+   *  faded/destroyed when the realm moves past the fork (or on shutdown). */
+  private aurlandImage?: Phaser.GameObjects.Image;
 
   private beatClock!: BeatClock;
   private beatRing!: Phaser.GameObjects.Graphics;
@@ -141,6 +153,8 @@ export class SunkenBellScene extends Phaser.Scene {
     this.load.image("sunken-bell-backdrop", sunkenBellBackdrop);
     this.load.image("bell-ghost", bellGhostSprite);
     this.load.image("bell-warden", bellWardenSprite);
+    this.load.image("olin", olinSprite);
+    this.load.image("aurland", aurlandSprite);
     preloadWren(this);
   }
 
@@ -216,6 +230,8 @@ export class SunkenBellScene extends Phaser.Scene {
       this.beatClock.stop();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
+      this.aurlandImage?.destroy();
+      this.aurlandImage = undefined;
     });
 
     this.ambientHandle = playAmbientBell();
@@ -1240,6 +1256,10 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private startFork2FreeAurland(): void {
+    // Triumphant beat: the freed king fades in, standing, while the passage is
+    // typed. Placed left-of-centre so he's clear of Wren (x=960) and the lower
+    // typing targets, and well below the narration band (y≈150).
+    this.showAurland();
     const chain = [
       { word: "break the silence", narrator: "You are remembered." },
       { word: "you are remembered", narrator: "Swim free, king." },
@@ -1254,7 +1274,36 @@ export class SunkenBellScene extends Phaser.Scene {
         }
       });
       playChime();
+      // Realm moves past the fork — the king swims off as the glass-fish gate
+      // begins.
+      this.hideAurland();
       this.startGlassFishGate();
+    });
+  }
+
+  /** Fade the painted King Aurland in, standing centre-left, as he's freed. */
+  private showAurland(): void {
+    if (this.aurlandImage) return;
+    const sprite = this.add
+      .image(660, 760, "aurland")
+      .setOrigin(0.5, 1)
+      .setAlpha(0);
+    sprite.setScale(AURLAND_SPRITE_HEIGHT / sprite.height);
+    this.aurlandImage = sprite;
+    this.tweens.add({ targets: sprite, alpha: 1, duration: 1200, ease: "Sine.easeIn" });
+  }
+
+  /** Fade King Aurland out and destroy him as the realm moves past the fork. */
+  private hideAurland(): void {
+    const sprite = this.aurlandImage;
+    if (!sprite) return;
+    this.aurlandImage = undefined;
+    this.tweens.add({
+      targets: sprite,
+      alpha: 0,
+      duration: 1000,
+      ease: "Sine.easeOut",
+      onComplete: () => sprite.destroy(),
     });
   }
 
@@ -1618,25 +1667,16 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private drawOlin(): void {
-    // Hunched figure on a pew — simple silhouette
+    // Wooden pew (kept procedural — the sprite is just Olin himself).
     const g = this.add.graphics();
-    // Pew
     g.fillStyle(0x1a2030, 1);
     g.fillRect(200, 820, 300, 20);
     g.fillRect(200, 820, 10, 60);
     g.fillRect(490, 820, 10, 60);
-    // Body (hunched)
-    g.fillStyle(0x1e1a28, 0.85);
-    g.fillEllipse(260, 800, 60, 80);
-    // Head (bowed)
-    g.fillCircle(255, 760, 18);
-    // Suggested staff
-    g.lineStyle(2, 0x2a2840, 0.8);
-    g.beginPath();
-    g.moveTo(290, 760);
-    g.lineTo(310, 870);
-    g.strokePath();
-    void g; // used
+    // Painted Old Olin — a small hunched figure, feet on the pew top. Replaces
+    // the old procedural body/head/staff silhouette.
+    const sprite = this.add.image(300, 822, "olin").setOrigin(0.5, 1);
+    sprite.setScale(OLIN_SPRITE_HEIGHT / sprite.height);
   }
 }
 

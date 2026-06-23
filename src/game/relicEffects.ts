@@ -439,6 +439,14 @@ export const SOUL_THRIFT_MULT = 0.8;
  *  lever that stops a protection-stacked satchel from going invulnerable: own
  *  four "save me" relics, still get only this many saves per realm. */
 export const GRACE_POOL_CAP = 2;
+/** Soul a player must bank before an OFFENSIVE one-shot (toll-strike / bind-beat
+ *  / jam-foe) lights, and the amount firing it spends — the keyboard-native
+ *  invocation is gated on the same clean-typing economy that fuels spells, so an
+ *  offensive relic is *charged*, not free. Kept SEPARATE from SPELL_COST (and
+ *  unaffected by soul-thrift): it's a relic invocation, not a modifier-spell, and
+ *  it must mean the same thing in Bell/Sky/Wood, which have no spell casts. Below
+ *  SOUL_MAX (100) so a full charge is reachable in one clean run. Tune on live. */
+export const ONESHOT_SOUL_COST = 60;
 
 export interface CombatLoadout {
   /** Multiply an enemy's advance DURATION by this (≥1 ⇒ slower). 1 = no change. */

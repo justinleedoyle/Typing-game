@@ -135,9 +135,22 @@ Soul effects are gated to the Forge (the only forward realm with a cast economy)
 Bell + Sky (the only realms with a losable economy). The empty-satchel run is unaffected — every
 effect no-ops at zero.
 
-- ◻ **Optional follow-ups** — the offensive one-shots (`toll-strike` / `bind-beat` / `jam-foe`,
-  declared but deferred — they need a keyboard-native invocation UX) and companions in-realm
-  (snow-fox / glass-fish / brass-songbird / lantern-moth / wisp-cat).
+- ◧ **Offensive one-shots** (`toll-strike` / `bind-beat` / `jam-foe`) — **invocation UX settled +
+  Forge slice landed.** They fire by the keyboard-native route signed off with the user: a
+  **Soul-charged, TYPED invocation word** (no modifier — Alt dead-keys on macOS). When an offensive
+  relic is owned and the Soul tank fills to `ONESHOT_SOUL_COST`, a charged word (e.g. `toll`) joins
+  the combat field; typing it spends the Soul and fires once per realm. Pure vocabulary + "strongest
+  foe" pick + charge gate in `src/game/oneShotInvocation.ts` (unit-tested); the charge widget in
+  `src/game/oneShotInvoker.ts` (a realm-agnostic Phaser shell, sibling to `MovingWordEnemy`); the
+  realm owns the consequence + eligibility (the boss, kept out of `this.golems`, is never one-shot).
+  - ✅ **Forge** — `toll-strike` (bells-tongue, earned on the Bell's force fork) fells the strongest
+    live golem with a bell toll — **#TBD**. (Forge is the only forward realm where an offensive
+    one-shot is usable: Winter awards none, so the Bell can't fire one forward.)
+  - ◻ **Sky** — adds `jam-foe` (sabotage-wrench, earned in the Forge): seize the strongest foe for
+    the wave (needs a `jam` capability on `MovingWordEnemy`).
+  - ◻ **Wood** — adds `bind-beat` (tether-cord, earned in the Sky): briefly freeze every live foe
+    (needs a `freeze` capability) — richest satchel, can hold all three.
+- ◻ **Companions in-realm** — snow-fox / glass-fish / brass-songbird / lantern-moth / wisp-cat.
 
 ---
 
@@ -148,4 +161,4 @@ effect no-ops at zero.
 - **The real-time game can't be automated headlessly** (a backgrounded tab freezes Phaser's rAF loop),
   so PRs are verified via `tsc` + `vite build` + throwaway `npx tsx` logic harnesses against the real code.
 
-_Last updated: 2026-06-22 — Tier 0 + Tier 1 (5/5) + **Tier 2 shared-enemy refactor COMPLETE** (#107 Forge+the shared type · #108 Winter · #109 Wood · #110 Bell+split) + Tier 3 finale (#96–#100) + Tier 4 relics-live (#101–#105). The advancing word-enemy is now one `MovingWordEnemy` (pure math in `movingWordMath.ts`), feel-identical across the four realms; Sky's `ScrollingPhrase` stays a sibling. **All four roadmap tiers + the finale are now done.** Open tails: offensive one-shots (need a keyboard invocation UX) + companions in-realm; the optional Forge `Ctrl` modifier; the deferred MultiWord fork/passage helpers. The whole-arc feel-tuning playthrough still gates "done"._
+_Last updated: 2026-06-22 — All four roadmap tiers + the finale done (Tier 0 + Tier 1 5/5 + Tier 2 #107–#110 + Tier 3 #96–#100 + Tier 4 relics-live #101–#105). **Now extending Tier 4: the deferred OFFENSIVE one-shots.** Invocation UX settled with the user — a **Soul-charged, typed invocation word** (no modifier; Alt dead-keys on macOS) — and the **Forge vertical slice** (`toll-strike`) landed: pure logic in `oneShotInvocation.ts` (tested), the charge widget in `oneShotInvoker.ts` (a realm-agnostic shell), wired into `ClockworkForgeScene`. Next: `jam-foe` (Sky) + `bind-beat` (Wood), each adding one enemy capability. Other open tails: companions in-realm; the optional Forge `Ctrl` modifier; the deferred MultiWord fork/passage helpers. The whole-arc feel-tuning playthrough still gates "done"._

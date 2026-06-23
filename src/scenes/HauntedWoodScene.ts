@@ -17,6 +17,7 @@ import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLor
 import {
   BIND_BEAT_FREEZE_MS,
   type CombatLoadout,
+  COMPANION_TRIP_DELAY_MS,
   ONESHOT_SOUL_COST,
   resolveCombatLoadout,
 } from "../game/relicEffects";
@@ -25,6 +26,7 @@ import {
   type OffensiveOneShot,
 } from "../game/oneShotInvocation";
 import { OneShotInvoker, type OneShotThreat } from "../game/oneShotInvoker";
+import { tripMostAdvancedFoe } from "../game/companionTrip";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
@@ -1255,13 +1257,11 @@ export class HauntedWoodScene extends Phaser.Scene {
     const threats: OneShotThreat<MovingWordEnemy>[] = [];
     for (const g of this.ghosts) {
       if (g.isDefeated() || g.isFrozen() || !g.target) continue;
-      const remaining = Math.hypot(
-        WREN_X - g.container.x,
-        WREN_Y - g.container.y,
-      );
-      const total = Math.hypot(WREN_X - g.restX, WREN_Y - g.restY) || 1;
-      const progress = Math.min(1, Math.max(0, 1 - remaining / total));
-      threats.push({ enemy: g, progress, wordLength: g.word.length });
+      threats.push({
+        enemy: g,
+        progress: g.advanceProgress(),
+        wordLength: g.word.length,
+      });
     }
     return threats;
   }
@@ -1327,6 +1327,16 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.waveForgivenessReady =
       this.combat.perWaveProcs.includes("forgive-wave-miss");
     this.applyAutoEase();
+    this.applyCompanionTrip();
+  }
+
+  /** companion-trip (snow-fox-cub): a short while into each wave the fox darts in
+   *  and trips the most-advanced ghost (a stumble). No-op without the relic. */
+  private applyCompanionTrip(): void {
+    if (!this.combat.perWaveProcs.includes("companion-trip")) return;
+    this.time.delayedCall(COMPANION_TRIP_DELAY_MS, () =>
+      tripMostAdvancedFoe(this, this.ghosts),
+    );
   }
 
   /** auto-ease (Etta's Ledger — owned by the time Wren reaches the Wood): mark

@@ -48,7 +48,8 @@ export type CombatEffectId =
   | "jam-foe"              // 1-shot (offensive): disable the hardest enemy
   | "auto-ease"            // per-wave: pre-mark the easiest enemy at wave start
   | "forgive-wave-miss"    // per-wave: forgive the first miss of each wave
-  | "mist-clear";          // per-wave: the mist lifts briefly each wave (Wood)
+  | "mist-clear"           // per-wave: the mist lifts briefly each wave (Wood)
+  | "companion-trip";      // per-wave: the snow-fox trips the most-advanced foe
 
 /** The three KINDS the whole vocabulary reduces to (the brief's
  *  passive / one-shot / per-wave proc). */
@@ -158,7 +159,20 @@ export const RELIC_EFFECTS: Record<string, RelicEffect> = {
       announce: "the old one's pelt keeps the cold dark back.",
     },
   },
-  "snow-fox-cub": { alignment: "neutral", isCompanion: true },
+  // snow-fox darted in and tripped a charging minion in the duel; in-realm it
+  // does the same once a wave — knocks the most-advanced foe back. Only the
+  // MovingWordEnemy realms it can reach forward (the Sky's banners have no
+  // knock-back); Winter is where it's earned, so it never acts there forward.
+  "snow-fox-cub": {
+    alignment: "neutral",
+    isCompanion: true,
+    combat: {
+      kind: "perWaveProc",
+      effect: "companion-trip",
+      appliesIn: ["sunken-bell", "clockwork-forge", "haunted-wood"],
+      announce: "the snow-fox runs with you — it trips the nearest foe each wave.",
+    },
+  },
 
   // ─── Sunken Bell ───────────────────────────────────────────────────────────
   "quiet-chant": {
@@ -487,6 +501,10 @@ export const ONESHOT_SOUL_COST = 60;
  *  breather to catch up, not a kill: long enough to clear a word or two, short
  *  enough that the wave resumes its pressure. Tune on the live build. */
 export const BIND_BEAT_FREEZE_MS = 3000;
+/** companion-trip (snow-fox) — how long after a wave starts the fox darts in to
+ *  trip the most-advanced foe. A short delay so a foe has begun its approach
+ *  (and attached its word) before the trip lands. Tune on the live build. */
+export const COMPANION_TRIP_DELAY_MS = 3500;
 
 export interface CombatLoadout {
   /** Multiply an enemy's advance DURATION by this (≥1 ⇒ slower). 1 = no change. */

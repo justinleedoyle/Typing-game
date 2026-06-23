@@ -20,6 +20,7 @@ import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import {
   type CombatLoadout,
+  COMPANION_TRIP_DELAY_MS,
   ONESHOT_SOUL_COST,
   resolveCombatLoadout,
 } from "../game/relicEffects";
@@ -28,6 +29,7 @@ import {
   type OffensiveOneShot,
 } from "../game/oneShotInvocation";
 import { OneShotInvoker, type OneShotThreat } from "../game/oneShotInvoker";
+import { tripMostAdvancedFoe } from "../game/companionTrip";
 import type { SaveStore } from "../game/saveState";
 import { SPELL_COST } from "../game/sessionStats";
 import { type ClaimMods, TypingInputController } from "../game/typingInput";
@@ -1467,6 +1469,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.combat.perWaveProcs.includes("forgive-wave-miss");
     this.typingInput.getStats().bankSoulFraction(this.combat.soulBankedFraction);
     this.applyAutoEase();
+    this.applyCompanionTrip();
+  }
+
+  /** companion-trip (snow-fox-cub): a short while into each wave the fox darts in
+   *  and trips the most-advanced golem (a stumble). No-op without the relic. */
+  private applyCompanionTrip(): void {
+    if (!this.combat.perWaveProcs.includes("companion-trip")) return;
+    this.time.delayedCall(COMPANION_TRIP_DELAY_MS, () =>
+      tripMostAdvancedFoe(this, this.golems),
+    );
   }
 
   /** auto-ease (Etta's Ledger): glow the easiest (shortest-word) golem of the
@@ -1522,16 +1534,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
    *  its true-name challenge is excluded by construction. Progress is the
    *  horizontal close on Wren (the Forge advance is straight). */
   private liveGolemThreats(): OneShotThreat<MovingWordEnemy>[] {
-    const wrenX = this.scale.width / 2;
     const threats: OneShotThreat<MovingWordEnemy>[] = [];
     for (const g of this.golems) {
-      if (g.isDefeated() || !g.target) continue;
-      const span = Math.abs(wrenX - g.restX) || 1;
-      const progress = Math.min(
-        1,
-        Math.max(0, Math.abs(g.container.x - g.restX) / span),
-      );
-      threats.push({ enemy: g, progress, wordLength: g.word.length });
+      if (g.isDefeated() || g.isFrozen() || !g.target) continue;
+      threats.push({
+        enemy: g,
+        progress: g.advanceProgress(),
+        wordLength: g.word.length,
+      });
     }
     return threats;
   }

@@ -155,13 +155,16 @@ effect no-ops at zero.
     bind = a timed room-wide hold that thaws + resumes; both keep the word typeable. toll reuses
     `defeat()`. The boss's every-punctuation capstone is a stationary passage (not in `this.ghosts`),
     so it stays untouchable — **#TBD**.
-- ◧ **Companions in-realm** — the 5 tamed creatures (§5.5.9) now also help in-realm, each effect
+- ✅ **Companions in-realm** — the 5 tamed creatures (§5.5.9) now also help in-realm, each effect
   paralleling its finale role, bounded by the same caps as the relics.
   - ✅ **Passive companions** — glass-fish + lantern-moth lit dark spaces in the duel → they join the
     (capped) `warm-light` pool; brass-songbird made foes "stop and listen" → `quiet-advance`. All
-    reuse effects the scenes already consume, so descriptor-only (no scene wiring) — **#TBD**.
-  - ◻ **snow-fox-cub** — tripped a charger in the duel → a new `companion-trip` perWaveProc (once a
-    wave, knock the most-advanced foe back) in the MovingWordEnemy realms it can reach (Bell/Forge/Wood).
+    reuse effects the scenes already consume, so descriptor-only (no scene wiring) — **#114**.
+  - ✅ **snow-fox-cub** — tripped a charger in the duel → a new `companion-trip` perWaveProc (a short
+    while into each wave the fox knocks the most-advanced foe back) in the MovingWordEnemy realms it
+    can reach (Bell/Forge/Wood). New `MovingWordEnemy.advanceProgress()` is the shared "most-advanced"
+    signal (the one-shot threat accessors now reuse it); the trip itself is `src/game/companionTrip.ts`
+    — **#TBD**.
   - ✖ **wisp-cat** — stays finale-only: earned in the last realm, it has no forward realm to act in.
 
 ---

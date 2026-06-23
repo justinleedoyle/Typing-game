@@ -1507,26 +1507,22 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   // ─── Tier 4 relic helpers ───────────────────────────────────────────────────
 
-  /** Surface the active relic effects once, before the realm's first combat, so
-   *  the player sees their earlier-realm choices paying off. Empty loadout
-   *  (incl. revisits) passes straight through. */
+  /** Surface that the satchel is doing something here — once, briefly. The old
+   *  version flashed every relic's line in sequence (a flood with a full satchel);
+   *  the persistent loadout bar now shows WHAT you carry, so this is a single quiet
+   *  beat. A lone relic still gets its own line. Empty loadout passes straight through. */
   private announceCombatLoadout(onDone: () => void): void {
     const lines = this.combat.announcements;
     if (lines.length === 0) {
       onDone();
       return;
     }
-    let i = 0;
-    const showNext = (): void => {
-      if (i >= lines.length) {
-        this.time.delayedCall(700, onDone);
-        return;
-      }
-      this.setNarrator(lines[i]!);
-      i += 1;
-      this.time.delayedCall(2200, showNext);
-    };
-    showNext();
+    this.setNarrator(
+      lines.length === 1
+        ? lines[0]!
+        : "Your satchel stirs — its relics answer here.",
+    );
+    this.time.delayedCall(1900, onDone);
   }
 
   /** Per-combat-wave relic procs: re-arm forgive-wave-miss, pre-bank Soul
@@ -1680,24 +1676,41 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private drawCatwalk(): void {
-    // A quiet stone-and-iron ledge for Wren to stand on. The old version drew a
-    // bright brass railing line + grating dashes that read as a UI overlay across
-    // the painting; this is a low-key ledge that sits in the world instead.
+    // A suspended iron walkway for Wren to stand on. It needs real THICKNESS +
+    // visible supports so Wren reads as standing on a structure, not floating —
+    // but without the old bright brass railing + grating dashes that read as a UI
+    // overlay across the painting.
     const g = this.add.graphics();
     const w = this.scale.width;
-    g.fillStyle(0x241c18, 1);
-    g.fillRect(0, CATWALK_Y, w, 26);
-    // A soft forge-lit top edge — a hint of warm metal, not a drawn line.
-    g.fillStyle(0x4a3a2a, 0.85);
-    g.fillRect(0, CATWALK_Y, w, 3);
-    // A faint shadow just beneath, to seat the ledge on the backdrop.
-    g.fillStyle(0x000000, 0.22);
-    g.fillRect(0, CATWALK_Y + 26, w, 8);
-    // Subtle support struts.
-    g.fillStyle(0x2c2220, 1);
-    for (const sx of [280, 680, 1080, 1480, 1780]) {
-      g.fillRect(sx, CATWALK_Y + 26, 10, 130);
+    const top = CATWALK_Y;
+    // Support trusses descending toward the foundry floor (drawn first, so the
+    // deck sits in front of them and they read as holding it up).
+    g.fillStyle(0x191310, 1);
+    for (const sx of [150, 470, 820, 1100, 1450, 1770]) {
+      g.fillRect(sx, top + 34, 12, 150);
+      g.fillRect(sx + 30, top + 34, 12, 150);
+      // a cross-brace
+      g.lineStyle(3, 0x191310, 1);
+      g.beginPath();
+      g.moveTo(sx + 6, top + 44);
+      g.lineTo(sx + 36, top + 150);
+      g.moveTo(sx + 36, top + 44);
+      g.lineTo(sx + 6, top + 150);
+      g.strokePath();
     }
+    // Deck — a solid plate with thickness: top surface (where Wren stands), a
+    // darker front face, a warm forge-lit top edge, and a dark underline.
+    g.fillStyle(0x2a211b, 1); // front face / body
+    g.fillRect(0, top, w, 34);
+    g.fillStyle(0x3a2e24, 1); // top deck surface
+    g.fillRect(0, top, w, 13);
+    g.fillStyle(0x5a4632, 0.85); // warm top highlight edge
+    g.fillRect(0, top, w, 3);
+    g.fillStyle(0x120e0b, 1); // dark underline at the deck's bottom
+    g.fillRect(0, top + 31, w, 3);
+    // Soft cast shadow under the deck.
+    g.fillStyle(0x000000, 0.3);
+    g.fillRect(0, top + 34, w, 12);
   }
 
   private drawWren(x: number, y: number): void {

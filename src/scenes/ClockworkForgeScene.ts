@@ -7,7 +7,12 @@ import { pickLowHeartLine } from "../audio/runaLines";
 import { playDamageThud } from "../audio/damageThud";
 import { playSparkZap } from "../audio/sparkZap";
 import { playWaveSting } from "../audio/waveSting";
-import { flashDamageVignette, playChainSpark } from "../game/vfx";
+import { playBellToll } from "../audio/bellToll";
+import {
+  flashDamageVignette,
+  playChainSpark,
+  playWordCompleteBurst,
+} from "../game/vfx";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
@@ -15,8 +20,14 @@ import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import {
   type CombatLoadout,
+  ONESHOT_SOUL_COST,
   resolveCombatLoadout,
 } from "../game/relicEffects";
+import {
+  isOffensiveOneShot,
+  type OffensiveOneShot,
+} from "../game/oneShotInvocation";
+import { OneShotInvoker, type OneShotThreat } from "../game/oneShotInvoker";
 import type { SaveStore } from "../game/saveState";
 import { SPELL_COST } from "../game/sessionStats";
 import { type ClaimMods, TypingInputController } from "../game/typingInput";
@@ -115,6 +126,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private combat: CombatLoadout = resolveCombatLoadout([], "clockwork-forge");
   private spellCost = SPELL_COST;
   private waveForgivenessReady = false;
+  // Tier 4 — the Soul-charged, typed invocation for offensive one-shots. In the
+  // Forge that's toll-strike (bells-tongue, earned in the Bell on a force fork):
+  // a charged "toll" word strikes the strongest live golem. Null until create().
+  private oneShotInvoker: OneShotInvoker<MovingWordEnemy> | null = null;
 
   /** Forge glow pools drawn on the floor. */
   private forgeGlowGraphics!: Phaser.GameObjects.Graphics;
@@ -140,6 +155,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.store = data.store;
     this.golems = [];
     this.activeTargets = [];
+    this.oneShotInvoker = null;
     this.shiftHeld = false;
     this.waveActive = false;
     this.fork1Choice = null;
@@ -200,10 +216,32 @@ export class ClockworkForgeScene extends Phaser.Scene {
       getCastReady: () => this.typingInput.getStats().canCast(this.spellCost),
       onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
     });
+
+    // Tier 4 — offensive one-shots fired by a Soul-charged, typed invocation
+    // word. In the Forge the only forward-usable one is toll-strike (bells-tongue
+    // from the Bell's force fork); a charged "toll" strikes the strongest golem.
+    // The boss is NOT in `this.golems`, so its true-name challenge is never
+    // skipped by a one-shot. Inert when no offensive relic is owned (empty list).
+    const offensiveOneShots = this.combat.oneShots.filter(isOffensiveOneShot);
+    this.oneShotInvoker = new OneShotInvoker<MovingWordEnemy>({
+      scene: this,
+      typingInput: this.typingInput,
+      available: offensiveOneShots,
+      cost: ONESHOT_SOUL_COST,
+      getSoul: () => this.typingInput.getStats().getSoul(),
+      spendSoul: (cost) => this.typingInput.getStats().spendSoul(cost),
+      getThreats: () => this.liveGolemThreats(),
+      applyEffect: (effect, targets) => this.applyOneShot(effect, targets),
+      isActive: () => this.waveActive,
+      announce: (text) => this.setNarrator(text),
+    });
+
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.input.keyboard?.on("keyup", this.onKeyUp, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
+      this.oneShotInvoker?.destroy();
+      this.oneShotInvoker = null;
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.input.keyboard?.off("keyup", this.onKeyUp, this);
       this.ambientHandle?.stop();
@@ -1476,6 +1514,52 @@ export class ClockworkForgeScene extends Phaser.Scene {
       ease: "Sine.easeOut",
       onComplete: () => txt.destroy(),
     });
+  }
+
+  /** The live, eligible golems summarised for an offensive one-shot's "strongest
+   *  foe" pick. Only golems with an attached word are threats (during the entrance
+   *  and between knock-backs they're mute); the boss isn't in `this.golems`, so
+   *  its true-name challenge is excluded by construction. Progress is the
+   *  horizontal close on Wren (the Forge advance is straight). */
+  private liveGolemThreats(): OneShotThreat<MovingWordEnemy>[] {
+    const wrenX = this.scale.width / 2;
+    const threats: OneShotThreat<MovingWordEnemy>[] = [];
+    for (const g of this.golems) {
+      if (g.isDefeated() || !g.target) continue;
+      const span = Math.abs(wrenX - g.restX) || 1;
+      const progress = Math.min(
+        1,
+        Math.max(0, Math.abs(g.container.x - g.restX) / span),
+      );
+      threats.push({ enemy: g, progress, wordLength: g.word.length });
+    }
+    return threats;
+  }
+
+  /** Run an offensive one-shot's consequence. The invoker has already picked the
+   *  target(s), spent the Soul, and consumed the once-per-realm charge; the realm
+   *  owns the kill/seize/freeze + VFX. The Forge only fires toll-strike forward;
+   *  jam-foe / bind-beat arrive with the Sky / Wood migrations. */
+  private applyOneShot(
+    effect: OffensiveOneShot,
+    targets: readonly MovingWordEnemy[],
+  ): void {
+    if (effect === "toll-strike") this.tollStrike(targets[0]);
+  }
+
+  /** toll-strike (bells-tongue): the bell's tongue rings and fells the strongest
+   *  golem outright — a deep toll + an ember bloom where it stood. A programmatic
+   *  defeat (like the chain-spark), so no command flourish, just the kill. */
+  private tollStrike(target: MovingWordEnemy | undefined): void {
+    if (!target || target.isDefeated()) return;
+    playBellToll();
+    playWordCompleteBurst(this, target.container.x, target.restY - 80, {
+      color: PALETTE_HEX.ember,
+      count: 16,
+      radius: 60,
+    });
+    this.cameras.main.shake(160, 0.004);
+    target.defeat();
   }
 
   private clearActiveTargets(): void {

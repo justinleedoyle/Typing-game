@@ -14,6 +14,7 @@ await import("./sayResolution.test.ts");
 await import("./pureMath.test.ts");
 await import("./relicEffects.test.ts");
 await import("./relicCombat.test.ts");
+await import("./oneShotInvocation.test.ts");
 await import("./wordTarget.test.ts");
 await import("./movingWordEnemy.test.ts");
 await import("./finaleFacets.test.ts");

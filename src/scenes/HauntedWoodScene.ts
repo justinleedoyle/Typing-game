@@ -6,16 +6,25 @@ import { playClaim } from "../audio/claim";
 import { pickLowHeartLine } from "../audio/runaLines";
 import { playDamageThud } from "../audio/damageThud";
 import { playWaveSting } from "../audio/waveSting";
-import { flashDamageVignette } from "../game/vfx";
+import { playBellToll } from "../audio/bellToll";
+import { playSparkZap } from "../audio/sparkZap";
+import { flashDamageVignette, playWordCompleteBurst } from "../game/vfx";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
-import { PALETTE, SERIF } from "../game/palette";
+import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import {
+  BIND_BEAT_FREEZE_MS,
   type CombatLoadout,
+  ONESHOT_SOUL_COST,
   resolveCombatLoadout,
 } from "../game/relicEffects";
+import {
+  isOffensiveOneShot,
+  type OffensiveOneShot,
+} from "../game/oneShotInvocation";
+import { OneShotInvoker, type OneShotThreat } from "../game/oneShotInvoker";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
@@ -101,6 +110,11 @@ export class HauntedWoodScene extends Phaser.Scene {
   // neutral on a revisit, which has no combat.
   private combat: CombatLoadout = resolveCombatLoadout([], "haunted-wood");
   private waveForgivenessReady = false;
+  // Tier 4 — Soul-charged typed invocation for offensive one-shots. Wood is the
+  // last realm and richest satchel, so it can hold all three: toll-strike
+  // (bells-tongue), jam-foe (sabotage-wrench), and bind-beat (tether-cord). Null
+  // until create().
+  private oneShotInvoker: OneShotInvoker<MovingWordEnemy> | null = null;
 
   private mistTimer: Phaser.Time.TimerEvent | null = null;
   /** Four faint punctuation glyphs at N/S/E/W around Wren — teaches the
@@ -119,6 +133,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.store = data.store;
     this.ghosts = [];
     this.activeTargets = [];
+    this.oneShotInvoker = null;
     this.onWaveCleared = null;
     this.fork1Choice = null;
     this.fork2Choice = null;
@@ -173,9 +188,32 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.revisit ? [] : this.store.get().satchel,
       "haunted-wood",
     );
+
+    // Tier 4 — Wood is the richest satchel; it can hold all three offensive
+    // one-shots. The widget sits just above Wren. Threats are the live, non-frozen
+    // ghosts (the boss's every-punctuation capstone is a stationary passage, NOT
+    // in `this.ghosts`, so a one-shot can't trivialise it).
+    const offensiveOneShots = this.combat.oneShots.filter(isOffensiveOneShot);
+    this.oneShotInvoker = new OneShotInvoker<MovingWordEnemy>({
+      scene: this,
+      typingInput: this.typingInput,
+      available: offensiveOneShots,
+      cost: ONESHOT_SOUL_COST,
+      getSoul: () => this.typingInput.getStats().getSoul(),
+      spendSoul: (cost) => this.typingInput.getStats().spendSoul(cost),
+      getThreats: () => this.liveGhostThreats(),
+      applyEffect: (effect, targets) => this.applyOneShot(effect, targets),
+      isActive: () =>
+        this.ghosts.length > 0 && this.ghosts.some((g) => !g.isDefeated()),
+      announce: (text) => this.setNarrator(text),
+      // Default baseY (just below Wren) — exact placement is a feel-tuning detail.
+    });
+
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
+      this.oneShotInvoker?.destroy();
+      this.oneShotInvoker = null;
       this.mistTimer?.remove();
       this.compassGlyphs.forEach((g) => g.destroy());
       this.compassGlyphs = [];
@@ -1207,6 +1245,60 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   // ─── Tier 4 relic helpers ───────────────────────────────────────────────────
+
+  /** The live, non-frozen ghosts summarised for an offensive one-shot's "strongest
+   *  foe" pick. Progress is the Euclidean close on Wren (the Wood advance is
+   *  diagonal); the word length breaks ties. Defeated + jam-frozen ghosts drop out
+   *  (the latter so a second one-shot isn't wasted re-seizing it); only worded
+   *  ghosts count — one mid-entrance/knock-back isn't yet a threat. */
+  private liveGhostThreats(): OneShotThreat<MovingWordEnemy>[] {
+    const threats: OneShotThreat<MovingWordEnemy>[] = [];
+    for (const g of this.ghosts) {
+      if (g.isDefeated() || g.isFrozen() || !g.target) continue;
+      const remaining = Math.hypot(
+        WREN_X - g.container.x,
+        WREN_Y - g.container.y,
+      );
+      const total = Math.hypot(WREN_X - g.restX, WREN_Y - g.restY) || 1;
+      const progress = Math.min(1, Math.max(0, 1 - remaining / total));
+      threats.push({ enemy: g, progress, wordLength: g.word.length });
+    }
+    return threats;
+  }
+
+  /** Run an offensive one-shot's consequence on the ghosts. The invoker has
+   *  already picked the target(s), spent the Soul, and consumed the once-per-realm
+   *  charge. toll-strike fells the strongest ghost (the bell's tongue); jam-foe
+   *  freezes it in place (still typeable, a sitting duck); bind-beat freezes EVERY
+   *  live ghost for a breath, then they thaw and resume the approach. */
+  private applyOneShot(
+    effect: OffensiveOneShot,
+    targets: readonly MovingWordEnemy[],
+  ): void {
+    if (effect === "toll-strike") {
+      const t = targets[0];
+      if (!t || t.isDefeated()) return;
+      playBellToll();
+      playWordCompleteBurst(this, t.container.x, t.restY - 80, {
+        color: PALETTE_HEX.ember,
+        count: 16,
+        radius: 60,
+      });
+      this.cameras.main.shake(160, 0.004);
+      t.defeat();
+    } else if (effect === "jam-foe") {
+      const t = targets[0];
+      if (!t || t.isDefeated()) return;
+      playSparkZap();
+      t.freeze();
+    } else if (effect === "bind-beat") {
+      playWaveSting();
+      this.cameras.main.shake(220, 0.004);
+      for (const g of targets) {
+        if (!g.isDefeated()) g.freeze(BIND_BEAT_FREEZE_MS);
+      }
+    }
+  }
 
   /** Surface the active relic effects once, before the realm's first combat, so
    *  the player sees their earlier-realm choices paying off. Empty loadout

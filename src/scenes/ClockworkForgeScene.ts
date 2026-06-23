@@ -39,6 +39,8 @@ import { pickAdaptiveWords, FORGE_COMMAND_BANK } from "../game/wordBank";
 import { TextWordTarget } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
 import forgeBackdrop from "../../art/references/clockwork-forge-clean.png";
+import forgeGolemSprite from "../../art/forge/golem.png";
+import forgeCommandGolemSprite from "../../art/forge/command-golem.png";
 
 // Danger ramps in over the LAST 60% of a golem's advance — earlier portion
 // stays cream so players can read the word, then it shifts ember as the
@@ -59,7 +61,7 @@ interface ForgeSceneData {
 // a word; Gregor's lesson drives it through golemTurnHead / golemCommandFlash.
 interface StaticGolem {
   container: Phaser.GameObjects.Container;
-  eye: Phaser.GameObjects.Graphics;
+  sprite: Phaser.GameObjects.Image;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -68,6 +70,12 @@ const CATWALK_Y = 440;
 const FLOOR_Y = 780;
 
 const GOLEM_ADVANCE_MS = 15000;
+
+// Painted-sprite display heights (px), matching the old procedural body heights so
+// the word anchor + hit feel line up. The boss is drawn inside a ×1.8 container,
+// so its on-screen height is COMMAND_GOLEM_SPRITE_HEIGHT × 1.8. Tune on live.
+const GOLEM_SPRITE_HEIGHT = 132;
+const COMMAND_GOLEM_SPRITE_HEIGHT = 150;
 
 /** Spawn slots on the foundry floor — same pattern as WinterMountainScene. */
 const FLOOR_SLOTS = [
@@ -169,6 +177,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image("forge-backdrop", forgeBackdrop);
+    this.load.image("forge-golem", forgeGolemSprite);
+    this.load.image("forge-command-golem", forgeCommandGolemSprite);
     preloadWren(this);
   }
 
@@ -697,16 +707,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.time.delayedCall(2800, () => this.startBossPhase1());
   }
 
-  // Boss graphics — returned so phases can update the eye
+  // Boss sprite — kept so phase 2 can flash it "commanded" (brass).
   private bossContainer!: Phaser.GameObjects.Container;
-  private bossEye!: Phaser.GameObjects.Graphics;
+  private bossSprite!: Phaser.GameObjects.Image;
 
   private spawnBossVisual(): void {
     const cx = this.scale.width / 2 + 200;
     const cy = FLOOR_Y - 10;
     this.bossContainer = this.add.container(cx, cy);
     this.bossContainer.setScale(1.8);
-    this.bossEye = this.drawCommandGolemInto(this.bossContainer, false);
+    this.bossSprite = this.drawCommandGolemInto(this.bossContainer, false);
 
     this.bossContainer.setAlpha(0);
     this.tweens.add({
@@ -761,12 +771,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private startBossPhase2(): void {
     this.clearActiveTargets();
-    // Eye turns brass-gold
-    this.bossEye.clear();
-    this.bossEye.fillStyle(PALETTE_HEX.brass, 1);
-    this.bossEye.fillCircle(22, -18, 7);
-    this.bossEye.lineStyle(2, 0xffd277, 1);
-    this.bossEye.strokeCircle(22, -18, 10);
+    // The Command-Golem is now under command — it glows brass for the rest of
+    // the fight (persisted tint, no clear).
+    this.flashGolemCommanded(this.bossSprite, true);
 
     this.narration.say("forge_command_golem_phase2");
 
@@ -1171,9 +1178,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
   /** Spawn a static (non-advancing) tutorial golem. Returns the golem object. */
   private spawnStaticGolem(x: number, y: number, _isBoss: boolean): StaticGolem {
     const container = this.add.container(x, y);
-    const eye = this.drawGolemInto(container, false);
+    const sprite = this.drawGolemInto(container, false);
     this.idleBob(container);
-    return { container, eye };
+    return { container, sprite };
   }
 
   /** Spawn a golem that advances toward Wren and can be defeated — now the shared
@@ -1190,7 +1197,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const startX = x < this.scale.width / 2 ? -120 : this.scale.width + 120;
     const container = this.add.container(startX, y);
     container.setAlpha(0);
-    const eye = this.drawGolemInto(container, false);
+    const sprite = this.drawGolemInto(container, false);
 
     return new MovingWordEnemy({
       scene: this,
@@ -1228,7 +1235,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         flashDamageVignette(this);
       },
       onComplete: (mods, self) =>
-        this.onGolemComplete(self, eye, isCapitalized, mods),
+        this.onGolemComplete(self, sprite, isCapitalized, mods),
     });
   }
 
@@ -1242,14 +1249,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
    *   - a plain lowercase nudge → the defeat alone. */
   private onGolemComplete(
     self: MovingWordEnemy,
-    eye: Phaser.GameObjects.Graphics,
+    sprite: Phaser.GameObjects.Image,
     isCapitalized: boolean,
     mods: ClaimMods,
   ): void {
     if (mods.alt) {
       this.chainSpark(self);
     } else if (mods.spell || isCapitalized) {
-      this.commandEffect(eye);
+      this.commandEffect(sprite);
     }
   }
 
@@ -1297,13 +1304,22 @@ export class ClockworkForgeScene extends Phaser.Scene {
     return best;
   }
 
+  /** Flash a golem sprite brass — the "command landed" tell (replaces the old
+   *  eye-brighten now that golems are painted sprites). `persist` leaves the tint
+   *  on (the boss stays commanded through phase 2); otherwise it clears shortly. */
+  private flashGolemCommanded(
+    sprite: Phaser.GameObjects.Image,
+    persist = false,
+  ): void {
+    sprite.setTint(PALETTE_HEX.brass);
+    if (!persist) this.time.delayedCall(220, () => sprite.clearTint());
+  }
+
   /** Visual "command" effect when the player uses Shift on a golem — the camera
-   *  flash and the eye brightening to brass before the body falls. */
-  private commandEffect(eye: Phaser.GameObjects.Graphics): void {
+   *  flash and the golem flaring brass before the body falls. */
+  private commandEffect(sprite: Phaser.GameObjects.Image): void {
     this.cameras.main.flash(180, 200, 140, 20);
-    eye.clear();
-    eye.fillStyle(PALETTE_HEX.brass, 1);
-    eye.fillCircle(14, -12, 5);
+    this.flashGolemCommanded(sprite);
   }
 
   /** Visual effect for tutorial golem head-turn. */
@@ -1320,9 +1336,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   /** Visual effect for full-command response. */
   private golemCommandFlash(golem: StaticGolem): void {
     this.cameras.main.flash(200, 200, 140, 20);
-    golem.eye.clear();
-    golem.eye.fillStyle(PALETTE_HEX.brass, 1);
-    golem.eye.fillCircle(14, -12, 5);
+    this.flashGolemCommanded(golem.sprite);
     this.tweens.add({
       targets: golem.container,
       scaleX: 1.15,
@@ -1634,78 +1648,30 @@ export class ClockworkForgeScene extends Phaser.Scene {
     c.add(this.wrenSprite);
   }
 
-  /** Draw a standard golem into a container. Returns the eye graphics. */
+  /** Add the painted golem sprite into a container, scaled to the old procedural
+   *  body height so the word anchor + hit feel still line up. Returns the sprite
+   *  so the command-flash can tint it brass. */
   private drawGolemInto(
     c: Phaser.GameObjects.Container,
     _isBoss: boolean,
-  ): Phaser.GameObjects.Graphics {
-    const g = this.add.graphics();
-    // Body — dark grey rectangles
-    g.fillStyle(0x282828, 1);
-    g.fillRect(-22, -30, 44, 60);
-    // Head
-    g.fillStyle(0x2e2e2e, 1);
-    g.fillRect(-16, -54, 32, 26);
-    // Shoulders
-    g.fillStyle(0x303030, 1);
-    g.fillRect(-30, -28, 14, 20);
-    g.fillRect(16, -28, 14, 20);
-    // Legs
-    g.fillStyle(0x242424, 1);
-    g.fillRect(-18, 30, 14, 30);
-    g.fillRect(4, 30, 14, 30);
-    // Brass trim lines on body
-    g.lineStyle(1, PALETTE_HEX.brass, 0.55);
-    g.strokeRect(-22, -30, 44, 60);
-    g.strokeRect(-16, -54, 32, 26);
-    c.add(g);
-
-    // Eye — on its own graphics so it can change color
-    const eye = this.add.graphics();
-    eye.fillStyle(PALETTE_HEX.ember, 0.9);
-    eye.fillCircle(14, -12, 4);
-    c.add(eye);
-    return eye;
+  ): Phaser.GameObjects.Image {
+    const sprite = this.add.image(0, 0, "forge-golem");
+    sprite.setScale(GOLEM_SPRITE_HEIGHT / sprite.height);
+    c.add(sprite);
+    return sprite;
   }
 
-  /** Draw the Command-Golem boss. Returns eye graphics. */
+  /** Add the painted Command-Golem boss sprite (scaled to the procedural boss
+   *  height; the ×1.8 container scales it up on screen). Returns it so phase 2
+   *  can flash it "commanded". */
   private drawCommandGolemInto(
     c: Phaser.GameObjects.Container,
     _isBoss: boolean,
-  ): Phaser.GameObjects.Graphics {
-    const g = this.add.graphics();
-    // Heavier body
-    g.fillStyle(0x242424, 1);
-    g.fillRect(-28, -38, 56, 76);
-    // Massive head
-    g.fillStyle(0x2a2a2a, 1);
-    g.fillRect(-22, -72, 44, 36);
-    // Shoulders — broader
-    g.fillStyle(0x303030, 1);
-    g.fillRect(-44, -36, 18, 26);
-    g.fillRect(26, -36, 18, 26);
-    // Legs
-    g.fillStyle(0x1e1e1e, 1);
-    g.fillRect(-22, 38, 18, 38);
-    g.fillRect(4, 38, 18, 38);
-    // Brass crown/collar trim
-    g.fillStyle(PALETTE_HEX.brass, 0.85);
-    g.fillRect(-22, -72, 44, 6);  // crown top
-    g.fillRect(-28, -38, 56, 5);  // collar band
-    // Heavy brass trim on body
-    g.lineStyle(2, PALETTE_HEX.brass, 0.7);
-    g.strokeRect(-28, -38, 56, 76);
-    g.strokeRect(-22, -72, 44, 36);
-    c.add(g);
-
-    // Eye
-    const eye = this.add.graphics();
-    eye.fillStyle(PALETTE_HEX.ember, 1);
-    eye.fillCircle(22, -18, 7);
-    eye.lineStyle(1, 0xff9944, 0.7);
-    eye.strokeCircle(22, -18, 10);
-    c.add(eye);
-    return eye;
+  ): Phaser.GameObjects.Image {
+    const sprite = this.add.image(0, 0, "forge-command-golem");
+    sprite.setScale(COMMAND_GOLEM_SPRITE_HEIGHT / sprite.height);
+    c.add(sprite);
+    return sprite;
   }
 }
 

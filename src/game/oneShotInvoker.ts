@@ -27,6 +27,7 @@ import {
 } from "./oneShotInvocation";
 import { PALETTE, PALETTE_HEX, SERIF } from "./palette";
 import type { TypingInputController } from "./typingInput";
+import { UI_HEX } from "./ui/uiTheme";
 import { TextWordTarget } from "./wordTarget";
 
 /** A live enemy as the realm sees it, plus the threat summary the pick needs. The
@@ -59,6 +60,11 @@ export interface OneShotInvokerConfig<E> {
   announce?: (text: string) => void;
   /** Widget baseline Y (default: 150px up from the bottom). Words sit above it. */
   baseY?: number;
+  /** Absolute screen slots for each widget (the console band's card positions).
+   *  When set, widget i sits at slots[i] instead of the centered vertical stack. */
+  slots?: readonly { x: number; y: number }[];
+  /** Compact card styling for the console band (smaller text + a card plate). */
+  compact?: boolean;
 }
 
 type WidgetState = "charging" | "ready" | "spent";
@@ -89,20 +95,30 @@ export class OneShotInvoker<E> {
   private readonly cfg: OneShotInvokerConfig<E>;
   private readonly widgets: Widget[] = [];
   private timer: Phaser.Time.TimerEvent | null = null;
+  private readonly compact: boolean;
+  private readonly barW: number;
+  private readonly barY: number;
+  private readonly wordSize: number;
 
   constructor(config: OneShotInvokerConfig<E>) {
     this.cfg = config;
+    this.compact = config.compact === true;
+    this.barW = this.compact ? 112 : BAR_W;
+    this.barY = this.compact ? 21 : 18;
+    this.wordSize = this.compact ? 22 : 30;
     if (config.available.length === 0) return; // inert — no relics
 
     const { scene } = config;
     const baseY = config.baseY ?? scene.scale.height - 150;
     const cx = scene.scale.width / 2;
 
-    // Stack widgets upward from the baseline (one realm rarely has >1, but Wood
-    // can hold all three).
+    // Console-band card slots override the centered vertical stack (one realm
+    // rarely has >1 floating widget, but Wood can hold all three).
     config.available.forEach((effect, i) => {
-      const y = baseY - i * WIDGET_GAP;
-      this.widgets.push(this.buildWidget(effect, cx, y));
+      const slot = config.slots?.[i];
+      const wx = slot?.x ?? cx;
+      const wy = slot?.y ?? baseY - i * WIDGET_GAP;
+      this.widgets.push(this.buildWidget(effect, wx, wy));
     });
 
     this.timer = scene.time.addEvent({
@@ -141,10 +157,26 @@ export class OneShotInvoker<E> {
       .setDepth(1500)
       .setAlpha(0); // hidden until a wave is live
 
+    const titleY = this.compact ? -23 : -34;
+    const wordOffsetY = this.compact ? 1 : -8;
+
+    // Compact (console band): a card plate behind the title/word/bar so each
+    // one-shot reads as a distinct, pickable card sitting in the band.
+    if (this.compact) {
+      const cw = this.barW + 30;
+      const ch = 70;
+      const card = scene.add.graphics();
+      card.fillStyle(UI_HEX.panel, 0.92);
+      card.fillRoundedRect(-cw / 2, -ch / 2, cw, ch, 7);
+      card.lineStyle(1, UI_HEX.frame, 0.9);
+      card.strokeRoundedRect(-cw / 2, -ch / 2, cw, ch, 7);
+      container.add(card);
+    }
+
     const titleText = scene.add
-      .text(0, -34, inv.title, {
+      .text(0, titleY, inv.title, {
         fontFamily: SERIF,
-        fontSize: "16px",
+        fontSize: this.compact ? "12px" : "16px",
         fontStyle: "italic",
         color: PALETTE.dim,
       })
@@ -152,16 +184,16 @@ export class OneShotInvoker<E> {
     // The dim word preview while charging — swapped for the bright live target
     // when ready, set to a "spent" line once fired.
     const placeholder = scene.add
-      .text(0, -8, inv.word, {
+      .text(0, wordOffsetY, inv.word, {
         fontFamily: SERIF,
-        fontSize: "30px",
+        fontSize: `${this.wordSize}px`,
         color: PALETTE.dim,
       })
       .setOrigin(0.5);
 
     const barBg = scene.add.graphics();
     barBg.fillStyle(0x000000, 0.45);
-    barBg.fillRoundedRect(-BAR_W / 2, 18, BAR_W, BAR_H, BAR_H / 2);
+    barBg.fillRoundedRect(-this.barW / 2, this.barY, this.barW, BAR_H, BAR_H / 2);
     const barFill = scene.add.graphics();
 
     container.add([titleText, placeholder, barBg, barFill]);
@@ -174,7 +206,7 @@ export class OneShotInvoker<E> {
       barBg,
       barFill,
       wordX: cx,
-      wordY: y - 8,
+      wordY: y + wordOffsetY,
       state: "charging",
       target: null,
       announcedReady: false,
@@ -219,9 +251,9 @@ export class OneShotInvoker<E> {
     w.barFill.clear();
     w.barFill.fillStyle(color, 0.95);
     w.barFill.fillRoundedRect(
-      -BAR_W / 2,
-      18,
-      Math.max(1, BAR_W * frac),
+      -this.barW / 2,
+      this.barY,
+      Math.max(1, this.barW * frac),
       BAR_H,
       BAR_H / 2,
     );
@@ -238,7 +270,7 @@ export class OneShotInvoker<E> {
       word: inv.word,
       x: w.wordX,
       y: w.wordY,
-      fontSize: 30,
+      fontSize: this.wordSize,
       // Above gameplay targets so an idle "t" claims the toll, not a stray.
       priority: 100,
       burstColor: PALETTE_HEX.ember,

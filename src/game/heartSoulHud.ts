@@ -43,6 +43,12 @@ interface HudOptions {
    *  corner brackets (matches the dialogue card + the TTT console) instead of the
    *  thin ink plate. Opt-in so only re-skinned scenes change. */
   console?: boolean;
+  /** Mount the meters at this absolute screen anchor (right edge of the pip rows)
+   *  instead of the default top-right corner — e.g. inside the console band. */
+  anchor?: { x: number; y: number };
+  /** Draw the HUD's own plate. Default true; set false when a container (the
+   *  console band) already provides the surface. */
+  plate?: boolean;
 }
 
 /** Streak length at which the combo flourish first appears. */
@@ -74,8 +80,8 @@ export class HeartSoulHud {
     const padY = 10;
     const plateW = rowW + LABEL_GAP + labelW + padX * 2;
     const plateH = ROW_GAP + PIP_H + padY * 2;
-    const x = scene.scale.width - HUD_PADDING;
-    const y = HUD_PADDING;
+    const x = opts.anchor?.x ?? scene.scale.width - HUD_PADDING;
+    const y = opts.anchor?.y ?? HUD_PADDING;
     this.container = scene.add
       .container(x, y)
       .setScrollFactor(0)
@@ -84,28 +90,31 @@ export class HeartSoulHud {
 
     // Ink-tinted plate so the HUD reads against warm backdrops (Forge, Sky-Island).
     // Plate spans from the left edge of the labels to slightly past the right edge
-    // of the pip rows, centered on the HUD content.
-    const plateCenterX = padX - plateW / 2;
-    const consoleStyle = opts.console === true;
-    const plate = scene.add
-      .rectangle(
-        plateCenterX,
-        ROW_GAP / 2,
-        plateW,
-        plateH,
-        consoleStyle ? UI_HEX.panel : PALETTE_HEX.ink,
-        consoleStyle ? 0.82 : 0.55,
-      )
-      .setStrokeStyle(
-        consoleStyle ? 2 : 1,
-        consoleStyle ? UI_HEX.brass : PALETTE_HEX.dim,
-        consoleStyle ? 0.9 : 0.4,
-      );
-    this.container.add(plate);
-    if (consoleStyle) {
-      const ticks = cornerTicks(scene, plateW, plateH, { inset: 5, size: 8 });
-      ticks.setPosition(plateCenterX, ROW_GAP / 2);
-      this.container.add(ticks);
+    // of the pip rows, centered on the HUD content. Skipped entirely when a
+    // container (the console band) already provides the surface.
+    if (opts.plate !== false) {
+      const plateCenterX = padX - plateW / 2;
+      const consoleStyle = opts.console === true;
+      const plate = scene.add
+        .rectangle(
+          plateCenterX,
+          ROW_GAP / 2,
+          plateW,
+          plateH,
+          consoleStyle ? UI_HEX.panel : PALETTE_HEX.ink,
+          consoleStyle ? 0.82 : 0.55,
+        )
+        .setStrokeStyle(
+          consoleStyle ? 2 : 1,
+          consoleStyle ? UI_HEX.brass : PALETTE_HEX.dim,
+          consoleStyle ? 0.9 : 0.4,
+        );
+      this.container.add(plate);
+      if (consoleStyle) {
+        const ticks = cornerTicks(scene, plateW, plateH, { inset: 5, size: 8 });
+        ticks.setPosition(plateCenterX, ROW_GAP / 2);
+        this.container.add(ticks);
+      }
     }
 
     const heartLabel = scene.add

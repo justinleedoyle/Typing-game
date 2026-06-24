@@ -38,10 +38,13 @@ import { MovingWordEnemy } from "../game/movingWordEnemy";
 import { pickAdaptiveWords, FORGE_COMMAND_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
+import { ConsoleBand } from "../game/ui/consoleBand";
+import { preloadSatchelIcons } from "../game/ui/satchelIcons";
 import forgeBackdrop from "../../art/references/clockwork-forge-clean.png";
 import forgeGolemSprite from "../../art/forge/golem.png";
 import forgeCommandGolemSprite from "../../art/forge/command-golem.png";
 import fornSprite from "../../art/forge/forn.png";
+import runaPortrait from "../../art/runa/runa-front.png";
 
 // Danger ramps in over the LAST 60% of a golem's advance — earlier portion
 // stays cream so players can read the word, then it shifts ember as the
@@ -188,6 +191,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.load.image("forge-golem", forgeGolemSprite);
     this.load.image("forge-command-golem", forgeCommandGolemSprite);
     this.load.image("forn", fornSprite);
+    this.load.image("band-portrait-runa", runaPortrait);
+    preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
   }
 
@@ -230,13 +235,24 @@ export class ClockworkForgeScene extends Phaser.Scene {
       },
       onClaim: () => playClaim(),
     });
+    // UI cohesion — the console band: the crafted bottom zone (TTT two-zone
+    // composition) that houses the meters + satchel. Passive relics show as icon
+    // tiles ("always on"); the offensive one-shots drop in as charge cards. This
+    // replaces the floating top-right HUD and the centered one-shot stack.
+    const band = new ConsoleBand(this, {
+      portraitKey: "band-portrait-runa",
+      portraitName: "Runa",
+      passiveIconIds: this.combat.passiveRelicIds,
+    });
+
     new HeartSoulHud(this, {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
       getCombo: () => this.typingInput.getStats().getCombo(),
       getCastReady: () => this.typingInput.getStats().canCast(this.spellCost),
       onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
-      console: true,
+      anchor: band.metersAnchor,
+      plate: false,
     });
 
     // Tier 4 — offensive one-shots fired by a Soul-charged, typed invocation
@@ -256,6 +272,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
       applyEffect: (effect, targets) => this.applyOneShot(effect, targets),
       isActive: () => this.waveActive,
       announce: (text) => this.setNarrator(text),
+      slots: band.oneShotSlots,
+      compact: true,
     });
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
@@ -322,7 +340,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         scene: this,
         word,
         x: this.scale.width / 2,
-        y: this.scale.height - 240,
+        y: this.scale.height - 340,
         fontSize: 44,
         onComplete: () => {
           playChime();
@@ -379,7 +397,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       scene: this,
       word: "i know.",
       x: this.scale.width / 2,
-      y: this.scale.height - 240,
+      y: this.scale.height - 340,
       fontSize: 36,
       onComplete: () => this.gregorStep2(),
     });
@@ -406,7 +424,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       scene: this,
       word: "turn",
       x: this.scale.width / 2,
-      y: this.scale.height - 240,
+      y: this.scale.height - 340,
       fontSize: 36,
       onComplete: () => {
         this.golemTurnHead(tutorialGolem);
@@ -430,7 +448,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       scene: this,
       word: "TURN",
       x: this.scale.width / 2,
-      y: this.scale.height - 240,
+      y: this.scale.height - 340,
       fontSize: 36,
       // Capital tutorial: must actually be typed with Shift now.
       caseSensitive: true,
@@ -662,7 +680,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       scene: this,
       word: "help smith forn",
       x: this.scale.width / 2 - 420,
-      y: this.scale.height - 200,
+      y: this.scale.height - 320,
       fontSize: 32,
       frame: "banner",
       onComplete: () => this.startFornBranch(),
@@ -671,7 +689,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       scene: this,
       word: "join the apprentices",
       x: this.scale.width / 2 + 420,
-      y: this.scale.height - 200,
+      y: this.scale.height - 320,
       fontSize: 32,
       frame: "banner",
       onComplete: () => this.startCabalBranch(),
@@ -960,7 +978,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       scene: this,
       word: "give the peaceful order",
       x: this.scale.width / 2 - 400,
-      y: this.scale.height - 200,
+      y: this.scale.height - 320,
       fontSize: 32,
       frame: "banner",
       onComplete: () => {
@@ -972,7 +990,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       scene: this,
       word: "fight to the end",
       x: this.scale.width / 2 + 400,
-      y: this.scale.height - 200,
+      y: this.scale.height - 320,
       fontSize: 32,
       frame: "banner",
       onComplete: () => {
@@ -996,7 +1014,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       scene: this,
       word: "STAND DOWN",
       x: this.scale.width / 2,
-      y: this.scale.height - 240,
+      y: this.scale.height - 340,
       fontSize: 40,
       // The peaceful-branch finale demands the full capitalized order.
       caseSensitive: true,
@@ -1089,7 +1107,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         scene: this,
         word: "whistle softly",
         x: this.scale.width / 2 - 340,
-        y: this.scale.height - 200,
+        y: this.scale.height - 320,
         fontSize: 32,
         frame: "banner",
         onComplete: () => this.awardSongbird(),
@@ -1098,7 +1116,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         scene: this,
         word: "leave it be",
         x: this.scale.width / 2 + 340,
-        y: this.scale.height - 200,
+        y: this.scale.height - 320,
         fontSize: 32,
         frame: "banner",
         onComplete: () => this.startTrueNamePassage(),
@@ -1444,7 +1462,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         scene: this,
         word,
         x: this.scale.width / 2,
-        y: this.scale.height - 240,
+        y: this.scale.height - 340,
         fontSize: 36,
         onComplete: () => {
           const line = narratorLines[step] ?? "";

@@ -25,8 +25,11 @@ import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import { pickAdaptiveWords, SUNKEN_BELL_WORD_BANK } from "../game/wordBank";
-import { TextWordTarget } from "../game/wordTarget";
+import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
+import { ConsoleBand } from "../game/ui/consoleBand";
+import { preloadSatchelIcons } from "../game/ui/satchelIcons";
+import runaPortrait from "../../art/runa/runa-front.png";
 import sunkenBellBackdrop from "../../art/references/sunken-bell-clean.png";
 import bellGhostSprite from "../../art/bell/ghost.png";
 import bellWardenSprite from "../../art/bell/bell-warden.png";
@@ -107,6 +110,9 @@ export class SunkenBellScene extends Phaser.Scene {
   private breathActive = false;
   private breathBar!: Phaser.GameObjects.Graphics;
   private breathLabel!: Phaser.GameObjects.Text;
+  /** Screen anchor where the air gauge docks inside the console band's satchel
+   *  zone (set in create() from band.satchelAnchor) — like Winter's candles. */
+  private breathAnchor = { x: 0, y: 0 };
 
   // Tier 4 — relics earned in EARLIER realms shape this realm's combat. The
   // bounded loadout is resolved once in create() (neutral on a revisit); the
@@ -155,6 +161,8 @@ export class SunkenBellScene extends Phaser.Scene {
     this.load.image("bell-warden", bellWardenSprite);
     this.load.image("olin", olinSprite);
     this.load.image("aurland", aurlandSprite);
+    this.load.image("band-portrait-runa", runaPortrait);
+    preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
   }
 
@@ -167,9 +175,29 @@ export class SunkenBellScene extends Phaser.Scene {
       .setDepth(-100);
     this.wrenContainer = this.drawWren(WREN_X, WREN_Y);
 
-    this.narration = new NarrationManager(this, { y: 120 });
-
     this.typingInput = new TypingInputController(this.store);
+
+    // Tier 4 — resolve the in-realm relic loadout. A revisit is a free-passage
+    // replay (no combat), so it gets the neutral (empty-satchel) loadout.
+    // Resolved before the band so its passive relics can show as icon tiles.
+    this.combat = resolveCombatLoadout(
+      this.revisit ? [] : this.store.get().satchel,
+      "sunken-bell",
+    );
+    this.graceSaves = this.combat.gracePool;
+
+    // UI cohesion — the console band houses the meters + the Bell's "air" stake.
+    // The breath meter is a bespoke bottom gauge, so it docks into the band's
+    // satchel zone (satchelLabel:"" — like Winter's candles); the passive relics
+    // earned in earlier realms still surface as icon tiles in that zone.
+    const band = new ConsoleBand(this, {
+      portraitKey: "band-portrait-runa",
+      portraitName: "Runa",
+      passiveIconIds: this.combat.passiveRelicIds,
+      satchelLabel: "",
+    });
+
+    this.narration = new NarrationManager(this, { y: 120, framed: true });
     // Bell is "quiet listening" — softer per-keystroke feedback than the
     // Winter Mountain default. 120ms / 0.002 shake instead of 80ms / 0.002.
     this.typingInput.setKeystrokeHooks({
@@ -184,39 +212,41 @@ export class SunkenBellScene extends Phaser.Scene {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
       onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
+      anchor: band.metersAnchor,
+      plate: false,
     });
-
-    // Tier 4 — resolve the in-realm relic loadout. A revisit is a free-passage
-    // replay (no combat), so it gets the neutral (empty-satchel) loadout.
-    this.combat = resolveCombatLoadout(
-      this.revisit ? [] : this.store.get().satchel,
-      "sunken-bell",
-    );
-    this.graceSaves = this.combat.gracePool;
 
     // Beat ring — bottom-center sonar pulse that emanates outward on each
     // bell toll. Bright + tight on the beat, fades + expands across the
     // claim window, then disappears until the next toll. Player sees this
     // and learns "type now" without anyone having to say it.
+    // Lifted to clear the console band (bottom 220px): the toll-rings are the
+    // realm's "type now" affordance, so they sit just above the band's top edge
+    // instead of behind its opaque wood (was y=960, inside the band footprint).
+    const ringY = this.scale.height - 290;
     this.beatRing = this.add.graphics().setDepth(10).setAlpha(0);
     this.beatRing.x = WREN_X;
-    this.beatRing.y = 960;
+    this.beatRing.y = ringY;
     // Off-beat ("antiphon") ring — ember, pulses at the half-beat during the
     // call-and-response wave so the off-beat answer window is visible.
     this.offbeatRing = this.add.graphics().setDepth(10).setAlpha(0);
     this.offbeatRing.x = WREN_X;
-    this.offbeatRing.y = 960;
+    this.offbeatRing.y = ringY;
 
-    // Air gauge — drawn above Wren, hidden until choir-wave combat begins.
-    this.breathBar = this.add.graphics().setDepth(11).setAlpha(0);
+    // Air gauge — docked into the console band's satchel zone (the bespoke
+    // bottom meter, like Winter's candles), offset right of the passive relic
+    // tiles. Hidden until choir-wave combat begins. Depth > the band surface.
+    this.breathAnchor = { x: band.satchelAnchor.x + 330, y: band.satchelAnchor.y };
+    this.breathBar = this.add.graphics().setDepth(1500).setAlpha(0);
     this.breathLabel = this.add
-      .text(WREN_X, WREN_Y + 48, "air", {
+      .text(this.breathAnchor.x, this.breathAnchor.y - 38, "air", {
         fontFamily: SERIF,
-        fontSize: "20px",
-        color: PALETTE.dim,
+        fontSize: "15px",
+        fontStyle: "italic",
+        color: "#a59b89",
       })
       .setOrigin(0.5)
-      .setDepth(11)
+      .setDepth(1500)
       .setAlpha(0);
 
     this.beatClock = new BeatClock(this, {
@@ -283,7 +313,7 @@ export class SunkenBellScene extends Phaser.Scene {
       }
       const word = words[idx];
       if (word === undefined) return;
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word,
         x: this.scale.width / 2,
@@ -362,8 +392,9 @@ export class SunkenBellScene extends Phaser.Scene {
     this.drawBreathBar();
   }
 
-  /** Redraw the air gauge below Wren from the current breath fraction. Frost
-   *  when full, ember when low. Hidden entirely when the stake is inactive. */
+  /** Redraw the air gauge in the console band's satchel zone from the current
+   *  breath fraction. Frost when full, ember when low. Hidden entirely when the
+   *  stake is inactive. Drawn around breathAnchor (docked like Winter's candles). */
   private drawBreathBar(): void {
     const bar = this.breathBar;
     bar.clear();
@@ -376,8 +407,8 @@ export class SunkenBellScene extends Phaser.Scene {
     this.breathLabel.setAlpha(0.8);
     const w = 160;
     const h = 14;
-    const x = WREN_X - w / 2;
-    const y = WREN_Y + 64;
+    const x = this.breathAnchor.x - w / 2;
+    const y = this.breathAnchor.y - h / 2;
     const frac = this.breath.getFraction();
     const low = frac < 0.4;
     bar.lineStyle(2, PALETTE_HEX.frost, 0.7);
@@ -623,7 +654,7 @@ export class SunkenBellScene extends Phaser.Scene {
       });
       lanternPulseTweens.push(pulseTween);
 
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word,
         x: pos.x,
@@ -659,11 +690,11 @@ export class SunkenBellScene extends Phaser.Scene {
 
     this.setNarrator("tell me your name, child.");
     this.time.delayedCall(600, () => {
-      const nameTarget = new TextWordTarget({
+      const nameTarget = this.makeWord({
         scene: this,
         word: "wren",
         x: this.scale.width / 2,
-        y: this.scale.height - 200,
+        y: this.scale.height - 340,
         fontSize: 40,
         onComplete: () => {
           this.clearActiveTargets();
@@ -675,11 +706,11 @@ export class SunkenBellScene extends Phaser.Scene {
               "i taught the bell its name. i can teach you if you let me.",
             );
             this.time.delayedCall(800, () => {
-              const teachTarget = new TextWordTarget({
+              const teachTarget = this.makeWord({
                 scene: this,
                 word: "teach me",
                 x: this.scale.width / 2,
-                y: this.scale.height - 200,
+                y: this.scale.height - 340,
                 fontSize: 40,
                 onComplete: () => {
                   this.clearActiveTargets();
@@ -884,11 +915,11 @@ export class SunkenBellScene extends Phaser.Scene {
     // (which has its own tempo + de-sync stakes, not the breath economy).
     this.setBreathActive(false);
     this.setNarrator("A room off the nave. Something on a stand.");
-    const target = new TextWordTarget({
+    const target = this.makeWord({
       scene: this,
       word: "read it",
       x: this.scale.width / 2,
-      y: this.scale.height - 180,
+      y: this.scale.height - 340,
       fontSize: 36,
       onComplete: () => {
         this.clearActiveTargets();
@@ -910,24 +941,26 @@ export class SunkenBellScene extends Phaser.Scene {
   private startFork1(): void {
     this.narration.say("sunken_fork1_intro");
 
-    const chantTarget = new TextWordTarget({
+    const chantTarget = this.makeWord({
       scene: this,
       word: "open slowly",
       x: this.scale.width / 2 - 380,
-      y: this.scale.height - 200,
+      y: this.scale.height - 340,
       fontSize: 32,
+      frame: "banner",
       onComplete: () => {
         this.clearActiveTargets();
         this.fork1Choice = "chant";
         this.startFork1Chant();
       },
     });
-    const forceTarget = new TextWordTarget({
+    const forceTarget = this.makeWord({
       scene: this,
       word: "force them open",
       x: this.scale.width / 2 + 380,
-      y: this.scale.height - 200,
+      y: this.scale.height - 340,
       fontSize: 32,
+      frame: "banner",
       onComplete: () => {
         this.clearActiveTargets();
         this.fork1Choice = "force";
@@ -968,11 +1001,11 @@ export class SunkenBellScene extends Phaser.Scene {
     // build had regressed this to a plain lowercase setNarrator("OPEN").)
     this.setNarrator("Force the doors — OPEN, on the toll.");
     this.time.delayedCall(700, () => {
-      const openTarget = new TextWordTarget({
+      const openTarget = this.makeWord({
         scene: this,
         word: "OPEN",
         x: this.scale.width / 2,
-        y: this.scale.height - 200,
+        y: this.scale.height - 340,
         fontSize: 56,
         caseSensitive: true,
         burstColor: BELL_BURST_COLOR,
@@ -1000,11 +1033,11 @@ export class SunkenBellScene extends Phaser.Scene {
       }
       const word = forcePhrases[step];
       if (word === undefined) return;
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word,
         x: this.scale.width / 2,
-        y: this.scale.height - 200,
+        y: this.scale.height - 340,
         fontSize: 40,
         onComplete: () => {
           step += 1;
@@ -1054,7 +1087,7 @@ export class SunkenBellScene extends Phaser.Scene {
     let remaining = words.length;
 
     words.forEach((word, i) => {
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word,
         x: this.scale.width / 2 - 200 + i * 200,
@@ -1106,7 +1139,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
     this.time.delayedCall(800, () => {
       phrases.forEach((word, i) => {
-        const target = new TextWordTarget({
+        const target = this.makeWord({
           scene: this,
           word,
           x: this.scale.width / 2 - 260 + i * 260,
@@ -1171,7 +1204,7 @@ export class SunkenBellScene extends Phaser.Scene {
       if (word === undefined) return;
 
       let completed = false;
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word,
         x: this.scale.width / 2,
@@ -1226,24 +1259,26 @@ export class SunkenBellScene extends Phaser.Scene {
   private startFork2(): void {
     this.setNarrator("The bell is silent. Two paths beneath it.");
 
-    const freeTarget = new TextWordTarget({
+    const freeTarget = this.makeWord({
       scene: this,
       word: "free king aurland",
       x: this.scale.width / 2 - 360,
-      y: this.scale.height - 200,
+      y: this.scale.height - 340,
       fontSize: 30,
+      frame: "banner",
       onComplete: () => {
         this.clearActiveTargets();
         this.fork2Choice = "free-aurland";
         this.startFork2FreeAurland();
       },
     });
-    const claimTarget = new TextWordTarget({
+    const claimTarget = this.makeWord({
       scene: this,
       word: "claim the tongue",
       x: this.scale.width / 2 + 360,
-      y: this.scale.height - 200,
+      y: this.scale.height - 340,
       fontSize: 30,
+      frame: "banner",
       onComplete: () => {
         this.clearActiveTargets();
         this.fork2Choice = "claim-tongue";
@@ -1333,12 +1368,13 @@ export class SunkenBellScene extends Phaser.Scene {
     if (this.fork2Choice === "free-aurland") {
       this.setNarrator("A small glass-fish leads the way up through the dark water.");
       this.time.delayedCall(1000, () => {
-        const takeTarget = new TextWordTarget({
+        const takeTarget = this.makeWord({
           scene: this,
           word: "take her with you",
           x: this.scale.width / 2 - 300,
-          y: this.scale.height - 200,
+          y: this.scale.height - 340,
           fontSize: 30,
+          frame: "banner",
           onComplete: () => {
             this.clearActiveTargets();
             this.store.update((s) => {
@@ -1347,12 +1383,13 @@ export class SunkenBellScene extends Phaser.Scene {
             this.startTrueNamePassage();
           },
         });
-        const letGoTarget = new TextWordTarget({
+        const letGoTarget = this.makeWord({
           scene: this,
           word: "let her go",
           x: this.scale.width / 2 + 300,
-          y: this.scale.height - 200,
+          y: this.scale.height - 340,
           fontSize: 30,
+          frame: "banner",
           onComplete: () => {
             this.clearActiveTargets();
             this.startTrueNamePassage();
@@ -1374,7 +1411,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.narration.say("sunken_truename_intro");
     this.time.delayedCall(800, () => {
       const trueName = "the bell remembers. the deep listens. the kingdom holds.";
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word: trueName,
         x: this.scale.width / 2,
@@ -1451,6 +1488,12 @@ export class SunkenBellScene extends Phaser.Scene {
 
   // ─── Ghost enemies ────────────────────────────────────────────────────────
 
+  /** UI-cohesion: every Bell word target gets the legibility outline by default
+   *  (TTT-style). Fork choices pass frame: "banner". */
+  private makeWord(opts: TextWordTargetOptions): TextWordTarget {
+    return new TextWordTarget({ outline: true, ...opts });
+  }
+
   private spawnGhost(
     startX: number,
     restX: number,
@@ -1488,6 +1531,7 @@ export class SunkenBellScene extends Phaser.Scene {
       fontSize: 32,
       // Sea-green burst — the ghost dissolves into deep water, not brass.
       burstColor: BELL_BURST_COLOR,
+      outline: true,
       onTargetAttached: (t) => this.activeTargets.push(t),
       onTargetDetached: (t) => {
         const idx = this.activeTargets.indexOf(t);
@@ -1585,11 +1629,11 @@ export class SunkenBellScene extends Phaser.Scene {
       }
       const step = steps[idx];
       if (!step) return;
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word: step.word,
         x: this.scale.width / 2,
-        y: this.scale.height - 200,
+        y: this.scale.height - 340,
         fontSize: 34,
         onComplete: () => {
           idx += 1;
@@ -1621,11 +1665,11 @@ export class SunkenBellScene extends Phaser.Scene {
       }
       const step = steps[idx];
       if (!step) return;
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word: step.word,
         x: this.scale.width / 2,
-        y: this.scale.height - 200,
+        y: this.scale.height - 340,
         fontSize: 36,
         onComplete: () => {
           idx += 1;

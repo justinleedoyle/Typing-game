@@ -37,11 +37,14 @@ import {
   WOOD_DIRECTION_PUNCTUATION,
   woodWardWord,
 } from "../game/wordBank";
-import { TextWordTarget } from "../game/wordTarget";
+import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
+import { ConsoleBand } from "../game/ui/consoleBand";
+import { preloadSatchelIcons } from "../game/ui/satchelIcons";
 import hauntedWoodBackdrop from "../../art/references/haunted-wood-clean.png";
 import woodGhostSprite from "../../art/wood/ghost.png";
 import ghostKingSprite from "../../art/wood/ghost-king.png";
+import runaPortrait from "../../art/runa/runa-front.png";
 
 interface HauntedWoodSceneData {
   store: SaveStore;
@@ -158,6 +161,8 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.load.image("haunted-wood-backdrop", hauntedWoodBackdrop);
     this.load.image("wood-ghost", woodGhostSprite);
     this.load.image("ghost-king", ghostKingSprite);
+    this.load.image("band-portrait-runa", runaPortrait);
+    preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
   }
 
@@ -171,7 +176,24 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.drawShrine();
     this.drawWren(WREN_X, WREN_Y);
 
-    this.narration = new NarrationManager(this, { y: 150 });
+    // Tier 4 — a revisit is a free-passage replay (no combat) → neutral loadout.
+    // Resolved here (before the band) so the console band can show the passive
+    // relic icons. Wood is the richest satchel; neutral on a revisit.
+    this.combat = resolveCombatLoadout(
+      this.revisit ? [] : this.store.get().satchel,
+      "haunted-wood",
+    );
+
+    // UI cohesion — the console band houses the meters + satchel. Wood's mist is
+    // a vision overlay (not a bottom meter), so the satchel zone shows the passive
+    // relic icon tiles; the offensive one-shots drop into the band's charge cards.
+    const band = new ConsoleBand(this, {
+      portraitKey: "band-portrait-runa",
+      portraitName: "Runa",
+      passiveIconIds: this.combat.passiveRelicIds,
+    });
+
+    this.narration = new NarrationManager(this, { y: 150, framed: true });
 
     this.typingInput = new TypingInputController(this.store);
     this.typingInput.setKeystrokeHooks({
@@ -194,13 +216,9 @@ export class HauntedWoodScene extends Phaser.Scene {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
       onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
+      anchor: band.metersAnchor,
+      plate: false,
     });
-
-    // Tier 4 — a revisit is a free-passage replay (no combat) → neutral loadout.
-    this.combat = resolveCombatLoadout(
-      this.revisit ? [] : this.store.get().satchel,
-      "haunted-wood",
-    );
 
     // Tier 4 — Wood is the richest satchel; it can hold all three offensive
     // one-shots. The widget sits just above Wren. Threats are the live, non-frozen
@@ -219,7 +237,8 @@ export class HauntedWoodScene extends Phaser.Scene {
       isActive: () =>
         this.ghosts.length > 0 && this.ghosts.some((g) => !g.isDefeated()),
       announce: (text) => this.setNarrator(text),
-      // Default baseY (just below Wren) — exact placement is a feel-tuning detail.
+      slots: band.oneShotSlots,
+      compact: true,
     });
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
@@ -280,7 +299,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       }
       const word = words[idx];
       if (word === undefined) return;
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word,
         x: this.scale.width / 2,
@@ -320,7 +339,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       }
       const beat = beats[i];
       if (!beat) return;
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word: beat.word,
         x: this.scale.width / 2,
@@ -355,11 +374,11 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.setNarrator("i don't know my name.");
     this.time.delayedCall(1800, () => {
       // Wren types a reply
-      const reply = new TextWordTarget({
+      const reply = this.makeWord({
         scene: this,
         word: "i'll find it.",
         x: this.scale.width / 2,
-        y: this.scale.height - 200,
+        y: this.scale.height - 340,
         fontSize: 36,
         onComplete: () => {
           this.clearActiveTargets();
@@ -517,24 +536,26 @@ export class HauntedWoodScene extends Phaser.Scene {
   private startFork1(): void {
     this.narration.say("wood_fork1_intro");
 
-    const offeringTarget = new TextWordTarget({
+    const offeringTarget = this.makeWord({
       scene: this,
       word: "leave an offering",
       x: this.scale.width / 2 - 380,
-      y: this.scale.height - 200,
+      y: this.scale.height - 340,
       fontSize: 30,
+      frame: "banner",
       onComplete: () => {
         this.clearActiveTargets();
         this.fork1Choice = "offering";
         this.startFork1Offering();
       },
     });
-    const fluteTarget = new TextWordTarget({
+    const fluteTarget = this.makeWord({
       scene: this,
       word: "take the bone-flute",
       x: this.scale.width / 2 + 380,
-      y: this.scale.height - 200,
+      y: this.scale.height - 340,
       fontSize: 30,
+      frame: "banner",
       onComplete: () => {
         this.clearActiveTargets();
         this.fork1Choice = "bone-flute";
@@ -576,11 +597,11 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startIngaNameReveal(): void {
     this.setNarrator("Her name. Type it back to her.");
-    const target = new TextWordTarget({
+    const target = this.makeWord({
       scene: this,
       word: "inga",
       x: this.scale.width / 2,
-      y: this.scale.height - 200,
+      y: this.scale.height - 340,
       fontSize: 44,
       onComplete: () => {
         this.clearActiveTargets();
@@ -638,24 +659,26 @@ export class HauntedWoodScene extends Phaser.Scene {
       "The Ghost-King speaks in silence. You may bargain — or simply light the grove.",
     );
 
-    const bargainTarget = new TextWordTarget({
+    const bargainTarget = this.makeWord({
       scene: this,
       word: "speak your true name",
       x: this.scale.width / 2 - 400,
-      y: this.scale.height - 200,
+      y: this.scale.height - 340,
       fontSize: 28,
+      frame: "banner",
       onComplete: () => {
         this.clearActiveTargets();
         this.fork2Choice = "bargain";
         this.startFork2Bargain();
       },
     });
-    const forceTarget = new TextWordTarget({
+    const forceTarget = this.makeWord({
       scene: this,
       word: "light the grove",
       x: this.scale.width / 2 + 400,
-      y: this.scale.height - 200,
+      y: this.scale.height - 340,
       fontSize: 28,
+      frame: "banner",
       onComplete: () => {
         this.clearActiveTargets();
         this.fork2Choice = "force";
@@ -818,7 +841,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       }
       const word = words[idx];
       if (word === undefined) return;
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word,
         x: this.scale.width / 2,
@@ -885,12 +908,13 @@ export class HauntedWoodScene extends Phaser.Scene {
       "A small cat made of pale light watches from the root-throne. She flicks one ear.",
     );
     this.time.delayedCall(1600, () => {
-      const callTarget = new TextWordTarget({
+      const callTarget = this.makeWord({
         scene: this,
         word: "call to her",
         x: this.scale.width / 2 - 320,
-        y: this.scale.height - 200,
+        y: this.scale.height - 340,
         fontSize: 30,
+        frame: "banner",
         onComplete: () => {
           this.clearActiveTargets();
           this.companionChoice = "call";
@@ -904,12 +928,13 @@ export class HauntedWoodScene extends Phaser.Scene {
           this.time.delayedCall(1800, () => this.startEnding());
         },
       });
-      const leaveTarget = new TextWordTarget({
+      const leaveTarget = this.makeWord({
         scene: this,
         word: "leave her",
         x: this.scale.width / 2 + 320,
-        y: this.scale.height - 200,
+        y: this.scale.height - 340,
         fontSize: 30,
+        frame: "banner",
         onComplete: () => {
           this.clearActiveTargets();
           this.companionChoice = "leave";
@@ -1032,6 +1057,9 @@ export class HauntedWoodScene extends Phaser.Scene {
       fontSize: 32,
       // Wisp-themed pale gray-green burst — a ghost going down in mist, not brass.
       burstColor: GHOST_BURST_COLOR,
+      // UI-cohesion: the legibility outline (TTT-style) so the word reads against
+      // the painted wood + mist.
+      outline: true,
       // Mask the ward mark — the player supplies the punctuation bound to this
       // ghost's approach direction (read off the compass), not read off the word.
       maskMarks: true,
@@ -1208,11 +1236,11 @@ export class HauntedWoodScene extends Phaser.Scene {
       }
       const step = steps[idx];
       if (!step) return;
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word: step.word,
         x: this.scale.width / 2,
-        y: this.scale.height - 200,
+        y: this.scale.height - 340,
         fontSize: 36,
         onComplete: () => {
           playChime();
@@ -1243,6 +1271,12 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
+
+  /** UI-cohesion: every Wood word target gets the legibility outline by default
+   *  (TTT-style). Fork choices pass frame: "banner". */
+  private makeWord(opts: TextWordTargetOptions): TextWordTarget {
+    return new TextWordTarget({ outline: true, ...opts });
+  }
 
   private setNarrator(text: string): void {
     this.narration.sayRaw(text);

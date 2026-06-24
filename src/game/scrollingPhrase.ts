@@ -113,6 +113,9 @@ export class ScrollingPhrase {
       y: opts.y,
       fontSize: BANNER_FONT_SIZE,
       burstColor: PALETTE_HEX.brass,
+      // UI-cohesion: the same legibility outline every other word target carries,
+      // so the scrolling banners read consistently with the rest of the realm.
+      outline: true,
       onComplete: () => this.handleComplete(),
     });
     opts.typingInput.register(this.target);

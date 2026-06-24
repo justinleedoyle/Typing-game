@@ -33,12 +33,15 @@ import {
   SKY_ISLAND_PHRASE_BANK,
   SKY_ISLAND_WORD_BANK,
 } from "../game/wordBank";
-import { TextWordTarget } from "../game/wordTarget";
+import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
+import { ConsoleBand } from "../game/ui/consoleBand";
+import { preloadSatchelIcons } from "../game/ui/satchelIcons";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
 import skyIslandBackdrop from "../../art/references/sky-island-clean.png";
 import lanternSpiritSprite from "../../art/sky/lantern-spirit.png";
 import scholarSpiritSprite from "../../art/sky/scholar-spirit.png";
 import ettaSprite from "../../art/sky/etta.png";
+import runaPortrait from "../../art/runa/runa-front.png";
 
 // Danger ramps in over the LAST 60% of a spirit's advance — earlier portion
 // stays cream so players can read the word, then it shifts red as the spirit
@@ -233,6 +236,8 @@ export class SkyIslandScene extends Phaser.Scene {
     this.load.image("sky-lantern-spirit", lanternSpiritSprite);
     this.load.image("scholar-spirit", scholarSpiritSprite);
     this.load.image("etta", ettaSprite);
+    this.load.image("band-portrait-runa", runaPortrait);
+    preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
   }
 
@@ -247,7 +252,24 @@ export class SkyIslandScene extends Phaser.Scene {
     this.drawAmbientLanterns();
     this.wrenContainer = this.drawWren(this.scale.width / 2, 900);
 
-    this.narration = new NarrationManager(this, { y: 150 });
+    // Tier 4 — a revisit is a free-passage replay (no combat) → neutral loadout.
+    // Resolved before the band so the passive relic icons can populate it.
+    this.combat = resolveCombatLoadout(
+      this.revisit ? [] : this.store.get().satchel,
+      "sky-island",
+    );
+
+    // UI cohesion — the console band: the crafted bottom zone (TTT two-zone
+    // composition) that houses the meters + satchel. Passive relics show as icon
+    // tiles ("always on"); the offensive one-shots drop in as charge cards. This
+    // replaces the floating top-right HUD and the centered one-shot stack.
+    const band = new ConsoleBand(this, {
+      portraitKey: "band-portrait-runa",
+      portraitName: "Runa",
+      passiveIconIds: this.combat.passiveRelicIds,
+    });
+
+    this.narration = new NarrationManager(this, { y: 150, framed: true });
 
     this.typingInput = new TypingInputController(this.store);
     this.typingInput.setKeystrokeHooks({
@@ -262,18 +284,14 @@ export class SkyIslandScene extends Phaser.Scene {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
       onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
+      anchor: band.metersAnchor,
+      plate: false,
     });
 
-    // Tier 4 — a revisit is a free-passage replay (no combat) → neutral loadout.
-    this.combat = resolveCombatLoadout(
-      this.revisit ? [] : this.store.get().satchel,
-      "sky-island",
-    );
-
-    // Tier 4 — offensive one-shots act on the scrolling banners. The widget sits
-    // in the open band between the banner lanes (y≤540) and Wren (y≈900); it only
-    // shows while a scrolling temple has live banners (the sealed-scroll temple
-    // and the between-temple lulls clear activePhrases, so it hides there).
+    // Tier 4 — offensive one-shots act on the scrolling banners. The charge cards
+    // dock into the console band's one-shot slots; they only respond while a
+    // scrolling temple has live banners (the sealed-scroll temple and the
+    // between-temple lulls clear activePhrases, so the invoker is inert there).
     const offensiveOneShots = this.combat.oneShots.filter(isOffensiveOneShot);
     this.oneShotInvoker = new OneShotInvoker<ScrollingPhrase>({
       scene: this,
@@ -286,7 +304,8 @@ export class SkyIslandScene extends Phaser.Scene {
       applyEffect: (effect, targets) => this.applyOneShot(effect, targets),
       isActive: () => this.activePhrases.some((p) => !p.isResolved()),
       announce: (text) => this.setNarrator(text),
-      baseY: 800,
+      slots: band.oneShotSlots,
+      compact: true,
     });
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
@@ -351,7 +370,7 @@ export class SkyIslandScene extends Phaser.Scene {
       }
       const word = words[idx];
       if (word === undefined) return;
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word,
         x: this.scale.width / 2,
@@ -391,7 +410,7 @@ export class SkyIslandScene extends Phaser.Scene {
       "Stepping stones. The gaps are wide, the island hums below your feet.",
     ];
     this.setNarrator(narrations[idx] ?? "");
-    const target = new TextWordTarget({
+    const target = this.makeWord({
       scene: this,
       word: beat,
       x: this.scale.width / 2,
@@ -413,7 +432,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.time.delayedCall(2000, () => {
       this.setNarrator(LIGHTER_LINE_1);
       this.time.delayedCall(600, () => {
-        const t = new TextWordTarget({
+        const t = this.makeWord({
           scene: this,
           word: WREN_RESPONSE,
           x: this.scale.width / 2,
@@ -624,7 +643,7 @@ export class SkyIslandScene extends Phaser.Scene {
       const cx = this.scale.width / 2;
       const cy = 720;
       const seal = this.drawSealedScroll(cx, cy);
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word: SEALED_SCROLL_PHRASE,
         x: cx,
@@ -806,11 +825,12 @@ export class SkyIslandScene extends Phaser.Scene {
     this.time.delayedCall(2000, () => {
       this.setNarrator(ETTA_LINE);
       this.time.delayedCall(600, () => {
-        const helpTarget = new TextWordTarget({
+        const helpTarget = this.makeWord({
           scene: this,
           word: ETTA_HELP_TRIGGER,
           x: this.scale.width / 2 - 300,
-          y: this.scale.height - 260,
+          y: this.scale.height - 340,
+          frame: "banner",
           fontSize: 36,
           onComplete: () => {
             this.clearActiveTargets();
@@ -819,11 +839,12 @@ export class SkyIslandScene extends Phaser.Scene {
         });
         // Any other typed word (typing something that doesn't start with 'h')
         // will just fail to claim — but we also offer a "skip" word
-        const skipTarget = new TextWordTarget({
+        const skipTarget = this.makeWord({
           scene: this,
           word: "keep moving",
           x: this.scale.width / 2 + 300,
-          y: this.scale.height - 260,
+          y: this.scale.height - 340,
+          frame: "banner",
           fontSize: 36,
           onComplete: () => {
             this.clearActiveTargets();
@@ -842,7 +863,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private startEttaHelp(nextTempleIdx: number): void {
     this.setNarrator("You approach the book. Scholar Etta holds her breath.");
     this.time.delayedCall(1200, () => {
-      const liftTarget = new TextWordTarget({
+      const liftTarget = this.makeWord({
         scene: this,
         word: ETTA_CHAIN_1,
         x: this.scale.width / 2,
@@ -853,7 +874,7 @@ export class SkyIslandScene extends Phaser.Scene {
           this.clearActiveTargets();
           this.setNarrator("The book is heavier than it looks. Old paper, dense with writing.");
           this.time.delayedCall(1400, () => {
-            const placeTarget = new TextWordTarget({
+            const placeTarget = this.makeWord({
               scene: this,
               word: ETTA_CHAIN_2,
               x: this.scale.width / 2,
@@ -924,11 +945,12 @@ export class SkyIslandScene extends Phaser.Scene {
   private startFork1(): void {
     this.narration.say("sky_fork1_intro");
 
-    const helpTarget = new TextWordTarget({
+    const helpTarget = this.makeWord({
       scene: this,
       word: "help scholar etta",
       x: this.scale.width / 2 - 400,
-      y: this.scale.height - 240,
+      y: this.scale.height - 340,
+      frame: "banner",
       fontSize: 30,
       onComplete: () => {
         this.clearActiveTargets();
@@ -936,11 +958,12 @@ export class SkyIslandScene extends Phaser.Scene {
         this.startFork1HelpEtta();
       },
     });
-    const stealTarget = new TextWordTarget({
+    const stealTarget = this.makeWord({
       scene: this,
       word: "steal the flame",
       x: this.scale.width / 2 + 400,
-      y: this.scale.height - 240,
+      y: this.scale.height - 340,
+      frame: "banner",
       fontSize: 30,
       onComplete: () => {
         this.clearActiveTargets();
@@ -1015,7 +1038,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.cameras.main.shake(220, 0.005);
     this.setNarrator(`The spirit speaks: "${RIDDLE_1_DISPLAY}"`);
     this.time.delayedCall(1200, () => {
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word: BOSS_PHASE1_ANSWER,
         x: this.scale.width / 2,
@@ -1039,7 +1062,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.cameras.main.shake(220, 0.005);
     this.setNarrator(`The spirit asks again: "${RIDDLE_2_DISPLAY}"`);
     this.time.delayedCall(1200, () => {
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word: BOSS_PHASE2_ANSWER,
         x: this.scale.width / 2,
@@ -1078,7 +1101,7 @@ export class SkyIslandScene extends Phaser.Scene {
       // runner but driven by cursor position at quarter-sentence milestones.
       const totalChars = BOSS_PHASE3_ANSWER.length;
       let lastFadeBand = 0;
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word: BOSS_PHASE3_ANSWER,
         x: this.scale.width / 2,
@@ -1164,11 +1187,12 @@ export class SkyIslandScene extends Phaser.Scene {
   private startFork2(): void {
     this.setNarrator("The summit is quiet. Two choices remain.");
 
-    const kindTarget = new TextWordTarget({
+    const kindTarget = this.makeWord({
       scene: this,
       word: "answer kindly",
       x: this.scale.width / 2 - 380,
-      y: this.scale.height - 240,
+      y: this.scale.height - 340,
+      frame: "banner",
       fontSize: 30,
       onComplete: () => {
         this.clearActiveTargets();
@@ -1176,11 +1200,12 @@ export class SkyIslandScene extends Phaser.Scene {
         this.startFork2KindEnding();
       },
     });
-    const tetherTarget = new TextWordTarget({
+    const tetherTarget = this.makeWord({
       scene: this,
       word: "cut the tether",
       x: this.scale.width / 2 + 380,
-      y: this.scale.height - 240,
+      y: this.scale.height - 340,
+      frame: "banner",
       fontSize: 30,
       onComplete: () => {
         this.clearActiveTargets();
@@ -1196,7 +1221,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private startFork2KindEnding(): void {
     this.setNarrator("You speak to what remains of the spirit.");
     this.time.delayedCall(1400, () => {
-      const t = new TextWordTarget({
+      const t = this.makeWord({
         scene: this,
         word: "you kept the light",
         x: this.scale.width / 2,
@@ -1237,11 +1262,12 @@ export class SkyIslandScene extends Phaser.Scene {
         "A lantern-moth drifts down from the beacon's height, wings lit like paper.",
       );
       this.time.delayedCall(1200, () => {
-        const takeTarget = new TextWordTarget({
+        const takeTarget = this.makeWord({
           scene: this,
           word: "take her with you",
           x: this.scale.width / 2 - 300,
-          y: this.scale.height - 240,
+          y: this.scale.height - 340,
+          frame: "banner",
           fontSize: 32,
           onComplete: () => {
             this.clearActiveTargets();
@@ -1257,11 +1283,12 @@ export class SkyIslandScene extends Phaser.Scene {
             this.time.delayedCall(2400, () => this.startTrueNamePassage());
           },
         });
-        const letGoTarget = new TextWordTarget({
+        const letGoTarget = this.makeWord({
           scene: this,
           word: "let her go",
           x: this.scale.width / 2 + 300,
-          y: this.scale.height - 240,
+          y: this.scale.height - 340,
+          frame: "banner",
           fontSize: 32,
           onComplete: () => {
             this.clearActiveTargets();
@@ -1288,7 +1315,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.clearActiveTargets();
     this.narration.say("sky_truename_intro");
     this.time.delayedCall(1800, () => {
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word: TRUE_NAME_PASSAGE,
         x: this.scale.width / 2,
@@ -1450,7 +1477,7 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private attachSpiritTarget(spirit: LanternSpirit): void {
-    const target = new TextWordTarget({
+    const target = this.makeWord({
       scene: this,
       word: spirit.word,
       x: spirit.container.x,
@@ -1608,7 +1635,7 @@ export class SkyIslandScene extends Phaser.Scene {
         this.time.delayedCall(1400, onDone);
         return;
       }
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word: passages[step] ?? "",
         x: this.scale.width / 2,
@@ -1652,6 +1679,12 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private setNarrator(text: string): void {
     this.narration.sayRaw(text);
+  }
+
+  /** UI-cohesion: every Sky-Island word target gets the legibility outline by
+   *  default (TTT-style). Fork choices pass frame: "banner". */
+  private makeWord(opts: TextWordTargetOptions): TextWordTarget {
+    return new TextWordTarget({ outline: true, ...opts });
   }
 
   private clearActiveTargets(): void {

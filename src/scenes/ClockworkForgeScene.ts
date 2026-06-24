@@ -121,6 +121,17 @@ const CABAL_PASSAGES = [
 const BOSS_PHASE1_WORDS = ["forge", "iron", "brass"] as const;
 const BOSS_PHASE2_WORDS = ["HOLD", "STAND", "YIELD"] as const;
 
+// ─── Triage wave (combat depth) ───────────────────────────────────────────────
+// The concurrent wave mixes golem KINDS so the player must read + prioritise each,
+// not just type the nearest (the TTT moment-to-moment): a lowercase PLAIN golem, a
+// mixed-case COMMAND golem (a mid-word Shift), and a tinted SPLITTER that sheds two
+// quick children where it dies — a "deal with it now and face two, or leave it
+// closing?" decision. All knobs here for the feel-tuning pass.
+const SPLITTER_TINT = 0x8fd4c8; // verdigris cast — the splitter reads as "unstable"
+const SPLITTER_CHILD_WORDS = ["cog", "bolt"] as const;
+const SPLITTER_CHILD_SPREAD = 110; // px each child rests from the death point
+const SPLITTER_CHILD_SPEED_MULT = 0.7; // children close quicker than the parent
+
 // ─── Scene ────────────────────────────────────────────────────────────────────
 
 export class ClockworkForgeScene extends Phaser.Scene {
@@ -503,7 +514,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
       "Gregor nods. \"Now do it for real. That one won't wait.\"",
     );
 
-    const golem = this.spawnAdvancingGolem(1060, FLOOR_Y, "walk", GOLEM_ADVANCE_MS * 1.4, false);
+    const golem = this.spawnAdvancingGolem({
+      x: 1060,
+      y: FLOOR_Y,
+      word: "walk",
+      advanceMs: GOLEM_ADVANCE_MS * 1.4,
+      isCapitalized: false,
+    });
 
     this.waveActive = true;
     this.time.delayedCall(2000, () => {
@@ -563,7 +580,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
     );
     const slots = shuffle(FLOOR_SLOTS).slice(0, 3);
     slots.forEach((slot, i) => {
-      const g = this.spawnAdvancingGolem(slot.x, slot.y, words[i], advanceMs, true);
+      const g = this.spawnAdvancingGolem({
+        x: slot.x,
+        y: slot.y,
+        word: words[i],
+        advanceMs,
+        isCapitalized: true,
+      });
       this.golems.push(g);
     });
 
@@ -620,14 +643,19 @@ export class ClockworkForgeScene extends Phaser.Scene {
       minLength,
     );
     const slots = shuffle(FLOOR_SLOTS).slice(0, count);
+    // Heterogeneous triage wave: read each golem (lowercase = plain, mixed-case =
+    // command/Shift, tinted = splitter) and prioritise — not just type the nearest.
+    const kinds = this.triageKinds(count);
     for (let i = 0; i < count; i++) {
-      const g = this.spawnAdvancingGolem(
-        slots[i].x,
-        slots[i].y,
-        words[i],
+      const isCommand = kinds[i] === "command";
+      const g = this.spawnAdvancingGolem({
+        x: slots[i].x,
+        y: slots[i].y,
+        word: isCommand ? words[i] : words[i]!.toLowerCase(),
         advanceMs,
-        true,
-      );
+        isCapitalized: isCommand,
+        splits: kinds[i] === "splitter",
+      });
       this.golems.push(g);
     }
 
@@ -1052,13 +1080,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const slots = shuffle(FLOOR_SLOTS).slice(0, 2);
     this.golems = [];
     for (let i = 0; i < 2; i++) {
-      const g = this.spawnAdvancingGolem(
-        slots[i].x,
-        slots[i].y,
-        words[i],
+      const g = this.spawnAdvancingGolem({
+        x: slots[i].x,
+        y: slots[i].y,
+        word: words[i]!,
         advanceMs,
-        true,
-      );
+        isCapitalized: true,
+      });
       this.golems.push(g);
     }
 
@@ -1258,17 +1286,35 @@ export class ClockworkForgeScene extends Phaser.Scene {
    *  MovingWordEnemy. The Forge keeps the body art (the eye it brightens on a
    *  command) and the consequence (onGolemComplete); the enemy owns the
    *  entrance / advance / knock-back / defeat lifecycle and the word target. */
-  private spawnAdvancingGolem(
-    x: number,
-    y: number,
-    word: string,
-    advanceMs: number,
-    isCapitalized: boolean,
-  ): MovingWordEnemy {
-    const startX = x < this.scale.width / 2 ? -120 : this.scale.width + 120;
+  /** Assign a mix of golem kinds for a triage wave: at least one splitter and one
+   *  plain when the wave is big enough, the rest command golems, order shuffled so
+   *  the splitter isn't always in the same slot. */
+  private triageKinds(count: number): Array<"splitter" | "plain" | "command"> {
+    const kinds: Array<"splitter" | "plain" | "command"> = [];
+    if (count >= 1) kinds.push("splitter");
+    if (count >= 2) kinds.push("plain");
+    while (kinds.length < count) kinds.push("command");
+    return shuffle(kinds);
+  }
+
+  private spawnAdvancingGolem(opts: {
+    x: number;
+    y: number;
+    word: string;
+    advanceMs: number;
+    isCapitalized: boolean;
+    /** Splitter: sheds two quick children where it dies, tinted as a tell. */
+    splits?: boolean;
+    /** Override the edge-sweep entrance — split children appear in place. */
+    startX?: number;
+  }): MovingWordEnemy {
+    const { x, y, word, advanceMs, isCapitalized } = opts;
+    const startX =
+      opts.startX ?? (x < this.scale.width / 2 ? -120 : this.scale.width + 120);
     const container = this.add.container(startX, y);
     container.setAlpha(0);
     const sprite = this.drawGolemInto(container, false);
+    if (opts.splits) sprite.setTint(SPLITTER_TINT);
 
     return new MovingWordEnemy({
       scene: this,
@@ -1293,6 +1339,29 @@ export class ClockworkForgeScene extends Phaser.Scene {
       // CAPITALS command them.") is a real mid-word demand, not a VFX gate.
       caseSensitive: isCapitalized,
       outline: true,
+      // Splitter: on a player kill, shed two quick plain children where it died
+      // (geometry via the shared splitChildPositions). Non-recursive — children
+      // don't split again. Pushed to this.golems so the wave-clear check waits on
+      // them. NOT fired by a chain-spark/dismiss (only a typed completion).
+      split: opts.splits
+        ? {
+            children: [
+              { word: SPLITTER_CHILD_WORDS[0], dx: -SPLITTER_CHILD_SPREAD },
+              { word: SPLITTER_CHILD_WORDS[1], dx: SPLITTER_CHILD_SPREAD },
+            ],
+            spawn: (p) => {
+              const child = this.spawnAdvancingGolem({
+                x: p.restX,
+                y: p.restY,
+                word: p.word,
+                advanceMs: advanceMs * SPLITTER_CHILD_SPEED_MULT,
+                isCapitalized: false,
+                startX: p.restX,
+              });
+              this.golems.push(child);
+            },
+          }
+        : undefined,
       isWaveActive: () => this.waveActive,
       onTargetAttached: (t) => this.activeTargets.push(t),
       onTargetDetached: (t) => {

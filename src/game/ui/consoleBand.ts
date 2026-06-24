@@ -157,7 +157,13 @@ export class ConsoleBand {
       .setOrigin(0, 0.5);
     this.container.add(label);
 
-    iconIds.forEach((id, i) => {
+    // Only relics with a loadable icon get a tile — no empty boxes for an id
+    // whose art is missing or not yet preloaded; the row stays contiguous.
+    const drawable = iconIds.filter((id) => {
+      const icon = satchelIconFor(id);
+      return icon !== null && scene.textures.exists(icon.key);
+    });
+    drawable.forEach((id, i) => {
       const x = SATCHEL_X + i * (TILE + TILE_GAP);
       const tile = scene.add.graphics();
       tile.fillStyle(0x0f0c08, 1);
@@ -166,12 +172,10 @@ export class ConsoleBand {
       tile.strokeRoundedRect(x, TILE_Y - TILE / 2, TILE, TILE, 5);
       this.container.add(tile);
 
-      const icon = satchelIconFor(id);
-      if (icon && scene.textures.exists(icon.key)) {
-        const img = scene.add.image(x + TILE / 2, TILE_Y, icon.key);
-        img.setScale(Math.min((TILE - 6) / img.width, (TILE - 6) / img.height));
-        this.container.add(img);
-      }
+      const icon = satchelIconFor(id)!;
+      const img = scene.add.image(x + TILE / 2, TILE_Y, icon.key);
+      img.setScale(Math.min((TILE - 6) / img.width, (TILE - 6) / img.height));
+      this.container.add(img);
     });
   }
 }

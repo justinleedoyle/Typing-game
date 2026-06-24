@@ -1,8 +1,9 @@
-// Shared satchel-icon loader. A relic/companion id maps to its painted icon at
-// art/relics/<id>.png (companions reuse art/companions/<id>.png). Bulk-imported
-// via Vite glob so a new art file is picked up without editing a list. The
-// Almanac collection and the in-combat console band show the SAME painted icons,
-// keyed identically, so a preload in either place is reused.
+// Shared satchel-icon loader. A relic id maps to art/relics/<id>.png; a companion
+// id maps to its creature sprite in art/companions/ (a couple of ids don't match
+// the filename — e.g. snow-fox-cub → snow-fox). Bulk-imported via Vite glob so a
+// new art file is picked up without editing a list. The Almanac collection and
+// the in-combat console band show the SAME painted icons, keyed identically
+// (`almanac-icon-<id>`), so a preload in either place is reused.
 
 import type Phaser from "phaser";
 
@@ -18,10 +19,25 @@ const COMPANION_ICON_URLS = import.meta.glob("../../../art/companions/*.png", {
   import: "default",
 }) as Record<string, string>;
 
-function urlFor(id: string): string | null {
-  const relic = RELIC_ICON_URLS[`../../../art/relics/${id}.png`];
-  if (relic) return relic;
-  return COMPANION_ICON_URLS[`../../../art/companions/${id}.png`] ?? null;
+// Companion relic-id → its creature art basename. Mirrors AlmanacScene so both
+// surfaces resolve the same icons (notably snow-fox-cub → snow-fox).
+const COMPANION_ICON_FILE: Record<string, string> = {
+  "snow-fox-cub": "snow-fox",
+  "glass-fish": "glass-fish",
+  "brass-songbird": "brass-songbird",
+  "lantern-moth": "lantern-moth",
+  "wisp-cat": "wisp-cat",
+};
+
+/** Resolve `<dir>/<name>.png` to its bundled URL from a glob map. */
+function globUrl(
+  urls: Record<string, string>,
+  name: string,
+): string | undefined {
+  for (const [path, url] of Object.entries(urls)) {
+    if (path.endsWith(`/${name}.png`)) return url;
+  }
+  return undefined;
 }
 
 /** Phaser texture key + source URL for a satchel id's icon, or null if no art.
@@ -29,7 +45,10 @@ function urlFor(id: string): string | null {
 export function satchelIconFor(
   id: string,
 ): { key: string; url: string } | null {
-  const url = urlFor(id);
+  const file = COMPANION_ICON_FILE[id];
+  const url = file
+    ? globUrl(COMPANION_ICON_URLS, file)
+    : globUrl(RELIC_ICON_URLS, id);
   return url ? { key: `almanac-icon-${id}`, url } : null;
 }
 

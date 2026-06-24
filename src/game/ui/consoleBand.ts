@@ -49,6 +49,10 @@ export interface ConsoleBandOptions {
   passiveIconIds?: readonly string[];
   /** How many one-shot card slots to reserve (default 3). */
   maxOneShots?: number;
+  /** Label over the satchel zone (default "satchel"). A realm with no satchel but
+   *  its own bottom meter (Winter's candles, Bell's breath) docks that meter at
+   *  `satchelAnchor` and relabels the zone. */
+  satchelLabel?: string;
 }
 
 export class ConsoleBand {
@@ -58,6 +62,9 @@ export class ConsoleBand {
   readonly metersAnchor: { x: number; y: number };
   /** Absolute screen slots for one-shot charge cards, left → right. */
   readonly oneShotSlots: { x: number; y: number }[] = [];
+  /** Absolute screen anchor for the satchel zone's content row — where a realm
+   *  with no satchel docks its own meter (Winter candles, Bell breath). */
+  readonly satchelAnchor: { x: number; y: number };
   private readonly container: Phaser.GameObjects.Container;
 
   constructor(scene: Phaser.Scene, opts: ConsoleBandOptions = {}) {
@@ -72,8 +79,9 @@ export class ConsoleBand {
 
     this.drawSurface(scene, W);
     this.drawPortrait(scene, opts);
-    this.drawSatchel(scene, opts.passiveIconIds ?? []);
+    this.drawSatchel(scene, opts.passiveIconIds ?? [], opts.satchelLabel ?? "satchel");
 
+    this.satchelAnchor = { x: SATCHEL_X, y: top + TILE_Y };
     this.metersAnchor = { x: METERS_RIGHT, y: top + METERS_CY };
     const n = opts.maxOneShots ?? 3;
     for (let i = 0; i < n; i++) {
@@ -141,14 +149,18 @@ export class ConsoleBand {
     }
   }
 
-  private drawSatchel(scene: Phaser.Scene, iconIds: readonly string[]): void {
+  private drawSatchel(
+    scene: Phaser.Scene,
+    iconIds: readonly string[],
+    labelText: string,
+  ): void {
     const divider = scene.add.graphics();
     divider.fillStyle(0x6e5a36, 0.45);
     divider.fillRect(DIVIDER_X, PAD, 1, BAND_H - PAD * 2);
     this.container.add(divider);
 
     const label = scene.add
-      .text(SATCHEL_X, SATCHEL_LABEL_Y, "satchel", {
+      .text(SATCHEL_X, SATCHEL_LABEL_Y, labelText, {
         fontFamily: SERIF,
         fontStyle: "italic",
         fontSize: "15px",

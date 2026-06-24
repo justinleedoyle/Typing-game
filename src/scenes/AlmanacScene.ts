@@ -6,6 +6,7 @@ import {
   lorePageIdsForRealm,
 } from "../game/almanacLorePages";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
+import { UI_CSS, UI_HEX } from "../game/ui/uiTheme";
 import { drawStaticQuietLordFragment } from "../game/quietLordIntrusion";
 import { REALM_LORE, REALM_ORDER } from "../game/realmLore";
 import { RELICS } from "../game/relics";
@@ -25,7 +26,7 @@ interface AlmanacSceneData {
   store: SaveStore;
 }
 
-const PAGE_INK = "#2a1f12";
+const PAGE_INK = UI_CSS.ink; // "#2a1f12" — shared with the dialogue-card ink
 const PAGE_INK_DIM = "#6a543a";
 
 // Companion creature IDs, one per realm. Stored in `satchel` alongside relics
@@ -706,7 +707,7 @@ export class AlmanacScene extends Phaser.Scene {
     // Page surface, two halves separated by a darker spine.
     g.fillStyle(PALETTE_HEX.cream, 1);
     g.fillRoundedRect(BOOK_X, BOOK_Y, BOOK_WIDTH, BOOK_HEIGHT, 14);
-    g.fillStyle(0xe6dcc0, 1);
+    g.fillStyle(UI_HEX.parchment, 1);
     // A faint "page is paper" wash on each side.
     g.fillRect(BOOK_X + 10, BOOK_Y + 10, BOOK_WIDTH / 2 - 30, BOOK_HEIGHT - 20);
     g.fillRect(

@@ -5,6 +5,7 @@ import { playClack } from "../audio/clack";
 import { playDamageThud } from "../audio/damageThud";
 import { playPeriodSnapSting } from "../audio/quietLordSting";
 import { NarrationManager } from "../game/narrationManager";
+import { ConsoleBand } from "../game/ui/consoleBand";
 import { flashDamageVignette } from "../game/vfx";
 import { flashQuietLordFragment } from "../game/quietLordIntrusion";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -27,8 +28,9 @@ import {
   SKY_ISLAND_WORD_BANK,
   HAUNTED_WOOD_WORD_BANK,
 } from "../game/wordBank";
-import { TextWordTarget } from "../game/wordTarget";
+import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import greatBattleBackdrop from "../../art/references/great-battle-clean.png";
+import runaPortrait from "../../art/runa/runa-front.png";
 
 // ─── Scene data ────────────────────────────────────────────────────────────────
 
@@ -243,6 +245,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image("great-battle-backdrop", greatBattleBackdrop);
+    this.load.image("band-portrait-runa", runaPortrait);
   }
 
   create(): void {
@@ -254,17 +257,41 @@ export class GreatBattleScene extends Phaser.Scene {
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
 
-    // Narrator
-    this.narration = new NarrationManager(this, { y: 90, wordWrapWidth: 1500, depth: 5 });
+    // UI cohesion — the console band. The finale has no heart/soul HUD; its candle
+    // (fail-state) + spell-charge meters dock into the band, with Runa at the portrait
+    // nook. No satchel icons here (the band's zone holds the two meters instead).
+    const band = new ConsoleBand(this, {
+      portraitKey: "band-portrait-runa",
+      portraitName: "Runa",
+      passiveIconIds: [],
+      satchelLabel: "",
+    });
 
-    // Candle & charge HUD — charges may be bumped by king-aurland
+    // Narrator (framed dialogue card)
+    this.narration = new NarrationManager(this, {
+      y: 90,
+      wordWrapWidth: 1500,
+      depth: 5,
+      framed: true,
+    });
+
+    // Candle & charge HUD, docked into the band — charges may be bumped by king-aurland.
     const satchel = this.store.get().satchel;
     if (satchel.includes("king-aurland")) {
       this.waveCharges = WAVE_CHARGES + 1; // +1 spell charge per wave
     }
 
-    this.candleGroup = this.add.container(this.scale.width / 2 - 120, 990).setDepth(6);
-    this.chargeGroup = this.add.container(this.scale.width / 2 + 120, 990).setDepth(6);
+    const meterY = band.bandTopY + 112;
+    this.candleGroup = this.add.container(430, meterY).setDepth(1500);
+    this.chargeGroup = this.add.container(720, meterY).setDepth(1500);
+    const finaleHudLabel: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: SERIF,
+      fontStyle: "italic",
+      fontSize: "15px",
+      color: "#a59b89",
+    };
+    this.add.text(430, meterY - 40, "candles", finaleHudLabel).setOrigin(0.5).setDepth(1500);
+    this.add.text(720, meterY - 40, "spells", finaleHudLabel).setOrigin(0.5).setDepth(1500);
     this.redrawCandles();
     this.redrawCharges();
 
@@ -336,6 +363,11 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private setNarrator(text: string): void {
     this.narration.sayRaw(text);
+  }
+
+  /** UI-cohesion: every finale word target gets the legibility outline (TTT-style). */
+  private makeWord(opts: TextWordTargetOptions): TextWordTarget {
+    return new TextWordTarget({ outline: true, ...opts });
   }
 
   private clearActiveTargets(): void {
@@ -623,7 +655,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // dawn-light overlay applied in startPhase1 (TextWordTarget doesn't expose
     // a per-instance color override; the overlay tints the whole battlefield).
 
-    const target = new TextWordTarget({
+    const target = this.makeWord({
       scene: this,
       word,
       x,
@@ -940,7 +972,7 @@ export class GreatBattleScene extends Phaser.Scene {
       finish(); // no-op if loseCandle emptied the pool (runOver guards it)
     });
 
-    const target = new TextWordTarget({
+    const target = this.makeWord({
       scene: this,
       word: facet.defenseWord,
       x: this.scale.width / 2,
@@ -1007,7 +1039,7 @@ export class GreatBattleScene extends Phaser.Scene {
       return;
     }
     const word = words[idx]!;
-    const target = new TextWordTarget({
+    const target = this.makeWord({
       scene: this,
       word,
       x: this.scale.width / 2,
@@ -1048,7 +1080,7 @@ export class GreatBattleScene extends Phaser.Scene {
     if (satchel.includes("tether-cord") && !this.tetherCordBindUsed) {
       this.tetherCordBindUsed = true;
       this.narration.say("finale_relic_tether_cord");
-      const bindTarget = new TextWordTarget({
+      const bindTarget = this.makeWord({
         scene: this,
         word: "bound",
         x: this.scale.width / 2,
@@ -1075,7 +1107,7 @@ export class GreatBattleScene extends Phaser.Scene {
     if (satchel.includes("master-key") && !this.masterKeyFlankUsed) {
       this.masterKeyFlankUsed = true;
       this.narration.say("finale_relic_master_key");
-      const flankTarget = new TextWordTarget({
+      const flankTarget = this.makeWord({
         scene: this,
         word: "flank",
         x: this.scale.width * 0.15,
@@ -1133,7 +1165,7 @@ export class GreatBattleScene extends Phaser.Scene {
     for (let i = 0; i < 3; i++) {
       const word = round1Words[i]!;
       const x = xPositions[i]!;
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word,
         x,
@@ -1179,7 +1211,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // Flash the screen briefly (light corridor effect)
     this.cameras.main.flash(400, 160, 220, 255, false);
     this.time.delayedCall(500, () => {
-      const bonusTarget = new TextWordTarget({
+      const bonusTarget = this.makeWord({
         scene: this,
         word: "light",
         x: this.scale.width / 2,
@@ -1222,7 +1254,7 @@ export class GreatBattleScene extends Phaser.Scene {
     });
 
     // Spawn a bonus hit-window word on the side
-    const bonusTarget = new TextWordTarget({
+    const bonusTarget = this.makeWord({
       scene: this,
       word: "throne",
       x: this.scale.width * 0.15,
@@ -1304,7 +1336,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
     this.cameras.main.shake(240, 0.004);
 
-    const defenseTarget = new TextWordTarget({
+    const defenseTarget = this.makeWord({
       scene: this,
       word: "hold",
       x: this.scale.width / 2,
@@ -1333,7 +1365,7 @@ export class GreatBattleScene extends Phaser.Scene {
   // §5.5.9 — wisp-cat: extra phrase target spawns mid-phase (flank)
   private applyWispCatFlank(onDone: () => void): void {
     this.narration.say("finale_companion_wisp_cat");
-    const flankTarget = new TextWordTarget({
+    const flankTarget = this.makeWord({
       scene: this,
       word: "flank",
       x: this.scale.width * 0.85,
@@ -1405,7 +1437,7 @@ export class GreatBattleScene extends Phaser.Scene {
     for (let i = 0; i < 3; i++) {
       const word = round2Words[i]!;
       const x = xPositions[i]!;
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word,
         x,
@@ -1508,7 +1540,7 @@ export class GreatBattleScene extends Phaser.Scene {
         : "Again, deeper — his name this time:";
     this.setNarrator(`${lead}  ${word}`);
 
-    const target = new TextWordTarget({
+    const target = this.makeWord({
       scene: this,
       word,
       x: this.scale.width / 2,
@@ -1608,7 +1640,7 @@ export class GreatBattleScene extends Phaser.Scene {
     }
     const word = words[idx]!;
 
-    const target = new TextWordTarget({
+    const target = this.makeWord({
       scene: this,
       word,
       x: this.scale.width / 2,

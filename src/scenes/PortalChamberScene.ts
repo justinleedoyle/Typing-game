@@ -610,7 +610,7 @@ export class PortalChamberScene extends Phaser.Scene {
       g.arc(spec.x, archMidY + 60, radius * 0.55, 0, Math.PI * 2);
       g.strokePath();
       sprite.setVisible(true);
-      sprite.setTint(0xc9a14a);
+      sprite.setTint(PALETTE_HEX.brass);
       sprite.setAlpha(0.55);
       if (!sprite.anims.isPlaying) sprite.play("portal-spin");
       return;

@@ -9,6 +9,8 @@ import { playWaveSting } from "../audio/waveSting";
 import { flashDamageVignette } from "../game/vfx";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
+import { ConsoleBand } from "../game/ui/consoleBand";
+import runaPortrait from "../../art/runa/runa-front.png";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
@@ -24,7 +26,7 @@ import {
 } from "../game/winterMechanics";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
-import { TextWordTarget } from "../game/wordTarget";
+import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import {
   makeHeldurSprite,
   makeHuntressSprite,
@@ -259,6 +261,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image("winter-backdrop", winterBackdrop);
+    this.load.image("band-portrait-runa", runaPortrait);
     preloadWren(this);
     preloadWolves(this);
     preloadWinterNpcs(this);
@@ -273,28 +276,44 @@ export class WinterMountainScene extends Phaser.Scene {
       .setDepth(-100);
     this.wrenContainer = this.drawWren(this.scale.width / 2, 880);
 
-    this.narration = new NarrationManager(this, { y: 160 });
+    // UI cohesion — the console band houses the meters + Winter's candle/thunder
+    // status. Realm 1 has no satchel, so those dock in the satchel zone.
+    const band = new ConsoleBand(this, {
+      portraitKey: "band-portrait-runa",
+      portraitName: "Runa",
+      passiveIconIds: [],
+      satchelLabel: "",
+    });
 
-    this.candleGroup = this.add.container(this.scale.width / 2 - 110, 880);
-    this.chargeGroup = this.add.container(this.scale.width / 2 + 110, 880);
+    this.narration = new NarrationManager(this, { y: 160, framed: true });
+
+    // Candle + thunder meters dock into the band's satchel zone (above the band
+    // surface, so depth > the band's DEPTH).
+    this.candleGroup = this.add
+      .container(band.satchelAnchor.x + 90, band.satchelAnchor.y)
+      .setDepth(1500);
+    this.chargeGroup = this.add
+      .container(band.satchelAnchor.x + 370, band.satchelAnchor.y)
+      .setDepth(1500);
     this.redrawCandles();
     this.redrawCharges();
 
-    // Small italic labels under each HUD cluster so it's obvious what they
-    // are. "candles" mirrors the narrator's language ("Keep your candles
-    // lit"); "thunder" matches the thunderclap spell.
+    // Small italic labels above each cluster — "candles" mirrors the narrator's
+    // language ("Keep your candles lit"); "thunder" matches the thunderclap spell.
     const hudLabelStyle: Phaser.Types.GameObjects.Text.TextStyle = {
       fontFamily: SERIF,
-      fontSize: "16px",
+      fontSize: "15px",
       fontStyle: "italic",
-      color: PALETTE.dim,
+      color: "#a59b89",
     };
     this.add
-      .text(this.scale.width / 2 - 110, 920, "candles", hudLabelStyle)
-      .setOrigin(0.5);
+      .text(band.satchelAnchor.x + 90, band.satchelAnchor.y - 38, "candles", hudLabelStyle)
+      .setOrigin(0.5)
+      .setDepth(1500);
     this.add
-      .text(this.scale.width / 2 + 110, 920, "thunder", hudLabelStyle)
-      .setOrigin(0.5);
+      .text(band.satchelAnchor.x + 370, band.satchelAnchor.y - 38, "thunder", hudLabelStyle)
+      .setOrigin(0.5)
+      .setDepth(1500);
 
     this.typingInput = new TypingInputController(this.store);
     this.director = new WaveDirector(this.typingInput.getStats());
@@ -316,6 +335,8 @@ export class WinterMountainScene extends Phaser.Scene {
       getCombo: () => this.typingInput.getStats().getCombo(),
       getCastReady: () => this.typingInput.getStats().canCast(SPELL_COST),
       onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
+      anchor: band.metersAnchor,
+      plate: false,
     });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.input.keyboard?.on("keyup", this.onKeyUp, this);
@@ -375,7 +396,7 @@ export class WinterMountainScene extends Phaser.Scene {
       }
       const word = words[idx];
       if (word === undefined) return;
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word,
         x: this.scale.width / 2,
@@ -415,7 +436,7 @@ export class WinterMountainScene extends Phaser.Scene {
       "A low branch catches the light. Duck under it.",
     ];
     this.setNarrator(narrations[idx]);
-    const target = new TextWordTarget({
+    const target = this.makeWord({
       scene: this,
       word: beat,
       x: this.scale.width / 2,
@@ -457,7 +478,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.setNarrator(HELDUR_NARRATOR_PROMPTS[idx]);
     this.clearHeldurDialog();
 
-    const target = new TextWordTarget({
+    const target = this.makeWord({
       scene: this,
       word: HELDUR_QUESTIONS[idx],
       x: this.scale.width / 2,
@@ -578,7 +599,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private promptKindle(): void {
     if (this.combatCandlesActive) return;
     this.narration.say("winter_kindle_prompt");
-    const target = new TextWordTarget({
+    const target = this.makeWord({
       scene: this,
       word: "kindle",
       x: this.scale.width / 2,
@@ -688,6 +709,12 @@ export class WinterMountainScene extends Phaser.Scene {
     }
   }
 
+  /** UI-cohesion: every Winter word target gets the legibility outline by default
+   *  (TTT-style). Fork choices pass frame: "banner". */
+  private makeWord(opts: TextWordTargetOptions): TextWordTarget {
+    return new TextWordTarget({ outline: true, ...opts });
+  }
+
   private spawnWolf(
     startX: number,
     targetX: number,
@@ -724,6 +751,7 @@ export class WinterMountainScene extends Phaser.Scene {
       fontSize: 32,
       // Frost burst on completion — wolves go "down in snow," not "down in brass."
       burstColor: PALETTE_HEX.frost,
+      outline: true,
       // The circler (flanking) wolf weaves vertically as it closes.
       verticalOffset: circles ? circlerY : undefined,
       isWaveActive: () => this.waveActive,
@@ -780,6 +808,7 @@ export class WinterMountainScene extends Phaser.Scene {
       defeatMs: 500,
       fontSize: 32,
       burstColor: PALETTE_HEX.frost,
+      outline: true,
       // Warded: the boss advances mute until the pack falls; releaseBossWard()
       // attaches its true name then.
       manualAttach: true,
@@ -946,11 +975,12 @@ export class WinterMountainScene extends Phaser.Scene {
   private startWoundedFox(nextWave: number): void {
     this.narration.say("winter_fox_intro");
 
-    const kindTarget = new TextWordTarget({
+    const kindTarget = this.makeWord({
       scene: this,
       word: "i mean no harm",
       x: this.scale.width / 2 - 320,
-      y: this.scale.height - 220,
+      y: this.scale.height - 340,
+      frame: "banner",
       fontSize: 30,
       onComplete: () => {
         this.clearActiveTargets();
@@ -965,11 +995,12 @@ export class WinterMountainScene extends Phaser.Scene {
       },
     });
 
-    const hurtTarget = new TextWordTarget({
+    const hurtTarget = this.makeWord({
       scene: this,
       word: "i don't have time",
       x: this.scale.width / 2 + 320,
-      y: this.scale.height - 220,
+      y: this.scale.height - 340,
+      frame: "banner",
       fontSize: 30,
       onComplete: () => {
         this.clearActiveTargets();
@@ -989,22 +1020,24 @@ export class WinterMountainScene extends Phaser.Scene {
   private startFork1(nextWave: number): void {
     this.narration.say("winter_fork1_intro");
 
-    const huntress = new TextWordTarget({
+    const huntress = this.makeWord({
       scene: this,
       word: "save the huntress",
       x: this.scale.width / 2 - 380,
-      y: this.scale.height - 220,
+      y: this.scale.height - 340,
+      frame: "banner",
       fontSize: 32,
       onComplete: () => {
         this.fork1Choice = "huntress";
         this.startHuntressBranch(nextWave);
       },
     });
-    const firefly = new TextWordTarget({
+    const firefly = this.makeWord({
       scene: this,
       word: "follow the fireflies",
       x: this.scale.width / 2 + 380,
-      y: this.scale.height - 220,
+      y: this.scale.height - 340,
+      frame: "banner",
       fontSize: 32,
       onComplete: () => {
         this.fork1Choice = "firefly";
@@ -1209,11 +1242,12 @@ export class WinterMountainScene extends Phaser.Scene {
   private startFork2(): void {
     this.narration.say("winter_fork2_intro");
 
-    const buryTarget = new TextWordTarget({
+    const buryTarget = this.makeWord({
       scene: this,
       word: "bury the pack leader",
       x: this.scale.width / 2 - 380,
-      y: this.scale.height - 220,
+      y: this.scale.height - 340,
+      frame: "banner",
       fontSize: 30,
       onComplete: () => {
         this.fork2Choice = "bury";
@@ -1229,11 +1263,12 @@ export class WinterMountainScene extends Phaser.Scene {
       },
     });
 
-    const peltTarget = new TextWordTarget({
+    const peltTarget = this.makeWord({
       scene: this,
       word: "take the pelt",
       x: this.scale.width / 2 + 380,
-      y: this.scale.height - 220,
+      y: this.scale.height - 340,
+      frame: "banner",
       fontSize: 30,
       onComplete: () => {
         this.fork2Choice = "pelt";
@@ -1291,11 +1326,12 @@ export class WinterMountainScene extends Phaser.Scene {
 
     this.narration.say("winter_fox_companion_accept");
 
-    const whisperTarget = new TextWordTarget({
+    const whisperTarget = this.makeWord({
       scene: this,
       word: "whisper to her",
       x: this.scale.width / 2 - 260,
-      y: this.scale.height - 220,
+      y: this.scale.height - 340,
+      frame: "banner",
       fontSize: 32,
       onComplete: () => {
         this.clearActiveTargets();
@@ -1307,11 +1343,12 @@ export class WinterMountainScene extends Phaser.Scene {
       },
     });
 
-    const letGoTarget = new TextWordTarget({
+    const letGoTarget = this.makeWord({
       scene: this,
       word: "let her go",
       x: this.scale.width / 2 + 260,
-      y: this.scale.height - 220,
+      y: this.scale.height - 340,
+      frame: "banner",
       fontSize: 32,
       onComplete: () => {
         this.clearActiveTargets();
@@ -1421,7 +1458,7 @@ export class WinterMountainScene extends Phaser.Scene {
         this.time.delayedCall(900, onDone);
         return;
       }
-      const target = new TextWordTarget({
+      const target = this.makeWord({
         scene: this,
         word: passages[step],
         x: this.scale.width / 2,

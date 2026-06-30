@@ -142,6 +142,8 @@ export class PortalChamberScene extends Phaser.Scene {
   private wrenSprite!: Phaser.GameObjects.Image;
   private runaSprite?: Phaser.GameObjects.Image;
   private zoneTargets: TextWordTarget[] = [];
+  private stationTypingPulseTimes = new WeakMap<StationSpec, number>();
+  private portalTypingPulseTimes = new Map<string, number>();
   private ambientHandle?: AmbientHandle;
 
   constructor() {
@@ -154,6 +156,8 @@ export class PortalChamberScene extends Phaser.Scene {
     this.archGlows = new Map();
     this.archSprites = new Map();
     this.zoneTargets = [];
+    this.stationTypingPulseTimes = new WeakMap();
+    this.portalTypingPulseTimes = new Map();
   }
 
   preload(): void {
@@ -325,6 +329,7 @@ export class PortalChamberScene extends Phaser.Scene {
         fontSize: 30,
         outline: true,
         onClaim: () => this.focusPortalForScene(arch.sceneKey),
+        onAdvance: () => this.pulsePortalTyping(arch.sceneKey),
         onComplete: () => this.onEnterPortal(arch.sceneKey, false),
       });
       this.typingInput.register(primary);
@@ -351,6 +356,7 @@ export class PortalChamberScene extends Phaser.Scene {
           outline: true,
           frame: "banner",
           onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),
+          onAdvance: () => this.pulseStationTyping(HUB_STATIONS.portalFloor),
           onComplete: () => {
             this.playHubActorAction(HUB_STATIONS.portalFloor.x);
             this.pulseStation(HUB_STATIONS.portalFloor);
@@ -375,6 +381,7 @@ export class PortalChamberScene extends Phaser.Scene {
           outline: true,
           frame: "banner",
           onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),
+          onAdvance: () => this.pulseStationTyping(HUB_STATIONS.portalFloor),
           onComplete: () => {
             this.playHubActorAction(HUB_STATIONS.portalFloor.x);
             this.pulseStation(HUB_STATIONS.portalFloor);
@@ -400,6 +407,7 @@ export class PortalChamberScene extends Phaser.Scene {
         priority: -1,
         outline: true,
         onClaim: () => this.focusPortalForScene(arch.sceneKey),
+        onAdvance: () => this.pulsePortalTyping(arch.sceneKey),
         onComplete: () => this.onEnterPortal(arch.sceneKey, true),
       });
       this.typingInput.register(revisit);
@@ -600,6 +608,9 @@ export class PortalChamberScene extends Phaser.Scene {
       onClaim: () => {
         if (opts.stationPulse) this.focusStation(opts.stationPulse);
       },
+      onAdvance: () => {
+        if (opts.stationPulse) this.pulseStationTyping(opts.stationPulse);
+      },
       onComplete: () => {
         if (opts.stationPulse) this.pulseStation(opts.stationPulse);
         onComplete();
@@ -640,6 +651,7 @@ export class PortalChamberScene extends Phaser.Scene {
       outline: true,
       frame: "banner",
       onClaim: () => this.focusStation(HUB_STATIONS.almanac),
+      onAdvance: () => this.pulseStationTyping(HUB_STATIONS.almanac),
       onComplete: () => {
         this.playHubActorAction(HUB_STATIONS.almanac.x, true);
         this.pulseStation(HUB_STATIONS.almanac);
@@ -673,6 +685,7 @@ export class PortalChamberScene extends Phaser.Scene {
         outline: true,
         frame: "banner",
         onClaim: () => this.focusStation(HUB_STATIONS.account),
+        onAdvance: () => this.pulseStationTyping(HUB_STATIONS.account),
         onComplete: () => {
           this.playHubActorAction(HUB_STATIONS.account.x);
           this.pulseStation(HUB_STATIONS.account);
@@ -702,6 +715,7 @@ export class PortalChamberScene extends Phaser.Scene {
         outline: true,
         frame: "banner",
         onClaim: () => this.focusStation(HUB_STATIONS.account),
+        onAdvance: () => this.pulseStationTyping(HUB_STATIONS.account),
         onComplete: () => {
           this.playHubActorAction(HUB_STATIONS.account.x);
           this.pulseStation(HUB_STATIONS.account);
@@ -1142,6 +1156,75 @@ export class PortalChamberScene extends Phaser.Scene {
       scaleX: 1.08,
       scaleY: 1.18,
       duration: 420,
+      ease: "Sine.easeOut",
+      onComplete: () => pulse.destroy(),
+    });
+  }
+
+  private pulseStationTyping(station: StationSpec): void {
+    const now = this.time.now;
+    const last = this.stationTypingPulseTimes.get(station) ?? -Infinity;
+    if (now - last < 90) return;
+    this.stationTypingPulseTimes.set(station, now);
+
+    const pulse = this.add
+      .container(station.x, station.y)
+      .setDepth(8)
+      .setAlpha(0.46);
+    const g = this.add.graphics();
+    g.fillStyle(UI_HEX.brass, 0.035);
+    g.fillRoundedRect(
+      -station.width / 2,
+      -station.height / 2,
+      station.width,
+      station.height,
+      8,
+    );
+    g.lineStyle(1, UI_HEX.brass, 0.34);
+    g.strokeRoundedRect(
+      -station.width / 2,
+      -station.height / 2,
+      station.width,
+      station.height,
+      8,
+    );
+    pulse.add(g);
+
+    this.tweens.add({
+      targets: pulse,
+      alpha: 0,
+      scaleX: 1.04,
+      scaleY: 1.1,
+      duration: 210,
+      ease: "Sine.easeOut",
+      onComplete: () => pulse.destroy(),
+    });
+  }
+
+  private pulsePortalTyping(sceneKey: string): void {
+    const now = this.time.now;
+    const last = this.portalTypingPulseTimes.get(sceneKey) ?? -Infinity;
+    if (now - last < 90) return;
+    this.portalTypingPulseTimes.set(sceneKey, now);
+
+    const arch = ARCHES.find((a) => a.sceneKey === sceneKey);
+    if (!arch) return;
+    const pulse = this.add
+      .graphics()
+      .setPosition(arch.x, arch.baseY - arch.height / 2 + 34)
+      .setDepth(7)
+      .setAlpha(0.48);
+    pulse.fillStyle(UI_HEX.brass, 0.04);
+    pulse.fillEllipse(0, 0, arch.width * 0.54, arch.height * 0.46);
+    pulse.lineStyle(1, UI_HEX.brass, 0.36);
+    pulse.strokeEllipse(0, 0, arch.width * 0.66, arch.height * 0.54);
+
+    this.tweens.add({
+      targets: pulse,
+      alpha: 0,
+      scaleX: 1.08,
+      scaleY: 1.12,
+      duration: 230,
       ease: "Sine.easeOut",
       onComplete: () => pulse.destroy(),
     });

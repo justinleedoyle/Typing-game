@@ -41,6 +41,7 @@ import {
   playBodyTypePulse,
   playClaimLine,
   pulseUiObject,
+  type AmbientKind,
   type ContainerWakeOptions,
 } from "../game/livingScene";
 import greatBattleBackdrop from "../../art/references/great-battle-clean.png";
@@ -110,6 +111,15 @@ interface CompanionCameoSpec {
   liftY?: number;
   bobMs?: number;
   flipX?: boolean;
+}
+
+interface LordWordFxOptions {
+  kind?: AmbientKind;
+  color?: number;
+  claimColor?: number;
+  ringRadius?: number;
+  pulseOffsetX?: number;
+  impactOffsetX?: number;
 }
 
 const WAVE_DEFS: WaveDef[] = [
@@ -385,6 +395,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.brassSongbirdStallTimer = null;
     this.brassSongbirdActiveTarget = null;
     this.facetSigil = null;
+    this.facetChannel = null;
   }
 
   preload(): void {
@@ -534,6 +545,61 @@ export class GreatBattleScene extends Phaser.Scene {
   /** UI-cohesion: every finale word target gets the legibility outline (TTT-style). */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
     return new TextWordTarget({ outline: true, depth: 6, ...opts });
+  }
+
+  /** Phase-2 boss words are attacks against the Quiet Lord, not free UI text. */
+  private makeLordWord(
+    opts: TextWordTargetOptions,
+    fx: LordWordFxOptions = {},
+  ): TextWordTarget {
+    const originalOnClaim = opts.onClaim;
+    const originalOnAdvance = opts.onAdvance;
+    const originalOnComplete = opts.onComplete;
+    const kind = fx.kind ?? "mist";
+    const color = fx.color ?? (this.isForceDuel ? UI_HEX.ember : UI_HEX.brass);
+    const claimColor = fx.claimColor ?? color;
+    const sideOffset =
+      fx.impactOffsetX ?? (opts.x - this.scale.width / 2) * 0.18;
+
+    return this.makeWord({
+      ...opts,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.scale.width / 2,
+          this.scale.height - 250,
+          opts.x,
+          opts.y,
+          { color: claimColor, depth: 6 },
+        );
+        originalOnClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, this.quietLordContainer, {
+          kind,
+          color,
+          offsetX: fx.pulseOffsetX ?? sideOffset,
+          offsetY: 508,
+          depth: 7,
+          ringRadius: fx.ringRadius ?? 34,
+          durationMs: 250,
+        });
+        originalOnAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        playBodyImpact(this, this.quietLordContainer, {
+          kind,
+          color,
+          offsetX: sideOffset,
+          offsetY: 508,
+          depth: 7,
+          ringRadius: (fx.ringRadius ?? 42) + 18,
+          count: 12,
+          durationMs: 420,
+        });
+        originalOnComplete();
+      },
+    });
   }
 
   private clearActiveTargets(): void {
@@ -1747,7 +1813,7 @@ export class GreatBattleScene extends Phaser.Scene {
       return;
     }
     const word = words[idx]!;
-    const target = this.makeWord({
+    const target = this.makeLordWord({
       scene: this,
       word,
       x: this.scale.width / 2,
@@ -1788,7 +1854,7 @@ export class GreatBattleScene extends Phaser.Scene {
     if (satchel.includes("tether-cord") && !this.tetherCordBindUsed) {
       this.tetherCordBindUsed = true;
       this.narration.say("finale_relic_tether_cord");
-      const bindTarget = this.makeWord({
+      const bindTarget = this.makeLordWord({
         scene: this,
         word: "bound",
         x: this.scale.width / 2,
@@ -1815,7 +1881,7 @@ export class GreatBattleScene extends Phaser.Scene {
     if (satchel.includes("master-key") && !this.masterKeyFlankUsed) {
       this.masterKeyFlankUsed = true;
       this.narration.say("finale_relic_master_key");
-      const flankTarget = this.makeWord({
+      const flankTarget = this.makeLordWord({
         scene: this,
         word: "flank",
         x: this.scale.width * 0.15,
@@ -1873,7 +1939,7 @@ export class GreatBattleScene extends Phaser.Scene {
     for (let i = 0; i < 3; i++) {
       const word = round1Words[i]!;
       const x = xPositions[i]!;
-      const target = this.makeWord({
+      const target = this.makeLordWord({
         scene: this,
         word,
         x,
@@ -1919,7 +1985,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // Flash the screen briefly (light corridor effect)
     this.cameras.main.flash(400, 160, 220, 255, false);
     this.time.delayedCall(500, () => {
-      const bonusTarget = this.makeWord({
+      const bonusTarget = this.makeLordWord({
         scene: this,
         word: "light",
         x: this.scale.width / 2,
@@ -1937,7 +2003,7 @@ export class GreatBattleScene extends Phaser.Scene {
             onComplete: () => onDone(),
           });
         },
-      });
+      }, { kind: "bubble", color: 0xa7d2dd, ringRadius: 38 });
       this.typingInput.register(bonusTarget);
       this.activeTargets.push(bonusTarget);
     });
@@ -1962,7 +2028,7 @@ export class GreatBattleScene extends Phaser.Scene {
     });
 
     // Spawn a bonus hit-window word on the side
-    const bonusTarget = this.makeWord({
+    const bonusTarget = this.makeLordWord({
       scene: this,
       word: "throne",
       x: this.scale.width * 0.15,
@@ -1982,7 +2048,7 @@ export class GreatBattleScene extends Phaser.Scene {
         if (idx >= 0) this.activeTargets.splice(idx, 1);
         bonusTarget.destroy();
       },
-    });
+    }, { kind: "mote", color: 0xffd080, ringRadius: 36 });
     this.typingInput.register(bonusTarget);
     this.activeTargets.push(bonusTarget);
   }
@@ -2044,7 +2110,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
     this.cameras.main.shake(240, 0.004);
 
-    const defenseTarget = this.makeWord({
+    const defenseTarget = this.makeLordWord({
       scene: this,
       word: "hold",
       x: this.scale.width / 2,
@@ -2065,7 +2131,7 @@ export class GreatBattleScene extends Phaser.Scene {
           },
         });
       },
-    });
+    }, { kind: "snow", color: PALETTE_HEX.frost, ringRadius: 40 });
     this.typingInput.register(defenseTarget);
     this.activeTargets.push(defenseTarget);
   }
@@ -2073,7 +2139,7 @@ export class GreatBattleScene extends Phaser.Scene {
   // §5.5.9 — wisp-cat: extra phrase target spawns mid-phase (flank)
   private applyWispCatFlank(onDone: () => void): void {
     this.narration.say("finale_companion_wisp_cat");
-    const flankTarget = this.makeWord({
+    const flankTarget = this.makeLordWord({
       scene: this,
       word: "flank",
       x: this.scale.width * 0.85,
@@ -2091,7 +2157,7 @@ export class GreatBattleScene extends Phaser.Scene {
           onComplete: () => onDone(),
         });
       },
-    });
+    }, { kind: "mist", color: 0x9fb69a, ringRadius: 36 });
     this.typingInput.register(flankTarget);
     this.activeTargets.push(flankTarget);
   }
@@ -2145,7 +2211,7 @@ export class GreatBattleScene extends Phaser.Scene {
     for (let i = 0; i < 3; i++) {
       const word = round2Words[i]!;
       const x = xPositions[i]!;
-      const target = this.makeWord({
+      const target = this.makeLordWord({
         scene: this,
         word,
         x,
@@ -2249,7 +2315,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.setNarrator(`${lead}  ${word}`);
     this.band.setObjective("Mind the capitals in the Quiet Lord's word.");
 
-    const target = this.makeWord({
+    const target = this.makeLordWord({
       scene: this,
       word,
       x: this.scale.width / 2,
@@ -2265,6 +2331,10 @@ export class GreatBattleScene extends Phaser.Scene {
           this.runDepthWords(words, idx + 1),
         );
       },
+    }, {
+      kind: "ember",
+      color: this.isForceDuel ? UI_HEX.ember : UI_HEX.brass,
+      ringRadius: 44,
     });
     this.typingInput.register(target);
     this.activeTargets.push(target);

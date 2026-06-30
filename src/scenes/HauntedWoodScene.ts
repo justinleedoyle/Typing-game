@@ -42,15 +42,19 @@ import {
   addAmbientDrift,
   addBackdropDrift,
   addContainerWake,
+  attachWordBodyAnchor,
   dismissCompanionCameo,
   addIdleBreath,
   addLocalGroundShadow,
   playActorAttention,
   playBodyImpact,
+  playBodyTypePulse,
+  playClaimLine,
   playRealmClearResonance,
   playSceneEventPulse,
   stageCompanionCameo,
   stageContainerEntrance,
+  type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import {
   bobWrenSprite,
@@ -159,6 +163,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private mistTimer: Phaser.Time.TimerEvent | null = null;
   private ingaFigure: Phaser.GameObjects.Container | null = null;
   private ghostKingBody: Phaser.GameObjects.Image | null = null;
+  private bossWordAnchors: WordBodyAnchorHandle[] = [];
   private wispCatCompanion: Phaser.GameObjects.Container | null = null;
   /** Four faint punctuation glyphs at N/S/E/W around Wren — teaches the
    *  direction-punctuation mapping diegetically. Drawn on first ghost
@@ -184,6 +189,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.mistTimer = null;
     this.ingaFigure = null;
     this.ghostKingBody = null;
+    this.bossWordAnchors = [];
     this.wispCatCompanion = null;
     this.quietLordIntruded =
       this.store.get().realms["haunted-wood"]?.quietLordIntruded ?? false;
@@ -927,7 +933,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       }
       const word = words[idx];
       if (word === undefined) return;
-      const target = this.makeWord({
+      const target = this.makeGhostKingWord({
         scene: this,
         word,
         x: this.scale.width / 2,
@@ -1439,6 +1445,75 @@ export class HauntedWoodScene extends Phaser.Scene {
     });
   }
 
+  private makeGhostKingWord(opts: TextWordTargetOptions): TextWordTarget {
+    if (!this.ghostKingBody) return this.makeWord(opts);
+    const body = this.ghostKingBody;
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.bossWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.bossWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.moss,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y - 30,
+          { color: PALETTE_HEX.moss, depth: 58 },
+        );
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "mist",
+          color: PALETTE_HEX.moss,
+          offsetY: -28,
+          depth: 58,
+          ringRadius: 30,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "mist",
+          color: PALETTE_HEX.moss,
+          offsetY: -28,
+          depth: 58,
+          ringRadius: 58,
+          count: 14,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.moss,
+        alpha: 0.2,
+        depth: 44,
+        sourceOffsetY: -30,
+        targetOffsetY: 24,
+      },
+    );
+    this.bossWordAnchors.push(anchor);
+    return target;
+  }
+
   private setNarrator(text: string, speakerName: string | null = null): void {
     this.narration.sayRaw(text, { speakerName });
   }
@@ -1648,11 +1723,17 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private clearActiveTargets(): void {
+    this.clearBossWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();
     }
     this.activeTargets = [];
+  }
+
+  private clearBossWordAnchors(): void {
+    for (const anchor of this.bossWordAnchors) anchor.destroy();
+    this.bossWordAnchors = [];
   }
 
   // ─── Drawing ──────────────────────────────────────────────────────────────

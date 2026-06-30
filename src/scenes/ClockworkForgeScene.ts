@@ -39,16 +39,20 @@ import {
   addAmbientDrift,
   addBackdropDrift,
   addContainerWake,
+  attachWordBodyAnchor,
   dismissCompanionCameo,
   fadeOutStagedSprite,
   addLocalGroundShadow,
   playBodyImpact,
+  playBodyTypePulse,
+  playClaimLine,
   playActorAttention,
   playRealmClearResonance,
   playSceneEventPulse,
   stageContainerEntrance,
   stageAnchoredSprite,
   stageCompanionCameo,
+  type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import { pickAdaptiveWords, FORGE_COMMAND_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
@@ -156,6 +160,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private band!: ConsoleBand;
   private golems: MovingWordEnemy[] = [];
   private activeTargets: TextWordTarget[] = [];
+  private bossWordAnchors: WordBodyAnchorHandle[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   /** Smith Forn's standing portrait — only on screen during the Fork 1 beat. */
@@ -204,6 +209,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.store = data.store;
     this.golems = [];
     this.activeTargets = [];
+    this.bossWordAnchors = [];
     this.oneShotInvoker = null;
     this.shiftHeld = false;
     this.waveActive = false;
@@ -877,7 +883,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         return;
       }
       const word = BOSS_PHASE1_WORDS[phaseIdx];
-      const target = this.makeWord({
+      const target = this.makeCommandGolemWord({
         scene: this,
         word,
         x: this.bossContainer.x,
@@ -919,7 +925,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         return;
       }
       const word = BOSS_PHASE2_WORDS[phaseIdx];
-      const target = this.makeWord({
+      const target = this.makeCommandGolemWord({
         scene: this,
         word,
         x: this.bossContainer.x,
@@ -970,7 +976,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // the claim never captures Shift → completion routes through onComplete.
     let repeatCount = 0;
     const runSequence = (): void => {
-      const target = this.makeWord({
+      const target = this.makeCommandGolemWord({
         scene: this,
         word: "stand DOWN",
         x: this.bossContainer.x,
@@ -1840,7 +1846,99 @@ export class ClockworkForgeScene extends Phaser.Scene {
     });
   }
 
+  private makeCommandGolemWord(opts: TextWordTargetOptions): TextWordTarget {
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    const onSpellComplete = opts.onSpellComplete;
+    const onAltSpellComplete = opts.onAltSpellComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.bossWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.bossWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+    const playBossImpact = (): void => {
+      playBodyImpact(this, this.bossContainer, {
+        kind: "ember",
+        color: PALETTE_HEX.ember,
+        offsetY: -150,
+        depth: 58,
+        ringRadius: 58,
+        count: 14,
+      });
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.ember,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          this.bossContainer.x,
+          this.bossContainer.y - 150,
+          { color: PALETTE_HEX.ember, depth: 58 },
+        );
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, this.bossContainer, {
+          kind: "ember",
+          color: PALETTE_HEX.ember,
+          offsetY: -150,
+          depth: 58,
+          ringRadius: 32,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBossImpact();
+        onComplete();
+      },
+      onSpellComplete: onSpellComplete
+        ? () => {
+            releaseAnchor();
+            playBossImpact();
+            onSpellComplete();
+          }
+        : undefined,
+      onAltSpellComplete: onAltSpellComplete
+        ? () => {
+            releaseAnchor();
+            playBossImpact();
+            onAltSpellComplete();
+          }
+        : undefined,
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      this.bossContainer,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.ember,
+        alpha: 0.2,
+        depth: 44,
+        sourceOffsetY: -150,
+        targetOffsetY: 24,
+      },
+    );
+    this.bossWordAnchors.push(anchor);
+    return target;
+  }
+
+  private clearBossWordAnchors(): void {
+    for (const anchor of this.bossWordAnchors) anchor.destroy();
+    this.bossWordAnchors = [];
+  }
+
   private clearActiveTargets(): void {
+    this.clearBossWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

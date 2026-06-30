@@ -33,7 +33,10 @@ import {
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
+  attachWordBodyAnchor,
   playBodyImpact,
+  playBodyTypePulse,
+  playClaimLine,
   playActorAttention,
   playMeterPulse,
   playRealmClearResonance,
@@ -41,6 +44,7 @@ import {
   stageContainerEntrance,
   stageAnchoredSprite,
   stageCompanionCameo,
+  type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import { pickAdaptiveWords, SUNKEN_BELL_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
@@ -113,6 +117,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private band!: ConsoleBand;
   private ghosts: MovingWordEnemy[] = [];
   private activeTargets: TextWordTarget[] = [];
+  private bossWordAnchors: WordBodyAnchorHandle[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   /** King Aurland's painted sprite — fades in when he's freed at fork 2 and is
@@ -176,6 +181,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.store = data.store;
     this.ghosts = [];
     this.activeTargets = [];
+    this.bossWordAnchors = [];
     this.beatPhase = "on";
     this.beatLocked = false;
     this.breath.reset();
@@ -1169,7 +1175,7 @@ export class SunkenBellScene extends Phaser.Scene {
     let remaining = words.length;
 
     words.forEach((word, i) => {
-      const target = this.makeWord({
+      const target = this.makeWardenWord(wardenSprite, {
         scene: this,
         word,
         x: this.scale.width / 2 - 200 + i * 200,
@@ -1221,7 +1227,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
     this.time.delayedCall(800, () => {
       phrases.forEach((word, i) => {
-        const target = this.makeWord({
+        const target = this.makeWardenWord(wardenSprite, {
           scene: this,
           word,
           x: this.scale.width / 2 - 260 + i * 260,
@@ -1247,11 +1253,11 @@ export class SunkenBellScene extends Phaser.Scene {
                 flashQuietLordFragment(this, {
                   text: "Ag",
                   onDone: () => {
-                    this.time.delayedCall(400, () => this.startWardenPhase3());
+                    this.time.delayedCall(400, () => this.startWardenPhase3(wardenSprite));
                   },
                 });
               } else {
-                this.time.delayedCall(400, () => this.startWardenPhase3());
+                this.time.delayedCall(400, () => this.startWardenPhase3(wardenSprite));
               }
             }
           },
@@ -1262,7 +1268,7 @@ export class SunkenBellScene extends Phaser.Scene {
     });
   }
 
-  private startWardenPhase3(): void {
+  private startWardenPhase3(wardenSprite: Phaser.GameObjects.Image): void {
     this.setNarrator("The bell sings. Type each word on the toll.");
 
     const passage = "i am the bell. i drink the sea.";
@@ -1286,7 +1292,7 @@ export class SunkenBellScene extends Phaser.Scene {
       if (word === undefined) return;
 
       let completed = false;
-      const target = this.makeWord({
+      const target = this.makeWardenWord(wardenSprite, {
         scene: this,
         word,
         x: this.scale.width / 2,
@@ -1616,6 +1622,81 @@ export class SunkenBellScene extends Phaser.Scene {
     });
   }
 
+  private makeWardenWord(
+    wardenSprite: Phaser.GameObjects.Image,
+    opts: TextWordTargetOptions,
+  ): TextWordTarget {
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.bossWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.bossWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? BELL_BURST_COLOR,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          wardenSprite.x,
+          wardenSprite.y - 70,
+          { color: BELL_BURST_COLOR, depth: 58 },
+        );
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, wardenSprite, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -58,
+          depth: 58,
+          ringRadius: 30,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, wardenSprite, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -58,
+          depth: 58,
+          ringRadius: 58,
+          count: 14,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      wardenSprite,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: BELL_BURST_COLOR,
+        alpha: 0.22,
+        depth: 44,
+        sourceOffsetY: -68,
+        targetOffsetY: 24,
+      },
+    );
+    this.bossWordAnchors.push(anchor);
+    return target;
+  }
+
+  private clearBossWordAnchors(): void {
+    for (const anchor of this.bossWordAnchors) anchor.destroy();
+    this.bossWordAnchors = [];
+  }
+
   private spawnGhost(
     startX: number,
     restX: number,
@@ -1904,6 +1985,7 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private clearActiveTargets(): void {
+    this.clearBossWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

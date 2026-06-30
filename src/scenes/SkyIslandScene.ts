@@ -213,6 +213,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
   // Boss state
   private bossContainer: Phaser.GameObjects.Container | null = null;
+  private bossWordAnchors: WordBodyAnchorHandle[] = [];
   /** Painted Scholar-Spirit boss body — kept so beats can tint-flash it. */
   private bossSprite: Phaser.GameObjects.Image | null = null;
   private bossRingTween: Phaser.Tweens.Tween | null = null;
@@ -255,6 +256,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.companionChoice = null;
     this.lanternMothCompanion = null;
     this.bossContainer = null;
+    this.bossWordAnchors = [];
     this.bossSprite = null;
     this.bossRingTween = null;
     this.quietLordFiredInPhase2 =
@@ -1154,7 +1156,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.setNarrator(RIDDLE_1_DISPLAY, "Scholar-Spirit");
     this.band.setObjective("Answer the Scholar-Spirit's riddle.");
     this.time.delayedCall(1200, () => {
-      const target = this.makeWord({
+      const target = this.makeScholarBossWord({
         scene: this,
         word: BOSS_PHASE1_ANSWER,
         x: this.scale.width / 2,
@@ -1180,7 +1182,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.setNarrator(RIDDLE_2_DISPLAY, "Scholar-Spirit");
     this.band.setObjective("Answer the second riddle.");
     this.time.delayedCall(1200, () => {
-      const target = this.makeWord({
+      const target = this.makeScholarBossWord({
         scene: this,
         word: BOSS_PHASE2_ANSWER,
         x: this.scale.width / 2,
@@ -1221,7 +1223,7 @@ export class SkyIslandScene extends Phaser.Scene {
       // runner but driven by cursor position at quarter-sentence milestones.
       const totalChars = BOSS_PHASE3_ANSWER.length;
       let lastFadeBand = 0;
-      const target = this.makeWord({
+      const target = this.makeScholarBossWord({
         scene: this,
         word: BOSS_PHASE3_ANSWER,
         x: this.scale.width / 2,
@@ -1984,7 +1986,82 @@ export class SkyIslandScene extends Phaser.Scene {
     });
   }
 
+  private makeScholarBossWord(opts: TextWordTargetOptions): TextWordTarget {
+    if (!this.bossContainer) return this.makeWord(opts);
+    const body = this.bossContainer;
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.bossWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.bossWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.brass,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y,
+          { color: PALETTE_HEX.brass, depth: 58 },
+        );
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: 0,
+          depth: 58,
+          ringRadius: 30,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: 0,
+          depth: 58,
+          ringRadius: 58,
+          count: 14,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.brass,
+        alpha: 0.2,
+        depth: 44,
+        sourceOffsetY: 0,
+        targetOffsetY: 24,
+      },
+    );
+    this.bossWordAnchors.push(anchor);
+    return target;
+  }
+
+  private clearBossWordAnchors(): void {
+    for (const anchor of this.bossWordAnchors) anchor.destroy();
+    this.bossWordAnchors = [];
+  }
+
   private clearActiveTargets(): void {
+    this.clearBossWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

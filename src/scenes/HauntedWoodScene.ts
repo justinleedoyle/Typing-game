@@ -893,6 +893,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         x: this.scale.width / 2,
         y: this.scale.height / 2,
         fontSize: 48,
+        onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
           playChime();
           idx += 1;
@@ -1285,6 +1286,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         x: this.scale.width / 2,
         y: this.scale.height - 340,
         fontSize: 36,
+        onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
           playChime();
           playWrenAction(this.wrenSprite);

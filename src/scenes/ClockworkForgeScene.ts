@@ -1515,6 +1515,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         x: this.scale.width / 2,
         y: this.scale.height - 340,
         fontSize: 36,
+        onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
           playWrenAction(this.wrenSprite);
           const line = narratorLines[step] ?? "";

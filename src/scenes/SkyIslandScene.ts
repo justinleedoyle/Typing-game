@@ -16,7 +16,7 @@ import {
 import { OneShotInvoker, type OneShotThreat } from "../game/oneShotInvoker";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
-import { PALETTE, SERIF } from "../game/palette";
+import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { ScrollingPhrase } from "../game/scrollingPhrase";
 import { blurAmountAt } from "../game/skyBlur";
@@ -42,6 +42,7 @@ import {
   addContainerWake,
   fadeOutStagedSprite,
   addLocalGroundShadow,
+  playRealmClearResonance,
   stageContainerEntrance,
   stageAnchoredSprite,
 } from "../game/livingScene";
@@ -1403,6 +1404,10 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private showAlmanacStamp(onDone: () => void): void {
+    playRealmClearResonance(this, {
+      color: PALETTE_HEX.brass,
+      y: this.scale.height / 2 - 60,
+    });
     showAlmanacStampCard(this, "the sky island of lanterns", onDone, {
       fontSize: 50,
       onReveal: playChime,

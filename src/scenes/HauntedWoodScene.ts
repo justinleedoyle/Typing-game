@@ -43,6 +43,7 @@ import {
   addContainerWake,
   addIdleBreath,
   addLocalGroundShadow,
+  playRealmClearResonance,
   stageContainerEntrance,
 } from "../game/livingScene";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, playWrenAction, preloadWren } from "../game/wren";
@@ -1001,6 +1002,10 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private showAlmanacStamp(onDone: () => void): void {
+    playRealmClearResonance(this, {
+      color: PALETTE_HEX.moss,
+      y: this.scale.height / 2 - 30,
+    });
     showAlmanacStampCard(this, "the haunted wood", onDone, { onReveal: playChime });
   }
 

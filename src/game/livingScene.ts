@@ -101,6 +101,14 @@ export interface ContainerWakeOptions {
   durationMs?: number;
 }
 
+export interface RealmClearResonanceOptions {
+  color: number;
+  x?: number;
+  y?: number;
+  depth?: number;
+  durationMs?: number;
+}
+
 /** Local ellipse shadow for feet-anchored sprites inside a container. */
 export function addLocalGroundShadow(
   scene: Phaser.Scene,
@@ -260,6 +268,71 @@ export function stageContainerEntrance(
       });
     },
   });
+}
+
+/** A short scene-wide resonance for realm-clear payoffs, drawn behind the
+ *  Almanac stamp card so the painted world visibly answers the final typed name. */
+export function playRealmClearResonance(
+  scene: Phaser.Scene,
+  opts: RealmClearResonanceOptions,
+): void {
+  const { width, height } = scene.scale;
+  const x = opts.x ?? width / 2;
+  const y = opts.y ?? height / 2;
+  const duration = opts.durationMs ?? 760;
+  const depth = opts.depth ?? 1090;
+
+  const wash = scene.add.graphics().setDepth(depth).setAlpha(0.34);
+  wash.fillStyle(opts.color, 0.18);
+  wash.fillRect(0, 0, width, height);
+  scene.tweens.add({
+    targets: wash,
+    alpha: 0,
+    duration,
+    ease: "Sine.easeOut",
+    onComplete: () => wash.destroy(),
+  });
+
+  const ring = scene.add
+    .graphics()
+    .setPosition(x, y)
+    .setDepth(depth + 1)
+    .setAlpha(0.72);
+  ring.lineStyle(4, opts.color, 0.74);
+  ring.strokeCircle(0, 0, 72);
+  ring.lineStyle(1, opts.color, 0.46);
+  ring.strokeCircle(0, 0, 108);
+  scene.tweens.add({
+    targets: ring,
+    alpha: 0,
+    scaleX: 3.2,
+    scaleY: 3.2,
+    duration,
+    ease: "Sine.easeOut",
+    onComplete: () => ring.destroy(),
+  });
+
+  for (let i = 0; i < 18; i++) {
+    const angle = (i / 18) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.18, 0.18);
+    const distance = Phaser.Math.Between(170, 420);
+    const fleck = scene.add
+      .graphics()
+      .setPosition(x, y)
+      .setDepth(depth + 2)
+      .setAlpha(0.76);
+    const size = Phaser.Math.FloatBetween(2.5, 5);
+    fleck.fillStyle(opts.color, 0.78);
+    fleck.fillCircle(0, 0, size);
+    scene.tweens.add({
+      targets: fleck,
+      x: x + Math.cos(angle) * distance,
+      y: y + Math.sin(angle) * distance * 0.56,
+      alpha: 0,
+      duration: duration + Phaser.Math.Between(-80, 180),
+      ease: "Sine.easeOut",
+      onComplete: () => fleck.destroy(),
+    });
+  }
 }
 
 /** A small environmental wake tied to a moving actor/enemy. This is cheaper than

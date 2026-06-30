@@ -31,6 +31,7 @@ import {
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
+  playRealmClearResonance,
   stageContainerEntrance,
   stageAnchoredSprite,
 } from "../game/livingScene";
@@ -1485,6 +1486,10 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private showAlmanacStamp(onDone: () => void): void {
     this.setNarrator("");
+    playRealmClearResonance(this, {
+      color: PALETTE_HEX.frost,
+      y: this.scale.height / 2 - 30,
+    });
     showAlmanacStampCard(this, "the sunken bell", onDone, { onReveal: playChime });
   }
 

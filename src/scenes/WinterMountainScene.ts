@@ -32,6 +32,7 @@ import {
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
+  playRealmClearResonance,
   stageContainerEntrance,
   stageAnchoredSprite,
 } from "../game/livingScene";
@@ -1468,6 +1469,10 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private showAlmanacStamp(onDone: () => void): void {
+    playRealmClearResonance(this, {
+      color: PALETTE_HEX.frost,
+      y: this.scale.height / 2 - 70,
+    });
     showAlmanacStampCard(this, "the winter mountain", onDone, { onReveal: playChime });
   }
 

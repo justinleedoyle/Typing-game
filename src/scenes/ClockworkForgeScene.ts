@@ -40,6 +40,7 @@ import {
   addContainerWake,
   fadeOutStagedSprite,
   addLocalGroundShadow,
+  playRealmClearResonance,
   stageContainerEntrance,
   stageAnchoredSprite,
 } from "../game/livingScene";
@@ -1243,6 +1244,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private showAlmanacStamp(onDone: () => void): void {
+    playRealmClearResonance(this, {
+      color: PALETTE_HEX.brass,
+      y: this.scale.height / 2 - 40,
+    });
     showAlmanacStampCard(this, "the clockwork forge", onDone, { onReveal: playChime });
   }
 

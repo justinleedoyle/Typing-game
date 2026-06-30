@@ -14,6 +14,7 @@ import openingBackdrop from "../../art/references/opening-typewriter-study-clean
 
 export class TitleScene extends Phaser.Scene {
   private prompt!: Phaser.GameObjects.Text;
+  private promptPlate?: Phaser.GameObjects.Graphics;
   private promptTween?: Phaser.Tweens.Tween;
   private store?: SaveStore;
   private storePromise?: Promise<SaveStore>;
@@ -66,7 +67,7 @@ export class TitleScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(4);
-    this.drawPromptPlate(this.prompt);
+    this.promptPlate = this.drawPromptPlate(this.prompt);
 
     this.promptTween = this.tweens.add({
       targets: this.prompt,
@@ -127,14 +128,68 @@ export class TitleScene extends Phaser.Scene {
       .setDepth(4);
   }
 
-  private drawPromptPlate(prompt: Phaser.GameObjects.Text): void {
-    const w = 540;
+  private drawPromptPlate(prompt: Phaser.GameObjects.Text): Phaser.GameObjects.Graphics {
+    const w = this.promptPlateWidth(prompt);
     const h = Math.max(48, prompt.height + 20);
     const plate = this.add.graphics().setDepth(3);
     plate.fillStyle(UI_HEX.panel, 0.72);
     plate.fillRoundedRect(prompt.x - w / 2, prompt.y - h / 2, w, h, 8);
     plate.lineStyle(2, UI_HEX.brass, 0.74);
     plate.strokeRoundedRect(prompt.x - w / 2, prompt.y - h / 2, w, h, 8);
+    return plate;
+  }
+
+  private promptPlateWidth(prompt: Phaser.GameObjects.Text): number {
+    return Math.min(900, Math.max(540, prompt.width + 86));
+  }
+
+  private redrawPromptPlate(): void {
+    this.promptPlate?.destroy();
+    this.promptPlate = this.drawPromptPlate(this.prompt);
+  }
+
+  private playTitleStartPulse(): void {
+    const { width, height } = this.scale;
+    const titleX = width / 2;
+    const titleY = height / 2 - 54;
+
+    const titlePulse = this.add
+      .graphics()
+      .setPosition(titleX, titleY)
+      .setDepth(5)
+      .setAlpha(0.72);
+    titlePulse.lineStyle(4, UI_HEX.brass, 0.7);
+    titlePulse.strokeRoundedRect(-610, -118, 1220, 236, 16);
+
+    this.tweens.add({
+      targets: titlePulse,
+      alpha: 0,
+      scaleX: 1.045,
+      scaleY: 1.16,
+      duration: 620,
+      ease: "Sine.easeOut",
+      onComplete: () => titlePulse.destroy(),
+    });
+
+    const promptW = this.promptPlateWidth(this.prompt);
+    const promptH = Math.max(48, this.prompt.height + 20);
+    const promptPulse = this.add
+      .graphics()
+      .setPosition(this.prompt.x, this.prompt.y)
+      .setDepth(5)
+      .setAlpha(0.82);
+    promptPulse.lineStyle(3, UI_HEX.ember, 0.65);
+    promptPulse.strokeRoundedRect(-promptW / 2, -promptH / 2, promptW, promptH, 10);
+
+    this.tweens.add({
+      targets: promptPulse,
+      alpha: 0,
+      scaleX: 1.08,
+      scaleY: 1.28,
+      duration: 430,
+      ease: "Sine.easeOut",
+      onComplete: () => promptPulse.destroy(),
+    });
   }
 
   private onKeyDown(event: KeyboardEvent): void {
@@ -147,6 +202,8 @@ export class TitleScene extends Phaser.Scene {
       this.promptTween?.stop();
       this.prompt.setAlpha(1);
       this.prompt.setText("the cartographer is waking up...");
+      this.redrawPromptPlate();
+      this.playTitleStartPulse();
     }
     void this.beginTransition();
   }

@@ -37,6 +37,7 @@ import {
   playActorAttention,
   playMeterPulse,
   playRealmClearResonance,
+  playSceneEventPulse,
   stageContainerEntrance,
   stageAnchoredSprite,
   stageCompanionCameo,
@@ -832,6 +833,7 @@ export class SunkenBellScene extends Phaser.Scene {
     // where the realm tips into combat.
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
+    this.pulseBellWave();
     this.ghosts = [];
     this.band.setObjective("Drive back the tide-ghosts before the air runs out.");
     // Combat begins — the air stake goes live for the choir waves.
@@ -866,6 +868,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private startWave1(): void {
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
+    this.pulseBellWave();
     this.onWaveCleared = () => this.onWave1Cleared();
     this.narration.say("sunken_choir_wave1");
     this.band.setObjective("Type each word on the toll; watch the air meter.");
@@ -898,6 +901,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private startAntiphon(): void {
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
+    this.pulseBellWave();
     this.ghosts = [];
     // Flip the accept window to the half-beat — answer BETWEEN the tolls.
     this.beatPhase = "off";
@@ -933,6 +937,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private startWave2(): void {
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
+    this.pulseBellWave();
     this.onWaveCleared = () => this.onWave2Cleared();
     this.narration.say("sunken_choir_wave2");
     this.band.setObjective("Break the splitting ghost before the air runs out.");
@@ -1151,6 +1156,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private startAct3(): void {
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
+    this.pulseBellWave({ y: 640, ringWidth: 900, ringHeight: 180, count: 14 });
     this.ghosts = [];
     const wardenSprite = this.drawWarden();
     // Phase 1
@@ -1852,6 +1858,22 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private setNarrator(text: string, speakerName: string | null = null): void {
     this.narration.sayRaw(text, { speakerName });
+  }
+
+  private pulseBellWave(
+    opts: { y?: number; ringWidth?: number; ringHeight?: number; count?: number } = {},
+  ): void {
+    playSceneEventPulse(this, {
+      kind: "bubble",
+      color: 0x86d7cf,
+      x: this.scale.width / 2,
+      y: 720,
+      ringWidth: 1100,
+      ringHeight: 180,
+      count: 12,
+      alpha: 0.13,
+      ...opts,
+    });
   }
 
   private clearActiveTargets(): void {

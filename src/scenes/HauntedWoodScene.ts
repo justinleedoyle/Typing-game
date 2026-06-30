@@ -48,6 +48,7 @@ import {
   playActorAttention,
   playBodyImpact,
   playRealmClearResonance,
+  playSceneEventPulse,
   stageCompanionCameo,
   stageContainerEntrance,
 } from "../game/livingScene";
@@ -472,6 +473,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private beginCrossroads1(): void {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseWoodWave();
     this.band.setObjective("Use the compass marks to clear each warded word.");
 
     const directions: WoodDirection[] = ["west", "east", "north"];
@@ -500,6 +502,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.narration.say("wood_crossroads2_intro");
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseWoodWave();
     this.band.setObjective("Watch all four compass marks through the mist.");
 
     const directions: WoodDirection[] = ["north", "south", "east", "west"];
@@ -537,6 +540,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.setNarrator("Older things stir. They come in pairs now.");
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseWoodWave();
     this.band.setObjective("Handle paired directions before the mist closes.");
 
     const directions: WoodDirection[] = ["north", "north", "east", "west"];
@@ -812,6 +816,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private spawnBossWaveA(): void {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseWoodWave({ y: 650, ringWidth: 900, ringHeight: 210, count: 14 });
     // Wave A: three directions, slower spawn pace. The player should still
     // recognize the learned punctuation-direction mapping from Act 2.
     const directions: WoodDirection[] = ["west", "east", "north"];
@@ -829,6 +834,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private spawnBossWaveB(): void {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseWoodWave({ y: 650, ringWidth: 900, ringHeight: 210, count: 14 });
     this.band.setObjective("South-heavy wards rise from below.");
     // Wave B: south-heavy attack — two from below + one from above. Reads
     // as the Ghost-King's hall rising up against Wren.
@@ -1434,6 +1440,22 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private setNarrator(text: string, speakerName: string | null = null): void {
     this.narration.sayRaw(text, { speakerName });
+  }
+
+  private pulseWoodWave(
+    opts: { y?: number; ringWidth?: number; ringHeight?: number; count?: number } = {},
+  ): void {
+    playSceneEventPulse(this, {
+      kind: "mist",
+      color: 0xa7d8a2,
+      x: this.scale.width / 2,
+      y: 700,
+      ringWidth: 1120,
+      ringHeight: 190,
+      count: 12,
+      alpha: 0.13,
+      ...opts,
+    });
   }
 
   private attendInga(): void {

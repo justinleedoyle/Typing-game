@@ -45,6 +45,7 @@ import {
   playBodyImpact,
   playActorAttention,
   playRealmClearResonance,
+  playSceneEventPulse,
   stageContainerEntrance,
   stageAnchoredSprite,
   stageCompanionCameo,
@@ -596,6 +597,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.golems = [];
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseForgeWave();
     this.narration.say("forge_wave1_intro");
     this.band.setObjective("Type each mixed-case command cleanly.");
 
@@ -639,6 +641,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.golems = [];
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseForgeWave();
     this.narration.say("forge_wave2_intro");
     this.band.setObjective("Use Shift for CAPITAL order fragments.");
 
@@ -857,6 +860,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.spawnBossVisual();
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseForgeWave({ y: FLOOR_Y - 130, ringWidth: 980, ringHeight: 150, count: 16 });
     this.setNarrator(
       "The Command-Golem — massive, iron-crowned, its eye burning orange. Phase one begins.",
     );
@@ -1643,6 +1647,22 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private setNarrator(text: string, speakerName: string | null = null): void {
     this.narration.sayRaw(text, { speakerName });
+  }
+
+  private pulseForgeWave(
+    opts: { y?: number; ringWidth?: number; ringHeight?: number; count?: number } = {},
+  ): void {
+    playSceneEventPulse(this, {
+      kind: "ember",
+      color: 0xd6754a,
+      x: this.scale.width / 2,
+      y: FLOOR_Y - 90,
+      ringWidth: 1100,
+      ringHeight: 130,
+      count: 14,
+      alpha: 0.15,
+      ...opts,
+    });
   }
 
   // ─── Tier 4 relic helpers ───────────────────────────────────────────────────

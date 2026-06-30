@@ -50,6 +50,7 @@ import {
   playClaimLine,
   playActorAttention,
   playRealmClearResonance,
+  playSceneEventPulse,
   stageContainerEntrance,
   stageAnchoredSprite,
   stageCompanionCameo,
@@ -525,6 +526,7 @@ export class SkyIslandScene extends Phaser.Scene {
     // the first spirit encounter lands with the same weight.
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseSkyWave({ y: 710, ringWidth: 980, ringHeight: 160 });
 
     this.setNarrator("Two lantern-spirits drift from the tower path, pale and unhurried.");
     this.band.setObjective("Clear the lantern-spirits before they reach Wren.");
@@ -573,6 +575,7 @@ export class SkyIslandScene extends Phaser.Scene {
     // like an event, not just "more text appears."
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseSkyWave();
 
     if (this.templeLanterns.length === 0) {
       this.drawTempleLanterns();
@@ -1143,6 +1146,7 @@ export class SkyIslandScene extends Phaser.Scene {
     // with the same event-weight as a wave.
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseSkyWave({ y: 560, ringWidth: 820, ringHeight: 190, count: 14 });
     this.setNarrator(RIDDLE_1_DISPLAY, "Scholar-Spirit");
     this.band.setObjective("Answer the Scholar-Spirit's riddle.");
     this.time.delayedCall(1200, () => {
@@ -1168,6 +1172,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private startBossPhase2(): void {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseSkyWave({ y: 560, ringWidth: 820, ringHeight: 190, count: 14 });
     this.setNarrator(RIDDLE_2_DISPLAY, "Scholar-Spirit");
     this.band.setObjective("Answer the second riddle.");
     this.time.delayedCall(1200, () => {
@@ -1203,6 +1208,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private startBossPhase3(): void {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseSkyWave({ y: 560, ringWidth: 820, ringHeight: 190, count: 14 });
     this.setNarrator(RIDDLE_3_DISPLAY, "Scholar-Spirit");
     this.band.setObjective("Type the final answer before the spirit fades.");
     this.time.delayedCall(1400, () => {
@@ -1908,6 +1914,22 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private setNarrator(text: string, speakerName: string | null = null): void {
     this.narration.sayRaw(text, { speakerName });
+  }
+
+  private pulseSkyWave(
+    opts: { y?: number; ringWidth?: number; ringHeight?: number; count?: number } = {},
+  ): void {
+    playSceneEventPulse(this, {
+      kind: "mote",
+      color: 0xffc96f,
+      x: this.scale.width / 2,
+      y: 650,
+      ringWidth: 1120,
+      ringHeight: 170,
+      count: 12,
+      alpha: 0.14,
+      ...opts,
+    });
   }
 
   /** UI-cohesion: every Sky-Island word target gets the legibility outline by

@@ -42,6 +42,7 @@ import {
   playBodyTypePulse,
   playActorAttention,
   playClaimLine,
+  playSceneEventPulse,
   pulseUiObject,
   stageCompanionCameo,
   type AmbientKind,
@@ -813,6 +814,16 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private startPhase1(): void {
     this.narration.say("finale_phase1_arrival");
+    playSceneEventPulse(this, {
+      kind: "ash",
+      color: 0xc9a14a,
+      x: this.scale.width / 2,
+      y: 690,
+      ringWidth: 1200,
+      ringHeight: 190,
+      count: 16,
+      alpha: 0.11,
+    });
 
     // Build wave queue from cleared realms
     this.waveQueue = [];
@@ -876,6 +887,16 @@ export class GreatBattleScene extends Phaser.Scene {
 
     this.setNarrator(`The ${waveDef.label} pour over the wall.`);
     this.band.setObjective("Hold the wall: clear the realm echoes before candles fall.");
+    playSceneEventPulse(this, {
+      kind: "ash",
+      color: 0xc9a14a,
+      x: this.scale.width / 2,
+      y: 720,
+      ringWidth: 1120,
+      ringHeight: 170,
+      count: 12,
+      alpha: 0.1,
+    });
 
     let words = pickAdaptiveWords(
       waveDef.bank as readonly string[],
@@ -1506,6 +1527,17 @@ export class GreatBattleScene extends Phaser.Scene {
       satchel.includes("wind-phrase") && satchel.includes("quiet-chant");
     this.whirlwindCancelAnnounced = false;
 
+    playSceneEventPulse(this, {
+      kind: "mist",
+      color: this.isForceDuel ? 0x9b2424 : 0x6b5ea8,
+      x: this.scale.width / 2,
+      y: 560,
+      depth: 3,
+      ringWidth: this.isForceDuel ? 760 : 640,
+      ringHeight: 260,
+      count: 14,
+      alpha: 0.12,
+    });
     this.drawQuietLord(this.isForceDuel, this.isKindnessDuel);
     this.showQuietLordDescription();
   }
@@ -2561,6 +2593,17 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private startPhase3(): void {
     this.clearActiveTargets();
+    playSceneEventPulse(this, {
+      kind: "mote",
+      color: 0xd4b8ff,
+      x: this.scale.width / 2,
+      y: 430,
+      depth: 3,
+      ringWidth: 680,
+      ringHeight: 220,
+      count: 14,
+      alpha: 0.12,
+    });
 
     const satchel = this.store.get().satchel;
     const hasAnyCompanion = COMPANION_IDS.some((id) => satchel.includes(id));

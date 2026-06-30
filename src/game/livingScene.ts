@@ -242,6 +242,21 @@ export interface RealmClearResonanceOptions {
   durationMs?: number;
 }
 
+export interface SceneEventPulseOptions {
+  kind?: AmbientKind;
+  color?: number;
+  x?: number;
+  y?: number;
+  depth?: number;
+  durationMs?: number;
+  ringWidth?: number;
+  ringHeight?: number;
+  count?: number;
+  alpha?: number;
+  spreadX?: number;
+  spreadY?: number;
+}
+
 const typedBodyPulseTimes = new WeakMap<object, number>();
 
 /** Local ellipse shadow for feet-anchored sprites inside a container. */
@@ -559,6 +574,88 @@ export function playRealmClearResonance(
       duration: duration + Phaser.Math.Between(-80, 180),
       ease: "Sine.easeOut",
       onComplete: () => fleck.destroy(),
+    });
+  }
+}
+
+/** A restrained scene-level pulse for wave/boss arrivals. It sits below active
+ *  words and actors, so the painted world answers the event without becoming a
+ *  second UI layer or hiding the typing targets. */
+export function playSceneEventPulse(
+  scene: Phaser.Scene,
+  opts: SceneEventPulseOptions = {},
+): void {
+  const { width, height } = scene.scale;
+  const kind = opts.kind ?? "mote";
+  const color = opts.color ?? colorFor(kind);
+  const x = opts.x ?? width / 2;
+  const y = opts.y ?? height * 0.66;
+  const depth = opts.depth ?? 13;
+  const duration = opts.durationMs ?? 620;
+  const alpha = opts.alpha ?? 0.16;
+  const ringWidth = opts.ringWidth ?? width * 0.46;
+  const ringHeight = opts.ringHeight ?? height * 0.16;
+
+  const wash = scene.add.graphics().setDepth(depth).setAlpha(alpha);
+  wash.fillStyle(color, 0.18);
+  wash.fillRect(0, 0, width, height);
+  scene.tweens.add({
+    targets: wash,
+    alpha: 0,
+    duration,
+    ease: "Sine.easeOut",
+    onComplete: () => wash.destroy(),
+  });
+
+  const ring = scene.add
+    .graphics()
+    .setPosition(x, y)
+    .setDepth(depth + 1)
+    .setAlpha(0.58);
+  ring.lineStyle(3, color, 0.5);
+  ring.strokeEllipse(0, 0, ringWidth, ringHeight);
+  scene.tweens.add({
+    targets: ring,
+    alpha: 0,
+    scaleX: 1.38,
+    scaleY: 1.55,
+    duration,
+    ease: "Sine.easeOut",
+    onComplete: () => ring.destroy(),
+  });
+
+  const count = opts.count ?? 10;
+  for (let i = 0; i < count; i++) {
+    const particle = scene.add.graphics().setDepth(depth + 2).setAlpha(0.68);
+    drawParticle(
+      particle,
+      kind,
+      color,
+      Phaser.Math.FloatBetween(2.4, 5.2),
+      Math.max(0.22, alphaFor(kind)),
+    );
+    particle.setPosition(
+      x +
+        Phaser.Math.FloatBetween(
+          -(opts.spreadX ?? ringWidth * 0.42),
+          opts.spreadX ?? ringWidth * 0.42,
+        ),
+      y +
+        Phaser.Math.FloatBetween(
+          -(opts.spreadY ?? ringHeight * 0.5),
+          opts.spreadY ?? ringHeight * 0.5,
+        ),
+    );
+    scene.tweens.add({
+      targets: particle,
+      x: particle.x + Phaser.Math.FloatBetween(-26, 26),
+      y: particle.y + Phaser.Math.FloatBetween(-32, -8),
+      alpha: 0,
+      scaleX: particle.scaleX * 1.3,
+      scaleY: particle.scaleY * 1.3,
+      duration: duration + Phaser.Math.Between(-90, 140),
+      ease: "Sine.easeOut",
+      onComplete: () => particle.destroy(),
     });
   }
 }

@@ -38,6 +38,7 @@ import {
   playActorAttention,
   pulseUiObject,
   playRealmClearResonance,
+  playSceneEventPulse,
   stageContainerEntrance,
   stageAnchoredSprite,
   stageCompanionCameo,
@@ -710,6 +711,15 @@ export class WinterMountainScene extends Phaser.Scene {
     // like an event, not just "more text appears."
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    playSceneEventPulse(this, {
+      kind: "snow",
+      color: 0xb7dcff,
+      x: this.scale.width / 2,
+      y: 690,
+      ringWidth: 980,
+      ringHeight: 170,
+      count: 14,
+    });
 
     // Speed-axis director: a fast, accurate typist draws faster-closing wolves
     // and longer words on EVERY wave — the floor rises to meet them, all bounded

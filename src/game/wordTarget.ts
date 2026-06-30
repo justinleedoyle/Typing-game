@@ -315,6 +315,7 @@ export class TextWordTarget implements WordTarget {
     this.dimmed = false;
     this.spellClaimed = mods.spell;
     this.altClaimed = mods.alt;
+    this.playClaimPulse();
     if (mods.alt) {
       // Alt = wild — brass tint reads as electric, distinct from ember spell.
       this.typedText.setColor(PALETTE.brass);
@@ -329,6 +330,7 @@ export class TextWordTarget implements WordTarget {
 
   onRelease(): void {
     if (this.complete) return;
+    this.container.setScale(1);
     this.cursor = 0;
     this.spellClaimed = false;
     this.altClaimed = false;
@@ -418,6 +420,17 @@ export class TextWordTarget implements WordTarget {
 
   destroy(): void {
     this.container.destroy();
+  }
+
+  private playClaimPulse(): void {
+    this.container.setScale(1.055);
+    this.opts.scene.tweens.add({
+      targets: this.container,
+      scaleX: 1,
+      scaleY: 1,
+      duration: 180,
+      ease: "Back.easeOut",
+    });
   }
 
   private relayout(): void {

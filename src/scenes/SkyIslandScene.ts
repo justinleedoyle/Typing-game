@@ -44,6 +44,7 @@ import {
   fadeOutStagedSprite,
   addLocalGroundShadow,
   playBodyImpact,
+  playBodyTypePulse,
   playClaimLine,
   playRealmClearResonance,
   stageContainerEntrance,
@@ -1522,6 +1523,14 @@ export class SkyIslandScene extends Phaser.Scene {
           spirit.restY - 80,
           { color: 0xf5c842 },
         ),
+      onAdvance: () =>
+        playBodyTypePulse(this, spirit.container, {
+          kind: "mote",
+          color: 0xf5c842,
+          offsetY: -48,
+          depth: 22,
+          ringRadius: 22,
+        }),
       onComplete: () => this.defeatSpirit(spirit),
     });
     spirit.target = target;

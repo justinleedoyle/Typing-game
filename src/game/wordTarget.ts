@@ -65,6 +65,9 @@ export interface TextWordTargetOptions {
   /** Called when a mid-claim target is released without completing — e.g. the
    *  player backspaced out of it. */
   onRelease?: () => void;
+  /** Called after each correct character advances this target. Combat owners
+   *  use this to make the body/banner react while typing is in progress. */
+  onAdvance?: (cursor: number, wordLength: number) => void;
   /** Optional anchor sprite to flash/shake when the player misses. */
   anchor?: Phaser.GameObjects.GameObject & {
     setTint?: (tint: number) => void;
@@ -216,6 +219,7 @@ export class TextWordTarget implements WordTarget {
       this.complete = true;
     }
     this.relayout();
+    this.opts.onAdvance?.(this.cursor, this.word.length);
   }
 
   /**

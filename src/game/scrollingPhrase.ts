@@ -8,7 +8,7 @@
 // typing state, this module owns the moving visuals and the timeout.
 
 import Phaser from "phaser";
-import { playBodyImpact, playClaimLine } from "./livingScene";
+import { playBodyImpact, playBodyTypePulse, playClaimLine } from "./livingScene";
 import { PALETTE, PALETTE_HEX, SERIF } from "./palette";
 import { blurAlphaFor, bannerDangerAt, shouldEatSuffix } from "./skyBlur";
 import { playWordCompleteBurst } from "./vfx";
@@ -121,6 +121,7 @@ export class ScrollingPhrase {
       // so the scrolling banners read consistently with the rest of the realm.
       outline: true,
       onClaim: () => this.playClaimLine(),
+      onAdvance: () => this.playTypedBodyPulse(),
       onComplete: () => this.handleComplete(),
     });
     opts.typingInput.register(this.target);
@@ -162,6 +163,16 @@ export class ScrollingPhrase {
       this.opts.y,
       { color: this.opts.claimLineColor ?? PALETTE_HEX.brass },
     );
+  }
+
+  private playTypedBodyPulse(): void {
+    playBodyTypePulse(this.opts.scene, this.container, {
+      kind: "mote",
+      color: PALETTE_HEX.brass,
+      offsetY: 0,
+      depth: 22,
+      ringRadius: Math.min(38, this.bannerW / 6),
+    });
   }
 
   private handleComplete(): void {

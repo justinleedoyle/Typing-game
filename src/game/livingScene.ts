@@ -99,6 +99,12 @@ type BodyImpactTarget = Phaser.GameObjects.GameObject & {
   active: boolean;
 };
 
+type BodyTypePulseTarget = Phaser.GameObjects.GameObject & {
+  x: number;
+  y: number;
+  active: boolean;
+};
+
 type ScalePulseTarget = Phaser.GameObjects.GameObject & {
   active: boolean;
   scaleX: number;
@@ -133,6 +139,17 @@ export interface BodyImpactOptions {
   durationMs?: number;
 }
 
+export interface BodyTypePulseOptions {
+  kind?: AmbientKind;
+  color?: number;
+  offsetX?: number;
+  offsetY?: number;
+  depth?: number;
+  ringRadius?: number;
+  durationMs?: number;
+  intervalMs?: number;
+}
+
 export interface ClaimLineOptions {
   color?: number;
   depth?: number;
@@ -161,6 +178,8 @@ export interface RealmClearResonanceOptions {
   depth?: number;
   durationMs?: number;
 }
+
+const typedBodyPulseTimes = new WeakMap<object, number>();
 
 /** Local ellipse shadow for feet-anchored sprites inside a container. */
 export function addLocalGroundShadow(
@@ -482,6 +501,63 @@ export function playBodyImpact(
       onComplete: () => fleck.destroy(),
     });
   }
+}
+
+/** A small per-letter reaction at the body/banner being typed. Completion gets
+ *  the heavier playBodyImpact(); this stays light so fast typing makes the
+ *  threat feel live without spraying full combat bursts. */
+export function playBodyTypePulse(
+  scene: Phaser.Scene,
+  target: BodyTypePulseTarget,
+  opts: BodyTypePulseOptions = {},
+): void {
+  if (!target.active) return;
+  const now = scene.time.now;
+  const interval = opts.intervalMs ?? 95;
+  const last = typedBodyPulseTimes.get(target) ?? -Infinity;
+  if (now - last < interval) return;
+  typedBodyPulseTimes.set(target, now);
+
+  const kind = opts.kind ?? "mote";
+  const color = opts.color ?? colorFor(kind);
+  const x = target.x + (opts.offsetX ?? 0);
+  const y = target.y + (opts.offsetY ?? -42);
+  const depth = opts.depth ?? 49;
+  const duration = opts.durationMs ?? 210;
+  const radius = opts.ringRadius ?? 24;
+
+  const ring = scene.add
+    .graphics()
+    .setPosition(x, y)
+    .setDepth(depth)
+    .setAlpha(0.55);
+  ring.lineStyle(2, color, 0.54);
+  ring.strokeEllipse(0, 0, radius * 1.45, radius * 0.72);
+  scene.tweens.add({
+    targets: ring,
+    alpha: 0,
+    scaleX: 1.42,
+    scaleY: 1.3,
+    duration,
+    ease: "Sine.easeOut",
+    onComplete: () => ring.destroy(),
+  });
+
+  const fleck = scene.add
+    .graphics()
+    .setPosition(x, y)
+    .setDepth(depth + 1)
+    .setAlpha(0.62);
+  drawParticle(fleck, kind, color, 3.2, Math.max(0.22, alphaFor(kind)));
+  scene.tweens.add({
+    targets: fleck,
+    x: x + Phaser.Math.Between(-18, 18),
+    y: y + Phaser.Math.Between(-16, 5),
+    alpha: 0,
+    duration,
+    ease: "Sine.easeOut",
+    onComplete: () => fleck.destroy(),
+  });
 }
 
 /** Brief line of force from Wren / the defended position to a claimed threat.

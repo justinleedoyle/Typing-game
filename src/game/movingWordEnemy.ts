@@ -22,7 +22,12 @@
 // scroll-across-and-miss flavour, not advance-and-retry.
 
 import Phaser from "phaser";
-import { playBodyImpact, playClaimLine, type AmbientKind } from "./livingScene";
+import {
+  playBodyImpact,
+  playBodyTypePulse,
+  playClaimLine,
+  type AmbientKind,
+} from "./livingScene";
 import {
   advanceDurationMs,
   dangerRamp,
@@ -388,6 +393,7 @@ export class MovingWordEnemy {
         this.playClaimLine();
       },
       onRelease: () => this.cfg.onRelease?.(),
+      onAdvance: () => this.playTypedBodyPulse(),
       // All three variants route to one handler so the realm's onComplete always
       // learns whether Shift/Alt were held. Identical to omitting the variants
       // when the realm ignores mods (TextWordTarget falls back to onComplete),
@@ -412,6 +418,19 @@ export class MovingWordEnemy {
       this.cfg.container.y + this.anchorOffsetY,
       { color: this.cfg.claimLineColor },
     );
+  }
+
+  private playTypedBodyPulse(): void {
+    playBodyTypePulse(this.cfg.scene, this.cfg.container, {
+      kind: this.cfg.defeatImpactKind ?? "mote",
+      color:
+        this.cfg.defeatImpactColor ??
+        this.cfg.claimLineColor ??
+        PALETTE_HEX.brass,
+      offsetY: this.cfg.defeatImpactOffsetY ?? Math.min(-34, this.anchorOffsetY / 2),
+      depth: 49,
+      ringRadius: 24,
+    });
   }
 
   private idleBob(): void {

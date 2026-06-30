@@ -84,6 +84,7 @@ interface Widget {
   target: TextWordTarget | null;
   announcedReady: boolean;
   pulse: Phaser.Tweens.Tween | null;
+  lastCardPulseAt: number;
 }
 
 const BAR_W = 150;
@@ -211,6 +212,7 @@ export class OneShotInvoker<E> {
       target: null,
       announcedReady: false,
       pulse: null,
+      lastCardPulseAt: -Infinity,
     };
   }
 
@@ -273,7 +275,13 @@ export class OneShotInvoker<E> {
       fontSize: this.wordSize,
       // Above gameplay targets so an idle "t" claims the toll, not a stray.
       priority: 100,
+      // The card itself lives in the console band at depth 1500; the live word
+      // has to sit above that card, not behind it.
+      depth: 1502,
+      outline: true,
       burstColor: PALETTE_HEX.ember,
+      onClaim: () => this.pulseCard(w, "claim"),
+      onAdvance: () => this.pulseCard(w, "typing"),
       onComplete: () => this.fire(w),
     });
     this.cfg.typingInput.register(w.target);
@@ -307,6 +315,31 @@ export class OneShotInvoker<E> {
     w.pulse = null;
     w.titleText.setColor(PALETTE.dim).setAlpha(1);
     w.placeholder.setAlpha(1);
+  }
+
+  private pulseCard(w: Widget, kind: "claim" | "typing"): void {
+    const now = this.cfg.scene.time.now;
+    if (kind === "typing" && now - w.lastCardPulseAt < 90) return;
+    w.lastCardPulseAt = now;
+
+    const cardW = this.compact ? this.barW + 30 : this.barW + 90;
+    const cardH = this.compact ? 70 : 92;
+    const pulse = this.cfg.scene.add.graphics().setAlpha(kind === "claim" ? 0.62 : 0.42);
+    pulse.fillStyle(PALETTE_HEX.ember, kind === "claim" ? 0.055 : 0.035);
+    pulse.fillRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 8);
+    pulse.lineStyle(kind === "claim" ? 2 : 1, PALETTE_HEX.ember, kind === "claim" ? 0.58 : 0.36);
+    pulse.strokeRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 8);
+    w.container.addAt(pulse, this.compact ? 1 : 0);
+
+    this.cfg.scene.tweens.add({
+      targets: pulse,
+      alpha: 0,
+      scaleX: kind === "claim" ? 1.045 : 1.025,
+      scaleY: kind === "claim" ? 1.085 : 1.05,
+      duration: kind === "claim" ? 260 : 180,
+      ease: "Sine.easeOut",
+      onComplete: () => pulse.destroy(),
+    });
   }
 
   // ── firing ───────────────────────────────────────────────────────────────────

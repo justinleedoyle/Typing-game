@@ -114,6 +114,8 @@ export class SunkenBellScene extends Phaser.Scene {
   /** King Aurland's painted sprite — fades in when he's freed at fork 2 and is
    *  faded/destroyed when the realm moves past the fork (or on shutdown). */
   private aurlandImage?: Phaser.GameObjects.Image;
+  /** Old Olin's painted sprite during the Act 1 teaching beat. */
+  private olinImage?: Phaser.GameObjects.Image;
 
   private beatClock!: BeatClock;
   private beatRing!: Phaser.GameObjects.Graphics;
@@ -300,6 +302,8 @@ export class SunkenBellScene extends Phaser.Scene {
       this.beatClock.stop();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
+      this.olinImage?.destroy();
+      this.olinImage = undefined;
       this.aurlandImage?.destroy();
       this.aurlandImage = undefined;
     });
@@ -748,11 +752,17 @@ export class SunkenBellScene extends Phaser.Scene {
         fontSize: 40,
         onComplete: () => {
           this.clearActiveTargets();
+          playActorAttention(this, this.olinImage, {
+            tint: BELL_BURST_COLOR,
+          });
           this.setNarrator(
             "you are listening for the bell. on its toll, you may speak. between tolls, you cannot.",
             "Old Olin",
           );
           this.time.delayedCall(3000, () => {
+            playActorAttention(this, this.olinImage, {
+              tint: BELL_BURST_COLOR,
+            });
             this.setNarrator(
               "i taught the bell its name. i can teach you if you let me.",
               "Old Olin",
@@ -782,6 +792,9 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private onOlinTeachComplete(): void {
     playChime();
+    playActorAttention(this, this.olinImage, {
+      tint: BELL_BURST_COLOR,
+    });
     // Almanac lore pages 1 + 5 — Drowned Choir + Olin's hidden confession,
     // both stamped at the end of his teaching beat per §5.5.7.
     this.store.update((s) => {
@@ -1815,6 +1828,7 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private drawOlin(): void {
+    if (this.olinImage) return;
     // Wooden pew (kept procedural — the sprite is just Olin himself).
     const g = this.add.graphics();
     g.fillStyle(0x1a2030, 1);
@@ -1825,6 +1839,7 @@ export class SunkenBellScene extends Phaser.Scene {
     // the old procedural body/head/staff silhouette.
     const sprite = this.add.image(300, 822, "olin").setOrigin(0.5, 1);
     sprite.setScale(OLIN_SPRITE_HEIGHT / sprite.height);
+    this.olinImage = sprite;
     addIdleBreath(this, sprite, { dy: -2, durationMs: 2600, delayMs: 300 });
   }
 }

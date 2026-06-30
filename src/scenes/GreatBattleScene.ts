@@ -21,6 +21,7 @@ import {
 } from "../game/finaleFacets";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
+import { makeQuietLordSprite, preloadQuietLord } from "../game/quietLord";
 import {
   pickAdaptiveWords,
   WINTER_WORD_BANK,
@@ -30,7 +31,11 @@ import {
   HAUNTED_WOOD_WORD_BANK,
 } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
-import { addAmbientDrift } from "../game/livingScene";
+import {
+  addAmbientDrift,
+  addIdleBreath,
+  addLocalGroundShadow,
+} from "../game/livingScene";
 import greatBattleBackdrop from "../../art/references/great-battle-clean.png";
 import runaPortrait from "../../art/runa/runa-front.png";
 
@@ -251,6 +256,7 @@ export class GreatBattleScene extends Phaser.Scene {
   preload(): void {
     this.load.image("great-battle-backdrop", greatBattleBackdrop);
     this.load.image("band-portrait-runa", runaPortrait);
+    preloadQuietLord(this);
   }
 
   create(): void {
@@ -917,27 +923,39 @@ export class GreatBattleScene extends Phaser.Scene {
   private drawQuietLord(forceDuel = false, kindnessDuel = false): void {
     this.quietLordContainer = this.add.container(this.scale.width / 2, 0).setDepth(4);
 
-    const g = this.add.graphics();
-    // Body: two overlapping rounded rectangles of deep shadow
-    g.fillStyle(0x0e0c14, 0.92);
-    g.fillRoundedRect(-80, 100, 160, 420, 16);
-    g.fillRoundedRect(-60, 80, 120, 440, 12);
-    // Head: larger ellipse
-    g.fillStyle(0x1a1020, 0.9);
-    g.fillEllipse(0, 80, 140, 140);
-    // Eyes: two small dim red ellipses — glow brighter in force duel
+    const aura = this.add.graphics();
+    aura.fillStyle(forceDuel ? 0x5a1010 : 0x2a2038, forceDuel ? 0.2 : 0.14);
+    aura.fillEllipse(0, 310, 280, 520);
+    aura.lineStyle(2, forceDuel ? 0x9b2424 : 0x4b3d7a, 0.32);
+    aura.strokeEllipse(0, 310, 230, 480);
+
+    const shadow = addLocalGroundShadow(this, 190, 30, {
+      y: 560,
+      alpha: forceDuel ? 0.5 : 0.4,
+    });
+
+    const lordFigure = this.add.container(0, 0);
+    const lordSprite = makeQuietLordSprite(this).setPosition(0, 560);
+    if (forceDuel) lordSprite.setTint(0xffd0d0);
+
+    const eyes = this.add.graphics();
     const eyeColor = forceDuel ? 0xa01010 : 0x4a1010;
     const eyeAlpha = forceDuel ? 1.0 : 0.85;
-    g.fillStyle(eyeColor, eyeAlpha);
-    g.fillEllipse(-28, 68, 22, 14);
-    g.fillEllipse(28, 68, 22, 14);
+    eyes.fillStyle(eyeColor, eyeAlpha);
+    eyes.fillEllipse(-28, 190, 20, 12);
+    eyes.fillEllipse(28, 190, 20, 12);
+    lordFigure.add([lordSprite, eyes]);
 
     // §5.5.11 — ≥3 kindness relics: Lord is slightly smaller (he shrinks rather than cracks)
     if (kindnessDuel) {
       this.quietLordContainer.setScale(0.82);
     }
 
-    this.quietLordContainer.add(g);
+    this.quietLordContainer.add([aura, shadow, lordFigure]);
+    addIdleBreath(this, lordFigure, {
+      dy: forceDuel ? -6 : -4,
+      durationMs: forceDuel ? 1800 : 2400,
+    });
 
     // The accumulating word, WITHOUT its period (§5.5.10): the realms revealed
     // it letter by letter (A → Ag → … → Again, no period); the period only

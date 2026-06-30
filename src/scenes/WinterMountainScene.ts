@@ -735,7 +735,15 @@ export class WinterMountainScene extends Phaser.Scene {
   /** UI-cohesion: every Winter word target gets the legibility outline by default
    *  (TTT-style). Fork choices pass frame: "banner". */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
-    return new TextWordTarget({ outline: true, ...opts });
+    const onComplete = opts.onComplete;
+    return new TextWordTarget({
+      outline: true,
+      ...opts,
+      onComplete: () => {
+        if (opts.frame === "banner") playWrenAction(this.wrenSprite);
+        onComplete();
+      },
+    });
   }
 
   private spawnWolf(

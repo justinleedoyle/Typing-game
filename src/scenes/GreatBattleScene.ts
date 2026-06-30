@@ -1506,6 +1506,7 @@ export class GreatBattleScene extends Phaser.Scene {
   private transitionToPhase2(): void {
     this.clearActiveTargets();
     this.enemies = [];
+    this.band.setObjective("The wall holds; the Quiet Lord is coming.");
     this.time.delayedCall(600, () => this.startPhase2());
   }
 
@@ -1538,6 +1539,7 @@ export class GreatBattleScene extends Phaser.Scene {
       count: 14,
       alpha: 0.12,
     });
+    this.band.setObjective("Face the Quiet Lord; watch for realm facets.");
     this.drawQuietLord(this.isForceDuel, this.isKindnessDuel);
     this.showQuietLordDescription();
   }
@@ -1656,10 +1658,12 @@ export class GreatBattleScene extends Phaser.Scene {
     const facets = resolveFacets(clearedRealmIds, state.satchel);
     if (facets.length === 0) {
       // No cleared realms → nothing to channel. Straight to the counter rounds.
+      this.band.setObjective("No realm facets answer him; type the counter-words.");
       this.startPhase2a();
       return;
     }
     this.narration.say("finale_facets_intro");
+    this.band.setObjective("Watch each realm facet and answer any defense word.");
     this.time.delayedCall(2000, () => this.runFacetSequence(facets, 0));
   }
 
@@ -1673,11 +1677,17 @@ export class GreatBattleScene extends Phaser.Scene {
     // Telegraph — name the facet so the player learns the counter over replays.
     this.showFacetSigil(facet, counteredBy ? "countered" : "threat");
     this.narration.say(FACET_LINES[facet.id].telegraph);
+    this.band.setObjective(
+      counteredBy
+        ? `${facet.name} rises; a relic is ready to answer.`
+        : `${facet.name} rises; prepare to type its defense word.`,
+    );
     this.time.delayedCall(1700, () => {
       if (this.runOver) return;
       if (counteredBy) {
         // A relic answers it — neutralized, no challenge. The Lord flickers.
         this.narration.say(FACET_LINES[facet.id].countered);
+        this.band.setObjective(`${facet.name} is answered; hold steady.`);
         playClaimLine(
           this,
           this.scale.width / 2,
@@ -1978,11 +1988,13 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private startPhase2a(): void {
     const satchel = this.store.get().satchel;
+    this.band.setObjective("Type the counter-words to unmake his silence.");
 
     // §5.5.11 — bells-tongue: one-shot massive hit — ends Phase 2a early
     if (this.bellsTongueSuperHitAvailable) {
       this.bellsTongueSuperHitAvailable = false; // consumed
       this.narration.say("finale_relic_bells_tongue");
+      this.band.setObjective("Bell's Tongue strikes; brace for the next counter.");
       this.time.delayedCall(1800, () => {
         // Camera flash to signal the super-hit
         this.cameras.main.flash(300, 200, 200, 255, false);
@@ -2023,6 +2035,7 @@ export class GreatBattleScene extends Phaser.Scene {
       return;
     }
     const word = words[idx]!;
+    this.band.setObjective(`Counter ${idx + 1}/${words.length}: type ${word}.`);
     const target = this.makeLordWord({
       scene: this,
       word,
@@ -2064,6 +2077,7 @@ export class GreatBattleScene extends Phaser.Scene {
     if (satchel.includes("tether-cord") && !this.tetherCordBindUsed) {
       this.tetherCordBindUsed = true;
       this.narration.say("finale_relic_tether_cord");
+      this.band.setObjective("Type bound while the tether-cord holds him.");
       const bindTarget = this.makeLordWord({
         scene: this,
         word: "bound",
@@ -2091,6 +2105,7 @@ export class GreatBattleScene extends Phaser.Scene {
     if (satchel.includes("master-key") && !this.masterKeyFlankUsed) {
       this.masterKeyFlankUsed = true;
       this.narration.say("finale_relic_master_key");
+      this.band.setObjective("Type flank through the Master-Key opening.");
       const flankTarget = this.makeLordWord({
         scene: this,
         word: "flank",
@@ -2130,6 +2145,7 @@ export class GreatBattleScene extends Phaser.Scene {
     const hasGlassFish = satchel.includes("glass-fish");
     const hasLanternMoth = satchel.includes("lantern-moth");
     const hasWispCat = satchel.includes("wisp-cat");
+    this.band.setObjective("Clear all three duel words before the Lord steadies.");
 
     // Round 1: 3 words from BATTLE_WORD_BANK simultaneously
     const round1Words = pickAdaptiveWords(
@@ -2192,6 +2208,7 @@ export class GreatBattleScene extends Phaser.Scene {
   // §5.5.9 — glass-fish: brief flash + bonus hit window word
   private applyGlassFishHitWindow(onDone: () => void): void {
     this.narration.say("finale_companion_glass_fish");
+    this.band.setObjective("Type light while the glass-fish opens the corridor.");
     const companion = this.showFinaleCompanionAction("glass-fish");
     // Flash the screen briefly (light corridor effect)
     this.cameras.main.flash(400, 160, 220, 255, false);
@@ -2229,6 +2246,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // Only fires if there are still live targets in play (avoid double-clear)
     if (this.activeTargets.length === 0) return;
     this.narration.say("finale_companion_lantern_moth");
+    this.band.setObjective("Type throne before the lantern-moth's light fades.");
     const companion = this.showFinaleCompanionAction("lantern-moth");
     // Warm light overlay
     const throneLight = this.add.graphics().setDepth(3).setAlpha(0);
@@ -2284,6 +2302,7 @@ export class GreatBattleScene extends Phaser.Scene {
       if (!this.whirlwindCancelAnnounced) {
         this.whirlwindCancelAnnounced = true;
         this.narration.say("finale_relic_windphrase_chant");
+        this.band.setObjective("Wind-Phrase and Quiet-Chant cancel the whirlwind.");
         const pulse = this.add.graphics().setDepth(3).setAlpha(0);
         pulse.fillStyle(PALETTE_HEX.frost, 0.22);
         pulse.fillRect(0, 0, this.scale.width, this.scale.height);
@@ -2305,6 +2324,7 @@ export class GreatBattleScene extends Phaser.Scene {
     }
 
     this.narration.say("finale_phase2_whirlwind");
+    this.band.setObjective("Type hold to brace through the whirlwind.");
 
     const overlay = this.add.graphics().setDepth(2).setAlpha(0);
     overlay.fillStyle(PALETTE_HEX.dim, 0.28);
@@ -2360,6 +2380,7 @@ export class GreatBattleScene extends Phaser.Scene {
   // §5.5.9 — wisp-cat: extra phrase target spawns mid-phase (flank)
   private applyWispCatFlank(onDone: () => void): void {
     this.narration.say("finale_companion_wisp_cat");
+    this.band.setObjective("Type flank through the wisp-cat opening.");
     const companion = this.showFinaleCompanionAction("wisp-cat");
     const flankTarget = this.makeLordWord({
       scene: this,
@@ -2390,6 +2411,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private onPhase2Round1Done(): void {
     this.narration.say("finale_phase2_wavers");
+    this.band.setObjective("The Quiet Lord wavers; brace for his answer.");
     this.tweens.add({
       targets: this.quietLordContainer,
       alpha: { from: 1.0, to: 0.6 },
@@ -2418,6 +2440,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private startPhase2bRound2(): void {
     // Round 2: 3 more words with no overlap
+    this.band.setObjective("Clear the last three duel words.");
     const allWords = (BATTLE_WORD_BANK as readonly string[]).filter(
       (w) => !this.phase2Round1Words.includes(w),
     );
@@ -2459,6 +2482,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private onPhase2Round2Done(): void {
     this.narration.say("finale_phase3_word_burns");
+    this.band.setObjective("His word burns open; prepare for the capital answer.");
 
     // §5.5.11 — force duel: Lord visually cracks open (camera shake)
     if (this.isForceDuel) {
@@ -2519,6 +2543,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private startPhase2Depth(): void {
     if (this.runOver) return;
+    this.band.setObjective("Mind the capitals in the Quiet Lord's word.");
     // Lowercase head so the claim captures no Shift (routes onComplete); the
     // capital tail then requires Shift via case-sensitive matching. Force gets a
     // second, deeper counter.
@@ -2577,6 +2602,7 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private onSpellWordComplete(): void {
+    this.band.setObjective("Again is loose; rebuild the final phrase.");
     this.tweens.add({
       targets: this.quietLordContainer,
       alpha: 0,
@@ -2646,6 +2672,7 @@ export class GreatBattleScene extends Phaser.Scene {
   private deliverFinalPhrase(): void {
     const phrase = selectFinalPhrase(this.store.get().satchel);
     const words = phrase.split(" ");
+    this.band.setObjective("Type the final phrase into Again.");
     this.runFinalPhraseWords(words, 0);
   }
 
@@ -2655,6 +2682,7 @@ export class GreatBattleScene extends Phaser.Scene {
       return;
     }
     const word = words[idx]!;
+    this.band.setObjective(`Final phrase ${idx + 1}/${words.length}: type ${word}.`);
 
     const target = this.makeFinalPhraseWord({
       scene: this,

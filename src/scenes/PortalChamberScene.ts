@@ -518,19 +518,21 @@ export class PortalChamberScene extends Phaser.Scene {
     const name = await currentUserDisplayName();
     if (name) {
       this.add
-        .text(this.scale.width - 40, 40, `signed in as ${name}`, {
+        .text(1812, 44, `signed in as ${name}`, {
           fontFamily: SERIF,
-          fontSize: "20px",
+          fontSize: "15px",
           fontStyle: "italic",
-          color: PALETTE.dim,
+          color: "#9d8f6d",
+          align: "center",
+          wordWrap: { width: 188 },
         })
-        .setOrigin(1, 0);
+        .setOrigin(0.5);
       const target = new TextWordTarget({
         scene: this,
         word: "sign out",
-        x: this.scale.width - 130,
-        y: 90,
-        fontSize: 22,
+        x: 1812,
+        y: 86,
+        fontSize: 20,
         priority: -1,
         outline: true,
         frame: "banner",
@@ -539,19 +541,21 @@ export class PortalChamberScene extends Phaser.Scene {
       this.typingInput.register(target);
     } else {
       this.add
-        .text(this.scale.width - 40, 40, "saves stay on this device until you sign in", {
+        .text(1812, 44, "local save only", {
           fontFamily: SERIF,
-          fontSize: "20px",
+          fontSize: "15px",
           fontStyle: "italic",
-          color: PALETTE.dim,
+          color: "#9d8f6d",
+          align: "center",
+          wordWrap: { width: 188 },
         })
-        .setOrigin(1, 0);
+        .setOrigin(0.5);
       const target = new TextWordTarget({
         scene: this,
         word: "sign in",
-        x: this.scale.width - 110,
-        y: 90,
-        fontSize: 22,
+        x: 1812,
+        y: 86,
+        fontSize: 20,
         priority: -1,
         outline: true,
         frame: "banner",
@@ -734,7 +738,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.drawStationPlaque(230, 1030, 230, 44, "almanac", { alpha: 0.28, labelAlpha: 0 });
     this.drawStationPlaque(this.scale.width / 2, 962, 330, 46, "portal floor", { alpha: 0.22 });
     this.drawStationPlaque(1740, 978, 290, 52, "your shelf");
-    this.drawStationPlaque(1812, 72, 210, 44, "account", { alpha: 0.24, labelAlpha: 0 });
+    this.drawStationPlaque(1812, 72, 218, 82, "account", { alpha: 0.24, labelAlpha: 0 });
   }
 
   private drawStationPlaque(

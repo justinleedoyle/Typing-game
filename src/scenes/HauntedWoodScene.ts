@@ -40,6 +40,7 @@ import {
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import {
   addAmbientDrift,
+  addContainerWake,
   addIdleBreath,
   addLocalGroundShadow,
 } from "../game/livingScene";
@@ -1016,6 +1017,19 @@ export class HauntedWoodScene extends Phaser.Scene {
     const container = this.add.container(pos.startX, pos.startY);
     const isPunctWord = hasPunctuation(word);
     this.drawGhostInto(container, isPunctWord);
+    addContainerWake(this, container, {
+      kind: "mist",
+      intervalMs: 300,
+      spreadX: 34,
+      spreadY: 10,
+      offsetY: 8,
+      alpha: 0.2,
+      size: 8,
+      depth: -1,
+      driftX: 26,
+      driftY: -18,
+      durationMs: 1050,
+    });
     container.setAlpha(0);
 
     const ghost = new MovingWordEnemy({

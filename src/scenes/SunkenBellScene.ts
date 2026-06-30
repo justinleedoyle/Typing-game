@@ -27,6 +27,7 @@ import { TypingInputController } from "../game/typingInput";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import {
   addAmbientDrift,
+  addContainerWake,
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
@@ -1503,6 +1504,19 @@ export class SunkenBellScene extends Phaser.Scene {
   ): void {
     const container = this.add.container(startX, restY);
     this.drawGhostInto(container);
+    addContainerWake(this, container, {
+      kind: "bubble",
+      intervalMs: 330,
+      spreadX: 22,
+      spreadY: 10,
+      offsetY: -8,
+      alpha: 0.32,
+      size: 4,
+      depth: -1,
+      driftX: 18,
+      driftY: -38,
+      durationMs: 1200,
+    });
     container.setAlpha(0);
 
     const ghost = new MovingWordEnemy({

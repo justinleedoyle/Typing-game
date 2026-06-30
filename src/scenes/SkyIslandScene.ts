@@ -39,6 +39,7 @@ import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
 import {
   addAmbientDrift,
+  addContainerWake,
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
@@ -1430,6 +1431,19 @@ export class SkyIslandScene extends Phaser.Scene {
     const lanternSprite = this.add.image(0, 0, "sky-lantern-spirit");
     lanternSprite.setScale(LANTERN_SPIRIT_HEIGHT / lanternSprite.height);
     container.add(lanternSprite);
+    addContainerWake(this, container, {
+      kind: "mote",
+      intervalMs: 230,
+      spreadX: 20,
+      spreadY: 16,
+      color: 0xf5c842,
+      alpha: 0.42,
+      size: 4,
+      depth: -1,
+      driftX: 22,
+      driftY: -32,
+      durationMs: 900,
+    });
     container.setAlpha(0);
 
     const spirit: LanternSpirit = {

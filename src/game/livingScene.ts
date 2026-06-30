@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 
-type AmbientKind = "ash" | "bubble" | "ember" | "mist" | "mote" | "snow";
+export type AmbientKind = "ash" | "bubble" | "ember" | "mist" | "mote" | "snow";
 
 interface AmbientArea {
   x: number;
@@ -63,6 +63,28 @@ export interface FadeOutStagedSpriteOptions {
 type TweenableObject = Phaser.GameObjects.GameObject & {
   y: number;
 };
+
+type WakeTarget = Phaser.GameObjects.GameObject & {
+  x: number;
+  y: number;
+  active: boolean;
+};
+
+export interface ContainerWakeOptions {
+  kind: AmbientKind;
+  intervalMs?: number;
+  spreadX?: number;
+  spreadY?: number;
+  offsetX?: number;
+  offsetY?: number;
+  color?: number;
+  alpha?: number;
+  size?: number;
+  depth?: number;
+  driftX?: number;
+  driftY?: number;
+  durationMs?: number;
+}
 
 /** Local ellipse shadow for feet-anchored sprites inside a container. */
 export function addLocalGroundShadow(
@@ -194,6 +216,73 @@ export function fadeOutStagedSprite(
       ease: opts.ease ?? "Sine.easeIn",
     });
   }
+}
+
+/** A small environmental wake tied to a moving actor/enemy. This is cheaper than
+ *  a particle emitter: one hand-drawn fleck at a throttled interval, fading out
+ *  behind the body so movement feels connected to the painted world. */
+export function addContainerWake(
+  scene: Phaser.Scene,
+  target: WakeTarget,
+  opts: ContainerWakeOptions,
+): void {
+  const interval = opts.intervalMs ?? 280;
+  let elapsed = Phaser.Math.Between(0, interval);
+  let alive = true;
+
+  const cleanup = (): void => {
+    if (!alive) return;
+    alive = false;
+    scene.events.off(Phaser.Scenes.Events.UPDATE, emitWake);
+  };
+
+  const emitWake = (_time: number, delta: number): void => {
+    if (!alive || !target.active || !target.scene) {
+      cleanup();
+      return;
+    }
+    elapsed += delta;
+    if (elapsed < interval) return;
+    elapsed = 0;
+
+    const baseSize = opts.size ?? 6;
+    const particle = scene.add.graphics();
+    drawParticle(
+      particle,
+      opts.kind,
+      opts.color ?? colorFor(opts.kind),
+      Phaser.Math.FloatBetween(Math.max(1, baseSize * 0.72), baseSize * 1.2),
+      opts.alpha ?? alphaFor(opts.kind),
+    );
+    particle
+      .setPosition(
+        target.x +
+          (opts.offsetX ?? 0) +
+          Phaser.Math.FloatBetween(-(opts.spreadX ?? 18), opts.spreadX ?? 18),
+        target.y +
+          (opts.offsetY ?? 0) +
+          Phaser.Math.FloatBetween(-(opts.spreadY ?? 8), opts.spreadY ?? 8),
+      )
+      .setScale(Phaser.Math.FloatBetween(0.75, 1.12));
+    if (opts.depth !== undefined) particle.setDepth(opts.depth);
+
+    scene.tweens.add({
+      targets: particle,
+      x: particle.x + Phaser.Math.FloatBetween(-(opts.driftX ?? 14), opts.driftX ?? 14),
+      y: particle.y + (opts.driftY ?? wakeDriftYFor(opts.kind)),
+      alpha: 0,
+      scaleX: particle.scaleX * 1.55,
+      scaleY: particle.scaleY * 1.55,
+      duration: opts.durationMs ?? wakeDurationFor(opts.kind),
+      ease: "Sine.easeOut",
+      onComplete: () => particle.destroy(),
+    });
+  };
+
+  scene.events.on(Phaser.Scenes.Events.UPDATE, emitWake);
+  target.once(Phaser.GameObjects.Events.DESTROY, cleanup);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
+  scene.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
 }
 
 /** Lightweight foreground/background particles that make a painted scene move. */
@@ -328,4 +417,18 @@ function driftYFor(kind: AmbientKind): number {
   if (kind === "mist") return -40;
   if (kind === "snow") return 560;
   return -120;
+}
+
+function wakeDriftYFor(kind: AmbientKind): number {
+  if (kind === "bubble" || kind === "ember" || kind === "mote") return -34;
+  if (kind === "mist") return -18;
+  if (kind === "snow") return -12;
+  return -24;
+}
+
+function wakeDurationFor(kind: AmbientKind): number {
+  if (kind === "bubble") return 1200;
+  if (kind === "mist") return 1050;
+  if (kind === "snow") return 850;
+  return 760;
 }

@@ -37,6 +37,7 @@ import { WaveDirector } from "../game/waveDirector";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import {
   addAmbientDrift,
+  addContainerWake,
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
@@ -1262,6 +1263,19 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const container = this.add.container(startX, y);
     container.setAlpha(0);
     const sprite = this.drawGolemInto(container, false);
+    addContainerWake(this, container, {
+      kind: "ember",
+      intervalMs: 190,
+      spreadX: 40,
+      spreadY: 8,
+      offsetY: 12,
+      alpha: 0.38,
+      size: 4,
+      depth: -1,
+      driftX: 20,
+      driftY: -30,
+      durationMs: 760,
+    });
 
     return new MovingWordEnemy({
       scene: this,

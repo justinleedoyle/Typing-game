@@ -33,8 +33,10 @@ import {
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import {
   addAmbientDrift,
+  addContainerWake,
   addIdleBreath,
   addLocalGroundShadow,
+  type ContainerWakeOptions,
 } from "../game/livingScene";
 import greatBattleBackdrop from "../../art/references/great-battle-clean.png";
 import runaPortrait from "../../art/runa/runa-front.png";
@@ -125,6 +127,72 @@ const WAVE_DEFS: WaveDef[] = [
     label: "wood-haunts",
   },
 ];
+
+function finaleWakeForRealm(realmId: string): ContainerWakeOptions {
+  switch (realmId) {
+    case "winter-mountain":
+      return {
+        kind: "snow",
+        intervalMs: 230,
+        spreadX: 46,
+        spreadY: 8,
+        alpha: 0.34,
+        size: 5,
+        driftX: 30,
+        driftY: -10,
+        durationMs: 820,
+      };
+    case "sunken-bell":
+      return {
+        kind: "bubble",
+        intervalMs: 320,
+        spreadX: 24,
+        spreadY: 10,
+        alpha: 0.3,
+        size: 4,
+        driftX: 18,
+        driftY: -38,
+        durationMs: 1200,
+      };
+    case "clockwork-forge":
+      return {
+        kind: "ember",
+        intervalMs: 190,
+        spreadX: 38,
+        spreadY: 8,
+        alpha: 0.38,
+        size: 4,
+        driftX: 20,
+        driftY: -30,
+        durationMs: 760,
+      };
+    case "sky-island":
+      return {
+        kind: "mote",
+        intervalMs: 230,
+        spreadX: 22,
+        spreadY: 16,
+        color: 0xf5c842,
+        alpha: 0.42,
+        size: 4,
+        driftX: 22,
+        driftY: -32,
+        durationMs: 900,
+      };
+    default:
+      return {
+        kind: "mist",
+        intervalMs: 300,
+        spreadX: 34,
+        spreadY: 10,
+        alpha: 0.2,
+        size: 8,
+        driftX: 26,
+        driftY: -18,
+        durationMs: 1050,
+      };
+  }
+}
 
 // ─── Enemy entity ──────────────────────────────────────────────────────────────
 
@@ -678,6 +746,12 @@ export class GreatBattleScene extends Phaser.Scene {
   private spawnEnemy(waveDef: WaveDef, x: number, word: string, waveIdx: number): void {
     const graphic = this.add.graphics().setDepth(3).setAlpha(0);
     this.drawEnemyShape(graphic, waveDef.realmId, x, waveDef.baseY);
+    addContainerWake(this, graphic, {
+      ...finaleWakeForRealm(waveDef.realmId),
+      offsetX: x,
+      offsetY: waveDef.baseY + 8,
+      depth: 2,
+    });
     graphic.y = -95;
 
     const enemy: Enemy = {

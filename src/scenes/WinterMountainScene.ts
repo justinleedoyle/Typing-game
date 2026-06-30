@@ -28,6 +28,7 @@ import {
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import {
   addAmbientDrift,
+  addContainerWake,
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
@@ -748,6 +749,19 @@ export class WinterMountainScene extends Phaser.Scene {
     const facingLeft = startX > this.scale.width / 2;
     const container = this.add.container(startX, targetY);
     this.drawWolfInto(container, facingLeft);
+    addContainerWake(this, container, {
+      kind: "snow",
+      intervalMs: circles ? 170 : 240,
+      spreadX: 54,
+      spreadY: 6,
+      offsetY: 4,
+      alpha: 0.34,
+      size: 5,
+      depth: -1,
+      driftX: 30,
+      driftY: -10,
+      durationMs: 820,
+    });
     container.setAlpha(0);
 
     const wolf = new MovingWordEnemy({
@@ -804,6 +818,19 @@ export class WinterMountainScene extends Phaser.Scene {
     const startX = -200;
     const container = this.add.container(startX, BOSS_SPAWN_Y);
     this.bossBodySprite = this.drawBossInto(container);
+    addContainerWake(this, container, {
+      kind: "snow",
+      intervalMs: 180,
+      spreadX: 78,
+      spreadY: 8,
+      offsetY: 8,
+      alpha: 0.4,
+      size: 7,
+      depth: -1,
+      driftX: 34,
+      driftY: -12,
+      durationMs: 900,
+    });
     container.setAlpha(0);
 
     const boss = new MovingWordEnemy({

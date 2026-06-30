@@ -9,6 +9,7 @@ import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
 import {
   addAmbientDrift,
+  addBackdropDrift,
   addIdleBreath,
   addLocalGroundShadow,
 } from "../game/livingScene";
@@ -73,11 +74,12 @@ export class OpeningScene extends Phaser.Scene {
     const { width } = this.scale;
 
     // ── Painted study backdrop ───────────────────────────────────────────────
-    this.add
+    const backdrop = this.add
       .image(0, 0, "opening-backdrop")
       .setOrigin(0)
       .setDisplaySize(width, this.scale.height)
       .setDepth(-100);
+    addBackdropDrift(this, backdrop, { durationMs: 15000, driftX: -4, driftY: -3 });
     addAmbientDrift(this, {
       kind: "mote",
       count: 26,

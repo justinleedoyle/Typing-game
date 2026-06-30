@@ -40,6 +40,7 @@ import {
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import {
   addAmbientDrift,
+  addBackdropDrift,
   addContainerWake,
   addIdleBreath,
   addLocalGroundShadow,
@@ -185,11 +186,12 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.fadeIn(600, 14, 18, 14);
-    this.add
+    const backdrop = this.add
       .image(0, 0, "haunted-wood-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addBackdropDrift(this, backdrop, { durationMs: 20000, driftX: -4, driftY: -3 });
     addAmbientDrift(this, {
       kind: "mist",
       count: 24,

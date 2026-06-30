@@ -18,6 +18,7 @@ import { TextWordTarget } from "../game/wordTarget";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import {
   addAmbientDrift,
+  addBackdropDrift,
   addGroundShadow,
   addIdleBreath,
   addLocalGroundShadow,
@@ -927,11 +928,12 @@ export class PortalChamberScene extends Phaser.Scene {
   // ─── Drawing ──────────────────────────────────────────────────────────────
 
   private drawRoom(): void {
-    this.add
+    const backdrop = this.add
       .image(0, 0, "hub-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addBackdropDrift(this, backdrop, { durationMs: 18000, driftX: -3, driftY: -2 });
     addAmbientDrift(this, {
       kind: "mote",
       count: 34,

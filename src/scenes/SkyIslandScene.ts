@@ -39,6 +39,7 @@ import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
 import {
   addAmbientDrift,
+  addBackdropDrift,
   addContainerWake,
   fadeOutStagedSprite,
   addLocalGroundShadow,
@@ -262,11 +263,12 @@ export class SkyIslandScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.fadeIn(600, 26, 16, 8);
-    this.add
+    const backdrop = this.add
       .image(0, 0, "sky-island-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addBackdropDrift(this, backdrop, { durationMs: 17500, driftX: -2, driftY: -6 });
     addAmbientDrift(this, {
       kind: "mote",
       count: 38,

@@ -3,7 +3,7 @@ import { playClack } from "../audio/clack";
 import { setAudioLevel } from "../audio/context";
 import { applyDevUnlock, parseDevTarget } from "../game/devUnlock";
 import { SERIF } from "../game/palette";
-import { addAmbientDrift } from "../game/livingScene";
+import { addAmbientDrift, addBackdropDrift } from "../game/livingScene";
 import { cornerTicks, UI_CSS, UI_HEX } from "../game/ui/uiTheme";
 import {
   SaveStore,
@@ -32,11 +32,12 @@ export class TitleScene extends Phaser.Scene {
   create(): void {
     const { width, height } = this.scale;
 
-    this.add
+    const backdrop = this.add
       .image(0, 0, "title-backdrop")
       .setOrigin(0)
       .setDisplaySize(width, height)
       .setDepth(-100);
+    addBackdropDrift(this, backdrop, { durationMs: 16500, driftX: -5, driftY: -4 });
 
     const shade = this.add.graphics().setDepth(-10);
     shade.fillStyle(0x0b0a0f, 0.48);

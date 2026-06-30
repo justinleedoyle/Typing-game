@@ -38,6 +38,14 @@ export interface IdleBreathOptions {
   delayMs?: number;
 }
 
+export interface BackdropDriftOptions {
+  scale?: number;
+  driftX?: number;
+  driftY?: number;
+  durationMs?: number;
+  delayMs?: number;
+}
+
 export interface StagedSpriteOptions {
   shadowWidth: number;
   shadowHeight: number;
@@ -195,6 +203,35 @@ export function addIdleBreath(
     targets: target,
     y: baseY + (opts.dy ?? -5),
     duration: opts.durationMs ?? 1800,
+    delay: opts.delayMs ?? 0,
+    yoyo: true,
+    repeat: -1,
+    ease: "Sine.easeInOut",
+  });
+}
+
+/** Subtle breathing motion for a full-screen painted backdrop. The target is
+ *  the low-depth background image only, so UI, actors, and word anchors stay
+ *  stable while the painting stops feeling like a static wallpaper layer. */
+export function addBackdropDrift(
+  scene: Phaser.Scene,
+  backdrop: Phaser.GameObjects.Image,
+  opts: BackdropDriftOptions = {},
+): Phaser.Tweens.Tween {
+  const baseX = backdrop.x;
+  const baseY = backdrop.y;
+  const baseScaleX = backdrop.scaleX;
+  const baseScaleY = backdrop.scaleY;
+  const scale = opts.scale ?? 1.012;
+  const extraX = (backdrop.displayWidth * (scale - 1)) / 2;
+  const extraY = (backdrop.displayHeight * (scale - 1)) / 2;
+  return scene.tweens.add({
+    targets: backdrop,
+    x: baseX - extraX + (opts.driftX ?? -4),
+    y: baseY - extraY + (opts.driftY ?? -3),
+    scaleX: baseScaleX * scale,
+    scaleY: baseScaleY * scale,
+    duration: opts.durationMs ?? 14000,
     delay: opts.delayMs ?? 0,
     yoyo: true,
     repeat: -1,

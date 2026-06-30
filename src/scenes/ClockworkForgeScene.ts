@@ -37,6 +37,7 @@ import { WaveDirector } from "../game/waveDirector";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import {
   addAmbientDrift,
+  addBackdropDrift,
   addContainerWake,
   fadeOutStagedSprite,
   addLocalGroundShadow,
@@ -216,11 +217,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.fadeIn(600, 26, 16, 8);
-    this.add
+    const backdrop = this.add
       .image(0, 0, "forge-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addBackdropDrift(this, backdrop, { durationMs: 15500, driftX: -5, driftY: -2 });
     addAmbientDrift(this, {
       kind: "ember",
       count: 44,

@@ -27,6 +27,7 @@ import { TypingInputController } from "../game/typingInput";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import {
   addAmbientDrift,
+  addBackdropDrift,
   addContainerWake,
   fadeOutStagedSprite,
   addIdleBreath,
@@ -188,11 +189,12 @@ export class SunkenBellScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.fadeIn(600, 8, 24, 32);
-    this.add
+    const backdrop = this.add
       .image(0, 0, "sunken-bell-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addBackdropDrift(this, backdrop, { durationMs: 19000, driftX: -3, driftY: -5 });
     addAmbientDrift(this, {
       kind: "bubble",
       count: 42,

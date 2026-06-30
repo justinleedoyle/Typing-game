@@ -33,6 +33,7 @@ import {
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import {
   addAmbientDrift,
+  addBackdropDrift,
   addContainerWake,
   addIdleBreath,
   addLocalGroundShadow,
@@ -378,11 +379,12 @@ export class GreatBattleScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.fadeIn(700, 11, 10, 15);
 
-    this.add
+    const backdrop = this.add
       .image(0, 0, "great-battle-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addBackdropDrift(this, backdrop, { durationMs: 21000, driftX: -5, driftY: -3 });
     addAmbientDrift(this, {
       kind: "ash",
       count: 48,

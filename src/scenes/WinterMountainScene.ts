@@ -28,6 +28,7 @@ import {
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import {
   addAmbientDrift,
+  addBackdropDrift,
   addContainerWake,
   fadeOutStagedSprite,
   addIdleBreath,
@@ -291,11 +292,12 @@ export class WinterMountainScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.fadeIn(500, 11, 10, 15);
-    this.add
+    const backdrop = this.add
       .image(0, 0, "winter-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addBackdropDrift(this, backdrop, { durationMs: 17000, driftX: -6, driftY: -4 });
     addAmbientDrift(this, {
       kind: "snow",
       count: 70,

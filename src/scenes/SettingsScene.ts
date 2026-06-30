@@ -463,6 +463,7 @@ export class SettingsScene extends Phaser.Scene {
     this.setNarrator(
       "This will wipe your save. Type `confirm` to do it, or `back` to keep your progress.",
     );
+    this.drawResetConfirmPanel();
 
     const confirmTarget = new TextWordTarget({
       scene: this,
@@ -493,6 +494,53 @@ export class SettingsScene extends Phaser.Scene {
     });
     this.typingInput.register(cancelTarget);
     this.menuTargets.push(cancelTarget);
+  }
+
+  private drawResetConfirmPanel(): void {
+    const panelW = 620;
+    const panelH = 194;
+    const panelX = this.scale.width / 2;
+    const panelY = 520;
+    const panel = this.add.graphics();
+    panel.fillStyle(UI_HEX.panel, 0.58);
+    panel.fillRoundedRect(
+      panelX - panelW / 2,
+      panelY - panelH / 2,
+      panelW,
+      panelH,
+      10,
+    );
+    panel.lineStyle(2, UI_HEX.brass, 0.54);
+    panel.strokeRoundedRect(
+      panelX - panelW / 2,
+      panelY - panelH / 2,
+      panelW,
+      panelH,
+      10,
+    );
+    const corners = cornerTicks(this, panelW, panelH, {
+      inset: 9,
+      size: 14,
+      width: 2,
+    }).setPosition(panelX, panelY).setAlpha(0.56);
+
+    const title = this.add
+      .text(panelX, panelY - 60, "Reset save?", {
+        fontFamily: SERIF,
+        fontSize: "34px",
+        color: UI_CSS.cream,
+      })
+      .setOrigin(0.5);
+    const warning = this.add
+      .text(panelX, panelY - 26, "Everything in this run will be erased.", {
+        fontFamily: SERIF,
+        fontSize: "21px",
+        fontStyle: "italic",
+        color: UI_CSS.brass,
+      })
+      .setOrigin(0.5);
+
+    this.rowTexts.push(panel, corners, title, warning);
   }
 
   private performReset(): void {

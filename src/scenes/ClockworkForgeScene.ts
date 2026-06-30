@@ -52,6 +52,7 @@ import {
   flashWrenMiss,
   makeWrenSprite,
   playWrenAction,
+  playWrenFocus,
   playWrenHurt,
   preloadWren,
 } from "../game/wren";
@@ -1708,10 +1709,15 @@ export class ClockworkForgeScene extends Phaser.Scene {
   /** UI-cohesion: every Forge word target goes through here so it picks up the
    *  legibility outline by default (TTT-style). Choices pass frame: "banner". */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
+    const onClaim = opts.onClaim;
     const onComplete = opts.onComplete;
     return new TextWordTarget({
       outline: true,
       ...opts,
+      onClaim: (mods) => {
+        if (opts.frame === "banner") playWrenFocus(this.wrenSprite);
+        onClaim?.(mods);
+      },
       onComplete: () => {
         if (opts.frame === "banner") playWrenAction(this.wrenSprite);
         onComplete();

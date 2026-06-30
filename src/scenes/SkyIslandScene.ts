@@ -55,6 +55,7 @@ import {
   flashWrenMiss,
   makeWrenSprite,
   playWrenAction,
+  playWrenFocus,
   playWrenHurt,
   preloadWren,
 } from "../game/wren";
@@ -1807,10 +1808,15 @@ export class SkyIslandScene extends Phaser.Scene {
   /** UI-cohesion: every Sky-Island word target gets the legibility outline by
    *  default (TTT-style). Fork choices pass frame: "banner". */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
+    const onClaim = opts.onClaim;
     const onComplete = opts.onComplete;
     return new TextWordTarget({
       outline: true,
       ...opts,
+      onClaim: (mods) => {
+        if (opts.frame === "banner") playWrenFocus(this.wrenSprite);
+        onClaim?.(mods);
+      },
       onComplete: () => {
         if (opts.frame === "banner") playWrenAction(this.wrenSprite);
         onComplete();

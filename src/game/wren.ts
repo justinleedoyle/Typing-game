@@ -119,6 +119,40 @@ export function playWrenAction(
   });
 }
 
+/** A smaller "attention" reaction for claiming an authored choice. It is less
+ *  forceful than playWrenAction(), which remains the completion flourish. */
+export function playWrenFocus(
+  img: Phaser.GameObjects.Image,
+  opts: { faceLeft?: boolean; durationMs?: number } = {},
+): void {
+  if (img.getData(HURT_TIMER_KEY)) return;
+  const originalKey = img.texture.key;
+  const originalScaleX = img.scaleX;
+  const originalScaleY = img.scaleY;
+  const originalX = img.x;
+  const originalY = img.y;
+  const scene = img.scene;
+  scene.tweens.killTweensOf(img);
+  const faceLeft = opts.faceLeft ?? originalScaleX < 0;
+  setWrenPose(img, "walk", faceLeft);
+  scene.tweens.add({
+    targets: img,
+    x: originalX + (faceLeft ? -5 : 5),
+    y: originalY - 3,
+    duration: opts.durationMs ?? 120,
+    yoyo: true,
+    ease: "Sine.easeOut",
+    onComplete: () => {
+      if (!img.scene) return;
+      img.setTexture(originalKey);
+      img.scaleX = originalScaleX;
+      img.scaleY = originalScaleY;
+      img.x = originalX;
+      img.y = originalY;
+    },
+  });
+}
+
 /** True while the heavier hurt-pose reaction is holding the sprite. */
 export function isWrenHurtPlaying(img: Phaser.GameObjects.Image): boolean {
   return Boolean(img.getData(HURT_TIMER_KEY));

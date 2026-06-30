@@ -62,6 +62,7 @@ export class SettingsScene extends Phaser.Scene {
   // tear them down before re-rendering instead of leaking through the scene.
   private rowTexts: Phaser.GameObjects.GameObject[] = [];
   private menuTargets: TextWordTarget[] = [];
+  private focusMarks: Phaser.GameObjects.GameObject[] = [];
 
   // Rename mode owns its own UI separate from the static rows.
   private renameBuffer = "";
@@ -85,6 +86,7 @@ export class SettingsScene extends Phaser.Scene {
     this.mode = "normal";
     this.rowTexts = [];
     this.menuTargets = [];
+    this.focusMarks = [];
     this.renameBuffer = "";
   }
 
@@ -235,6 +237,7 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   private clearMenu(): void {
+    this.clearFocusMarks();
     for (const t of this.rowTexts) t.destroy();
     this.rowTexts = [];
     for (const t of this.menuTargets) {
@@ -290,10 +293,48 @@ export class SettingsScene extends Phaser.Scene {
       outline: true,
       frame: "banner",
       priority,
+      onClaim: () => this.pulseMenuRow(index),
       onComplete,
     });
     this.typingInput.register(target);
     this.menuTargets.push(target);
+  }
+
+  private pulseMenuRow(index: number): void {
+    const y = ROW_START_Y + index * ROW_SPACING;
+    const h = index === 0 ? 112 : 92;
+    this.pulseFocusBox(ROW_X + 30, y + 28, 940, h);
+  }
+
+  private pulseFocusBox(x: number, y: number, w: number, h: number): void {
+    this.clearFocusMarks();
+    const mark = this.add.graphics();
+    mark.setPosition(x, y).setDepth(20);
+    mark.fillStyle(UI_HEX.brass, 0.07);
+    mark.fillRoundedRect(-w / 2, -h / 2, w, h, 10);
+    mark.lineStyle(2, UI_HEX.brass, 0.72);
+    mark.strokeRoundedRect(-w / 2, -h / 2, w, h, 10);
+    this.focusMarks.push(mark);
+    this.tweens.add({
+      targets: mark,
+      alpha: 0,
+      scaleX: 1.035,
+      scaleY: 1.08,
+      duration: 520,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        mark.destroy();
+        this.focusMarks = this.focusMarks.filter((m) => m !== mark);
+      },
+    });
+  }
+
+  private clearFocusMarks(): void {
+    for (const mark of this.focusMarks) {
+      this.tweens.killTweensOf(mark);
+      mark.destroy();
+    }
+    this.focusMarks = [];
   }
 
   /** Dim sub-hint under the Difficulty row that surfaces the otherwise-hidden
@@ -418,6 +459,7 @@ export class SettingsScene extends Phaser.Scene {
         },
       )
       .setOrigin(0.5);
+    this.pulseFocusBox(panelX, panelY, panelW + 54, panelH + 42);
   }
 
   private commitRename(): void {
@@ -473,6 +515,7 @@ export class SettingsScene extends Phaser.Scene {
       fontSize: 34,
       outline: true,
       frame: "banner",
+      onClaim: () => this.pulseResetPanel(),
       onComplete: () => this.performReset(),
     });
     this.typingInput.register(confirmTarget);
@@ -486,6 +529,7 @@ export class SettingsScene extends Phaser.Scene {
       fontSize: 34,
       outline: true,
       frame: "banner",
+      onClaim: () => this.pulseResetPanel(),
       onComplete: () => {
         this.mode = "normal";
         this.setNarrator("Save kept. Nothing changed.");
@@ -494,6 +538,10 @@ export class SettingsScene extends Phaser.Scene {
     });
     this.typingInput.register(cancelTarget);
     this.menuTargets.push(cancelTarget);
+  }
+
+  private pulseResetPanel(): void {
+    this.pulseFocusBox(this.scale.width / 2, 520, 700, 230);
   }
 
   private drawResetConfirmPanel(): void {
@@ -605,6 +653,7 @@ export class SettingsScene extends Phaser.Scene {
         this.renameBuffer = this.renameBuffer.slice(0, -1);
         playClack();
         this.renameField?.setText(this.renameBuffer || " ");
+        this.pulseRenameField();
       }
       return;
     }
@@ -615,8 +664,22 @@ export class SettingsScene extends Phaser.Scene {
         this.renameBuffer += event.key;
         playClack();
         this.renameField?.setText(this.renameBuffer);
+        this.pulseRenameField();
       }
     }
+  }
+
+  private pulseRenameField(): void {
+    if (!this.renameFieldPlate) return;
+    this.tweens.killTweensOf(this.renameFieldPlate);
+    this.renameFieldPlate.setAlpha(1);
+    this.tweens.add({
+      targets: this.renameFieldPlate,
+      alpha: 0.76,
+      duration: 80,
+      yoyo: true,
+      ease: "Sine.easeOut",
+    });
   }
 
   // ─── Narrator helper ────────────────────────────────────────────────────────

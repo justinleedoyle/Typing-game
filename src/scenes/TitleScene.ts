@@ -2,12 +2,15 @@ import Phaser from "phaser";
 import { playClack } from "../audio/clack";
 import { setAudioLevel } from "../audio/context";
 import { applyDevUnlock, parseDevTarget } from "../game/devUnlock";
-import { PALETTE, SERIF } from "../game/palette";
+import { SERIF } from "../game/palette";
+import { addAmbientDrift } from "../game/livingScene";
+import { cornerTicks, UI_CSS, UI_HEX } from "../game/ui/uiTheme";
 import {
   SaveStore,
   SyncedBackend,
   type SaveBackend,
 } from "../game/saveState";
+import openingBackdrop from "../../art/references/opening-typewriter-study-clean.png";
 
 export class TitleScene extends Phaser.Scene {
   private prompt!: Phaser.GameObjects.Text;
@@ -21,37 +24,53 @@ export class TitleScene extends Phaser.Scene {
     super("TitleScene");
   }
 
+  preload(): void {
+    this.load.image("title-backdrop", openingBackdrop);
+  }
+
   create(): void {
     const { width, height } = this.scale;
 
     this.add
-      .text(width / 2, height / 2 - 120, "The Portalwright's Almanac", {
-        fontFamily: SERIF,
-        fontSize: "112px",
-        color: PALETTE.cream,
-      })
-      .setOrigin(0.5);
+      .image(0, 0, "title-backdrop")
+      .setOrigin(0)
+      .setDisplaySize(width, height)
+      .setDepth(-100);
 
-    this.add
-      .text(width / 2, height / 2 + 20, "a typing adventure", {
-        fontFamily: SERIF,
-        fontSize: "40px",
-        fontStyle: "italic",
-        color: PALETTE.dim,
-      })
-      .setOrigin(0.5);
+    const shade = this.add.graphics().setDepth(-10);
+    shade.fillStyle(0x0b0a0f, 0.48);
+    shade.fillRect(0, 0, width, height);
+
+    addAmbientDrift(this, {
+      kind: "mote",
+      count: 30,
+      depth: -2,
+      area: { x: 90, y: 80, width: width - 180, height: height - 180 },
+      alpha: 0.2,
+      minSize: 1.5,
+      maxSize: 3.5,
+      driftX: 42,
+      driftY: -80,
+      minDurationMs: 8500,
+      maxDurationMs: 15000,
+    });
+
+    this.drawTitlePlate(width / 2, height / 2 - 54);
 
     this.prompt = this.add
-      .text(width / 2, height - 180, "press any key", {
+      .text(width / 2, height - 168, "press any key", {
         fontFamily: SERIF,
-        fontSize: "32px",
-        color: PALETTE.dim,
+        fontSize: "28px",
+        color: UI_CSS.parchment,
+        fontStyle: "italic",
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setDepth(4);
+    this.drawPromptPlate(this.prompt);
 
     this.promptTween = this.tweens.add({
       targets: this.prompt,
-      alpha: { from: 1, to: 0.3 },
+      alpha: { from: 1, to: 0.35 },
       duration: 1400,
       yoyo: true,
       repeat: -1,
@@ -73,6 +92,49 @@ export class TitleScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
     });
+  }
+
+  private drawTitlePlate(x: number, y: number): void {
+    const w = 1160;
+    const h = 220;
+    const plate = this.add.graphics().setDepth(2);
+    plate.fillStyle(UI_HEX.parchment, 0.93);
+    plate.fillRoundedRect(x - w / 2, y - h / 2, w, h, 12);
+    plate.lineStyle(3, UI_HEX.frame, 0.92);
+    plate.strokeRoundedRect(x - w / 2, y - h / 2, w, h, 12);
+    cornerTicks(this, w, h, { inset: 10, size: 18, width: 3 })
+      .setPosition(x, y)
+      .setDepth(3);
+
+    this.add
+      .text(x, y - 32, "The Portalwright's Almanac", {
+        fontFamily: SERIF,
+        fontSize: "78px",
+        color: UI_CSS.ink,
+        align: "center",
+      })
+      .setOrigin(0.5)
+      .setDepth(4);
+
+    this.add
+      .text(x, y + 50, "a typing adventure", {
+        fontFamily: SERIF,
+        fontSize: "30px",
+        fontStyle: "italic",
+        color: UI_CSS.inkSoft,
+      })
+      .setOrigin(0.5)
+      .setDepth(4);
+  }
+
+  private drawPromptPlate(prompt: Phaser.GameObjects.Text): void {
+    const w = 540;
+    const h = Math.max(48, prompt.height + 20);
+    const plate = this.add.graphics().setDepth(3);
+    plate.fillStyle(UI_HEX.panel, 0.72);
+    plate.fillRoundedRect(prompt.x - w / 2, prompt.y - h / 2, w, h, 8);
+    plate.lineStyle(2, UI_HEX.brass, 0.74);
+    plate.strokeRoundedRect(prompt.x - w / 2, prompt.y - h / 2, w, h, 8);
   }
 
   private onKeyDown(event: KeyboardEvent): void {

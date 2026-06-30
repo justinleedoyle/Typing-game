@@ -169,6 +169,7 @@ export class OpeningScene extends Phaser.Scene {
       fontSize: 52,
       outline: true,
       frame: "banner",
+      onClaim: () => this.playStudyClaimPulse(STUDY_RESPONSE.name),
       onComplete: () => pick("boy"),
     });
     const girl = new TextWordTarget({
@@ -179,6 +180,7 @@ export class OpeningScene extends Phaser.Scene {
       fontSize: 52,
       outline: true,
       frame: "banner",
+      onClaim: () => this.playStudyClaimPulse(STUDY_RESPONSE.name),
       onComplete: () => pick("girl"),
     });
     this.typingInput.register(boy);
@@ -213,6 +215,7 @@ export class OpeningScene extends Phaser.Scene {
       fontSize: 48,
       outline: true,
       frame: "banner",
+      onClaim: () => this.playStudyClaimPulse(STUDY_RESPONSE.name),
       onComplete: () => this.onBeat4Complete(),
     });
     this.typingInput.register(target);
@@ -236,6 +239,7 @@ export class OpeningScene extends Phaser.Scene {
       fontSize: 48,
       outline: true,
       frame: "banner",
+      onClaim: () => this.playStudyClaimPulse(STUDY_RESPONSE.typewriter),
       onComplete: () => this.onBeat5Complete(),
     });
     this.typingInput.register(target);
@@ -309,6 +313,7 @@ export class OpeningScene extends Phaser.Scene {
       fontSize: 44,
       outline: true,
       frame: "banner",
+      onClaim: () => this.playStudyClaimPulse(STUDY_RESPONSE.portal),
       onComplete: () => this.onBeat8Complete(),
     });
     this.typingInput.register(target);
@@ -366,19 +371,34 @@ export class OpeningScene extends Phaser.Scene {
     this.narration.sayRaw(text, { speakerName });
   }
 
+  private playStudyClaimPulse(point: { x: number; y: number; color: number }): void {
+    this.playStudyPulse(point, {
+      scale: 1.45,
+      durationMs: 420,
+      alpha: 0.42,
+      flecks: 4,
+    });
+  }
+
   private playStudyPulse(
     point: { x: number; y: number; color: number },
-    opts: { scale?: number; durationMs?: number } = {},
+    opts: {
+      scale?: number;
+      durationMs?: number;
+      alpha?: number;
+      flecks?: number;
+    } = {},
   ): void {
     const duration = opts.durationMs ?? 620;
+    const alpha = opts.alpha ?? 0.7;
     const pulse = this.add
       .graphics()
       .setPosition(point.x, point.y)
       .setDepth(-3)
-      .setAlpha(0.7);
-    pulse.lineStyle(3, point.color, 0.72);
+      .setAlpha(alpha);
+    pulse.lineStyle(3, point.color, alpha);
     pulse.strokeCircle(0, 0, 44);
-    pulse.lineStyle(1, point.color, 0.42);
+    pulse.lineStyle(1, point.color, alpha * 0.58);
     pulse.strokeCircle(0, 0, 70);
     this.tweens.add({
       targets: pulse,
@@ -390,14 +410,16 @@ export class OpeningScene extends Phaser.Scene {
       onComplete: () => pulse.destroy(),
     });
 
-    for (let i = 0; i < 10; i++) {
-      const angle = (i / 10) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.25, 0.25);
+    const fleckCount = opts.flecks ?? 10;
+    for (let i = 0; i < fleckCount; i++) {
+      const angle =
+        (i / fleckCount) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.25, 0.25);
       const fleck = this.add
         .graphics()
         .setPosition(point.x, point.y)
         .setDepth(-2)
-        .setAlpha(0.76);
-      fleck.fillStyle(point.color, 0.78);
+        .setAlpha(alpha + 0.06);
+      fleck.fillStyle(point.color, Math.min(0.84, alpha + 0.08));
       fleck.fillCircle(0, 0, Phaser.Math.FloatBetween(2, 4));
       this.tweens.add({
         targets: fleck,

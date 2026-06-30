@@ -3,6 +3,7 @@ import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
 import { NarrationManager } from "../game/narrationManager";
+import { PALETTE_HEX } from "../game/palette";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
@@ -24,6 +25,11 @@ interface OpeningSceneData {
 // on the left and the sibling on the right. Keeps the eye on the centre
 // of the screen rather than tucked over the typewriter.
 const TYPE_TARGET = { x: 960, y: 540 };
+const STUDY_RESPONSE = {
+  name: { x: 960, y: 630, color: PALETTE_HEX.cream },
+  typewriter: { x: 790, y: 770, color: PALETTE_HEX.brass },
+  portal: { x: 1510, y: 610, color: PALETTE_HEX.frost },
+} as const;
 
 export class OpeningScene extends Phaser.Scene {
   private store!: SaveStore;
@@ -149,6 +155,7 @@ export class OpeningScene extends Phaser.Scene {
         s.wrenGender = gender;
       });
       playChime();
+      this.playStudyPulse(STUDY_RESPONSE.name);
       this.time.delayedCall(700, () => this.beat3());
     };
 
@@ -211,6 +218,7 @@ export class OpeningScene extends Phaser.Scene {
 
   private onBeat4Complete(): void {
     playChime();
+    this.playStudyPulse(STUDY_RESPONSE.name);
     this.time.delayedCall(500, () => this.beat5());
   }
 
@@ -233,6 +241,7 @@ export class OpeningScene extends Phaser.Scene {
 
   private onBeat5Complete(): void {
     playChime();
+    this.playStudyPulse(STUDY_RESPONSE.typewriter);
     // Warm gold camera flash.
     this.cameras.main.flash(320, 201, 161, 74); // PALETTE_HEX.brass split to r/g/b
     this.time.delayedCall(400, () => this.beat6());
@@ -282,6 +291,7 @@ export class OpeningScene extends Phaser.Scene {
    *  extra overlay circles. */
   private beat7(): void {
     this.narration.say("opening_beat7_portal_wakes");
+    this.playStudyPulse(STUDY_RESPONSE.portal, { scale: 1.3, durationMs: 980 });
     this.time.delayedCall(2400, () => this.beat8());
   }
 
@@ -304,6 +314,7 @@ export class OpeningScene extends Phaser.Scene {
 
   private onBeat8Complete(): void {
     playChime();
+    this.playStudyPulse(STUDY_RESPONSE.portal, { scale: 1.45, durationMs: 900 });
     this.beat9();
   }
 
@@ -351,6 +362,51 @@ export class OpeningScene extends Phaser.Scene {
 
   private setNarrator(text: string, speakerName: string | null = null): void {
     this.narration.sayRaw(text, { speakerName });
+  }
+
+  private playStudyPulse(
+    point: { x: number; y: number; color: number },
+    opts: { scale?: number; durationMs?: number } = {},
+  ): void {
+    const duration = opts.durationMs ?? 620;
+    const pulse = this.add
+      .graphics()
+      .setPosition(point.x, point.y)
+      .setDepth(-3)
+      .setAlpha(0.7);
+    pulse.lineStyle(3, point.color, 0.72);
+    pulse.strokeCircle(0, 0, 44);
+    pulse.lineStyle(1, point.color, 0.42);
+    pulse.strokeCircle(0, 0, 70);
+    this.tweens.add({
+      targets: pulse,
+      alpha: 0,
+      scaleX: opts.scale ?? 2.2,
+      scaleY: opts.scale ?? 2.2,
+      duration,
+      ease: "Sine.easeOut",
+      onComplete: () => pulse.destroy(),
+    });
+
+    for (let i = 0; i < 10; i++) {
+      const angle = (i / 10) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.25, 0.25);
+      const fleck = this.add
+        .graphics()
+        .setPosition(point.x, point.y)
+        .setDepth(-2)
+        .setAlpha(0.76);
+      fleck.fillStyle(point.color, 0.78);
+      fleck.fillCircle(0, 0, Phaser.Math.FloatBetween(2, 4));
+      this.tweens.add({
+        targets: fleck,
+        x: point.x + Math.cos(angle) * Phaser.Math.Between(80, 180),
+        y: point.y + Math.sin(angle) * Phaser.Math.Between(40, 110),
+        alpha: 0,
+        duration: duration + Phaser.Math.Between(-80, 120),
+        ease: "Sine.easeOut",
+        onComplete: () => fleck.destroy(),
+      });
+    }
   }
 
   // ── Drawing ────────────────────────────────────────────────────────────────

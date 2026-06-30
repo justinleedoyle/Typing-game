@@ -41,6 +41,7 @@ import {
   addContainerWake,
   fadeOutStagedSprite,
   addLocalGroundShadow,
+  playBodyImpact,
   playRealmClearResonance,
   stageContainerEntrance,
   stageAnchoredSprite,
@@ -1518,6 +1519,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
           playWrenAction(this.wrenSprite);
+          playBodyImpact(this, this.wrenContainer, {
+            kind: "ember",
+            color: PALETTE_HEX.ember,
+            offsetY: -104,
+            ringRadius: 30,
+            count: 7,
+            depth: 58,
+          });
           const line = narratorLines[step] ?? "";
           step++;
           if (line) this.setNarrator(line);

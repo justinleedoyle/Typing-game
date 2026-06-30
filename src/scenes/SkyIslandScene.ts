@@ -1757,6 +1757,14 @@ export class SkyIslandScene extends Phaser.Scene {
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
           playWrenAction(this.wrenSprite);
+          playBodyImpact(this, this.wrenContainer, {
+            kind: "mote",
+            color: PALETTE_HEX.brass,
+            offsetY: -108,
+            ringRadius: 30,
+            count: 7,
+            depth: 58,
+          });
           step += 1;
           this.setNarrator(narratorLines[step - 1] ?? "");
           this.time.delayedCall(1400, advance);

@@ -32,6 +32,7 @@ import {
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
+  playBodyImpact,
   playMeterPulse,
   playRealmClearResonance,
   stageContainerEntrance,
@@ -1712,6 +1713,14 @@ export class SunkenBellScene extends Phaser.Scene {
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
           playWrenAction(this.wrenSprite);
+          playBodyImpact(this, this.wrenContainer, {
+            kind: "bubble",
+            color: BELL_BURST_COLOR,
+            offsetY: -104,
+            ringRadius: 30,
+            count: 7,
+            depth: 58,
+          });
           idx += 1;
           this.clearActiveTargets();
           if (step.narrator) this.setNarrator(step.narrator);
@@ -1750,6 +1759,14 @@ export class SunkenBellScene extends Phaser.Scene {
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
           playWrenAction(this.wrenSprite);
+          playBodyImpact(this, this.wrenContainer, {
+            kind: "bubble",
+            color: BELL_BURST_COLOR,
+            offsetY: -104,
+            ringRadius: 30,
+            count: 7,
+            depth: 58,
+          });
           idx += 1;
           this.clearActiveTargets();
           if (step.narrator) this.setNarrator(step.narrator);

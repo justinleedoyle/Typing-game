@@ -33,6 +33,7 @@ import {
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
+  playBodyImpact,
   pulseUiObject,
   playRealmClearResonance,
   stageContainerEntrance,
@@ -1551,6 +1552,14 @@ export class WinterMountainScene extends Phaser.Scene {
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
           playWrenAction(this.wrenSprite);
+          playBodyImpact(this, this.wrenContainer, {
+            kind: "snow",
+            color: PALETTE_HEX.frost,
+            offsetY: -108,
+            ringRadius: 30,
+            count: 7,
+            depth: 58,
+          });
           step += 1;
           this.setNarrator(narratorLines[step - 1] ?? "");
           this.time.delayedCall(900, advance);

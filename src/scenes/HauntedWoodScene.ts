@@ -44,6 +44,7 @@ import {
   addContainerWake,
   addIdleBreath,
   addLocalGroundShadow,
+  playBodyImpact,
   playRealmClearResonance,
   stageContainerEntrance,
 } from "../game/livingScene";
@@ -896,6 +897,14 @@ export class HauntedWoodScene extends Phaser.Scene {
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
           playChime();
+          playBodyImpact(this, this.wrenContainer, {
+            kind: "mist",
+            color: PALETTE_HEX.moss,
+            offsetY: -108,
+            ringRadius: 30,
+            count: 7,
+            depth: 58,
+          });
           idx += 1;
           this.clearActiveTargets();
           this.time.delayedCall(160, advance);
@@ -1290,6 +1299,14 @@ export class HauntedWoodScene extends Phaser.Scene {
         onComplete: () => {
           playChime();
           playWrenAction(this.wrenSprite);
+          playBodyImpact(this, this.wrenContainer, {
+            kind: "mist",
+            color: PALETTE_HEX.moss,
+            offsetY: -108,
+            ringRadius: 30,
+            count: 7,
+            depth: 58,
+          });
           idx += 1;
           this.clearActiveTargets();
           if (step.narrator) this.setNarrator(step.narrator);

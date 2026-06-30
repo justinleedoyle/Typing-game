@@ -91,6 +91,13 @@ type BodyImpactTarget = Phaser.GameObjects.GameObject & {
   active: boolean;
 };
 
+type ScalePulseTarget = Phaser.GameObjects.GameObject & {
+  active: boolean;
+  scaleX: number;
+  scaleY: number;
+  setScale(x: number, y?: number): ScalePulseTarget;
+};
+
 export interface ContainerWakeOptions {
   kind: AmbientKind;
   intervalMs?: number;
@@ -115,6 +122,21 @@ export interface BodyImpactOptions {
   depth?: number;
   ringRadius?: number;
   count?: number;
+  durationMs?: number;
+}
+
+export interface UiObjectPulseOptions {
+  scale?: number;
+  durationMs?: number;
+}
+
+export interface MeterPulseOptions {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: number;
+  depth?: number;
   durationMs?: number;
 }
 
@@ -417,6 +439,50 @@ export function playBodyImpact(
       onComplete: () => fleck.destroy(),
     });
   }
+}
+
+/** Small console-band/UI pulse for resource meters. Keeps meter changes from
+ *  reading as silent redraws while avoiding a full-screen combat effect. */
+export function pulseUiObject(
+  scene: Phaser.Scene,
+  target: ScalePulseTarget,
+  opts: UiObjectPulseOptions = {},
+): void {
+  if (!target.active) return;
+  const scale = opts.scale ?? 1.12;
+  scene.tweens.killTweensOf(target);
+  target.setScale(scale, scale);
+  scene.tweens.add({
+    targets: target,
+    scaleX: 1,
+    scaleY: 1,
+    duration: opts.durationMs ?? 260,
+    ease: "Back.easeOut",
+  });
+}
+
+/** Meter pulse for absolute-drawn gauges (e.g. Bell's breath bar) where scaling
+ *  the Graphics object would distort from the scene origin. */
+export function playMeterPulse(
+  scene: Phaser.Scene,
+  opts: MeterPulseOptions,
+): void {
+  const g = scene.add
+    .graphics()
+    .setPosition(opts.x, opts.y)
+    .setDepth(opts.depth ?? 1501)
+    .setAlpha(0.82);
+  g.lineStyle(2, opts.color, 0.78);
+  g.strokeRoundedRect(-opts.width / 2, -opts.height / 2, opts.width, opts.height, 7);
+  scene.tweens.add({
+    targets: g,
+    alpha: 0,
+    scaleX: 1.18,
+    scaleY: 1.6,
+    duration: opts.durationMs ?? 320,
+    ease: "Sine.easeOut",
+    onComplete: () => g.destroy(),
+  });
 }
 
 /** A small environmental wake tied to a moving actor/enemy. This is cheaper than

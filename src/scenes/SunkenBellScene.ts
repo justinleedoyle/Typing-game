@@ -31,6 +31,7 @@ import {
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
+  playMeterPulse,
   playRealmClearResonance,
   stageContainerEntrance,
   stageAnchoredSprite,
@@ -131,6 +132,7 @@ export class SunkenBellScene extends Phaser.Scene {
   /** Screen anchor where the air gauge docks inside the console band's satchel
    *  zone (set in create() from band.satchelAnchor) — like Winter's candles. */
   private breathAnchor = { x: 0, y: 0 };
+  private drawnBreathFraction: number | null = null;
 
   // Tier 4 — relics earned in EARLIER realms shape this realm's combat. The
   // bounded loadout is resolved once in create() (neutral on a revisit); the
@@ -432,6 +434,7 @@ export class SunkenBellScene extends Phaser.Scene {
     if (!this.breathActive) {
       bar.setAlpha(0);
       this.breathLabel.setAlpha(0);
+      this.drawnBreathFraction = null;
       return;
     }
     bar.setAlpha(1);
@@ -446,6 +449,19 @@ export class SunkenBellScene extends Phaser.Scene {
     bar.strokeRoundedRect(x, y, w, h, 4);
     bar.fillStyle(low ? PALETTE_HEX.ember : PALETTE_HEX.frost, low ? 0.95 : 0.8);
     bar.fillRoundedRect(x + 1, y + 1, Math.max(0, (w - 2) * frac), h - 2, 3);
+    if (
+      this.drawnBreathFraction !== null &&
+      Math.abs(this.drawnBreathFraction - frac) > 0.001
+    ) {
+      playMeterPulse(this, {
+        x: this.breathAnchor.x,
+        y: this.breathAnchor.y,
+        width: w + 14,
+        height: h + 12,
+        color: low ? PALETTE_HEX.ember : PALETTE_HEX.frost,
+      });
+    }
+    this.drawnBreathFraction = frac;
   }
 
   /** Out of air — a non-terminal shove (the Bell has no candle/game-over

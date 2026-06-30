@@ -37,6 +37,7 @@ import {
   addIdleBreath,
   addLocalGroundShadow,
   playBodyImpact,
+  pulseUiObject,
   type ContainerWakeOptions,
 } from "../game/livingScene";
 import greatBattleBackdrop from "../../art/references/great-battle-clean.png";
@@ -242,6 +243,8 @@ export class GreatBattleScene extends Phaser.Scene {
   // HUD
   private candleGroup!: Phaser.GameObjects.Container;
   private chargeGroup!: Phaser.GameObjects.Container;
+  private drawnCandles: number | null = null;
+  private drawnCharges: number | null = null;
   private candles = WAVE_CANDLES;
   private charges = WAVE_CHARGES;
 
@@ -503,6 +506,7 @@ export class GreatBattleScene extends Phaser.Scene {
   // ─── HUD ────────────────────────────────────────────────────────────────────
 
   private redrawCandles(): void {
+    const previous = this.drawnCandles;
     this.candleGroup.removeAll(true);
     for (let i = 0; i < WAVE_CANDLES; i++) {
       const lit = i < this.candles;
@@ -525,9 +529,14 @@ export class GreatBattleScene extends Phaser.Scene {
       }
       this.candleGroup.add(g);
     }
+    if (previous !== null && previous !== this.candles) {
+      pulseUiObject(this, this.candleGroup, { scale: 1.14 });
+    }
+    this.drawnCandles = this.candles;
   }
 
   private redrawCharges(): void {
+    const previous = this.drawnCharges;
     this.chargeGroup.removeAll(true);
     for (let i = 0; i < this.waveCharges; i++) {
       const ready = i < this.charges;
@@ -544,6 +553,10 @@ export class GreatBattleScene extends Phaser.Scene {
       }
       this.chargeGroup.add(g);
     }
+    if (previous !== null && previous !== this.charges) {
+      pulseUiObject(this, this.chargeGroup, { scale: 1.16 });
+    }
+    this.drawnCharges = this.charges;
   }
 
   /** Snuff one candle — a Phase-1 breach or a fumbled Phase-2 counter. Reuses

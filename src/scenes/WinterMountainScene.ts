@@ -32,6 +32,7 @@ import {
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
+  pulseUiObject,
   playRealmClearResonance,
   stageContainerEntrance,
   stageAnchoredSprite,
@@ -216,6 +217,8 @@ export class WinterMountainScene extends Phaser.Scene {
   private huntressSprite: Phaser.GameObjects.Image | null = null;
   private candleGroup!: Phaser.GameObjects.Container;
   private chargeGroup!: Phaser.GameObjects.Container;
+  private drawnCandles: number | null = null;
+  private drawnThunderCharges: number | null = null;
 
   private candles = WAVE_CANDLES;
   // How many thunderclaps the current Soul can afford — derived from Soul
@@ -1615,6 +1618,7 @@ export class WinterMountainScene extends Phaser.Scene {
   // ─── HUD: candles + charges ──────────────────────────────────────────────
 
   private redrawCandles(): void {
+    const previous = this.drawnCandles;
     this.candleGroup.removeAll(true);
     for (let i = 0; i < WAVE_CANDLES; i++) {
       const lit = i < this.candles;
@@ -1635,6 +1639,10 @@ export class WinterMountainScene extends Phaser.Scene {
       }
       this.candleGroup.add(g);
     }
+    if (previous !== null && previous !== this.candles) {
+      pulseUiObject(this, this.candleGroup, { scale: 1.14 });
+    }
+    this.drawnCandles = this.candles;
   }
 
   /** Recompute affordable thunderclaps from banked Soul; redraw the pip row
@@ -1652,6 +1660,7 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private redrawCharges(): void {
+    const previous = this.drawnThunderCharges;
     this.chargeGroup.removeAll(true);
     for (let i = 0; i < WAVE_CHARGES; i++) {
       const ready = i < this.castableThunder;
@@ -1668,6 +1677,10 @@ export class WinterMountainScene extends Phaser.Scene {
       }
       this.chargeGroup.add(g);
     }
+    if (previous !== null && previous !== this.castableThunder) {
+      pulseUiObject(this, this.chargeGroup, { scale: 1.16 });
+    }
+    this.drawnThunderCharges = this.castableThunder;
     this.updateWrenGlow();
   }
 

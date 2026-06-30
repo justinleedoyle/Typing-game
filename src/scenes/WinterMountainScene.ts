@@ -44,7 +44,16 @@ import {
   preloadWinterNpcs,
 } from "../game/winterNpcs";
 import { makeWolfSprite, preloadWolves } from "../game/wolf";
-import { bobWrenSprite, flashWrenMiss, makeWrenSprite, playWrenAction, preloadWren, setWrenPose } from "../game/wren";
+import {
+  bobWrenSprite,
+  flashWrenMiss,
+  isWrenHurtPlaying,
+  makeWrenSprite,
+  playWrenAction,
+  playWrenHurt,
+  preloadWren,
+  setWrenPose,
+} from "../game/wren";
 import winterBackdrop from "../../art/references/winter-mountain-clean.png";
 
 // Danger ramps in over the LAST 60% of a wolf's advance — earlier portion
@@ -202,7 +211,6 @@ export class WinterMountainScene extends Phaser.Scene {
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenGlow!: Phaser.GameObjects.Graphics;
   private wrenSprite!: Phaser.GameObjects.Image;
-  private hurtPoseTimer: Phaser.Time.TimerEvent | null = null;
   private heldurSprite: Phaser.GameObjects.Image | null = null;
   private heldurDialogText: Phaser.GameObjects.Text | null = null;
   private huntressSprite: Phaser.GameObjects.Image | null = null;
@@ -1578,18 +1586,17 @@ export class WinterMountainScene extends Phaser.Scene {
       this.waveActive;
     this.wrenGlow.setAlpha(armed ? 0.55 : 0);
     // Don't overwrite a hurt pose mid-flash; the timer restores from there.
-    if (this.hurtPoseTimer) return;
+    if (isWrenHurtPlaying(this.wrenSprite)) return;
     setWrenPose(this.wrenSprite, armed ? "cast" : "front");
   }
 
   /** Briefly flash the hurt pose, then restore the resting pose. */
   private flashHurt(): void {
     if (!this.wrenSprite) return;
-    this.hurtPoseTimer?.remove();
-    setWrenPose(this.wrenSprite, "hurt");
-    this.hurtPoseTimer = this.time.delayedCall(420, () => {
-      this.hurtPoseTimer = null;
-      this.updateWrenGlow();
+    playWrenHurt(this.wrenSprite, {
+      durationMs: 420,
+      knockX: 0,
+      onComplete: () => this.updateWrenGlow(),
     });
   }
 

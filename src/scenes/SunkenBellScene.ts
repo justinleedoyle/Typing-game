@@ -37,7 +37,14 @@ import {
 } from "../game/livingScene";
 import { pickAdaptiveWords, SUNKEN_BELL_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
-import { bobWrenSprite, flashWrenMiss, makeWrenSprite, playWrenAction, preloadWren } from "../game/wren";
+import {
+  bobWrenSprite,
+  flashWrenMiss,
+  makeWrenSprite,
+  playWrenAction,
+  playWrenHurt,
+  preloadWren,
+} from "../game/wren";
 import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
 import runaPortrait from "../../art/runa/runa-front.png";
@@ -455,6 +462,7 @@ export class SunkenBellScene extends Phaser.Scene {
       return;
     }
     this.cameras.main.flash(280, 0, 0, 0, false);
+    playWrenHurt(this.wrenSprite, { knockX: 0 });
     playDamageThud();
     flashDamageVignette(this);
     this.breath.gasp();
@@ -1580,6 +1588,7 @@ export class SunkenBellScene extends Phaser.Scene {
       },
       onReachWren: () => {
         this.cameras.main.flash(300, 0, 0, 0, false);
+        playWrenHurt(this.wrenSprite, { knockX: 0 });
         playDamageThud();
         flashDamageVignette(this);
       },

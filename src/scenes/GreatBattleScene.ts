@@ -577,6 +577,15 @@ export class GreatBattleScene extends Phaser.Scene {
     this.cameras.main.shake(180, 0.006);
     playDamageThud();
     flashDamageVignette(this);
+    const wake = finaleWakeForRealm(enemy.realmId);
+    playBodyImpact(this, enemy.graphic, {
+      kind: wake.kind,
+      color: wake.color,
+      offsetX: enemy.x,
+      offsetY: enemy.y + 34,
+      depth: 48,
+      ringRadius: 58,
+    });
     this.tweens.add({
       targets: enemy.graphic,
       alpha: 0,

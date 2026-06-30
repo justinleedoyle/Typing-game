@@ -46,7 +46,14 @@ import {
   playRealmClearResonance,
   stageContainerEntrance,
 } from "../game/livingScene";
-import { bobWrenSprite, flashWrenMiss, makeWrenSprite, playWrenAction, preloadWren } from "../game/wren";
+import {
+  bobWrenSprite,
+  flashWrenMiss,
+  makeWrenSprite,
+  playWrenAction,
+  playWrenHurt,
+  preloadWren,
+} from "../game/wren";
 import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
 import { showAlmanacStampCard } from "../game/ui/almanacStamp";
@@ -1089,6 +1096,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       },
       onReachWren: () => {
         this.cameras.main.shake(180, 0.004);
+        playWrenHurt(this.wrenSprite, { knockX: 0 });
         playDamageThud();
         flashDamageVignette(this);
       },

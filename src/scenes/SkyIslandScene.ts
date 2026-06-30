@@ -47,7 +47,14 @@ import {
   stageContainerEntrance,
   stageAnchoredSprite,
 } from "../game/livingScene";
-import { bobWrenSprite, flashWrenMiss, makeWrenSprite, playWrenAction, preloadWren } from "../game/wren";
+import {
+  bobWrenSprite,
+  flashWrenMiss,
+  makeWrenSprite,
+  playWrenAction,
+  playWrenHurt,
+  preloadWren,
+} from "../game/wren";
 import skyIslandBackdrop from "../../art/references/sky-island-clean.png";
 import lanternSpiritSprite from "../../art/sky/lantern-spirit.png";
 import scholarSpiritSprite from "../../art/sky/scholar-spirit.png";
@@ -617,7 +624,7 @@ export class SkyIslandScene extends Phaser.Scene {
    *  and shakes Wren. */
   private onPhraseResolved(success: boolean): void {
     if (!success) {
-      flashWrenMiss(this.wrenSprite);
+      playWrenHurt(this.wrenSprite, { knockX: 0 });
       this.cameras.main.shake(180, 0.004);
       this.typingInput.getStats().record(false);
     }
@@ -1609,6 +1616,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private spiritReachesWren(spirit: LanternSpirit): void {
     // Gentle flash — no wave reset
     this.cameras.main.flash(300, 26, 16, 8, false);
+    playWrenHurt(this.wrenSprite, { knockX: 0 });
     playDamageThud();
     flashDamageVignette(this);
 

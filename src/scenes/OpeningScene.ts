@@ -203,6 +203,7 @@ export class OpeningScene extends Phaser.Scene {
       y: TYPE_TARGET.y,
       fontSize: 48,
       outline: true,
+      frame: "banner",
       onComplete: () => this.onBeat4Complete(),
     });
     this.typingInput.register(target);
@@ -224,6 +225,7 @@ export class OpeningScene extends Phaser.Scene {
       y: TYPE_TARGET.y,
       fontSize: 48,
       outline: true,
+      frame: "banner",
       onComplete: () => this.onBeat5Complete(),
     });
     this.typingInput.register(target);

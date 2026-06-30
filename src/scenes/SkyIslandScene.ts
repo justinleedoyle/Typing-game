@@ -43,6 +43,7 @@ import {
   fadeOutStagedSprite,
   addLocalGroundShadow,
   playBodyImpact,
+  playClaimLine,
   playRealmClearResonance,
   stageContainerEntrance,
   stageAnchoredSprite,
@@ -611,6 +612,11 @@ export class SkyIslandScene extends Phaser.Scene {
         // Tier 4 — quiet-advance buys more time before a banner scrolls off.
         durationMs: cfg.durationMs * this.combat.advanceMult,
         delayMs: i * cfg.staggerMs,
+        claimLineFrom: () => ({
+          x: this.wrenContainer.x,
+          y: this.wrenContainer.y - 116,
+        }),
+        claimLineColor: 0xf5c842,
         onComplete: () => this.onPhraseResolved(true),
         onMiss: () => this.onPhraseResolved(false),
       });
@@ -1510,6 +1516,15 @@ export class SkyIslandScene extends Phaser.Scene {
       // Lantern-amber burst on completion — spirits "bloom out" in their own
       // light, matching the theme rather than the default brass.
       burstColor: 0xf5c842,
+      onClaim: () =>
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 116,
+          spirit.container.x,
+          spirit.restY - 80,
+          { color: 0xf5c842 },
+        ),
       onComplete: () => this.defeatSpirit(spirit),
     });
     spirit.target = target;

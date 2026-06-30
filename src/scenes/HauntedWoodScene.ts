@@ -115,6 +115,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
+  private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   private ghosts: MovingWordEnemy[] = [];
   private activeTargets: TextWordTarget[] = [];
@@ -203,7 +204,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       maxDurationMs: 17000,
     });
     this.drawShrine();
-    this.drawWren(WREN_X, WREN_Y);
+    this.wrenContainer = this.drawWren(WREN_X, WREN_Y);
 
     // Tier 4 — a revisit is a free-passage replay (no combat) → neutral loadout.
     // Resolved here (before the band) so the console band can show the passive
@@ -1079,6 +1080,11 @@ export class HauntedWoodScene extends Phaser.Scene {
       burstColor: GHOST_BURST_COLOR,
       defeatImpactKind: "mist",
       defeatImpactColor: GHOST_BURST_COLOR,
+      claimLineFrom: () => ({
+        x: this.wrenContainer.x,
+        y: this.wrenContainer.y - 116,
+      }),
+      claimLineColor: GHOST_BURST_COLOR,
       // UI-cohesion: the legibility outline (TTT-style) so the word reads against
       // the painted wood + mist.
       outline: true,

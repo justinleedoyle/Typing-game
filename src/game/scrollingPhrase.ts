@@ -8,7 +8,7 @@
 // typing state, this module owns the moving visuals and the timeout.
 
 import Phaser from "phaser";
-import { playBodyImpact } from "./livingScene";
+import { playBodyImpact, playClaimLine } from "./livingScene";
 import { PALETTE, PALETTE_HEX, SERIF } from "./palette";
 import { blurAlphaFor, bannerDangerAt, shouldEatSuffix } from "./skyBlur";
 import { playWordCompleteBurst } from "./vfx";
@@ -32,6 +32,9 @@ export interface ScrollingPhraseOptions {
   onComplete?: () => void;
   /** Called when the banner exits the far side without being typed. */
   onMiss?: () => void;
+  /** Optional origin for a brief claim-line flourish when the banner is targeted. */
+  claimLineFrom?: () => { x: number; y: number };
+  claimLineColor?: number;
 }
 
 const BANNER_PADDING_X = 32;
@@ -117,6 +120,7 @@ export class ScrollingPhrase {
       // UI-cohesion: the same legibility outline every other word target carries,
       // so the scrolling banners read consistently with the rest of the realm.
       outline: true,
+      onClaim: () => this.playClaimLine(),
       onComplete: () => this.handleComplete(),
     });
     opts.typingInput.register(this.target);
@@ -145,6 +149,19 @@ export class ScrollingPhrase {
       },
       onComplete: () => this.handleMiss(),
     });
+  }
+
+  private playClaimLine(): void {
+    const from = this.opts.claimLineFrom?.();
+    if (!from) return;
+    playClaimLine(
+      this.opts.scene,
+      from.x,
+      from.y,
+      this.container.x,
+      this.opts.y,
+      { color: this.opts.claimLineColor ?? PALETTE_HEX.brass },
+    );
   }
 
   private handleComplete(): void {

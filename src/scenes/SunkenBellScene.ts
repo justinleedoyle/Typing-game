@@ -1585,6 +1585,11 @@ export class SunkenBellScene extends Phaser.Scene {
       burstColor: BELL_BURST_COLOR,
       defeatImpactKind: "bubble",
       defeatImpactColor: BELL_BURST_COLOR,
+      claimLineFrom: () => ({
+        x: this.wrenContainer.x,
+        y: this.wrenContainer.y - 112,
+      }),
+      claimLineColor: BELL_BURST_COLOR,
       outline: true,
       onTargetAttached: (t) => this.activeTargets.push(t),
       onTargetDetached: (t) => {

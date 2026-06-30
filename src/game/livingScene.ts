@@ -125,6 +125,12 @@ export interface BodyImpactOptions {
   durationMs?: number;
 }
 
+export interface ClaimLineOptions {
+  color?: number;
+  depth?: number;
+  durationMs?: number;
+}
+
 export interface UiObjectPulseOptions {
   scale?: number;
   durationMs?: number;
@@ -439,6 +445,55 @@ export function playBodyImpact(
       onComplete: () => fleck.destroy(),
     });
   }
+}
+
+/** Brief line of force from Wren / the defended position to a claimed threat.
+ *  It fires on target claim so the word reads as attached to scene action, not
+ *  as loose UI text floating over the painting. */
+export function playClaimLine(
+  scene: Phaser.Scene,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  opts: ClaimLineOptions = {},
+): void {
+  const color = opts.color ?? 0xc9a14a;
+  const duration = opts.durationMs ?? 340;
+  const depth = opts.depth ?? 47;
+  const midX = (fromX + toX) / 2;
+  const midY = (fromY + toY) / 2 - 28;
+
+  const line = scene.add.graphics().setDepth(depth).setAlpha(0.74);
+  line.lineStyle(2, color, 0.62);
+  line.lineBetween(fromX, fromY, midX, midY);
+  line.lineBetween(midX, midY, toX, toY);
+  line.fillStyle(color, 0.72);
+  line.fillCircle(toX, toY, 4);
+  scene.tweens.add({
+    targets: line,
+    alpha: 0,
+    duration,
+    ease: "Sine.easeOut",
+    onComplete: () => line.destroy(),
+  });
+
+  const endpoint = scene.add
+    .graphics()
+    .setPosition(toX, toY)
+    .setDepth(depth + 1)
+    .setAlpha(0.7);
+  endpoint.lineStyle(2, color, 0.64);
+  endpoint.strokeCircle(0, 0, 12);
+  scene.tweens.add({
+    targets: endpoint,
+    alpha: 0,
+    scaleX: 1.8,
+    scaleY: 1.8,
+    duration,
+    ease: "Sine.easeOut",
+    onComplete: () => endpoint.destroy(),
+  });
 }
 
 /** Small console-band/UI pulse for resource meters. Keeps meter changes from

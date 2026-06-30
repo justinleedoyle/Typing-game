@@ -37,6 +37,7 @@ import {
   addIdleBreath,
   addLocalGroundShadow,
   playBodyImpact,
+  playClaimLine,
   pulseUiObject,
   type ContainerWakeOptions,
 } from "../game/livingScene";
@@ -215,6 +216,21 @@ function finaleWakeForRealm(realmId: string): ContainerWakeOptions {
         driftY: -18,
         durationMs: 1050,
       };
+  }
+}
+
+function finaleClaimColorForRealm(realmId: string): number {
+  switch (realmId) {
+    case "winter-mountain":
+      return PALETTE_HEX.frost;
+    case "sunken-bell":
+      return 0x4ab8d6;
+    case "clockwork-forge":
+      return PALETTE_HEX.ember;
+    case "sky-island":
+      return 0xf5c842;
+    default:
+      return 0xd8e2cf;
   }
 }
 
@@ -855,6 +871,15 @@ export class GreatBattleScene extends Phaser.Scene {
       x: enemy.x,
       y: enemy.graphic.y + waveDef.baseY - 60,
       fontSize: 34,
+      onClaim: () =>
+        playClaimLine(
+          this,
+          this.scale.width / 2,
+          this.scale.height - 250,
+          enemy.x + enemy.graphic.x,
+          enemy.graphic.y + enemy.y - 60,
+          { color: finaleClaimColorForRealm(waveDef.realmId) },
+        ),
       onComplete: () => this.defeatEnemy(enemy),
     });
     enemy.target = target;

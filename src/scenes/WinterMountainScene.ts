@@ -809,6 +809,11 @@ export class WinterMountainScene extends Phaser.Scene {
       burstColor: PALETTE_HEX.frost,
       defeatImpactKind: "snow",
       defeatImpactColor: PALETTE_HEX.frost,
+      claimLineFrom: () => ({
+        x: this.wrenContainer.x,
+        y: this.wrenContainer.y - 116,
+      }),
+      claimLineColor: PALETTE_HEX.frost,
       outline: true,
       // The circler (flanking) wolf weaves vertically as it closes.
       verticalOffset: circles ? circlerY : undefined,
@@ -881,6 +886,11 @@ export class WinterMountainScene extends Phaser.Scene {
       burstColor: PALETTE_HEX.frost,
       defeatImpactKind: "snow",
       defeatImpactColor: PALETTE_HEX.frost,
+      claimLineFrom: () => ({
+        x: this.wrenContainer.x,
+        y: this.wrenContainer.y - 116,
+      }),
+      claimLineColor: PALETTE_HEX.frost,
       outline: true,
       // Warded: the boss advances mute until the pack falls; releaseBossWard()
       // attaches its true name then.

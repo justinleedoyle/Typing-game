@@ -147,6 +147,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private narration!: NarrationManager;
   private golems: MovingWordEnemy[] = [];
   private activeTargets: TextWordTarget[] = [];
+  private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   /** Smith Forn's standing portrait — only on screen during the Fork 1 beat. */
   private fornSprite?: Phaser.GameObjects.Image;
@@ -1317,6 +1318,11 @@ export class ClockworkForgeScene extends Phaser.Scene {
       burstColor: PALETTE_HEX.ember,
       defeatImpactKind: "ember",
       defeatImpactColor: PALETTE_HEX.ember,
+      claimLineFrom: () => ({
+        x: this.wrenContainer.x,
+        y: this.wrenContainer.y - 112,
+      }),
+      claimLineColor: PALETTE_HEX.ember,
       // Mixed-case command golems enforce case — the CAPITALIZED tail misses
       // unless typed with Shift, so Gregor's lesson ("Lowercase moves them.
       // CAPITALS command them.") is a real mid-word demand, not a VFX gate.
@@ -1772,6 +1778,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private drawWren(x: number, y: number): void {
     const c = this.add.container(x, y);
+    this.wrenContainer = c;
     c.add(addLocalGroundShadow(this, 92, 18, { y: 6, alpha: 0.32 }));
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);

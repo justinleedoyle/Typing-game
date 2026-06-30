@@ -732,17 +732,35 @@ export class SkyIslandScene extends Phaser.Scene {
    *  the phrase target so the (equal-depth) text renders on top of it. */
   private drawSealedScroll(cx: number, cy: number): Phaser.GameObjects.Container {
     const c = this.add.container(cx, cy);
+    const shadow = this.add.graphics();
     const g = this.add.graphics();
     const w = 920;
     const h = 120;
+    shadow.fillStyle(0x05030a, 0.28);
+    shadow.fillRoundedRect(-w / 2 + 10, -h / 2 + 14, w, h, 14);
+    c.add(shadow);
+    // Hanging cords/pins: the scroll is "pinned in still air", not a loose UI
+    // card. Keep these subtle so the phrase remains the focal point.
+    g.lineStyle(2, 0xc9a14a, 0.38);
+    g.lineBetween(-w / 2 + 110, -h / 2 - 58, -w / 2 + 76, -h / 2 + 8);
+    g.lineBetween(w / 2 - 110, -h / 2 - 58, w / 2 - 76, -h / 2 + 8);
+    g.fillStyle(0xc9a14a, 0.66);
+    g.fillCircle(-w / 2 + 110, -h / 2 - 58, 6);
+    g.fillCircle(w / 2 - 110, -h / 2 - 58, 6);
     g.fillStyle(0xf3ead2, 0.95);
     g.fillRoundedRect(-w / 2, -h / 2, w, h, 14);
+    g.fillStyle(0xe1d2ad, 0.55);
+    g.fillTriangle(-w / 2 + 18, -h / 2 + 12, -w / 2 + 66, -h / 2 + 12, -w / 2 + 18, -h / 2 + 46);
+    g.fillTriangle(w / 2 - 18, h / 2 - 12, w / 2 - 66, h / 2 - 12, w / 2 - 18, h / 2 - 46);
     g.lineStyle(3, 0xc9a14a, 0.9);
     g.strokeRoundedRect(-w / 2, -h / 2, w, h, 14);
     // Rolled ends.
     g.fillStyle(0xc9a14a, 0.85);
     g.fillRoundedRect(-w / 2 - 14, -h / 2 - 6, 14, h + 12, 6);
     g.fillRoundedRect(w / 2, -h / 2 - 6, 14, h + 12, 6);
+    g.lineStyle(2, 0x8a7060, 0.55);
+    g.lineBetween(-w / 2 + 34, -h / 2 + 22, w / 2 - 34, -h / 2 + 22);
+    g.lineBetween(-w / 2 + 34, h / 2 - 22, w / 2 - 34, h / 2 - 22);
     c.add(g);
     // Wax seal motif at the bottom edge.
     const seal = this.add.graphics();
@@ -751,6 +769,25 @@ export class SkyIslandScene extends Phaser.Scene {
     seal.fillStyle(0x7a2a1e, 0.9);
     seal.fillCircle(0, h / 2 - 8, 8);
     c.add(seal);
+    this.tweens.add({
+      targets: seal,
+      scaleX: 1.08,
+      scaleY: 1.08,
+      duration: 1300,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    c.once(Phaser.GameObjects.Events.DESTROY, () => this.tweens.killTweensOf(seal));
+    playBodyImpact(this, c, {
+      kind: "mote",
+      color: 0xf5c842,
+      offsetY: 0,
+      depth: 21,
+      ringRadius: 58,
+      count: 10,
+      durationMs: 420,
+    });
     return c;
   }
 

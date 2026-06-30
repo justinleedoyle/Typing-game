@@ -65,6 +65,8 @@ export class SettingsScene extends Phaser.Scene {
 
   // Rename mode owns its own UI separate from the static rows.
   private renameBuffer = "";
+  private renamePanel?: Phaser.GameObjects.Graphics;
+  private renamePanelCorners?: Phaser.GameObjects.Graphics;
   private renamePrompt?: Phaser.GameObjects.Text;
   private renameField?: Phaser.GameObjects.Text;
   private renameHint?: Phaser.GameObjects.Text;
@@ -341,6 +343,33 @@ export class SettingsScene extends Phaser.Scene {
     this.renameBuffer = this.store.get().profileName;
     this.clearMenu();
 
+    const panelW = 640;
+    const panelH = 244;
+    const panelX = this.scale.width / 2;
+    const panelY = 460;
+    this.renamePanel = this.add.graphics();
+    this.renamePanel.fillStyle(UI_HEX.panel, 0.58);
+    this.renamePanel.fillRoundedRect(
+      panelX - panelW / 2,
+      panelY - panelH / 2,
+      panelW,
+      panelH,
+      10,
+    );
+    this.renamePanel.lineStyle(2, UI_HEX.brass, 0.54);
+    this.renamePanel.strokeRoundedRect(
+      panelX - panelW / 2,
+      panelY - panelH / 2,
+      panelW,
+      panelH,
+      10,
+    );
+    this.renamePanelCorners = cornerTicks(this, panelW, panelH, {
+      inset: 9,
+      size: 14,
+      width: 2,
+    }).setPosition(panelX, panelY).setAlpha(0.56);
+
     this.renamePrompt = this.add
       .text(this.scale.width / 2, 380, "Type a new name.", {
         fontFamily: SERIF,
@@ -410,10 +439,14 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   private exitRenameMode(): void {
+    this.renamePanel?.destroy();
+    this.renamePanelCorners?.destroy();
     this.renamePrompt?.destroy();
     this.renameFieldPlate?.destroy();
     this.renameField?.destroy();
     this.renameHint?.destroy();
+    this.renamePanel = undefined;
+    this.renamePanelCorners = undefined;
     this.renamePrompt = undefined;
     this.renameFieldPlate = undefined;
     this.renameField = undefined;

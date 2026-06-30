@@ -616,6 +616,7 @@ export class AlmanacScene extends Phaser.Scene {
         fontSize: 26,
         outline: true,
         frame: "banner",
+        onClaim: () => this.playPageFocus(-1),
         onComplete: () => this.turnPage(-1),
       });
       this.typingInput.register(this.prevTarget);
@@ -630,6 +631,7 @@ export class AlmanacScene extends Phaser.Scene {
         fontSize: 26,
         outline: true,
         frame: "banner",
+        onClaim: () => this.playPageFocus(1),
         onComplete: () => this.turnPage(1),
       });
       this.typingInput.register(this.nextTarget);
@@ -643,6 +645,7 @@ export class AlmanacScene extends Phaser.Scene {
       fontSize: 28,
       outline: true,
       frame: "banner",
+      onClaim: () => this.playCloseFocus(),
       onComplete: () => this.closeBook(),
     });
     this.typingInput.register(this.closeTarget);
@@ -682,6 +685,57 @@ export class AlmanacScene extends Phaser.Scene {
       duration: 420,
       ease: "Sine.easeOut",
       onComplete: () => shimmer.destroy(),
+    });
+  }
+
+  private playPageFocus(direction: -1 | 1): void {
+    const pageTop = BOOK_Y + 42;
+    const pageHeight = BOOK_HEIGHT - 84;
+    const edgeX =
+      direction > 0 ? BOOK_X + BOOK_WIDTH - 58 : BOOK_X + 58;
+
+    const focus = this.add.graphics().setDepth(29).setAlpha(0.76);
+    focus.lineStyle(3, UI_HEX.brass, 0.8);
+    focus.strokeRoundedRect(-18, 0, 36, pageHeight, 15);
+    focus.lineStyle(1, UI_HEX.brass, 0.42);
+    focus.lineBetween(0, 22, 0, pageHeight - 22);
+    focus.setPosition(edgeX, pageTop);
+
+    this.tweens.add({
+      targets: focus,
+      alpha: 0,
+      scaleX: 1.18,
+      duration: 360,
+      ease: "Sine.easeOut",
+      onComplete: () => focus.destroy(),
+    });
+  }
+
+  private playCloseFocus(): void {
+    const focus = this.add
+      .graphics()
+      .setDepth(29)
+      .setAlpha(0.72)
+      .setPosition(BOOK_X + BOOK_WIDTH / 2, BOOK_Y + BOOK_HEIGHT / 2);
+    focus.lineStyle(3, UI_HEX.brass, 0.7);
+    focus.strokeRoundedRect(
+      -BOOK_WIDTH / 2 - 16,
+      -BOOK_HEIGHT / 2 - 16,
+      BOOK_WIDTH + 32,
+      BOOK_HEIGHT + 32,
+      24,
+    );
+    focus.lineStyle(2, UI_HEX.brass, 0.55);
+    focus.lineBetween(0, -BOOK_HEIGHT / 2 + 32, 0, BOOK_HEIGHT / 2 - 32);
+
+    this.tweens.add({
+      targets: focus,
+      alpha: 0,
+      scaleX: 1.025,
+      scaleY: 1.025,
+      duration: 420,
+      ease: "Sine.easeOut",
+      onComplete: () => focus.destroy(),
     });
   }
 

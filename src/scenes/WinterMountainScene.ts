@@ -810,7 +810,7 @@ export class WinterMountainScene extends Phaser.Scene {
       knockbackMs: 700,
       knockbackPauseMs: WOLF_KNOCKBACK_PAUSE_MS,
       dangerRampStart: DANGER_RAMP_START,
-      anchorOffsetY: -90,
+      anchorOffsetY: -118,
       idleBobDy: 6,
       idleBobMs: 900,
       defeatRiseY: -60,
@@ -820,6 +820,8 @@ export class WinterMountainScene extends Phaser.Scene {
       burstColor: PALETTE_HEX.frost,
       defeatImpactKind: "snow",
       defeatImpactColor: PALETTE_HEX.frost,
+      arrivalImpactKind: "snow",
+      arrivalImpactColor: PALETTE_HEX.frost,
       claimLineFrom: () => ({
         x: this.wrenContainer.x,
         y: this.wrenContainer.y - 116,
@@ -888,7 +890,7 @@ export class WinterMountainScene extends Phaser.Scene {
       knockbackMs: 700,
       knockbackPauseMs: WOLF_KNOCKBACK_PAUSE_MS,
       dangerRampStart: DANGER_RAMP_START,
-      anchorOffsetY: -90,
+      anchorOffsetY: -136,
       idleBobDy: 6,
       idleBobMs: 900,
       defeatRiseY: -60,
@@ -897,6 +899,8 @@ export class WinterMountainScene extends Phaser.Scene {
       burstColor: PALETTE_HEX.frost,
       defeatImpactKind: "snow",
       defeatImpactColor: PALETTE_HEX.frost,
+      arrivalImpactKind: "snow",
+      arrivalImpactColor: PALETTE_HEX.frost,
       claimLineFrom: () => ({
         x: this.wrenContainer.x,
         y: this.wrenContainer.y - 116,
@@ -1729,12 +1733,12 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private drawWolfInto(c: Phaser.GameObjects.Container, facingLeft: boolean): void {
-    c.add(addLocalGroundShadow(this, 118, 22, { y: 8, alpha: 0.38 }));
+    c.add(addLocalGroundShadow(this, 158, 28, { y: 9, alpha: 0.4 }));
     c.add(makeWolfSprite(this, false, facingLeft));
   }
 
   private drawBossInto(c: Phaser.GameObjects.Container): Phaser.GameObjects.Image {
-    c.add(addLocalGroundShadow(this, 160, 30, { y: 10, alpha: 0.42 }));
+    c.add(addLocalGroundShadow(this, 212, 38, { y: 12, alpha: 0.44 }));
     const sprite = makeWolfSprite(this, true, false);
     c.add(sprite);
     return sprite;

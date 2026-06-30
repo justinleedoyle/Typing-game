@@ -98,6 +98,14 @@ export interface MovingWordEnemyConfig {
   defeatImpactKind?: AmbientKind;
   defeatImpactColor?: number;
   defeatImpactOffsetY?: number;
+  /** Living-scene impact when the body finishes its entrance. Defaults to the
+   *  defeat-impact kind when present; pass null to suppress. */
+  arrivalImpactKind?: AmbientKind | null;
+  arrivalImpactColor?: number;
+  arrivalImpactOffsetY?: number;
+  /** Subtle squash/stretch while the body is alive. Default keeps shared
+   *  advancing enemies from reading as static cutouts. */
+  bodyBreathScale?: number;
 
   // ── TextWordTarget passthrough ─────────────────────────────────────────────
   fontSize?: number;
@@ -184,6 +192,9 @@ export class MovingWordEnemy {
   private readonly defeatRiseY: number;
   private readonly defeatMs: number;
   private readonly advanceMult: number;
+  private readonly baseScaleX: number;
+  private readonly baseScaleY: number;
+  private readonly bodyBreathScale: number;
 
   constructor(config: MovingWordEnemyConfig) {
     this.cfg = config;
@@ -200,6 +211,9 @@ export class MovingWordEnemy {
     this.defeatRiseY = config.defeatRiseY ?? -50;
     this.defeatMs = config.defeatMs ?? 480;
     this.advanceMult = config.advanceMult ?? 1;
+    this.baseScaleX = config.container.scaleX;
+    this.baseScaleY = config.container.scaleY;
+    this.bodyBreathScale = config.bodyBreathScale ?? 0.018;
 
     // Entrance: sweep in from off-screen, fade to rest alpha, then come alive.
     config.scene.tweens.add({
@@ -211,6 +225,7 @@ export class MovingWordEnemy {
       ease: "Sine.easeOut",
       onComplete: () => {
         if (this.defeated || !this.waveActive()) return;
+        this.playArrivalImpact();
         // A ward-gated enemy (the Winter boss) advances mute until attachWord().
         if (!this.cfg.manualAttach) this.attachTarget();
         this.idleBob();
@@ -433,8 +448,28 @@ export class MovingWordEnemy {
     });
   }
 
+  private playArrivalImpact(): void {
+    if (this.cfg.arrivalImpactKind === null) return;
+    playBodyImpact(this.cfg.scene, this.cfg.container, {
+      kind: this.cfg.arrivalImpactKind ?? this.cfg.defeatImpactKind ?? "mote",
+      color:
+        this.cfg.arrivalImpactColor ??
+        this.cfg.defeatImpactColor ??
+        this.cfg.claimLineColor,
+      offsetY:
+        this.cfg.arrivalImpactOffsetY ??
+        this.cfg.defeatImpactOffsetY ??
+        Math.min(-34, this.anchorOffsetY / 2),
+      depth: 47,
+      ringRadius: 34,
+      count: 8,
+      durationMs: 360,
+    });
+  }
+
   private idleBob(): void {
     const c = this.cfg.container;
+    c.setScale(this.baseScaleX, this.baseScaleY);
     this.cfg.scene.tweens.add({
       targets: c,
       y: { from: c.y, to: c.y - this.idleBobDy },
@@ -443,6 +478,17 @@ export class MovingWordEnemy {
       repeat: -1,
       ease: "Sine.easeInOut",
     });
+    if (this.bodyBreathScale > 0) {
+      this.cfg.scene.tweens.add({
+        targets: c,
+        scaleX: this.baseScaleX * (1 - this.bodyBreathScale * 0.42),
+        scaleY: this.baseScaleY * (1 + this.bodyBreathScale),
+        duration: Math.round(this.idleBobMs * 1.25),
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.easeInOut",
+      });
+    }
   }
 
   private startAdvance(): void {

@@ -32,6 +32,7 @@ const STUDY_RESPONSE = {
   typewriter: { x: 790, y: 770, color: PALETTE_HEX.brass },
   portal: { x: 1510, y: 610, color: PALETTE_HEX.frost },
 } as const;
+type StudyResponsePoint = (typeof STUDY_RESPONSE)[keyof typeof STUDY_RESPONSE];
 
 export class OpeningScene extends Phaser.Scene {
   private store!: SaveStore;
@@ -42,6 +43,7 @@ export class OpeningScene extends Phaser.Scene {
   private quietLordSprite: Phaser.GameObjects.Image | null = null;
   private runaActor: Phaser.GameObjects.Container | null = null;
   private siblingActor: Phaser.GameObjects.Container | null = null;
+  private studyTypingPulseTimes = new WeakMap<StudyResponsePoint, number>();
 
   // §5.5.2 — Wren is gender-selectable. Cached from saveState in init(); set
   // by Beat 2.5 on first run; used by beat3 (sibling appearance + dialogue),
@@ -62,6 +64,7 @@ export class OpeningScene extends Phaser.Scene {
     this.quietLordSprite = null;
     this.runaActor = null;
     this.siblingActor = null;
+    this.studyTypingPulseTimes = new WeakMap();
     // Honor an existing gender choice on revisit / New Game+; null on a
     // truly fresh save so Beat 2.5 will prompt.
     this.wrenGender = this.store.get().wrenGender;
@@ -179,6 +182,7 @@ export class OpeningScene extends Phaser.Scene {
       outline: true,
       frame: "banner",
       onClaim: () => this.playStudyClaimPulse(STUDY_RESPONSE.name),
+      onAdvance: () => this.playStudyTypingPulse(STUDY_RESPONSE.name),
       onComplete: () => pick("boy"),
     });
     const girl = new TextWordTarget({
@@ -190,6 +194,7 @@ export class OpeningScene extends Phaser.Scene {
       outline: true,
       frame: "banner",
       onClaim: () => this.playStudyClaimPulse(STUDY_RESPONSE.name),
+      onAdvance: () => this.playStudyTypingPulse(STUDY_RESPONSE.name),
       onComplete: () => pick("girl"),
     });
     this.typingInput.register(boy);
@@ -225,6 +230,7 @@ export class OpeningScene extends Phaser.Scene {
       outline: true,
       frame: "banner",
       onClaim: () => this.playStudyClaimPulse(STUDY_RESPONSE.name),
+      onAdvance: () => this.playStudyTypingPulse(STUDY_RESPONSE.name),
       onComplete: () => this.onBeat4Complete(),
     });
     this.typingInput.register(target);
@@ -249,6 +255,7 @@ export class OpeningScene extends Phaser.Scene {
       outline: true,
       frame: "banner",
       onClaim: () => this.playStudyClaimPulse(STUDY_RESPONSE.typewriter),
+      onAdvance: () => this.playStudyTypingPulse(STUDY_RESPONSE.typewriter),
       onComplete: () => this.onBeat5Complete(),
     });
     this.typingInput.register(target);
@@ -323,6 +330,7 @@ export class OpeningScene extends Phaser.Scene {
       outline: true,
       frame: "banner",
       onClaim: () => this.playStudyClaimPulse(STUDY_RESPONSE.portal),
+      onAdvance: () => this.playStudyTypingPulse(STUDY_RESPONSE.portal),
       onComplete: () => this.onBeat8Complete(),
     });
     this.typingInput.register(target);
@@ -388,7 +396,8 @@ export class OpeningScene extends Phaser.Scene {
     }
   }
 
-  private playStudyClaimPulse(point: { x: number; y: number; color: number }): void {
+  private playStudyClaimPulse(point: StudyResponsePoint): void {
+    this.studyTypingPulseTimes.set(point, this.time.now);
     this.playStudyPulse(point, {
       scale: 1.45,
       durationMs: 420,
@@ -397,8 +406,35 @@ export class OpeningScene extends Phaser.Scene {
     });
   }
 
+  private playStudyTypingPulse(point: StudyResponsePoint): void {
+    const now = this.time.now;
+    const last = this.studyTypingPulseTimes.get(point) ?? -Infinity;
+    if (now - last < 95) return;
+    this.studyTypingPulseTimes.set(point, now);
+
+    const pulse = this.add
+      .graphics()
+      .setPosition(point.x, point.y)
+      .setDepth(-2)
+      .setAlpha(0.32);
+    pulse.lineStyle(1, point.color, 0.34);
+    pulse.strokeCircle(0, 0, 28);
+    pulse.lineStyle(1, point.color, 0.2);
+    pulse.strokeCircle(0, 0, 44);
+
+    this.tweens.add({
+      targets: pulse,
+      alpha: 0,
+      scaleX: 1.35,
+      scaleY: 1.35,
+      duration: 210,
+      ease: "Sine.easeOut",
+      onComplete: () => pulse.destroy(),
+    });
+  }
+
   private playStudyPulse(
-    point: { x: number; y: number; color: number },
+    point: StudyResponsePoint,
     opts: {
       scale?: number;
       durationMs?: number;

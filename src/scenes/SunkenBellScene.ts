@@ -35,7 +35,7 @@ import {
 } from "../game/livingScene";
 import { pickAdaptiveWords, SUNKEN_BELL_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
-import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
+import { bobWrenSprite, flashWrenMiss, makeWrenSprite, playWrenAction, preloadWren } from "../game/wren";
 import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
 import runaPortrait from "../../art/runa/runa-front.png";
@@ -1651,6 +1651,7 @@ export class SunkenBellScene extends Phaser.Scene {
         y: this.scale.height - 340,
         fontSize: 34,
         onComplete: () => {
+          playWrenAction(this.wrenSprite);
           idx += 1;
           this.clearActiveTargets();
           if (step.narrator) this.setNarrator(step.narrator);
@@ -1687,6 +1688,7 @@ export class SunkenBellScene extends Phaser.Scene {
         y: this.scale.height - 340,
         fontSize: 36,
         onComplete: () => {
+          playWrenAction(this.wrenSprite);
           idx += 1;
           this.clearActiveTargets();
           if (step.narrator) this.setNarrator(step.narrator);

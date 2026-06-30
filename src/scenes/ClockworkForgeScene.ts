@@ -45,7 +45,7 @@ import {
 } from "../game/livingScene";
 import { pickAdaptiveWords, FORGE_COMMAND_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
-import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
+import { bobWrenSprite, flashWrenMiss, makeWrenSprite, playWrenAction, preloadWren } from "../game/wren";
 import { showAlmanacStampCard } from "../game/ui/almanacStamp";
 import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
@@ -1480,6 +1480,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         y: this.scale.height - 340,
         fontSize: 36,
         onComplete: () => {
+          playWrenAction(this.wrenSprite);
           const line = narratorLines[step] ?? "";
           step++;
           if (line) this.setNarrator(line);

@@ -42,7 +42,7 @@ import {
   preloadWinterNpcs,
 } from "../game/winterNpcs";
 import { makeWolfSprite, preloadWolves } from "../game/wolf";
-import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
+import { bobWrenSprite, flashWrenMiss, makeWrenSprite, playWrenAction, preloadWren, setWrenPose } from "../game/wren";
 import winterBackdrop from "../../art/references/winter-mountain-clean.png";
 
 // Danger ramps in over the LAST 60% of a wolf's advance — earlier portion
@@ -1486,6 +1486,7 @@ export class WinterMountainScene extends Phaser.Scene {
         y: this.scale.height / 2,
         fontSize: 36,
         onComplete: () => {
+          playWrenAction(this.wrenSprite);
           step += 1;
           this.setNarrator(narratorLines[step - 1] ?? "");
           this.time.delayedCall(900, advance);

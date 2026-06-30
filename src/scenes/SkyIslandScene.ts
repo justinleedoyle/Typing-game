@@ -45,7 +45,7 @@ import {
   addLocalGroundShadow,
   stageAnchoredSprite,
 } from "../game/livingScene";
-import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
+import { bobWrenSprite, flashWrenMiss, makeWrenSprite, playWrenAction, preloadWren } from "../game/wren";
 import skyIslandBackdrop from "../../art/references/sky-island-clean.png";
 import lanternSpiritSprite from "../../art/sky/lantern-spirit.png";
 import scholarSpiritSprite from "../../art/sky/scholar-spirit.png";
@@ -1653,6 +1653,7 @@ export class SkyIslandScene extends Phaser.Scene {
         y: this.scale.height / 2,
         fontSize: 36,
         onComplete: () => {
+          playWrenAction(this.wrenSprite);
           step += 1;
           this.setNarrator(narratorLines[step - 1] ?? "");
           this.time.delayedCall(1400, advance);

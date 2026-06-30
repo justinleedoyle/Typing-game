@@ -87,6 +87,38 @@ export function bobWrenSprite(img: Phaser.GameObjects.Image): void {
 }
 
 /**
+ * A readable completion flourish for non-combat typed actions. Keystrokes already
+ * bob Wren; this switches to the cast/action pose for the completed verb, lifts
+ * slightly from the feet anchor, then restores the exact previous texture/scale.
+ */
+export function playWrenAction(
+  img: Phaser.GameObjects.Image,
+  opts: { faceLeft?: boolean; durationMs?: number } = {},
+): void {
+  const originalKey = img.texture.key;
+  const originalScaleX = img.scaleX;
+  const originalScaleY = img.scaleY;
+  const originalY = img.y;
+  const scene = img.scene;
+  scene.tweens.killTweensOf(img);
+  setWrenPose(img, "cast", opts.faceLeft ?? originalScaleX < 0);
+  scene.tweens.add({
+    targets: img,
+    y: originalY - 8,
+    duration: opts.durationMs ?? 180,
+    yoyo: true,
+    ease: "Sine.easeOut",
+    onComplete: () => {
+      if (!img.scene) return;
+      img.setTexture(originalKey);
+      img.scaleX = originalScaleX;
+      img.scaleY = originalScaleY;
+      img.y = originalY;
+    },
+  });
+}
+
+/**
  * Per-mistyped-keystroke feedback. A brief red-ember tint flash on Wren
  * (80ms) — visible enough that the player feels the typo land without
  * being punishing. Composes safely with the hurt-pose system; the tint

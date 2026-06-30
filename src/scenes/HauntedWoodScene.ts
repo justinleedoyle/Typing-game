@@ -44,7 +44,7 @@ import {
   addIdleBreath,
   addLocalGroundShadow,
 } from "../game/livingScene";
-import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
+import { bobWrenSprite, flashWrenMiss, makeWrenSprite, playWrenAction, preloadWren } from "../game/wren";
 import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
 import { showAlmanacStampCard } from "../game/ui/almanacStamp";
@@ -1252,6 +1252,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         fontSize: 36,
         onComplete: () => {
           playChime();
+          playWrenAction(this.wrenSprite);
           idx += 1;
           this.clearActiveTargets();
           if (step.narrator) this.setNarrator(step.narrator);

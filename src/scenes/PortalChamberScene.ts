@@ -25,7 +25,15 @@ import {
 } from "../game/livingScene";
 import { preloadSatchelIcons, satchelIconFor } from "../game/ui/satchelIcons";
 import { cornerTicks, UI_HEX } from "../game/ui/uiTheme";
-import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
+import {
+  bobWrenSprite,
+  flashWrenMiss,
+  makeWrenSprite,
+  playWrenAction,
+  playWrenFocus,
+  preloadWren,
+  setWrenPose,
+} from "../game/wren";
 import hubBackdrop from "../../art/references/hub-portal-chamber-clean.png";
 import portalActiveSheet from "../../art/portal/portal-active-sheet.png";
 import runaSprite from "../../art/runa/runa-front.png";
@@ -132,6 +140,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private narration!: NarrationManager;
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
+  private runaSprite?: Phaser.GameObjects.Image;
   private zoneTargets: TextWordTarget[] = [];
   private ambientHandle?: AmbientHandle;
 
@@ -337,6 +346,7 @@ export class PortalChamberScene extends Phaser.Scene {
           frame: "banner",
           onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),
           onComplete: () => {
+            this.playHubActorAction(HUB_STATIONS.portalFloor.x);
             this.pulseStation(HUB_STATIONS.portalFloor);
             this.cameras.main.fadeOut(600, 10, 8, 15);
             this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
@@ -360,6 +370,7 @@ export class PortalChamberScene extends Phaser.Scene {
           frame: "banner",
           onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),
           onComplete: () => {
+            this.playHubActorAction(HUB_STATIONS.portalFloor.x);
             this.pulseStation(HUB_STATIONS.portalFloor);
             this.startNewGame();
           },
@@ -624,6 +635,7 @@ export class PortalChamberScene extends Phaser.Scene {
       frame: "banner",
       onClaim: () => this.focusStation(HUB_STATIONS.almanac),
       onComplete: () => {
+        this.playHubActorAction(HUB_STATIONS.almanac.x, true);
         this.pulseStation(HUB_STATIONS.almanac);
         this.openAlmanac();
       },
@@ -656,6 +668,7 @@ export class PortalChamberScene extends Phaser.Scene {
         frame: "banner",
         onClaim: () => this.focusStation(HUB_STATIONS.account),
         onComplete: () => {
+          this.playHubActorAction(HUB_STATIONS.account.x);
           this.pulseStation(HUB_STATIONS.account);
           void signOut();
         },
@@ -684,6 +697,7 @@ export class PortalChamberScene extends Phaser.Scene {
         frame: "banner",
         onClaim: () => this.focusStation(HUB_STATIONS.account),
         onComplete: () => {
+          this.playHubActorAction(HUB_STATIONS.account.x);
           this.pulseStation(HUB_STATIONS.account);
           void signInWithGoogle(window.location.href);
         },
@@ -901,6 +915,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private flashPortalForScene(sceneKey: string): void {
     const arch = ARCHES.find((a) => a.sceneKey === sceneKey);
     if (!arch) return;
+    this.playHubActorAction(arch.x);
 
     const cx = arch.x;
     const cy = arch.baseY - arch.height / 2 + 34;
@@ -938,6 +953,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private focusPortalForScene(sceneKey: string): void {
     const arch = ARCHES.find((a) => a.sceneKey === sceneKey);
     if (!arch) return;
+    this.playHubActorFocus(arch.x);
 
     const sprite = this.archSprites.get(arch.id);
     const glow = this.archGlows.get(arch.id);
@@ -1126,6 +1142,10 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private focusStation(station: StationSpec): void {
+    this.playHubActorFocus(
+      station.x,
+      station === HUB_STATIONS.desk || station === HUB_STATIONS.almanac,
+    );
     const focus = this.add
       .container(station.x, station.y)
       .setDepth(8)
@@ -1152,6 +1172,55 @@ export class PortalChamberScene extends Phaser.Scene {
     });
   }
 
+  private playHubActorFocus(targetX: number, includeRuna = false): void {
+    if (this.wrenSprite?.active && this.wrenContainer?.active) {
+      playWrenFocus(this.wrenSprite, {
+        faceLeft: targetX < this.wrenContainer.x - 12,
+        durationMs: 135,
+      });
+    }
+    if (includeRuna) this.playRunaAttention();
+  }
+
+  private playHubActorAction(targetX: number, includeRuna = false): void {
+    if (this.wrenSprite?.active && this.wrenContainer?.active) {
+      playWrenAction(this.wrenSprite, {
+        faceLeft: targetX < this.wrenContainer.x - 12,
+        durationMs: 190,
+      });
+    }
+    if (includeRuna) this.playRunaAttention();
+  }
+
+  private playRunaAttention(): void {
+    const img = this.runaSprite;
+    if (!img?.active) return;
+
+    const originalX = img.x;
+    const originalY = img.y;
+    const originalScaleX = img.scaleX;
+    const originalScaleY = img.scaleY;
+    this.tweens.killTweensOf(img);
+    this.tweens.add({
+      targets: img,
+      x: originalX + 6,
+      y: originalY - 5,
+      scaleX: originalScaleX * 1.012,
+      scaleY: originalScaleY * 1.012,
+      duration: 135,
+      yoyo: true,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!img.scene) return;
+        img.x = originalX;
+        img.y = originalY;
+        img.scaleX = originalScaleX;
+        img.scaleY = originalScaleY;
+        addIdleBreath(this, img, { dy: -4, durationMs: 2200, delayMs: 160 });
+      },
+    });
+  }
+
   private setHint(text: string): void {
     this.hint.setText(text);
     this.hintPlate.clear();
@@ -1173,6 +1242,7 @@ export class PortalChamberScene extends Phaser.Scene {
     const img = this.add
       .image(420, 975, "runa-sprite")
       .setOrigin(0.5, 1);
+    this.runaSprite = img;
     img.setScale(360 / img.height);
     addIdleBreath(this, img, { dy: -4, durationMs: 2200, delayMs: 300 });
   }

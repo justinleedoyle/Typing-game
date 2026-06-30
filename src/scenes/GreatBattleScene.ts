@@ -50,6 +50,11 @@ import {
 } from "../game/livingScene";
 import greatBattleBackdrop from "../../art/references/great-battle-clean.png";
 import runaPortrait from "../../art/runa/runa-front.png";
+import finaleWolfSprite from "../../art/wolf/wolf-pack.png";
+import finaleBellGhostSprite from "../../art/bell/ghost.png";
+import finaleGolemSprite from "../../art/forge/golem.png";
+import finaleLanternSpiritSprite from "../../art/sky/lantern-spirit.png";
+import finaleWoodGhostSprite from "../../art/wood/ghost.png";
 import snowFoxSprite from "../../art/companions/snow-fox.png";
 import glassFishSprite from "../../art/companions/glass-fish.png";
 import brassSongbirdSprite from "../../art/companions/brass-songbird.png";
@@ -132,6 +137,24 @@ interface LordWordFxOptions {
   impactOffsetX?: number;
 }
 
+interface FinaleEnemyArtSpec {
+  textureKey: string;
+  height: number;
+  shadowWidth: number;
+  shadowHeight: number;
+  shadowY: number;
+  shadowAlpha: number;
+  spriteY: number;
+  tint?: number;
+  alpha?: number;
+  flipX?: boolean;
+  glowColor?: number;
+  glowAlpha?: number;
+  glowY?: number;
+  glowWidth?: number;
+  glowHeight?: number;
+}
+
 const WAVE_DEFS: WaveDef[] = [
   {
     realmId: "winter-mountain",
@@ -174,6 +197,91 @@ const WAVE_DEFS: WaveDef[] = [
     label: "wood-haunts",
   },
 ];
+
+function finaleEnemyArtForRealm(realmId: string): FinaleEnemyArtSpec {
+  switch (realmId) {
+    case "winter-mountain":
+      return {
+        textureKey: "finale-wolf-pack",
+        height: 112,
+        shadowWidth: 156,
+        shadowHeight: 28,
+        shadowY: 42,
+        shadowAlpha: 0.38,
+        spriteY: -2,
+        alpha: 0.92,
+        flipX: true,
+      };
+    case "sunken-bell":
+      return {
+        textureKey: "finale-bell-ghost",
+        height: 106,
+        shadowWidth: 94,
+        shadowHeight: 20,
+        shadowY: 40,
+        shadowAlpha: 0.18,
+        spriteY: -4,
+        alpha: 0.74,
+        glowColor: 0xa7d2dd,
+        glowAlpha: 0.12,
+        glowY: -2,
+      };
+    case "clockwork-forge":
+      return {
+        textureKey: "finale-forge-golem",
+        height: 124,
+        shadowWidth: 138,
+        shadowHeight: 28,
+        shadowY: 46,
+        shadowAlpha: 0.42,
+        spriteY: -8,
+        glowColor: PALETTE_HEX.ember,
+        glowAlpha: 0.08,
+        glowY: -6,
+      };
+    case "sky-island":
+      return {
+        textureKey: "finale-lantern-spirit",
+        height: 112,
+        shadowWidth: 84,
+        shadowHeight: 18,
+        shadowY: 42,
+        shadowAlpha: 0.2,
+        spriteY: -6,
+        glowColor: 0xf5c842,
+        glowAlpha: 0.16,
+        glowY: -6,
+        glowWidth: 112,
+        glowHeight: 112,
+      };
+    case "haunted-wood":
+      return {
+        textureKey: "finale-wood-ghost",
+        height: 104,
+        shadowWidth: 96,
+        shadowHeight: 20,
+        shadowY: 42,
+        shadowAlpha: 0.2,
+        spriteY: -2,
+        alpha: 0.78,
+        tint: 0xd8e2cf,
+        glowColor: 0xd8e2cf,
+        glowAlpha: 0.1,
+        glowY: -4,
+      };
+    default:
+      return {
+        textureKey: "finale-wood-ghost",
+        height: 96,
+        shadowWidth: 86,
+        shadowHeight: 18,
+        shadowY: 38,
+        shadowAlpha: 0.18,
+        spriteY: 0,
+        alpha: 0.74,
+      };
+  }
+}
 
 function finaleWakeForRealm(realmId: string): ContainerWakeOptions {
   switch (realmId) {
@@ -278,7 +386,7 @@ function finaleTypedPulseForRealm(realmId: string): {
 // ─── Enemy entity ──────────────────────────────────────────────────────────────
 
 interface Enemy {
-  graphic: Phaser.GameObjects.Graphics;
+  graphic: Phaser.GameObjects.Container;
   target: TextWordTarget | null;
   advanceTween: Phaser.Tweens.Tween | null;
   x: number;
@@ -411,6 +519,11 @@ export class GreatBattleScene extends Phaser.Scene {
   preload(): void {
     this.load.image("great-battle-backdrop", greatBattleBackdrop);
     this.load.image("band-portrait-runa", runaPortrait);
+    this.load.image("finale-wolf-pack", finaleWolfSprite);
+    this.load.image("finale-bell-ghost", finaleBellGhostSprite);
+    this.load.image("finale-forge-golem", finaleGolemSprite);
+    this.load.image("finale-lantern-spirit", finaleLanternSpiritSprite);
+    this.load.image("finale-wood-ghost", finaleWoodGhostSprite);
     this.load.image("finale-companion-snow-fox", snowFoxSprite);
     this.load.image("finale-companion-glass-fish", glassFishSprite);
     this.load.image("finale-companion-brass-songbird", brassSongbirdSprite);
@@ -979,8 +1092,9 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private spawnEnemy(waveDef: WaveDef, x: number, word: string, waveIdx: number): void {
-    const graphic = this.add.graphics().setDepth(3).setAlpha(0);
-    this.drawEnemyShape(graphic, waveDef.realmId, x, waveDef.baseY);
+    const graphic = this.drawFinaleEnemyBody(waveDef.realmId, x, waveDef.baseY)
+      .setDepth(3)
+      .setAlpha(0);
     addContainerWake(this, graphic, {
       ...finaleWakeForRealm(waveDef.realmId),
       offsetX: x,
@@ -1084,78 +1198,38 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
-  private drawEnemyShape(g: Phaser.GameObjects.Graphics, realmId: string, x: number, y: number): void {
-    g.fillStyle(0x000000, 0.28);
-    g.fillEllipse(x, y + 38, 92, 18);
+  private drawFinaleEnemyBody(
+    realmId: string,
+    x: number,
+    y: number,
+  ): Phaser.GameObjects.Container {
+    const c = this.add.container(0, 0);
+    const spec = finaleEnemyArtForRealm(realmId);
+    c.add(addLocalGroundShadow(this, spec.shadowWidth, spec.shadowHeight, {
+      x,
+      y: y + spec.shadowY,
+      alpha: spec.shadowAlpha,
+    }));
 
-    switch (realmId) {
-      case "winter-mountain":
-        // Shadow-wolf: crouched silhouette instead of a bare marker.
-        g.fillStyle(0x171923, 0.96);
-        g.fillEllipse(x - 8, y + 8, 78, 30);
-        g.fillEllipse(x + 36, y - 2, 34, 28);
-        g.fillTriangle(x + 24, y - 18, x + 31, y - 36, x + 38, y - 14);
-        g.fillTriangle(x + 38, y - 17, x + 48, y - 33, x + 51, y - 10);
-        g.fillTriangle(x - 44, y + 8, x - 70, y - 8, x - 50, y + 24);
-        g.lineStyle(2, 0x5f6f86, 0.7);
-        g.lineBetween(x + 30, y - 4, x + 43, y - 4);
-        break;
-      case "sunken-bell":
-        // Tide-wraith: drowned bell-shape with a spectral ring.
-        g.fillStyle(0x314861, 0.56);
-        g.fillEllipse(x, y, 64, 78);
-        g.fillStyle(0x1b2838, 0.42);
-        g.fillRoundedRect(x - 22, y - 6, 44, 42, 12);
-        g.lineStyle(2, 0xa7d2dd, 0.5);
-        g.strokeEllipse(x, y, 70, 84);
-        g.strokeCircle(x, y + 5, 21);
-        g.lineBetween(x - 18, y + 30, x + 18, y + 30);
-        g.fillStyle(0xa7d2dd, 0.52);
-        g.fillCircle(x, y + 32, 4);
-        break;
-      case "clockwork-forge":
-        // Rogue golem: riveted body plate with an ember eye.
-        g.fillStyle(0x4f4129, 0.94);
-        g.fillRoundedRect(x - 28, y - 32, 56, 62, 6);
-        g.fillStyle(0x6f562c, 0.9);
-        g.fillRoundedRect(x - 38, y - 18, 18, 34, 5);
-        g.fillRoundedRect(x + 20, y - 18, 18, 34, 5);
-        g.lineStyle(2, UI_HEX.brass, 0.52);
-        g.strokeRoundedRect(x - 28, y - 32, 56, 62, 6);
-        g.lineBetween(x - 18, y - 2, x + 18, y - 2);
-        g.fillStyle(PALETTE_HEX.ember, 0.9);
-        g.fillCircle(x + 10, y - 15, 5);
-        g.fillStyle(UI_HEX.brass, 0.58);
-        g.fillCircle(x - 16, y - 21, 3);
-        g.fillCircle(x + 16, y + 20, 3);
-        break;
-      case "sky-island":
-        // Sky-shard: faceted falling glass, not a UI triangle.
-        g.fillStyle(0xd4b84a, 0.88);
-        g.fillTriangle(x, y - 42, x - 26, y + 5, x, y + 36);
-        g.fillStyle(0x8ea7d8, 0.42);
-        g.fillTriangle(x, y - 42, x + 26, y + 5, x, y + 36);
-        g.lineStyle(2, 0xf0df86, 0.7);
-        g.strokeTriangle(x, y - 42, x - 26, y + 5, x, y + 36);
-        g.strokeTriangle(x, y - 42, x + 26, y + 5, x, y + 36);
-        g.lineStyle(1, 0xf6edb2, 0.42);
-        g.lineBetween(x, y - 32, x, y + 28);
-        g.strokeCircle(x, y + 4, 34);
-        break;
-      case "haunted-wood":
-        // Wood-haunt: cloaked apparition with branch-like antlers.
-        g.fillStyle(0x334335, 0.5);
-        g.fillTriangle(x, y - 42, x - 36, y + 36, x + 36, y + 36);
-        g.fillStyle(0x6a8068, 0.42);
-        g.fillEllipse(x, y - 12, 42, 50);
-        g.lineStyle(2, 0x9fb69a, 0.45);
-        g.lineBetween(x - 14, y - 36, x - 34, y - 54);
-        g.lineBetween(x + 14, y - 36, x + 34, y - 54);
-        g.lineBetween(x - 30, y - 50, x - 44, y - 48);
-        g.lineBetween(x + 30, y - 50, x + 44, y - 48);
-        g.lineBetween(x - 18, y + 24, x + 18, y + 24);
-        break;
+    if (spec.glowColor) {
+      const glow = this.add.graphics();
+      glow.fillStyle(spec.glowColor, spec.glowAlpha ?? 0.14);
+      glow.fillEllipse(
+        x,
+        y + (spec.glowY ?? 0),
+        spec.glowWidth ?? 92,
+        spec.glowHeight ?? 92,
+      );
+      c.add(glow);
     }
+
+    const sprite = this.add.image(x, y + spec.spriteY, spec.textureKey);
+    sprite.setScale(spec.height / sprite.height);
+    if (spec.tint) sprite.setTint(spec.tint);
+    if (spec.alpha !== undefined) sprite.setAlpha(spec.alpha);
+    if (spec.flipX) sprite.setFlipX(true);
+    c.add(sprite);
+    return c;
   }
 
   private defeatEnemy(enemy: Enemy): void {

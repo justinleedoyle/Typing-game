@@ -28,8 +28,10 @@ import {
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import {
   addAmbientDrift,
+  fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
+  stageAnchoredSprite,
 } from "../game/livingScene";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
@@ -570,15 +572,18 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private fadeInHeldur(): void {
     if (this.heldurSprite) return;
-    this.heldurSprite = makeHeldurSprite(this).setAlpha(0);
+    this.heldurSprite = makeHeldurSprite(this);
     // Place Heldur on the path to the left of where Wren stands, near the
     // ruined wayshrine arch in the painted backdrop.
     this.heldurSprite.setPosition(420, 920);
-    this.tweens.add({
-      targets: this.heldurSprite,
-      alpha: 1,
-      duration: 700,
-      ease: "Sine.easeOut",
+    stageAnchoredSprite(this, this.heldurSprite, {
+      shadowWidth: 132,
+      shadowHeight: 24,
+      shadowAlpha: 0.28,
+      entranceOffsetY: 20,
+      entranceMs: 760,
+      breathDy: -3,
+      breathMs: 2400,
     });
   }
 
@@ -586,12 +591,9 @@ export class WinterMountainScene extends Phaser.Scene {
     if (!this.heldurSprite) return;
     const sprite = this.heldurSprite;
     this.heldurSprite = null;
-    this.tweens.add({
-      targets: sprite,
-      alpha: 0,
-      duration: 600,
+    fadeOutStagedSprite(this, sprite, {
+      durationMs: 620,
       ease: "Sine.easeIn",
-      onComplete: () => sprite.destroy(),
     });
   }
 
@@ -1096,14 +1098,17 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private fadeInHuntress(): void {
     if (this.huntressSprite) return;
-    this.huntressSprite = makeHuntressSprite(this).setAlpha(0);
+    this.huntressSprite = makeHuntressSprite(this);
     // Half-buried in the drift to Wren's left.
     this.huntressSprite.setPosition(560, 960);
-    this.tweens.add({
-      targets: this.huntressSprite,
-      alpha: 1,
-      duration: 700,
-      ease: "Sine.easeOut",
+    stageAnchoredSprite(this, this.huntressSprite, {
+      shadowWidth: 118,
+      shadowHeight: 20,
+      shadowAlpha: 0.22,
+      entranceOffsetY: 16,
+      entranceMs: 720,
+      breathDy: -2,
+      breathMs: 2300,
     });
   }
 
@@ -1111,12 +1116,9 @@ export class WinterMountainScene extends Phaser.Scene {
     if (!this.huntressSprite) return;
     const sprite = this.huntressSprite;
     this.huntressSprite = null;
-    this.tweens.add({
-      targets: sprite,
-      alpha: 0,
-      duration: 600,
+    fadeOutStagedSprite(this, sprite, {
+      durationMs: 620,
       ease: "Sine.easeIn",
-      onComplete: () => sprite.destroy(),
     });
   }
 

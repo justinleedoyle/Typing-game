@@ -27,8 +27,10 @@ import { TypingInputController } from "../game/typingInput";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import {
   addAmbientDrift,
+  fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
+  stageAnchoredSprite,
 } from "../game/livingScene";
 import { pickAdaptiveWords, SUNKEN_BELL_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
@@ -1340,11 +1342,20 @@ export class SunkenBellScene extends Phaser.Scene {
     if (this.aurlandImage) return;
     const sprite = this.add
       .image(660, 760, "aurland")
-      .setOrigin(0.5, 1)
-      .setAlpha(0);
+      .setOrigin(0.5, 1);
     sprite.setScale(AURLAND_SPRITE_HEIGHT / sprite.height);
     this.aurlandImage = sprite;
-    this.tweens.add({ targets: sprite, alpha: 1, duration: 1200, ease: "Sine.easeIn" });
+    stageAnchoredSprite(this, sprite, {
+      shadowWidth: 132,
+      shadowHeight: 24,
+      shadowOffsetY: 8,
+      shadowAlpha: 0.2,
+      restAlpha: 0.94,
+      entranceOffsetY: 18,
+      entranceMs: 1100,
+      breathDy: -3,
+      breathMs: 2600,
+    });
   }
 
   /** Fade King Aurland out and destroy him as the realm moves past the fork. */
@@ -1352,12 +1363,9 @@ export class SunkenBellScene extends Phaser.Scene {
     const sprite = this.aurlandImage;
     if (!sprite) return;
     this.aurlandImage = undefined;
-    this.tweens.add({
-      targets: sprite,
-      alpha: 0,
-      duration: 1000,
+    fadeOutStagedSprite(this, sprite, {
+      durationMs: 1000,
       ease: "Sine.easeOut",
-      onComplete: () => sprite.destroy(),
     });
   }
 
@@ -1714,5 +1722,6 @@ export class SunkenBellScene extends Phaser.Scene {
     // the old procedural body/head/staff silhouette.
     const sprite = this.add.image(300, 822, "olin").setOrigin(0.5, 1);
     sprite.setScale(OLIN_SPRITE_HEIGHT / sprite.height);
+    addIdleBreath(this, sprite, { dy: -2, durationMs: 2600, delayMs: 300 });
   }
 }

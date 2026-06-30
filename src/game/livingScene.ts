@@ -38,6 +38,28 @@ export interface IdleBreathOptions {
   delayMs?: number;
 }
 
+export interface StagedSpriteOptions {
+  shadowWidth: number;
+  shadowHeight: number;
+  shadowOffsetY?: number;
+  shadowAlpha?: number;
+  shadowDepth?: number;
+  restAlpha?: number;
+  entranceOffsetY?: number;
+  entranceMs?: number;
+  delayMs?: number;
+  breathDy?: number;
+  breathMs?: number;
+  breathDelayMs?: number;
+}
+
+export interface FadeOutStagedSpriteOptions {
+  durationMs?: number;
+  riseY?: number;
+  ease?: string;
+  onComplete?: () => void;
+}
+
 type TweenableObject = Phaser.GameObjects.GameObject & {
   y: number;
 };
@@ -88,6 +110,90 @@ export function addIdleBreath(
     repeat: -1,
     ease: "Sine.easeInOut",
   });
+}
+
+/** Stage a feet-anchored cutout as a character in the scene: planted shadow,
+ *  small entrance drift, and subtle idle breath. Used for NPCs/side figures
+ *  that were previously just faded onto the background. */
+export function stageAnchoredSprite(
+  scene: Phaser.Scene,
+  sprite: Phaser.GameObjects.Image,
+  opts: StagedSpriteOptions,
+): Phaser.GameObjects.Graphics {
+  const restY = sprite.y;
+  const shadow = addGroundShadow(
+    scene,
+    sprite.x,
+    restY + (opts.shadowOffsetY ?? 8),
+    opts.shadowWidth,
+    opts.shadowHeight,
+    {
+      alpha: opts.shadowAlpha ?? 0.3,
+      depth: opts.shadowDepth ?? sprite.depth - 0.1,
+    },
+  ).setAlpha(0);
+  sprite.setData("livingSceneShadow", shadow);
+  sprite.once(Phaser.GameObjects.Events.DESTROY, () => {
+    if (shadow.scene) shadow.destroy();
+  });
+
+  sprite.setAlpha(0);
+  sprite.y = restY + (opts.entranceOffsetY ?? 18);
+  scene.tweens.add({
+    targets: [sprite, shadow],
+    alpha: opts.restAlpha ?? 1,
+    duration: opts.entranceMs ?? 720,
+    delay: opts.delayMs ?? 0,
+    ease: "Sine.easeOut",
+  });
+  scene.tweens.add({
+    targets: sprite,
+    y: restY,
+    duration: opts.entranceMs ?? 720,
+    delay: opts.delayMs ?? 0,
+    ease: "Sine.easeOut",
+    onComplete: () => {
+      if (!sprite.scene) return;
+      addIdleBreath(scene, sprite, {
+        dy: opts.breathDy ?? -3,
+        durationMs: opts.breathMs ?? 2200,
+        delayMs: opts.breathDelayMs ?? 0,
+      });
+    },
+  });
+  return shadow;
+}
+
+/** Fade a staged cutout and its planted shadow together. */
+export function fadeOutStagedSprite(
+  scene: Phaser.Scene,
+  sprite: Phaser.GameObjects.Image,
+  opts: FadeOutStagedSpriteOptions = {},
+): void {
+  const shadow = sprite.getData("livingSceneShadow") as
+    | Phaser.GameObjects.Graphics
+    | undefined;
+  scene.tweens.killTweensOf(sprite);
+  if (shadow) scene.tweens.killTweensOf(shadow);
+  scene.tweens.add({
+    targets: shadow ? [sprite, shadow] : sprite,
+    alpha: 0,
+    duration: opts.durationMs ?? 600,
+    ease: opts.ease ?? "Sine.easeIn",
+    onComplete: () => {
+      if (shadow?.scene) shadow.destroy();
+      if (sprite.scene) sprite.destroy();
+      opts.onComplete?.();
+    },
+  });
+  if (opts.riseY) {
+    scene.tweens.add({
+      targets: sprite,
+      y: sprite.y + opts.riseY,
+      duration: opts.durationMs ?? 600,
+      ease: opts.ease ?? "Sine.easeIn",
+    });
+  }
 }
 
 /** Lightweight foreground/background particles that make a painted scene move. */

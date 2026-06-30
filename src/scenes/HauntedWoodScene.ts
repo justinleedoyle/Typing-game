@@ -1511,6 +1511,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       alpha: 1,
       duration: 1200,
       ease: "Sine.easeIn",
+      onComplete: () => addIdleBreath(this, sprite, { dy: -4, durationMs: 2600 }),
     });
   }
 }

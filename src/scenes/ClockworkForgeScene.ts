@@ -37,8 +37,10 @@ import { WaveDirector } from "../game/waveDirector";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import {
   addAmbientDrift,
+  fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
+  stageAnchoredSprite,
 } from "../game/livingScene";
 import { pickAdaptiveWords, FORGE_COMMAND_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
@@ -664,12 +666,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
     sprite.setOrigin(0.5, 1); // feet on the floor line
     sprite.setScale(FORN_SPRITE_HEIGHT / sprite.height);
     sprite.setDepth(40); // above backdrop (-100), below narration band (y≈150)
-    sprite.setAlpha(0);
-    this.tweens.add({
-      targets: sprite,
-      alpha: 1,
-      duration: 700,
-      ease: "Sine.easeOut",
+    stageAnchoredSprite(this, sprite, {
+      shadowWidth: 120,
+      shadowHeight: 22,
+      shadowOffsetY: 8,
+      shadowAlpha: 0.3,
+      shadowDepth: 39.9,
+      entranceOffsetY: 16,
+      entranceMs: 720,
+      breathDy: -3,
+      breathMs: 2100,
     });
     this.fornSprite = sprite;
   }
@@ -679,12 +685,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const sprite = this.fornSprite;
     if (!sprite) return;
     this.fornSprite = undefined;
-    this.tweens.add({
-      targets: sprite,
-      alpha: 0,
-      duration: 600,
+    fadeOutStagedSprite(this, sprite, {
+      durationMs: 620,
       ease: "Sine.easeIn",
-      onComplete: () => sprite.destroy(),
     });
   }
 

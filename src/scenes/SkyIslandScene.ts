@@ -39,8 +39,10 @@ import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
 import {
   addAmbientDrift,
+  fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
+  stageAnchoredSprite,
 } from "../game/livingScene";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
 import skyIslandBackdrop from "../../art/references/sky-island-clean.png";
@@ -933,15 +935,20 @@ export class SkyIslandScene extends Phaser.Scene {
     const sprite = this.add
       .image(ETTA_SPRITE_X, ETTA_SPRITE_Y, "etta")
       .setOrigin(0.5, 1)
-      .setDepth(ETTA_SPRITE_DEPTH)
-      .setAlpha(0);
+      .setDepth(ETTA_SPRITE_DEPTH);
     sprite.setScale(ETTA_SPRITE_HEIGHT / sprite.height);
     this.ettaSprite = sprite;
-    this.tweens.add({
-      targets: sprite,
-      alpha: ETTA_RESTING_ALPHA,
-      duration: 700,
-      ease: "Sine.easeOut",
+    stageAnchoredSprite(this, sprite, {
+      shadowWidth: 110,
+      shadowHeight: 22,
+      shadowOffsetY: 8,
+      shadowAlpha: 0.18,
+      shadowDepth: ETTA_SPRITE_DEPTH - 0.1,
+      restAlpha: ETTA_RESTING_ALPHA,
+      entranceOffsetY: 14,
+      entranceMs: 760,
+      breathDy: -3,
+      breathMs: 2500,
     });
   }
 
@@ -950,12 +957,9 @@ export class SkyIslandScene extends Phaser.Scene {
     const sprite = this.ettaSprite;
     if (!sprite) return;
     this.ettaSprite = null;
-    this.tweens.add({
-      targets: sprite,
-      alpha: 0,
-      duration: 600,
+    fadeOutStagedSprite(this, sprite, {
+      durationMs: 620,
       ease: "Sine.easeIn",
-      onComplete: () => sprite.destroy(),
     });
   }
 

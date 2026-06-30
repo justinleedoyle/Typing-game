@@ -113,6 +113,7 @@ const GHOST_BURST_COLOR = 0xdde8dd;
 // ~232px. Both drawn at native 1:1 (no scaled container). Tune on live.
 const WOOD_GHOST_SPRITE_HEIGHT = 84;
 const GHOST_KING_SPRITE_HEIGHT = 232;
+const INGA_GHOST_SPRITE_HEIGHT = 92;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1548,7 +1549,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     } else if (speakerName === "Ghost-King") {
       this.band.setPortrait("ghost-king", "Ghost-King");
     } else if (speakerName === "Inga") {
-      this.band.setPortrait(undefined, "Inga");
+      this.band.setPortrait("wood-ghost", "Inga");
     } else {
       this.band.setPortrait(undefined, speakerName);
     }
@@ -1791,20 +1792,21 @@ export class HauntedWoodScene extends Phaser.Scene {
   private drawInga(x: number, y: number): void {
     if (this.ingaFigure?.scene) this.ingaFigure.destroy();
     const c = this.add.container(x, y);
-    c.add(addLocalGroundShadow(this, 54, 14, { y: 32, alpha: 0.18 }));
+    c.add(addLocalGroundShadow(this, 72, 16, { y: 34, alpha: 0.2 }));
 
-    // Inga: smaller translucent ellipse, slightly warmer tone
+    const glow = this.add.graphics();
+    glow.fillStyle(0xfaf4e8, 0.12);
+    glow.fillEllipse(0, -4, 66, 96);
+    c.add(glow);
+
+    const sprite = this.add.image(0, -2, "wood-ghost");
+    sprite
+      .setScale(INGA_GHOST_SPRITE_HEIGHT / sprite.height)
+      .setTint(0xf0e8d8)
+      .setAlpha(0.72);
+    c.add(sprite);
+
     const g = this.add.graphics();
-    // Translucent body — warmer than the grey ghosts
-    g.fillStyle(0xf0e8d8, 0.38);
-    g.fillEllipse(0, 0, 42, 58);
-    // Inner glow
-    g.fillStyle(0xfaf4e8, 0.18);
-    g.fillEllipse(0, -4, 24, 34);
-    // Eyes
-    g.fillStyle(0x2a1a0a, 0.6);
-    g.fillCircle(-7, -4, 3);
-    g.fillCircle(7, -4, 3);
     // Lantern post
     g.lineStyle(2, 0x3a3630, 0.85);
     g.beginPath();

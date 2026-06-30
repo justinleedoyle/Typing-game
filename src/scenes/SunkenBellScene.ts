@@ -520,26 +520,21 @@ export class SunkenBellScene extends Phaser.Scene {
     });
   }
 
-  /** Surface the active relic effects once, as a short pre-combat sequence, so
-   *  the player sees their earlier-realm choices paying off. An empty loadout
-   *  (incl. revisits) passes straight through. */
+  /** Surface that the satchel is doing something here, once and briefly. The
+   *  persistent console-band icons show what you carry, so avoid flooding the
+   *  narration card with one line per relic. */
   private announceCombatLoadout(onDone: () => void): void {
     const lines = this.combat.announcements;
     if (lines.length === 0) {
       onDone();
       return;
     }
-    let i = 0;
-    const showNext = (): void => {
-      if (i >= lines.length) {
-        this.time.delayedCall(700, onDone);
-        return;
-      }
-      this.setNarrator(lines[i]!);
-      i += 1;
-      this.time.delayedCall(2200, showNext);
-    };
-    showNext();
+    this.setNarrator(
+      lines.length === 1
+        ? lines[0]!
+        : "Your satchel stirs; its relics answer here.",
+    );
+    this.time.delayedCall(1900, onDone);
   }
 
   /** Reset the per-wave relic procs at the start of each combat wave. */

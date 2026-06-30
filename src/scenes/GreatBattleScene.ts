@@ -37,10 +37,13 @@ import {
   addContainerWake,
   addIdleBreath,
   addLocalGroundShadow,
+  dismissCompanionCameo,
   playBodyImpact,
   playBodyTypePulse,
+  playActorAttention,
   playClaimLine,
   pulseUiObject,
+  stageCompanionCameo,
   type AmbientKind,
   type ContainerWakeOptions,
 } from "../game/livingScene";
@@ -112,6 +115,12 @@ interface CompanionCameoSpec {
   bobMs?: number;
   flipX?: boolean;
 }
+
+type FinaleCompanionActionId =
+  | "glass-fish"
+  | "brass-songbird"
+  | "lantern-moth"
+  | "wisp-cat";
 
 interface LordWordFxOptions {
   kind?: AmbientKind;
@@ -1257,6 +1266,129 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
+  private showFinaleCompanionAction(
+    companionId: FinaleCompanionActionId,
+  ): Phaser.GameObjects.Container {
+    const width = this.scale.width;
+    switch (companionId) {
+      case "glass-fish":
+        return stageCompanionCameo(this, {
+          textureKey: "finale-companion-glass-fish",
+          startX: width + 110,
+          startY: 700,
+          x: width * 0.62,
+          y: 650,
+          height: 94,
+          depth: 8,
+          flipX: true,
+          shadowWidth: 78,
+          shadowHeight: 12,
+          shadowOffsetY: 24,
+          shadowAlpha: 0.13,
+          breathDy: -16,
+          breathMs: 1450,
+          wake: {
+            kind: "bubble",
+            intervalMs: 140,
+            offsetY: -34,
+            spreadX: 24,
+            spreadY: 20,
+            depth: 7,
+            alpha: 0.34,
+          },
+        });
+      case "lantern-moth":
+        return stageCompanionCameo(this, {
+          textureKey: "finale-companion-lantern-moth",
+          startX: width + 95,
+          startY: 530,
+          x: width * 0.32,
+          y: 575,
+          height: 92,
+          depth: 8,
+          flipX: true,
+          shadowWidth: 62,
+          shadowHeight: 10,
+          shadowOffsetY: 34,
+          shadowAlpha: 0.12,
+          breathDy: -22,
+          breathMs: 1450,
+          wake: {
+            kind: "mote",
+            intervalMs: 120,
+            offsetY: -42,
+            spreadX: 28,
+            spreadY: 22,
+            depth: 7,
+            alpha: 0.42,
+          },
+        });
+      case "wisp-cat":
+        return stageCompanionCameo(this, {
+          textureKey: "finale-companion-wisp-cat",
+          startX: -100,
+          startY: 770,
+          x: width * 0.73,
+          y: 760,
+          height: 108,
+          depth: 8,
+          shadowWidth: 86,
+          shadowHeight: 16,
+          shadowOffsetY: 10,
+          shadowAlpha: 0.2,
+          breathDy: -5,
+          breathMs: 1800,
+          wake: {
+            kind: "mist",
+            intervalMs: 160,
+            offsetY: -8,
+            spreadX: 22,
+            spreadY: 10,
+            depth: 7,
+            alpha: 0.24,
+          },
+        });
+      case "brass-songbird":
+        return stageCompanionCameo(this, {
+          textureKey: "finale-companion-brass-songbird",
+          startX: width + 90,
+          startY: 485,
+          x: width * 0.66,
+          y: 510,
+          height: 78,
+          depth: 8,
+          flipX: true,
+          shadowWidth: 56,
+          shadowHeight: 10,
+          shadowOffsetY: 28,
+          shadowAlpha: 0.14,
+          breathDy: -14,
+          breathMs: 1350,
+          wake: {
+            kind: "ember",
+            intervalMs: 125,
+            offsetY: -34,
+            spreadX: 22,
+            spreadY: 16,
+            depth: 7,
+            alpha: 0.42,
+          },
+        });
+    }
+  }
+
+  private dismissFinaleCompanionAction(
+    companion: Phaser.GameObjects.Container,
+    exitX: number,
+    exitY: number,
+  ): void {
+    dismissCompanionCameo(this, companion, {
+      x: exitX,
+      y: exitY,
+      durationMs: 680,
+    });
+  }
+
   private companionCameoSpec(waveDef: WaveDef): CompanionCameoSpec | null {
     const width = this.scale.width;
     const wake = finaleWakeForRealm(waveDef.realmId);
@@ -2028,6 +2160,7 @@ export class GreatBattleScene extends Phaser.Scene {
   // §5.5.9 — glass-fish: brief flash + bonus hit window word
   private applyGlassFishHitWindow(onDone: () => void): void {
     this.narration.say("finale_companion_glass_fish");
+    const companion = this.showFinaleCompanionAction("glass-fish");
     // Flash the screen briefly (light corridor effect)
     this.cameras.main.flash(400, 160, 220, 255, false);
     this.time.delayedCall(500, () => {
@@ -2046,7 +2179,11 @@ export class GreatBattleScene extends Phaser.Scene {
             alpha: { from: this.quietLordContainer.alpha, to: 0.5 },
             duration: 300,
             yoyo: true,
-            onComplete: () => onDone(),
+            onComplete: () => {
+              playActorAttention(this, companion, { scale: 1.05, durationMs: 220 });
+              this.dismissFinaleCompanionAction(companion, this.scale.width * 0.48, 610);
+              onDone();
+            },
           });
         },
       }, { kind: "bubble", color: 0xa7d2dd, ringRadius: 38 });
@@ -2060,6 +2197,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // Only fires if there are still live targets in play (avoid double-clear)
     if (this.activeTargets.length === 0) return;
     this.narration.say("finale_companion_lantern_moth");
+    const companion = this.showFinaleCompanionAction("lantern-moth");
     // Warm light overlay
     const throneLight = this.add.graphics().setDepth(3).setAlpha(0);
     throneLight.fillStyle(0xffd080, 0.18);
@@ -2089,6 +2227,8 @@ export class GreatBattleScene extends Phaser.Scene {
           duration: 250,
           yoyo: true,
         });
+        playActorAttention(this, companion, { scale: 1.05, durationMs: 220 });
+        this.dismissFinaleCompanionAction(companion, 330, 510);
         this.typingInput.unregister(bonusTarget);
         const idx = this.activeTargets.indexOf(bonusTarget);
         if (idx >= 0) this.activeTargets.splice(idx, 1);
@@ -2097,6 +2237,9 @@ export class GreatBattleScene extends Phaser.Scene {
     }, { kind: "mote", color: 0xffd080, ringRadius: 36 });
     this.typingInput.register(bonusTarget);
     this.activeTargets.push(bonusTarget);
+    this.time.delayedCall(5200, () => {
+      if (companion.scene) this.dismissFinaleCompanionAction(companion, 330, 510);
+    });
   }
 
   // §5.5.11 — the Lord's whirlwind attack between rounds. Wren must type
@@ -2185,6 +2328,7 @@ export class GreatBattleScene extends Phaser.Scene {
   // §5.5.9 — wisp-cat: extra phrase target spawns mid-phase (flank)
   private applyWispCatFlank(onDone: () => void): void {
     this.narration.say("finale_companion_wisp_cat");
+    const companion = this.showFinaleCompanionAction("wisp-cat");
     const flankTarget = this.makeLordWord({
       scene: this,
       word: "flank",
@@ -2200,7 +2344,11 @@ export class GreatBattleScene extends Phaser.Scene {
           alpha: { from: this.quietLordContainer.alpha, to: 0.55 },
           duration: 300,
           yoyo: true,
-          onComplete: () => onDone(),
+          onComplete: () => {
+            playActorAttention(this, companion, { scale: 1.05, durationMs: 220 });
+            this.dismissFinaleCompanionAction(companion, this.scale.width * 0.88, 735);
+            onDone();
+          },
         });
       },
     }, { kind: "mist", color: 0x9fb69a, ringRadius: 36 });
@@ -2519,6 +2667,13 @@ export class GreatBattleScene extends Phaser.Scene {
   private applyBrassSongbirdHint(_target: TextWordTarget, word: string): void {
     // Show a narrator cue
     this.narration.say("finale_companion_songbird");
+    const companion = this.showFinaleCompanionAction("brass-songbird");
+    playActorAttention(this, companion, { scale: 1.05, durationMs: 220 });
+    this.time.delayedCall(1350, () => {
+      if (companion.scene) {
+        this.dismissFinaleCompanionAction(companion, this.scale.width * 0.56, 485);
+      }
+    });
 
     // TextWordTarget doesn't expose a direct "advance N chars" API, so we
     // simulate by injecting up to 3 typed characters via the typingInput.

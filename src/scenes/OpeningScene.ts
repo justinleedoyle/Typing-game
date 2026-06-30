@@ -8,8 +8,8 @@ import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
 import {
   addAmbientDrift,
-  addGroundShadow,
   addIdleBreath,
+  addLocalGroundShadow,
 } from "../game/livingScene";
 import openingBackdrop from "../../art/references/opening-typewriter-study-clean.png";
 import { makeQuietLordSprite, preloadQuietLord } from "../game/quietLord";
@@ -350,23 +350,26 @@ export class OpeningScene extends Phaser.Scene {
 
   // ── Drawing ────────────────────────────────────────────────────────────────
 
-  /** Runa — the painted royal cartographer, fades in in front of the desk
-   *  on the left. Positioned left of the painted chair (which sits at ≈x=900)
-   *  so she doesn't appear to stand on it. */
+  /** Runa — the painted royal cartographer, steps down into the lamplight in
+   *  front of the desk on the left. Positioned left of the painted chair
+   *  (which sits at ≈x=900) so she doesn't appear to stand on it. */
   private drawRuna(): void {
-    addGroundShadow(this, 480, 952, 180, 28, { depth: -1, alpha: 0.32 });
+    const actor = this.add.container(430, 900).setAlpha(0).setDepth(-1);
+    actor.add(addLocalGroundShadow(this, 180, 28, { y: 7, alpha: 0.32 }));
     const img = this.add
-      .image(480, 945, "runa-sprite")
+      .image(0, 0, "runa-sprite")
       .setOrigin(0.5, 1);
     // 420px tall — matches painted desk + chair proportions in this study.
     img.setScale(420 / img.height);
-    img.setAlpha(0);
+    actor.add(img);
     this.tweens.add({
-      targets: img,
+      targets: actor,
+      x: 480,
+      y: 945,
       alpha: 1,
-      duration: 500,
+      duration: 850,
       ease: "Sine.easeOut",
-      onComplete: () => addIdleBreath(this, img, { dy: -4, durationMs: 2200 }),
+      onComplete: () => addIdleBreath(this, actor, { dy: -4, durationMs: 2200 }),
     });
   }
 
@@ -381,12 +384,10 @@ export class OpeningScene extends Phaser.Scene {
    */
   private drawSibling(): void {
     const isBoy = this.wrenGender === "boy";
-    addGroundShadow(this, 1180, 957, isBoy ? 110 : 130, 22, {
-      depth: -1,
-      alpha: 0.28,
-    });
+    const actor = this.add.container(1240, 950).setAlpha(0).setDepth(-1);
+    actor.add(addLocalGroundShadow(this, isBoy ? 110 : 130, 22, { y: 7, alpha: 0.28 }));
     const img = this.add
-      .image(1180, 950, "sibling-sprite")
+      .image(0, 0, "sibling-sprite")
       .setOrigin(0.5, 1);
     // Magnus reads taller (older sibling) than Saga; both still sit below
     // doorway height so the painted portal stays legible past them.
@@ -395,13 +396,14 @@ export class OpeningScene extends Phaser.Scene {
     // dim study palette. Saga gets a warm cream cast (sits in lamplight);
     // Magnus gets a cool blue-gray (reads as older + a beat more distant).
     img.setTint(isBoy ? 0xbfb0a0 : 0xa0aebf);
-    img.setAlpha(0);
+    actor.add(img);
     this.tweens.add({
-      targets: img,
+      targets: actor,
+      x: 1180,
       alpha: 1,
-      duration: 500,
+      duration: 760,
       ease: "Sine.easeOut",
-      onComplete: () => addIdleBreath(this, img, { dy: -3, durationMs: 2100 }),
+      onComplete: () => addIdleBreath(this, actor, { dy: -3, durationMs: 2100 }),
     });
   }
 }

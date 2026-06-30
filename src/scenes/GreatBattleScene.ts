@@ -177,6 +177,7 @@ export class GreatBattleScene extends Phaser.Scene {
   private againText!: Phaser.GameObjects.Text;
   private strikeLineGraphic!: Phaser.GameObjects.Graphics;
   private phase2Round1Words: string[] = [];
+  private facetSigil: Phaser.GameObjects.Graphics | null = null;
 
   // Phase 2 — relic state
   private bellsTongueSuperHitAvailable = false;
@@ -243,6 +244,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // Phase 3
     this.brassSongbirdStallTimer = null;
     this.brassSongbirdActiveTarget = null;
+    this.facetSigil = null;
   }
 
   preload(): void {
@@ -356,6 +358,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.typingInput.reset();
     this.input.keyboard?.off("keydown", this.onKeyDown, this);
     this.ambientHandle?.stop();
+    this.clearFacetSigil(false);
     if (this.brassSongbirdStallTimer) {
       this.brassSongbirdStallTimer.remove();
       this.brassSongbirdStallTimer = null;
@@ -983,6 +986,7 @@ export class GreatBattleScene extends Phaser.Scene {
     }
     const { facet, counteredBy } = facets[idx]!;
     // Telegraph — name the facet so the player learns the counter over replays.
+    this.showFacetSigil(facet, counteredBy ? "countered" : "threat");
     this.narration.say(FACET_LINES[facet.id].telegraph);
     this.time.delayedCall(1700, () => {
       if (this.runOver) return;
@@ -995,6 +999,7 @@ export class GreatBattleScene extends Phaser.Scene {
           duration: 260,
           yoyo: true,
         });
+        this.time.delayedCall(1400, () => this.clearFacetSigil());
         this.time.delayedCall(1800, () => this.runFacetSequence(facets, idx + 1));
       } else {
         // No counter — survive the facet by typing its defense word in time.
@@ -1020,6 +1025,7 @@ export class GreatBattleScene extends Phaser.Scene {
       if (resolved) return;
       resolved = true;
       this.clearActiveTargets();
+      this.clearFacetSigil();
       // It lands — the realms' hit cue + a candle gutters.
       this.cameras.main.shake(220, 0.006);
       playDamageThud();
@@ -1041,12 +1047,124 @@ export class GreatBattleScene extends Phaser.Scene {
         timer.remove();
         playChime();
         this.clearActiveTargets();
+        this.clearFacetSigil();
         this.narration.say("finale_facet_held");
         finish();
       },
     });
     this.typingInput.register(target);
     this.activeTargets.push(target);
+  }
+
+  private showFacetSigil(facet: Facet, mode: "countered" | "threat"): void {
+    this.clearFacetSigil(false);
+
+    const color = mode === "countered" ? UI_HEX.brass : UI_HEX.ember;
+    const alpha = mode === "countered" ? 0.46 : 0.6;
+    const g = this.add.graphics().setDepth(3).setAlpha(0).setPosition(this.scale.width / 2, 300);
+    this.drawFacetSigilInto(g, facet.id, color, mode);
+    this.facetSigil = g;
+
+    this.tweens.add({
+      targets: g,
+      alpha,
+      scaleX: { from: 0.86, to: 1 },
+      scaleY: { from: 0.86, to: 1 },
+      duration: 520,
+      ease: "Sine.easeOut",
+    });
+    this.tweens.add({
+      targets: g,
+      angle: mode === "countered" ? 3 : -3,
+      duration: 1700,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  private clearFacetSigil(fade = true): void {
+    const sigil = this.facetSigil;
+    this.facetSigil = null;
+    if (!sigil) return;
+    this.tweens.killTweensOf(sigil);
+    if (!fade) {
+      sigil.destroy();
+      return;
+    }
+    this.tweens.add({
+      targets: sigil,
+      alpha: 0,
+      scaleX: 1.08,
+      scaleY: 1.08,
+      duration: 260,
+      ease: "Sine.easeIn",
+      onComplete: () => sigil.destroy(),
+    });
+  }
+
+  private drawFacetSigilInto(
+    g: Phaser.GameObjects.Graphics,
+    facetId: FacetId,
+    color: number,
+    mode: "countered" | "threat",
+  ): void {
+    g.clear();
+    g.lineStyle(3, color, mode === "countered" ? 0.82 : 0.74);
+    g.strokeCircle(0, 0, 96);
+    g.lineStyle(1, color, mode === "countered" ? 0.38 : 0.32);
+    g.strokeCircle(0, 0, 122);
+
+    if (facetId === "cold") {
+      for (let i = 0; i < 6; i++) {
+        const a = (Math.PI * 2 * i) / 6;
+        const x1 = Math.cos(a) * 26;
+        const y1 = Math.sin(a) * 26;
+        const x2 = Math.cos(a) * 82;
+        const y2 = Math.sin(a) * 82;
+        g.lineBetween(x1, y1, x2, y2);
+        g.lineBetween(Math.cos(a + 0.28) * 58, Math.sin(a + 0.28) * 58, x2, y2);
+        g.lineBetween(Math.cos(a - 0.28) * 58, Math.sin(a - 0.28) * 58, x2, y2);
+      }
+      return;
+    }
+
+    if (facetId === "toll") {
+      g.strokeEllipse(0, 12, 72, 94);
+      g.lineBetween(-42, 50, 42, 50);
+      g.lineBetween(-28, -35, 28, -35);
+      g.fillStyle(color, 0.6);
+      g.fillCircle(0, 56, 7);
+      return;
+    }
+
+    if (facetId === "armor") {
+      g.strokeRoundedRect(-46, -62, 92, 118, 10);
+      g.lineBetween(-34, -20, 34, -20);
+      g.lineBetween(-34, 18, 34, 18);
+      g.fillStyle(color, 0.2);
+      g.fillTriangle(0, -42, -26, 48, 26, 48);
+      return;
+    }
+
+    if (facetId === "light") {
+      for (let i = 0; i < 12; i++) {
+        const a = (Math.PI * 2 * i) / 12;
+        g.lineBetween(Math.cos(a) * 34, Math.sin(a) * 34, Math.cos(a) * 88, Math.sin(a) * 88);
+      }
+      g.fillStyle(color, 0.18);
+      g.fillCircle(0, 0, 42);
+      g.strokeCircle(0, 0, 34);
+      return;
+    }
+
+    // grief
+    g.lineBetween(0, -72, 0, 58);
+    g.lineBetween(0, -24, -46, -54);
+    g.lineBetween(0, -6, 48, -40);
+    g.lineBetween(0, 18, -38, 48);
+    g.lineBetween(0, 18, 38, 48);
+    g.strokeEllipse(0, 18, 58, 84);
   }
 
   private startPhase2a(): void {

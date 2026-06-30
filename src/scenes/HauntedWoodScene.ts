@@ -43,6 +43,7 @@ import {
   addContainerWake,
   addIdleBreath,
   addLocalGroundShadow,
+  stageContainerEntrance,
 } from "../game/livingScene";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, playWrenAction, preloadWren } from "../game/wren";
 import { ConsoleBand } from "../game/ui/consoleBand";
@@ -1469,7 +1470,10 @@ export class HauntedWoodScene extends Phaser.Scene {
     c.add(addLocalGroundShadow(this, 92, 20, { y: 6, alpha: 0.27 }));
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
-    addIdleBreath(this, c, { dy: -4, durationMs: 2300 });
+    stageContainerEntrance(this, c, {
+      breathDy: -4,
+      breathMs: 2300,
+    });
     return c;
   }
 

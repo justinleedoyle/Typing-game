@@ -60,8 +60,23 @@ export interface FadeOutStagedSpriteOptions {
   onComplete?: () => void;
 }
 
+export interface StagedContainerEntranceOptions {
+  restAlpha?: number;
+  entranceOffsetY?: number;
+  entranceMs?: number;
+  delayMs?: number;
+  breathDy?: number;
+  breathMs?: number;
+  breathDelayMs?: number;
+}
+
 type TweenableObject = Phaser.GameObjects.GameObject & {
   y: number;
+};
+
+type FadeableTweenableObject = TweenableObject & {
+  scene: Phaser.Scene;
+  setAlpha(value: number): FadeableTweenableObject;
 };
 
 type WakeTarget = Phaser.GameObjects.GameObject & {
@@ -216,6 +231,35 @@ export function fadeOutStagedSprite(
       ease: opts.ease ?? "Sine.easeIn",
     });
   }
+}
+
+/** Stage an already-built feet-origin container. This is for actors like Wren
+ *  whose shadow/glow/sprite are grouped locally and must move as one body. */
+export function stageContainerEntrance(
+  scene: Phaser.Scene,
+  target: FadeableTweenableObject,
+  opts: StagedContainerEntranceOptions = {},
+): void {
+  const restY = target.y;
+  target.setAlpha(0);
+  target.y = restY + (opts.entranceOffsetY ?? 22);
+
+  scene.tweens.add({
+    targets: target,
+    y: restY,
+    alpha: opts.restAlpha ?? 1,
+    duration: opts.entranceMs ?? 680,
+    delay: opts.delayMs ?? 80,
+    ease: "Sine.easeOut",
+    onComplete: () => {
+      if (!target.scene) return;
+      addIdleBreath(scene, target, {
+        dy: opts.breathDy ?? -4,
+        durationMs: opts.breathMs ?? 2200,
+        delayMs: opts.breathDelayMs ?? 0,
+      });
+    },
+  });
 }
 
 /** A small environmental wake tied to a moving actor/enemy. This is cheaper than

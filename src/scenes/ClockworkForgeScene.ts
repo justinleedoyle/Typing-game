@@ -39,8 +39,8 @@ import {
   addAmbientDrift,
   addContainerWake,
   fadeOutStagedSprite,
-  addIdleBreath,
   addLocalGroundShadow,
+  stageContainerEntrance,
   stageAnchoredSprite,
 } from "../game/livingScene";
 import { pickAdaptiveWords, FORGE_COMMAND_BANK } from "../game/wordBank";
@@ -1752,7 +1752,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
     c.add(addLocalGroundShadow(this, 92, 18, { y: 6, alpha: 0.32 }));
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
-    addIdleBreath(this, c, { dy: -3, durationMs: 1900 });
+    stageContainerEntrance(this, c, {
+      breathDy: -3,
+      breathMs: 1900,
+    });
   }
 
   /** Add the painted golem sprite into a container, scaled to the old procedural

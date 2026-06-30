@@ -32,6 +32,7 @@ import {
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
+  stageContainerEntrance,
   stageAnchoredSprite,
 } from "../game/livingScene";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
@@ -1659,7 +1660,10 @@ export class WinterMountainScene extends Phaser.Scene {
 
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
-    addIdleBreath(this, c, { dy: -4, durationMs: 2100 });
+    stageContainerEntrance(this, c, {
+      breathDy: -4,
+      breathMs: 2100,
+    });
     return c;
   }
 

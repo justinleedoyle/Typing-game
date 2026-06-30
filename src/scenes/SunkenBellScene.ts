@@ -31,6 +31,7 @@ import {
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
+  stageContainerEntrance,
   stageAnchoredSprite,
 } from "../game/livingScene";
 import { pickAdaptiveWords, SUNKEN_BELL_WORD_BANK } from "../game/wordBank";
@@ -1725,7 +1726,10 @@ export class SunkenBellScene extends Phaser.Scene {
     c.add(addLocalGroundShadow(this, 92, 20, { y: 6, alpha: 0.26 }));
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
-    addIdleBreath(this, c, { dy: -4, durationMs: 2300 });
+    stageContainerEntrance(this, c, {
+      breathDy: -4,
+      breathMs: 2300,
+    });
     return c;
   }
 

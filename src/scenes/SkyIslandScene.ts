@@ -41,8 +41,8 @@ import {
   addAmbientDrift,
   addContainerWake,
   fadeOutStagedSprite,
-  addIdleBreath,
   addLocalGroundShadow,
+  stageContainerEntrance,
   stageAnchoredSprite,
 } from "../game/livingScene";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, playWrenAction, preloadWren } from "../game/wren";
@@ -1835,7 +1835,10 @@ export class SkyIslandScene extends Phaser.Scene {
     c.add(addLocalGroundShadow(this, 92, 20, { y: 6, alpha: 0.28 }));
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
-    addIdleBreath(this, c, { dy: -5, durationMs: 2200 });
+    stageContainerEntrance(this, c, {
+      breathDy: -5,
+      breathMs: 2200,
+    });
     return c;
   }
 

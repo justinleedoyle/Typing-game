@@ -126,6 +126,7 @@ const WAVE_DEFS: WaveDef[] = [
 interface Enemy {
   graphic: Phaser.GameObjects.Graphics;
   target: TextWordTarget | null;
+  advanceTween: Phaser.Tweens.Tween | null;
   x: number;
   y: number;
   word: string;
@@ -461,6 +462,9 @@ export class GreatBattleScene extends Phaser.Scene {
   private breachEnemy(enemy: Enemy): void {
     if (enemy.defeated || this.runOver) return;
     enemy.defeated = true;
+    enemy.advanceTween?.stop();
+    enemy.advanceTween = null;
+    this.tweens.killTweensOf(enemy.graphic);
     if (enemy.target) {
       this.typingInput.unregister(enemy.target);
       const idx = this.activeTargets.indexOf(enemy.target);
@@ -666,25 +670,14 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private spawnEnemy(waveDef: WaveDef, x: number, word: string, waveIdx: number): void {
-    const graphic = this.add.graphics().setDepth(3);
+    const graphic = this.add.graphics().setDepth(3).setAlpha(0);
     this.drawEnemyShape(graphic, waveDef.realmId, x, waveDef.baseY);
-
-    // §5.5.11 — firefly-lantern: enemy word text rendered brighter via the
-    // dawn-light overlay applied in startPhase1 (TextWordTarget doesn't expose
-    // a per-instance color override; the overlay tints the whole battlefield).
-
-    const target = this.makeWord({
-      scene: this,
-      word,
-      x,
-      y: waveDef.baseY - 60,
-      fontSize: 34,
-      onComplete: () => this.defeatEnemy(enemy),
-    });
+    graphic.y = -95;
 
     const enemy: Enemy = {
       graphic,
-      target,
+      target: null,
+      advanceTween: null,
       x,
       y: waveDef.baseY,
       word,
@@ -693,20 +686,69 @@ export class GreatBattleScene extends Phaser.Scene {
     };
 
     this.enemies.push(enemy);
+
+    const laneOffset = (x / this.scale.width - 0.5) * 50;
+    this.tweens.add({
+      targets: graphic,
+      y: 0,
+      alpha: 1,
+      duration: 560,
+      delay: Math.abs(laneOffset) * 8,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (enemy.defeated || this.runOver) return;
+        this.attachEnemyWord(enemy, waveDef);
+        this.beginEnemyAdvance(enemy);
+      },
+    });
+    this.tweens.add({
+      targets: graphic,
+      scaleX: { from: 0.98, to: 1.03 },
+      scaleY: { from: 1, to: 0.97 },
+      duration: 1300 + Math.abs(laneOffset) * 10,
+      delay: 560,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  private attachEnemyWord(enemy: Enemy, waveDef: WaveDef): void {
+    // §5.5.11 — firefly-lantern: enemy word text rendered brighter via the
+    // dawn-light overlay applied in startPhase1 (TextWordTarget doesn't expose
+    // a per-instance color override; the overlay tints the whole battlefield).
+    const target = this.makeWord({
+      scene: this,
+      word: enemy.word,
+      x: enemy.x,
+      y: enemy.graphic.y + waveDef.baseY - 60,
+      fontSize: 34,
+      onComplete: () => this.defeatEnemy(enemy),
+    });
+    enemy.target = target;
     this.typingInput.register(target);
     this.activeTargets.push(target);
+  }
 
+  private beginEnemyAdvance(enemy: Enemy): void {
     // §5.5.11 — untethered-wind: slow enemy advance by ~15% via longer tween.
     // Enemy advance is a slow downward drift toward the wall; if it completes
     // before the enemy is defeated, the line is breached → a candle is snuffed
     // (the fail-state stake). untethered-wind buys more time to clear it.
     const advanceDuration = 12000 * (1 / this.untetheredWindSlowMult);
-    this.tweens.add({
-      targets: graphic,
+    enemy.advanceTween = this.tweens.add({
+      targets: enemy.graphic,
       y: `+=${80}`,
       duration: advanceDuration,
       ease: "Linear",
-      onComplete: () => this.breachEnemy(enemy),
+      onUpdate: () => {
+        enemy.target?.setAnchorX(enemy.x + enemy.graphic.x);
+        enemy.target?.setAnchorY(enemy.graphic.y + enemy.y - 60);
+      },
+      onComplete: () => {
+        enemy.advanceTween = null;
+        this.breachEnemy(enemy);
+      },
     });
   }
 
@@ -788,6 +830,9 @@ export class GreatBattleScene extends Phaser.Scene {
     if (enemy.defeated) return;
     playChime();
     enemy.defeated = true;
+    enemy.advanceTween?.stop();
+    enemy.advanceTween = null;
+    this.tweens.killTweensOf(enemy.graphic);
     if (enemy.target) {
       this.typingInput.unregister(enemy.target);
       const idx = this.activeTargets.indexOf(enemy.target);

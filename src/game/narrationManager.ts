@@ -19,6 +19,7 @@ const FRAMED_WORD_WRAP = 920;
 const FADE_DURATION_MS = 400;
 const CARD_PAD_X = 30;
 const CARD_PAD_Y = 18;
+const DEFAULT_SPEAKER_NAME = "Runa";
 
 interface NarrationConfig {
   /** Vertical position of the caption. Defaults to 150; Winter Mountain
@@ -33,6 +34,10 @@ interface NarrationConfig {
    *  (brass-framed, dark ink text) instead of bare cream italic text. Opt-in so
    *  only re-skinned scenes change; the card sizes itself to each line. */
   framed?: boolean;
+  /** Framed-card speaker ribbon. Framed cards default to "Runa" because the
+   *  Almanac script is canonically delivered through Runa's voice. Pass null to
+   *  suppress the ribbon for a special-purpose caption. */
+  speakerName?: string | null;
 }
 
 export class NarrationManager {
@@ -43,6 +48,8 @@ export class NarrationManager {
   private container?: Phaser.GameObjects.Container;
   private cardBg?: Phaser.GameObjects.Graphics;
   private cardCorners?: Phaser.GameObjects.Graphics;
+  private speakerBg?: Phaser.GameObjects.Graphics;
+  private speakerText?: Phaser.GameObjects.Text;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -57,6 +64,21 @@ export class NarrationManager {
       this.container = scene.add.container(cx, cy).setAlpha(0);
       this.cardBg = scene.add.graphics();
       this.cardCorners = scene.add.graphics();
+      const speakerName = config.speakerName === undefined
+        ? DEFAULT_SPEAKER_NAME
+        : config.speakerName;
+      if (speakerName) {
+        this.speakerBg = scene.add.graphics();
+        this.speakerText = scene.add
+          .text(0, 0, speakerName, {
+            fontFamily: SERIF,
+            fontSize: "17px",
+            color: UI_CSS.parchment,
+            fontStyle: "italic",
+            align: "center",
+          })
+          .setOrigin(0.5);
+      }
       this.text = scene.add
         .text(0, 0, "", {
           fontFamily: SERIF,
@@ -67,7 +89,12 @@ export class NarrationManager {
           wordWrap: { width: config.wordWrapWidth ?? FRAMED_WORD_WRAP },
         })
         .setOrigin(0.5);
-      this.container.add([this.cardBg, this.cardCorners, this.text]);
+      this.container.add([
+        this.cardBg,
+        this.cardCorners,
+        ...(this.speakerBg && this.speakerText ? [this.speakerBg, this.speakerText] : []),
+        this.text,
+      ]);
       if (config.depth !== undefined) this.container.setDepth(config.depth);
     } else {
       this.text = scene.add
@@ -108,6 +135,19 @@ export class NarrationManager {
     this.cardCorners.beginPath(); this.cardCorners.moveTo(x - size, -y); this.cardCorners.lineTo(x, -y); this.cardCorners.lineTo(x, -y + size); this.cardCorners.strokePath();
     this.cardCorners.beginPath(); this.cardCorners.moveTo(-x, y - size); this.cardCorners.lineTo(-x, y); this.cardCorners.lineTo(-x + size, y); this.cardCorners.strokePath();
     this.cardCorners.beginPath(); this.cardCorners.moveTo(x - size, y); this.cardCorners.lineTo(x, y); this.cardCorners.lineTo(x, y - size); this.cardCorners.strokePath();
+
+    if (this.speakerBg && this.speakerText) {
+      const tabW = Math.max(86, this.speakerText.width + 30);
+      const tabH = 28;
+      const tabX = -w / 2 + 28;
+      const tabY = -h / 2 - tabH / 2 + 5;
+      this.speakerBg.clear();
+      this.speakerBg.fillStyle(UI_HEX.frame, 0.98);
+      this.speakerBg.fillRoundedRect(tabX, tabY, tabW, tabH, 6);
+      this.speakerBg.lineStyle(2, UI_HEX.brass, 0.92);
+      this.speakerBg.strokeRoundedRect(tabX, tabY, tabW, tabH, 6);
+      this.speakerText.setPosition(tabX + tabW / 2, tabY + tabH / 2 - 1);
+    }
   }
 
   /** Render a canonical Runa line by ID. Falls back to sayRaw() if the ID is

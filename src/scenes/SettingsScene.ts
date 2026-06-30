@@ -17,7 +17,8 @@ import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
 import { setAudioLevel } from "../audio/context";
-import { PALETTE, SERIF } from "../game/palette";
+import { addAmbientDrift } from "../game/livingScene";
+import { SERIF } from "../game/palette";
 import { difficultyLabel, togglePuristMode } from "../game/purist";
 import {
   emptySave,
@@ -25,6 +26,7 @@ import {
   type SaveStore,
 } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
+import { cornerTicks, UI_CSS, UI_HEX } from "../game/ui/uiTheme";
 import { TextWordTarget } from "../game/wordTarget";
 
 interface SettingsSceneData {
@@ -45,6 +47,10 @@ const ROW_SPACING = 110;
 const LABEL_OFFSET_X = -360;
 const VALUE_OFFSET_X = 80;
 const ACTION_OFFSET_Y = 44;
+const PANEL_W = 1180;
+const PANEL_H = 720;
+const PANEL_X = 960;
+const PANEL_Y = 560;
 
 export class SettingsScene extends Phaser.Scene {
   private store!: SaveStore;
@@ -54,7 +60,7 @@ export class SettingsScene extends Phaser.Scene {
 
   // Rows of text we redraw whenever state changes — kept around so we can
   // tear them down before re-rendering instead of leaking through the scene.
-  private rowTexts: Phaser.GameObjects.Text[] = [];
+  private rowTexts: Phaser.GameObjects.GameObject[] = [];
   private menuTargets: TextWordTarget[] = [];
 
   // Rename mode owns its own UI separate from the static rows.
@@ -62,8 +68,10 @@ export class SettingsScene extends Phaser.Scene {
   private renamePrompt?: Phaser.GameObjects.Text;
   private renameField?: Phaser.GameObjects.Text;
   private renameHint?: Phaser.GameObjects.Text;
+  private renameFieldPlate?: Phaser.GameObjects.Graphics;
 
   private narrator!: Phaser.GameObjects.Text;
+  private narratorPlate?: Phaser.GameObjects.Graphics;
 
   constructor() {
     super("SettingsScene");
@@ -84,19 +92,34 @@ export class SettingsScene extends Phaser.Scene {
     // Dim ink wash so the menu reads as its own quiet room, matching the
     // Almanac's "stepped out of the world for a moment" treatment.
     const g = this.add.graphics();
-    g.fillStyle(0x0b0a0f, 0.94);
+    g.fillStyle(0x0b0a0f, 0.95);
     g.fillRect(0, 0, this.scale.width, this.scale.height);
+    g.setDepth(-20);
 
-    this.add
-      .text(this.scale.width / 2, 140, "Settings", {
-        fontFamily: SERIF,
-        fontSize: "72px",
-        color: PALETTE.cream,
-      })
-      .setOrigin(0.5);
+    addAmbientDrift(this, {
+      kind: "mote",
+      count: 22,
+      depth: -1,
+      area: {
+        x: 220,
+        y: 120,
+        width: this.scale.width - 440,
+        height: this.scale.height - 220,
+      },
+      alpha: 0.2,
+      minSize: 1.5,
+      maxSize: 3.5,
+      driftX: 70,
+      driftY: -130,
+      minDurationMs: 7000,
+      maxDurationMs: 14000,
+    });
+
+    this.drawSettingsShell();
 
     // Narrator — matches WinterMountainScene's setNarrator styling so the
     // game's voice stays consistent across scenes.
+    this.narratorPlate = this.add.graphics();
     this.narrator = this.add
       .text(
         this.scale.width / 2,
@@ -105,13 +128,14 @@ export class SettingsScene extends Phaser.Scene {
         {
           fontFamily: SERIF,
           fontSize: "32px",
-          color: PALETTE.cream,
+          color: UI_CSS.ink,
           fontStyle: "italic",
           align: "center",
-          wordWrap: { width: 1400 },
+          wordWrap: { width: 980 },
         },
       )
       .setOrigin(0.5);
+    this.redrawNarratorPlate();
 
     this.typingInput = new TypingInputController(this.store);
     this.typingInput.setKeystrokeHooks({
@@ -128,6 +152,61 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   // ─── Menu rendering ─────────────────────────────────────────────────────────
+
+  private drawSettingsShell(): void {
+    const bg = this.add.graphics();
+    bg.fillStyle(UI_HEX.panel, 0.82);
+    bg.fillRoundedRect(
+      PANEL_X - PANEL_W / 2,
+      PANEL_Y - PANEL_H / 2,
+      PANEL_W,
+      PANEL_H,
+      10,
+    );
+    bg.lineStyle(3, UI_HEX.brass, 0.82);
+    bg.strokeRoundedRect(
+      PANEL_X - PANEL_W / 2,
+      PANEL_Y - PANEL_H / 2,
+      PANEL_W,
+      PANEL_H,
+      10,
+    );
+
+    cornerTicks(this, PANEL_W, PANEL_H, { inset: 10, size: 18, width: 3 })
+      .setPosition(PANEL_X, PANEL_Y);
+
+    const titleW = 520;
+    const titleH = 102;
+    const titleX = this.scale.width / 2;
+    const titleY = 138;
+    const titlePlate = this.add.graphics();
+    titlePlate.fillStyle(UI_HEX.parchment, 0.96);
+    titlePlate.fillRoundedRect(
+      titleX - titleW / 2,
+      titleY - titleH / 2,
+      titleW,
+      titleH,
+      10,
+    );
+    titlePlate.lineStyle(3, UI_HEX.frame, 0.92);
+    titlePlate.strokeRoundedRect(
+      titleX - titleW / 2,
+      titleY - titleH / 2,
+      titleW,
+      titleH,
+      10,
+    );
+    cornerTicks(this, titleW, titleH, { inset: 10, size: 18, width: 3 })
+      .setPosition(titleX, titleY);
+
+    this.add
+      .text(titleX, titleY - 4, "Settings", {
+        fontFamily: SERIF,
+        fontSize: "62px",
+        color: UI_CSS.ink,
+      })
+      .setOrigin(0.5);
+  }
 
   /** Tear down and redraw every row + every typing target. Called whenever
    *  the underlying state changes so the menu reflects it. */
@@ -165,11 +244,19 @@ export class SettingsScene extends Phaser.Scene {
 
   private drawRow(index: number, label: string, value: string): void {
     const y = ROW_START_Y + index * ROW_SPACING;
+    const rowRule = this.add.graphics();
+    rowRule.lineStyle(1, UI_HEX.brass, 0.22);
+    rowRule.beginPath();
+    rowRule.moveTo(ROW_X + LABEL_OFFSET_X, y + 58);
+    rowRule.lineTo(ROW_X + 420, y + 58);
+    rowRule.strokePath();
+    this.rowTexts.push(rowRule);
+
     const labelText = this.add
       .text(ROW_X + LABEL_OFFSET_X, y, label, {
         fontFamily: SERIF,
         fontSize: "32px",
-        color: PALETTE.cream,
+        color: UI_CSS.cream,
       })
       .setOrigin(0, 0.5);
     this.rowTexts.push(labelText);
@@ -179,7 +266,7 @@ export class SettingsScene extends Phaser.Scene {
         fontFamily: SERIF,
         fontSize: "32px",
         fontStyle: "italic",
-        color: PALETTE.brass,
+        color: UI_CSS.brass,
       })
       .setOrigin(0, 0.5);
     this.rowTexts.push(valueText);
@@ -198,6 +285,8 @@ export class SettingsScene extends Phaser.Scene {
       x: ROW_X,
       y,
       fontSize: 22,
+      outline: true,
+      frame: "banner",
       priority,
       onComplete,
     });
@@ -219,11 +308,12 @@ export class SettingsScene extends Phaser.Scene {
         {
           fontFamily: SERIF,
           fontSize: "20px",
-          color: PALETTE.dim,
+          color: UI_CSS.cream,
           fontStyle: "italic",
         },
       )
-      .setOrigin(0.5, 0.5);
+      .setOrigin(0.5, 0.5)
+      .setAlpha(0.58);
     this.rowTexts.push(hint);
   }
 
@@ -255,16 +345,34 @@ export class SettingsScene extends Phaser.Scene {
       .text(this.scale.width / 2, 380, "Type a new name.", {
         fontFamily: SERIF,
         fontSize: "32px",
-        color: PALETTE.cream,
+        color: UI_CSS.cream,
         fontStyle: "italic",
       })
       .setOrigin(0.5);
+
+    this.renameFieldPlate = this.add.graphics();
+    this.renameFieldPlate.fillStyle(UI_HEX.parchment, 0.94);
+    this.renameFieldPlate.fillRoundedRect(
+      this.scale.width / 2 - 250,
+      421,
+      500,
+      78,
+      8,
+    );
+    this.renameFieldPlate.lineStyle(2, UI_HEX.frame, 0.88);
+    this.renameFieldPlate.strokeRoundedRect(
+      this.scale.width / 2 - 250,
+      421,
+      500,
+      78,
+      8,
+    );
 
     this.renameField = this.add
       .text(this.scale.width / 2, 460, this.renameBuffer || " ", {
         fontFamily: SERIF,
         fontSize: "48px",
-        color: PALETTE.brass,
+        color: UI_CSS.ink,
       })
       .setOrigin(0.5);
 
@@ -276,7 +384,7 @@ export class SettingsScene extends Phaser.Scene {
         {
           fontFamily: SERIF,
           fontSize: "22px",
-          color: PALETTE.dim,
+          color: UI_CSS.cream,
           fontStyle: "italic",
         },
       )
@@ -303,9 +411,11 @@ export class SettingsScene extends Phaser.Scene {
 
   private exitRenameMode(): void {
     this.renamePrompt?.destroy();
+    this.renameFieldPlate?.destroy();
     this.renameField?.destroy();
     this.renameHint?.destroy();
     this.renamePrompt = undefined;
+    this.renameFieldPlate = undefined;
     this.renameField = undefined;
     this.renameHint = undefined;
     this.renameBuffer = "";
@@ -327,6 +437,8 @@ export class SettingsScene extends Phaser.Scene {
       x: this.scale.width / 2 - 160,
       y: 520,
       fontSize: 34,
+      outline: true,
+      frame: "banner",
       onComplete: () => this.performReset(),
     });
     this.typingInput.register(confirmTarget);
@@ -338,6 +450,8 @@ export class SettingsScene extends Phaser.Scene {
       x: this.scale.width / 2 + 160,
       y: 520,
       fontSize: 34,
+      outline: true,
+      frame: "banner",
       onComplete: () => {
         this.mode = "normal";
         this.setNarrator("Save kept. Nothing changed.");
@@ -428,6 +542,7 @@ export class SettingsScene extends Phaser.Scene {
 
   private setNarrator(text: string): void {
     this.narrator.setText(text);
+    this.redrawNarratorPlate();
     this.narrator.setAlpha(0);
     this.tweens.add({
       targets: this.narrator,
@@ -435,6 +550,32 @@ export class SettingsScene extends Phaser.Scene {
       duration: 400,
       ease: "Sine.easeOut",
     });
+  }
+
+  private redrawNarratorPlate(): void {
+    if (!this.narratorPlate) return;
+    const bounds = this.narrator.getBounds();
+    const padX = 32;
+    const padY = 16;
+    const w = bounds.width + padX * 2;
+    const h = bounds.height + padY * 2;
+    this.narratorPlate.clear();
+    this.narratorPlate.fillStyle(UI_HEX.parchment, 0.96);
+    this.narratorPlate.fillRoundedRect(
+      this.narrator.x - w / 2,
+      this.narrator.y - h / 2,
+      w,
+      h,
+      8,
+    );
+    this.narratorPlate.lineStyle(2, UI_HEX.frame, 0.9);
+    this.narratorPlate.strokeRoundedRect(
+      this.narrator.x - w / 2,
+      this.narrator.y - h / 2,
+      w,
+      h,
+      8,
+    );
   }
 }
 

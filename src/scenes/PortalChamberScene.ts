@@ -70,6 +70,15 @@ const ZONE_X: Record<Zone, number> = {
   shelf:   1660,
 };
 const WREN_Y = 900;
+const SHELF_GRID = {
+  cols: 5,
+  startX: 1648,
+  startY: 448,
+  colGap: 46,
+  rowGap: 56,
+  tileSize: 40,
+  iconSize: 30,
+} as const;
 
 // Maps the last-cleared realm to its Runa desk-line ID in runaLines.ts. The
 // line text now lives there (single source of truth); the hub renders it via
@@ -909,37 +918,92 @@ export class PortalChamberScene extends Phaser.Scene {
     const items = this.store.get().satchel;
 
     if (items.length === 0) {
-      this.add
-        .text(1740, 535, "nothing yet", {
-          fontFamily: SERIF,
-          fontSize: "17px",
-          fontStyle: "italic",
-          color: "#3a3550",
-        })
-        .setOrigin(0.5);
+      this.drawShelfEmptyPlate();
       return;
     }
 
+    this.drawShelfGridBacker(items.length);
+
     items.forEach((id, i) => {
-      const ix = 1702 + (i % 3) * 40;
-      const iy = 470 + Math.floor(i / 3) * 90;
+      const relic = RELICS[id];
+      if (!relic) return;
+
+      const ix = SHELF_GRID.startX + (i % SHELF_GRID.cols) * SHELF_GRID.colGap;
+      const iy = SHELF_GRID.startY + Math.floor(i / SHELF_GRID.cols) * SHELF_GRID.rowGap;
+      const tile = this.add.container(ix, iy).setDepth(1).setAlpha(0.9);
+      const tileBg = this.add.graphics();
+      const half = SHELF_GRID.tileSize / 2;
+      tileBg.fillStyle(UI_HEX.panel, 0.42);
+      tileBg.fillRoundedRect(-half, -half, SHELF_GRID.tileSize, SHELF_GRID.tileSize, 7);
+      tileBg.lineStyle(1, UI_HEX.brass, 0.34);
+      tileBg.strokeRoundedRect(-half, -half, SHELF_GRID.tileSize, SHELF_GRID.tileSize, 7);
+      tile.add(tileBg);
+
       const icon = satchelIconFor(id);
       if (icon && this.textures.exists(icon.key)) {
-        const img = this.add.image(ix, iy, icon.key);
-        img.setScale(Math.min(34 / img.width, 34 / img.height));
-        img.setAlpha(0.86);
-        addIdleBreath(this, img, {
-          dy: -2,
-          durationMs: 1800 + (i % 3) * 180,
-          delayMs: i * 70,
-        });
-        return;
+        const img = this.add.image(0, 0, icon.key);
+        img.setScale(Math.min(SHELF_GRID.iconSize / img.width, SHELF_GRID.iconSize / img.height));
+        img.setAlpha(0.9);
+        tile.add(img);
+      } else {
+        tile.add(
+          this.add
+            .text(0, 0, relic.name.slice(0, 1), {
+              fontFamily: SERIF,
+              fontSize: "22px",
+              color: "#d6c087",
+            })
+            .setOrigin(0.5),
+        );
       }
-      if (!RELICS[id]) return;
-      const fallback = this.add.graphics();
-      fallback.fillStyle(PALETTE_HEX.brass, 0.8);
-      fallback.fillEllipse(ix, iy, 18, 26);
+
+      addIdleBreath(this, tile, {
+        dy: -2,
+        durationMs: 1800 + (i % SHELF_GRID.cols) * 150,
+        delayMs: i * 45,
+      });
     });
+  }
+
+  private drawShelfEmptyPlate(): void {
+    const width = 180;
+    const height = 42;
+    const x = 1740;
+    const y = 535;
+    const plate = this.add.graphics().setDepth(0);
+    plate.fillStyle(UI_HEX.panel, 0.34);
+    plate.fillRoundedRect(x - width / 2, y - height / 2, width, height, 8);
+    plate.lineStyle(1, UI_HEX.brass, 0.34);
+    plate.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 8);
+
+    this.add
+      .text(x, y, "nothing yet", {
+        fontFamily: SERIF,
+        fontSize: "17px",
+        fontStyle: "italic",
+        color: "#8f8161",
+      })
+      .setOrigin(0.5)
+      .setDepth(1);
+  }
+
+  private drawShelfGridBacker(itemCount: number): void {
+    const rows = Math.ceil(itemCount / SHELF_GRID.cols);
+    const width = SHELF_GRID.colGap * (SHELF_GRID.cols - 1) + SHELF_GRID.tileSize + 24;
+    const height = SHELF_GRID.rowGap * Math.max(0, rows - 1) + SHELF_GRID.tileSize + 26;
+    const x = SHELF_GRID.startX + ((SHELF_GRID.cols - 1) * SHELF_GRID.colGap) / 2;
+    const y = SHELF_GRID.startY + ((rows - 1) * SHELF_GRID.rowGap) / 2;
+    const backer = this.add.graphics().setDepth(-1);
+    backer.fillStyle(UI_HEX.panel, 0.18);
+    backer.fillRoundedRect(x - width / 2, y - height / 2, width, height, 10);
+    backer.lineStyle(1, UI_HEX.brass, 0.22);
+    backer.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 10);
+
+    for (let row = 0; row < rows; row++) {
+      const railY = SHELF_GRID.startY + row * SHELF_GRID.rowGap + SHELF_GRID.tileSize / 2 + 9;
+      backer.lineStyle(1, UI_HEX.brass, 0.13);
+      backer.lineBetween(x - width / 2 + 16, railY, x + width / 2 - 16, railY);
+    }
   }
 
   // ─── Wren character ───────────────────────────────────────────────────────

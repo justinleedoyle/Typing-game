@@ -1831,6 +1831,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
    *  legibility outline by default (TTT-style). Choices pass frame: "banner". */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
     const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
     const onComplete = opts.onComplete;
     return new TextWordTarget({
       outline: true,
@@ -1839,10 +1840,24 @@ export class ClockworkForgeScene extends Phaser.Scene {
         if (opts.frame === "banner") playWrenFocus(this.wrenSprite);
         onClaim?.(mods);
       },
+      onAdvance: (cursor, wordLength) => {
+        this.playWrenTypingPulse();
+        onAdvance?.(cursor, wordLength);
+      },
       onComplete: () => {
         if (opts.frame === "banner") playWrenAction(this.wrenSprite);
         onComplete();
       },
+    });
+  }
+
+  private playWrenTypingPulse(): void {
+    playBodyTypePulse(this, this.wrenContainer, {
+      kind: "ember",
+      color: PALETTE_HEX.ember,
+      offsetY: -108,
+      depth: 58,
+      ringRadius: 22,
     });
   }
 

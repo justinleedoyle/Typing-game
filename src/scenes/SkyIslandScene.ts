@@ -1971,6 +1971,7 @@ export class SkyIslandScene extends Phaser.Scene {
    *  default (TTT-style). Fork choices pass frame: "banner". */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
     const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
     const onComplete = opts.onComplete;
     return new TextWordTarget({
       outline: true,
@@ -1979,10 +1980,24 @@ export class SkyIslandScene extends Phaser.Scene {
         if (opts.frame === "banner") playWrenFocus(this.wrenSprite);
         onClaim?.(mods);
       },
+      onAdvance: (cursor, wordLength) => {
+        this.playWrenTypingPulse();
+        onAdvance?.(cursor, wordLength);
+      },
       onComplete: () => {
         if (opts.frame === "banner") playWrenAction(this.wrenSprite);
         onComplete();
       },
+    });
+  }
+
+  private playWrenTypingPulse(): void {
+    playBodyTypePulse(this, this.wrenContainer, {
+      kind: "mote",
+      color: PALETTE_HEX.brass,
+      offsetY: -108,
+      depth: 58,
+      ringRadius: 22,
     });
   }
 

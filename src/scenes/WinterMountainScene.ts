@@ -35,6 +35,7 @@ import {
   addIdleBreath,
   addLocalGroundShadow,
   playBodyImpact,
+  playBodyTypePulse,
   playActorAttention,
   pulseUiObject,
   playRealmClearResonance,
@@ -755,6 +756,7 @@ export class WinterMountainScene extends Phaser.Scene {
    *  (TTT-style). Fork choices pass frame: "banner". */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
     const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
     const onComplete = opts.onComplete;
     return new TextWordTarget({
       outline: true,
@@ -763,10 +765,24 @@ export class WinterMountainScene extends Phaser.Scene {
         if (opts.frame === "banner") playWrenFocus(this.wrenSprite);
         onClaim?.(mods);
       },
+      onAdvance: (cursor, wordLength) => {
+        this.playWrenTypingPulse();
+        onAdvance?.(cursor, wordLength);
+      },
       onComplete: () => {
         if (opts.frame === "banner") playWrenAction(this.wrenSprite);
         onComplete();
       },
+    });
+  }
+
+  private playWrenTypingPulse(): void {
+    playBodyTypePulse(this, this.wrenContainer, {
+      kind: "snow",
+      color: PALETTE_HEX.frost,
+      offsetY: -108,
+      depth: 58,
+      ringRadius: 22,
     });
   }
 

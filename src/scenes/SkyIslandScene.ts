@@ -74,7 +74,7 @@ const DANGER_RAMP_START = 0.4;
 // amber body ellipse (the separate glow halo is kept as-is). The Scholar-Spirit
 // boss replaces the head+torso silhouette (head top ≈ -60, torso bottom ≈ +100,
 // so ~160 tall). Sizing is tune-later. */
-const LANTERN_SPIRIT_HEIGHT = 60;
+const LANTERN_SPIRIT_HEIGHT = 88;
 const SCHOLAR_SPIRIT_HEIGHT = 160;
 // Painted Scholar Etta — a small amber book-spirit child shown during her side
 // encounter. Smallish (~280px) and translucent (resting alpha 0.9). Positioning
@@ -1500,6 +1500,15 @@ export class SkyIslandScene extends Phaser.Scene {
       ease: "Sine.easeOut",
       onComplete: () => {
         if (spirit.defeated) return;
+        playBodyImpact(this, container, {
+          kind: "mote",
+          color: 0xf5c842,
+          offsetY: -36,
+          depth: 21,
+          ringRadius: 32,
+          count: 8,
+          durationMs: 360,
+        });
         // Idle pulse — a soft alpha breathe on the painted body.
         spirit.pulseTween = this.tweens.add({
           targets: lanternSprite,
@@ -1722,10 +1731,20 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private idleBob(c: Phaser.GameObjects.Container): void {
+    c.setScale(1, 1);
     this.tweens.add({
       targets: c,
       y: { from: c.y, to: c.y - 8 },
       duration: 1100,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    this.tweens.add({
+      targets: c,
+      scaleX: 0.992,
+      scaleY: 1.022,
+      duration: 1450,
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",

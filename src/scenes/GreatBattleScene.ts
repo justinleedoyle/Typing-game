@@ -36,6 +36,7 @@ import {
   addContainerWake,
   addIdleBreath,
   addLocalGroundShadow,
+  playBodyImpact,
   type ContainerWakeOptions,
 } from "../game/livingScene";
 import greatBattleBackdrop from "../../art/references/great-battle-clean.png";
@@ -224,6 +225,7 @@ interface Enemy {
   advanceTween: Phaser.Tweens.Tween | null;
   x: number;
   y: number;
+  realmId: string;
   word: string;
   defeated: boolean;
   waveIdx: number;
@@ -787,6 +789,7 @@ export class GreatBattleScene extends Phaser.Scene {
       advanceTween: null,
       x,
       y: waveDef.baseY,
+      realmId: waveDef.realmId,
       word,
       defeated: false,
       waveIdx,
@@ -940,6 +943,14 @@ export class GreatBattleScene extends Phaser.Scene {
     enemy.advanceTween?.stop();
     enemy.advanceTween = null;
     this.tweens.killTweensOf(enemy.graphic);
+    const wake = finaleWakeForRealm(enemy.realmId);
+    playBodyImpact(this, enemy.graphic, {
+      kind: wake.kind,
+      color: wake.color,
+      offsetX: enemy.x,
+      offsetY: enemy.y - 10,
+      depth: 48,
+    });
     if (enemy.target) {
       this.typingInput.unregister(enemy.target);
       const idx = this.activeTargets.indexOf(enemy.target);

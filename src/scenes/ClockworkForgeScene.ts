@@ -1308,6 +1308,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
       fontSize: 32,
       // Forge-fire burst on completion — an "ember bloom" rather than brass.
       burstColor: PALETTE_HEX.ember,
+      defeatImpactKind: "ember",
+      defeatImpactColor: PALETTE_HEX.ember,
       // Mixed-case command golems enforce case — the CAPITALIZED tail misses
       // unless typed with Shift, so Gregor's lesson ("Lowercase moves them.
       // CAPITALS command them.") is a real mid-word demand, not a VFX gate.

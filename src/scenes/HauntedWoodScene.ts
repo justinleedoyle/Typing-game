@@ -1070,6 +1070,8 @@ export class HauntedWoodScene extends Phaser.Scene {
       fontSize: 32,
       // Wisp-themed pale gray-green burst — a ghost going down in mist, not brass.
       burstColor: GHOST_BURST_COLOR,
+      defeatImpactKind: "mist",
+      defeatImpactColor: GHOST_BURST_COLOR,
       // UI-cohesion: the legibility outline (TTT-style) so the word reads against
       // the painted wood + mist.
       outline: true,

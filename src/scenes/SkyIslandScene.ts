@@ -42,6 +42,7 @@ import {
   addContainerWake,
   fadeOutStagedSprite,
   addLocalGroundShadow,
+  playBodyImpact,
   playRealmClearResonance,
   stageContainerEntrance,
   stageAnchoredSprite,
@@ -1563,6 +1564,12 @@ export class SkyIslandScene extends Phaser.Scene {
     spirit.advanceTween?.stop();
     spirit.advanceTween = null;
     this.tweens.killTweensOf(spirit.container);
+    playBodyImpact(this, spirit.container, {
+      kind: "mote",
+      color: 0xf5c842,
+      offsetY: -42,
+      ringRadius: 48,
+    });
 
     // Bloom: expand glow radius briefly
     this.tweens.add({

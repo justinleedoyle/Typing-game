@@ -22,6 +22,7 @@
 // scroll-across-and-miss flavour, not advance-and-retry.
 
 import Phaser from "phaser";
+import { playBodyImpact, type AmbientKind } from "./livingScene";
 import {
   advanceDurationMs,
   dangerRamp,
@@ -87,6 +88,11 @@ export interface MovingWordEnemyConfig {
   /** Body fade-up distance and duration on defeat. Defaults −50 / 480. */
   defeatRiseY?: number;
   defeatMs?: number;
+  /** Living-scene impact at the body when the word resolves. Defaults to a
+   *  brass/mote pulse; realms can tint it as snow, bubbles, embers, or mist. */
+  defeatImpactKind?: AmbientKind;
+  defeatImpactColor?: number;
+  defeatImpactOffsetY?: number;
 
   // ── TextWordTarget passthrough ─────────────────────────────────────────────
   fontSize?: number;
@@ -290,6 +296,13 @@ export class MovingWordEnemy {
     this.advanceTween = null;
     const c = this.cfg.container;
     this.cfg.scene.tweens.killTweensOf(c);
+    playBodyImpact(this.cfg.scene, c, {
+      kind: this.cfg.defeatImpactKind,
+      color:
+        this.cfg.defeatImpactColor ??
+        (this.cfg.burstColor === null ? undefined : this.cfg.burstColor),
+      offsetY: this.cfg.defeatImpactOffsetY ?? this.anchorOffsetY * 0.62,
+    });
     this.cfg.scene.tweens.add({
       targets: c,
       alpha: 0,

@@ -1559,6 +1559,8 @@ export class SunkenBellScene extends Phaser.Scene {
       fontSize: 32,
       // Sea-green burst — the ghost dissolves into deep water, not brass.
       burstColor: BELL_BURST_COLOR,
+      defeatImpactKind: "bubble",
+      defeatImpactColor: BELL_BURST_COLOR,
       outline: true,
       onTargetAttached: (t) => this.activeTargets.push(t),
       onTargetDetached: (t) => {

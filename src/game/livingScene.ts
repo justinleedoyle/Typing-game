@@ -85,6 +85,12 @@ type WakeTarget = Phaser.GameObjects.GameObject & {
   active: boolean;
 };
 
+type BodyImpactTarget = Phaser.GameObjects.GameObject & {
+  x: number;
+  y: number;
+  active: boolean;
+};
+
 export interface ContainerWakeOptions {
   kind: AmbientKind;
   intervalMs?: number;
@@ -98,6 +104,17 @@ export interface ContainerWakeOptions {
   depth?: number;
   driftX?: number;
   driftY?: number;
+  durationMs?: number;
+}
+
+export interface BodyImpactOptions {
+  kind?: AmbientKind;
+  color?: number;
+  offsetX?: number;
+  offsetY?: number;
+  depth?: number;
+  ringRadius?: number;
+  count?: number;
   durationMs?: number;
 }
 
@@ -329,6 +346,73 @@ export function playRealmClearResonance(
       y: y + Math.sin(angle) * distance * 0.56,
       alpha: 0,
       duration: duration + Phaser.Math.Between(-80, 180),
+      ease: "Sine.easeOut",
+      onComplete: () => fleck.destroy(),
+    });
+  }
+}
+
+/** Typed combat impact at the enemy/body location, not just at the word. This
+ *  is the "the thing in the world reacted" layer that keeps combat from feeling
+ *  like floating text over static art. */
+export function playBodyImpact(
+  scene: Phaser.Scene,
+  target: BodyImpactTarget,
+  opts: BodyImpactOptions = {},
+): void {
+  if (!target.active) return;
+  const kind = opts.kind ?? "mote";
+  const color = opts.color ?? colorFor(kind);
+  const x = target.x + (opts.offsetX ?? 0);
+  const y = target.y + (opts.offsetY ?? -54);
+  const depth = opts.depth ?? 48;
+  const duration = opts.durationMs ?? 460;
+  const radius = opts.ringRadius ?? 46;
+
+  const ring = scene.add
+    .graphics()
+    .setPosition(x, y)
+    .setDepth(depth)
+    .setAlpha(0.7);
+  ring.lineStyle(3, color, 0.68);
+  ring.strokeEllipse(0, 0, radius * 1.55, radius * 0.74);
+  scene.tweens.add({
+    targets: ring,
+    alpha: 0,
+    scaleX: 1.75,
+    scaleY: 1.55,
+    duration,
+    ease: "Sine.easeOut",
+    onComplete: () => ring.destroy(),
+  });
+
+  const count = opts.count ?? 12;
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.25, 0.25);
+    const distance = Phaser.Math.Between(
+      Math.round(radius * 0.55),
+      Math.round(radius * 1.35),
+    );
+    const fleck = scene.add
+      .graphics()
+      .setPosition(x, y)
+      .setDepth(depth + 1)
+      .setAlpha(0.82);
+    drawParticle(
+      fleck,
+      kind,
+      color,
+      Phaser.Math.FloatBetween(2.4, 5.4),
+      Math.max(0.24, alphaFor(kind)),
+    );
+    scene.tweens.add({
+      targets: fleck,
+      x: x + Math.cos(angle) * distance,
+      y: y + Math.sin(angle) * distance * 0.55 + Phaser.Math.Between(-10, 8),
+      alpha: 0,
+      scaleX: 1.4,
+      scaleY: 1.4,
+      duration: duration + Phaser.Math.Between(-80, 130),
       ease: "Sine.easeOut",
       onComplete: () => fleck.destroy(),
     });

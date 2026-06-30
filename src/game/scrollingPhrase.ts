@@ -8,6 +8,7 @@
 // typing state, this module owns the moving visuals and the timeout.
 
 import Phaser from "phaser";
+import { playBodyImpact } from "./livingScene";
 import { PALETTE, PALETTE_HEX, SERIF } from "./palette";
 import { blurAlphaFor, bannerDangerAt, shouldEatSuffix } from "./skyBlur";
 import { playWordCompleteBurst } from "./vfx";
@@ -151,6 +152,13 @@ export class ScrollingPhrase {
     this.resolved = true;
     this.scrollTween?.stop();
     this.scrollTween = null;
+    playBodyImpact(this.opts.scene, this.container, {
+      kind: "mote",
+      color: PALETTE_HEX.brass,
+      offsetY: 0,
+      ringRadius: Math.min(72, this.bannerW / 4),
+      count: 14,
+    });
     // Banner glows + dissolves.
     this.opts.scene.tweens.add({
       targets: this.container,
@@ -233,6 +241,13 @@ export class ScrollingPhrase {
       color: PALETTE_HEX.ember,
       count: 16,
       radius: 60,
+    });
+    playBodyImpact(this.opts.scene, this.container, {
+      kind: "ember",
+      color: PALETTE_HEX.ember,
+      offsetY: 0,
+      ringRadius: Math.min(74, this.bannerW / 4),
+      count: 16,
     });
     this.opts.scene.tweens.add({
       targets: this.container,

@@ -796,6 +796,8 @@ export class WinterMountainScene extends Phaser.Scene {
       fontSize: 32,
       // Frost burst on completion — wolves go "down in snow," not "down in brass."
       burstColor: PALETTE_HEX.frost,
+      defeatImpactKind: "snow",
+      defeatImpactColor: PALETTE_HEX.frost,
       outline: true,
       // The circler (flanking) wolf weaves vertically as it closes.
       verticalOffset: circles ? circlerY : undefined,
@@ -866,6 +868,8 @@ export class WinterMountainScene extends Phaser.Scene {
       defeatMs: 500,
       fontSize: 32,
       burstColor: PALETTE_HEX.frost,
+      defeatImpactKind: "snow",
+      defeatImpactColor: PALETTE_HEX.frost,
       outline: true,
       // Warded: the boss advances mute until the pack falls; releaseBossWard()
       // attaches its true name then.

@@ -1510,7 +1510,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── Helpers ──────────────────────────────────────────────────────────────────
 
   private setNarrator(text: string): void {
-    this.narration.sayRaw(text);
+    this.narration.sayRaw(text, { speakerName: null });
   }
 
   // ─── Tier 4 relic helpers ───────────────────────────────────────────────────

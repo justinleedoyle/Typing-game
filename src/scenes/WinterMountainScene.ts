@@ -1546,7 +1546,7 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private setNarrator(text: string): void {
-    this.narration.sayRaw(text);
+    this.narration.sayRaw(text, { speakerName: null });
   }
 
   private clearActiveTargets(): void {

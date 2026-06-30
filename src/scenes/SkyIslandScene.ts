@@ -1671,7 +1671,7 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private setNarrator(text: string): void {
-    this.narration.sayRaw(text);
+    this.narration.sayRaw(text, { speakerName: null });
   }
 
   /** UI-cohesion: every Sky-Island word target gets the legibility outline by

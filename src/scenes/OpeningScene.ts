@@ -345,7 +345,7 @@ export class OpeningScene extends Phaser.Scene {
   // ── Narrator helper ────────────────────────────────────────────────────────
 
   private setNarrator(text: string): void {
-    this.narration.sayRaw(text);
+    this.narration.sayRaw(text, { speakerName: null });
   }
 
   // ── Drawing ────────────────────────────────────────────────────────────────

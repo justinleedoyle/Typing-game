@@ -40,9 +40,15 @@ interface NarrationConfig {
   speakerName?: string | null;
 }
 
+interface NarrationOptions {
+  /** Override the framed-card ribbon for this one line. `null` suppresses it. */
+  speakerName?: string | null;
+}
+
 export class NarrationManager {
   private readonly text: Phaser.GameObjects.Text;
   private readonly framed: boolean;
+  private readonly defaultSpeakerName: string | null;
   /** Framed mode only: a container holding the card plate + corners + text, so
    *  the whole caption fades/positions as one and the plate resizes per line. */
   private container?: Phaser.GameObjects.Container;
@@ -56,6 +62,9 @@ export class NarrationManager {
     config: NarrationConfig = {},
   ) {
     this.framed = config.framed === true;
+    this.defaultSpeakerName = config.speakerName === undefined
+      ? DEFAULT_SPEAKER_NAME
+      : config.speakerName;
     const cx = scene.scale.width / 2;
     const cy = config.y ?? DEFAULT_Y;
 
@@ -64,21 +73,17 @@ export class NarrationManager {
       this.container = scene.add.container(cx, cy).setAlpha(0);
       this.cardBg = scene.add.graphics();
       this.cardCorners = scene.add.graphics();
-      const speakerName = config.speakerName === undefined
-        ? DEFAULT_SPEAKER_NAME
-        : config.speakerName;
-      if (speakerName) {
-        this.speakerBg = scene.add.graphics();
-        this.speakerText = scene.add
-          .text(0, 0, speakerName, {
-            fontFamily: SERIF,
-            fontSize: "17px",
-            color: UI_CSS.parchment,
-            fontStyle: "italic",
-            align: "center",
-          })
-          .setOrigin(0.5);
-      }
+      this.speakerBg = scene.add.graphics().setVisible(false);
+      this.speakerText = scene.add
+        .text(0, 0, "", {
+          fontFamily: SERIF,
+          fontSize: "17px",
+          color: UI_CSS.parchment,
+          fontStyle: "italic",
+          align: "center",
+        })
+        .setOrigin(0.5)
+        .setVisible(false);
       this.text = scene.add
         .text(0, 0, "", {
           fontFamily: SERIF,
@@ -92,7 +97,8 @@ export class NarrationManager {
       this.container.add([
         this.cardBg,
         this.cardCorners,
-        ...(this.speakerBg && this.speakerText ? [this.speakerBg, this.speakerText] : []),
+        this.speakerBg,
+        this.speakerText,
         this.text,
       ]);
       if (config.depth !== undefined) this.container.setDepth(config.depth);
@@ -136,7 +142,7 @@ export class NarrationManager {
     this.cardCorners.beginPath(); this.cardCorners.moveTo(-x, y - size); this.cardCorners.lineTo(-x, y); this.cardCorners.lineTo(-x + size, y); this.cardCorners.strokePath();
     this.cardCorners.beginPath(); this.cardCorners.moveTo(x - size, y); this.cardCorners.lineTo(x, y); this.cardCorners.lineTo(x, y - size); this.cardCorners.strokePath();
 
-    if (this.speakerBg && this.speakerText) {
+    if (this.speakerBg && this.speakerText && this.speakerText.visible) {
       const tabW = Math.max(86, this.speakerText.width + 30);
       const tabH = 28;
       const tabX = -w / 2 + 28;
@@ -150,25 +156,44 @@ export class NarrationManager {
     }
   }
 
+  private setSpeaker(name: string | null): void {
+    if (!this.speakerBg || !this.speakerText) return;
+    if (!name) {
+      this.speakerBg.clear();
+      this.speakerBg.setVisible(false);
+      this.speakerText.setText("").setVisible(false);
+      return;
+    }
+    this.speakerText.setText(name).setVisible(true);
+    this.speakerBg.setVisible(true);
+  }
+
   /** Render a canonical Runa line by ID. Falls back to sayRaw() if the ID is
    *  unknown (so a typo or stale ID degrades gracefully rather than blanking
    *  the caption). When audio files land, this is the hook that plays them. */
-  say(lineId: string): void {
+  say(lineId: string, opts: NarrationOptions = {}): void {
     const line = getRunaLine(lineId);
+    const speakerName = opts.speakerName === undefined
+      ? this.defaultSpeakerName
+      : opts.speakerName;
     if (!line) {
       // Unknown ID — render the ID itself as a hint during development.
-      this.sayRaw(`[missing line: ${lineId}]`);
+      this.sayRaw(`[missing line: ${lineId}]`, { speakerName });
       return;
     }
-    this.sayRaw(line.text);
+    this.sayRaw(line.text, { speakerName });
     // Audio playback hook for when voice work resumes:
     //   playLine(lineId);
   }
 
   /** Render an inline caption. Use for transitional/inline copy that isn't
    *  in runaLines.ts yet. Migrate to say(lineId) over time. */
-  sayRaw(text: string): void {
+  sayRaw(text: string, opts: NarrationOptions = {}): void {
+    const speakerName = opts.speakerName === undefined
+      ? this.defaultSpeakerName
+      : opts.speakerName;
     this.text.setText(text);
+    if (this.framed) this.setSpeaker(speakerName);
     if (this.framed) this.redrawCard();
     const root = this.container ?? this.text;
     root.setAlpha(0);

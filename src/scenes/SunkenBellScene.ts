@@ -1679,7 +1679,7 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
   private setNarrator(text: string): void {
-    this.narration.sayRaw(text);
+    this.narration.sayRaw(text, { speakerName: null });
   }
 
   private clearActiveTargets(): void {

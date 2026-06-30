@@ -380,7 +380,7 @@ export class GreatBattleScene extends Phaser.Scene {
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
   private setNarrator(text: string): void {
-    this.narration.sayRaw(text);
+    this.narration.sayRaw(text, { speakerName: null });
   }
 
   /** UI-cohesion: every finale word target gets the legibility outline (TTT-style). */

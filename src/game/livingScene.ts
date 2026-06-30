@@ -105,6 +105,12 @@ type BodyTypePulseTarget = Phaser.GameObjects.GameObject & {
   active: boolean;
 };
 
+type WordBodyAnchorTarget = Phaser.GameObjects.GameObject & {
+  x: number;
+  y: number;
+  active: boolean;
+};
+
 type ScalePulseTarget = Phaser.GameObjects.GameObject & {
   active: boolean;
   scaleX: number;
@@ -154,6 +160,22 @@ export interface ClaimLineOptions {
   color?: number;
   depth?: number;
   durationMs?: number;
+}
+
+export interface WordBodyAnchorOptions {
+  color?: number;
+  alpha?: number;
+  depth?: number;
+  lineWidth?: number;
+  sourceOffsetX?: number;
+  sourceOffsetY?: number;
+  targetOffsetX?: number;
+  targetOffsetY?: number;
+}
+
+export interface WordBodyAnchorHandle {
+  update(): void;
+  destroy(): void;
 }
 
 export interface UiObjectPulseOptions {
@@ -607,6 +629,64 @@ export function playClaimLine(
     ease: "Sine.easeOut",
     onComplete: () => endpoint.destroy(),
   });
+}
+
+/** Faint persistent tether between an in-world body and its floating word.
+ *  This is deliberately quieter than claim lines: it solves "loose text over
+ *  art" in idle screenshots without competing with the active typing cue. */
+export function attachWordBodyAnchor(
+  scene: Phaser.Scene,
+  body: WordBodyAnchorTarget,
+  getWordAnchor: () => { x: number; y: number } | null,
+  opts: WordBodyAnchorOptions = {},
+): WordBodyAnchorHandle {
+  const g = scene.add.graphics().setDepth(opts.depth ?? 18);
+  const color = opts.color ?? 0xc9a14a;
+  const alpha = opts.alpha ?? 0.22;
+  const lineWidth = opts.lineWidth ?? 1;
+  let destroyed = false;
+
+  const update = (): void => {
+    if (destroyed) return;
+    if (!body.active) {
+      handle.destroy();
+      return;
+    }
+    const word = getWordAnchor();
+    if (!word) {
+      g.clear();
+      return;
+    }
+    const fromX = body.x + (opts.sourceOffsetX ?? 0);
+    const fromY = body.y + (opts.sourceOffsetY ?? -36);
+    const toX = word.x + (opts.targetOffsetX ?? 0);
+    const toY = word.y + (opts.targetOffsetY ?? 24);
+    if (Math.hypot(toX - fromX, toY - fromY) < 14) {
+      g.clear();
+      return;
+    }
+    g.clear();
+    g.lineStyle(lineWidth, color, alpha);
+    g.lineBetween(fromX, fromY, toX, toY);
+    g.fillStyle(color, alpha * 0.7);
+    g.fillCircle(toX, toY, 2.5);
+  };
+
+  const handle: WordBodyAnchorHandle = {
+    update,
+    destroy: () => {
+      if (destroyed) return;
+      destroyed = true;
+      scene.events.off(Phaser.Scenes.Events.UPDATE, update);
+      scene.events.off(Phaser.Scenes.Events.SHUTDOWN, handle.destroy);
+      g.destroy();
+    },
+  };
+
+  scene.events.on(Phaser.Scenes.Events.UPDATE, update);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, handle.destroy);
+  update();
+  return handle;
 }
 
 /** Small console-band/UI pulse for resource meters. Keeps meter changes from

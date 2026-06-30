@@ -425,6 +425,14 @@ export class TextWordTarget implements WordTarget {
     this.container.y = y;
   }
 
+  getAnchorX(): number {
+    return this.container.x;
+  }
+
+  getAnchorY(): number {
+    return this.container.y;
+  }
+
   destroy(): void {
     this.container.destroy();
   }

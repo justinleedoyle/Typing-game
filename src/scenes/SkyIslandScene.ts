@@ -41,6 +41,7 @@ import {
   addAmbientDrift,
   addBackdropDrift,
   addContainerWake,
+  attachWordBodyAnchor,
   fadeOutStagedSprite,
   addLocalGroundShadow,
   playBodyImpact,
@@ -49,6 +50,7 @@ import {
   playRealmClearResonance,
   stageContainerEntrance,
   stageAnchoredSprite,
+  type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import {
   bobWrenSprite,
@@ -99,6 +101,7 @@ interface LanternSpirit {
   glowGfx: Phaser.GameObjects.Graphics;
   pulseTween: Phaser.Tweens.Tween | null;
   target: TextWordTarget | null;
+  wordAnchor: WordBodyAnchorHandle | null;
   spawnX: number;
   restY: number;
   word: string;
@@ -1521,6 +1524,7 @@ export class SkyIslandScene extends Phaser.Scene {
       glowGfx,
       pulseTween: null,
       target: null,
+      wordAnchor: null,
       spawnX: targetX,
       restY: targetY,
       word,
@@ -1595,6 +1599,22 @@ export class SkyIslandScene extends Phaser.Scene {
       onComplete: () => this.defeatSpirit(spirit),
     });
     spirit.target = target;
+    spirit.wordAnchor?.destroy();
+    spirit.wordAnchor = attachWordBodyAnchor(
+      this,
+      spirit.container,
+      () =>
+        spirit.target
+          ? { x: spirit.target.getAnchorX(), y: spirit.target.getAnchorY() }
+          : null,
+      {
+        color: 0xf5c842,
+        alpha: 0.24,
+        depth: 20,
+        sourceOffsetY: -46,
+        targetOffsetY: 24,
+      },
+    );
     this.typingInput.register(target);
     this.activeTargets.push(target);
   }
@@ -1650,6 +1670,8 @@ export class SkyIslandScene extends Phaser.Scene {
       if (idx >= 0) this.activeTargets.splice(idx, 1);
       spirit.target = null;
     }
+    spirit.wordAnchor?.destroy();
+    spirit.wordAnchor = null;
     spirit.advanceTween?.stop();
     spirit.advanceTween = null;
     this.tweens.killTweensOf(spirit.container);
@@ -1709,6 +1731,8 @@ export class SkyIslandScene extends Phaser.Scene {
       spirit.target.destroy();
       spirit.target = null;
     }
+    spirit.wordAnchor?.destroy();
+    spirit.wordAnchor = null;
     this.tweens.killTweensOf(spirit.container);
 
     this.tweens.add({

@@ -23,10 +23,12 @@
 
 import Phaser from "phaser";
 import {
+  attachWordBodyAnchor,
   playBodyImpact,
   playBodyTypePulse,
   playClaimLine,
   type AmbientKind,
+  type WordBodyAnchorHandle,
 } from "./livingScene";
 import {
   advanceDurationMs,
@@ -171,6 +173,7 @@ export class MovingWordEnemy {
   private readonly cfg: MovingWordEnemyConfig;
   private wordTarget: TextWordTarget | null = null;
   private advanceTween: Phaser.Tweens.Tween | null = null;
+  private wordAnchor: WordBodyAnchorHandle | null = null;
   private defeated = false;
   private completedByPlayer = false;
   // Tier 4 freeze (jam-foe / bind-beat): advance halted, word kept typeable.
@@ -420,6 +423,25 @@ export class MovingWordEnemy {
     this.wordTarget = target;
     this.cfg.typingInput.register(target);
     this.cfg.onTargetAttached?.(target);
+    this.wordAnchor?.destroy();
+    this.wordAnchor = attachWordBodyAnchor(
+      this.cfg.scene,
+      this.cfg.container,
+      () =>
+        this.wordTarget
+          ? { x: this.wordTarget.getAnchorX(), y: this.wordTarget.getAnchorY() }
+          : null,
+      {
+        color:
+          this.cfg.claimLineColor ??
+          this.cfg.defeatImpactColor ??
+          PALETTE_HEX.brass,
+        alpha: 0.2,
+        depth: 44,
+        sourceOffsetY: Math.min(-26, this.anchorOffsetY * 0.42),
+        targetOffsetY: 24,
+      },
+    );
   }
 
   private playClaimLine(): void {
@@ -627,6 +649,8 @@ export class MovingWordEnemy {
   }
 
   private dropTarget(destroy: boolean): void {
+    this.wordAnchor?.destroy();
+    this.wordAnchor = null;
     const target = this.wordTarget;
     if (!target) return;
     this.cfg.typingInput.unregister(target);

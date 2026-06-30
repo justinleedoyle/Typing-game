@@ -614,6 +614,8 @@ export class AlmanacScene extends Phaser.Scene {
         x: LEFT_PAGE_X + 200,
         y: this.scale.height - 130,
         fontSize: 26,
+        outline: true,
+        frame: "banner",
         onComplete: () => {
           this.currentPage -= 1;
           this.renderCurrentPage();
@@ -630,6 +632,8 @@ export class AlmanacScene extends Phaser.Scene {
         x: RIGHT_PAGE_X + 200,
         y: this.scale.height - 130,
         fontSize: 26,
+        outline: true,
+        frame: "banner",
         onComplete: () => {
           this.currentPage += 1;
           this.renderCurrentPage();
@@ -645,6 +649,8 @@ export class AlmanacScene extends Phaser.Scene {
       x: this.scale.width / 2,
       y: this.scale.height - 70,
       fontSize: 28,
+      outline: true,
+      frame: "banner",
       onComplete: () => this.closeBook(),
     });
     this.typingInput.register(this.closeTarget);

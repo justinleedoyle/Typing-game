@@ -33,6 +33,7 @@ import {
   addIdleBreath,
   addLocalGroundShadow,
   playBodyImpact,
+  playActorAttention,
   playMeterPulse,
   playRealmClearResonance,
   stageContainerEntrance,
@@ -1759,6 +1760,9 @@ export class SunkenBellScene extends Phaser.Scene {
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
           playWrenAction(this.wrenSprite);
+          playActorAttention(this, this.aurlandImage, {
+            tint: BELL_BURST_COLOR,
+          });
           playBodyImpact(this, this.wrenContainer, {
             kind: "bubble",
             color: BELL_BURST_COLOR,

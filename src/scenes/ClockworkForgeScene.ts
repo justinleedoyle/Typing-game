@@ -42,6 +42,7 @@ import {
   fadeOutStagedSprite,
   addLocalGroundShadow,
   playBodyImpact,
+  playActorAttention,
   playRealmClearResonance,
   stageContainerEntrance,
   stageAnchoredSprite,
@@ -1519,6 +1520,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
           playWrenAction(this.wrenSprite);
+          playActorAttention(this, this.fornSprite, {
+            tint: PALETTE_HEX.ember,
+          });
           playBodyImpact(this, this.wrenContainer, {
             kind: "ember",
             color: PALETTE_HEX.ember,

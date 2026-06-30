@@ -47,6 +47,7 @@ import {
   playBodyImpact,
   playBodyTypePulse,
   playClaimLine,
+  playActorAttention,
   playRealmClearResonance,
   stageContainerEntrance,
   stageAnchoredSprite,
@@ -918,6 +919,9 @@ export class SkyIslandScene extends Phaser.Scene {
           frame: "banner",
           fontSize: 36,
           onComplete: () => {
+            playActorAttention(this, this.ettaSprite, {
+              tint: PALETTE_HEX.brass,
+            });
             this.clearActiveTargets();
             this.startEttaHelp(nextTempleIdx);
           },
@@ -932,6 +936,9 @@ export class SkyIslandScene extends Phaser.Scene {
           frame: "banner",
           fontSize: 36,
           onComplete: () => {
+            playActorAttention(this, this.ettaSprite, {
+              tint: PALETTE_HEX.brass,
+            });
             this.clearActiveTargets();
             this.hideEtta();
             this.setNarrator("The scholar watches you go in silence.");
@@ -956,6 +963,9 @@ export class SkyIslandScene extends Phaser.Scene {
         fontSize: 38,
         onComplete: () => {
           playChime();
+          playActorAttention(this, this.ettaSprite, {
+            tint: PALETTE_HEX.brass,
+          });
           this.clearActiveTargets();
           this.setNarrator("The book is heavier than it looks. Old paper, dense with writing.");
           this.time.delayedCall(1400, () => {
@@ -967,6 +977,9 @@ export class SkyIslandScene extends Phaser.Scene {
               fontSize: 38,
               onComplete: () => {
                 playChime();
+                playActorAttention(this, this.ettaSprite, {
+                  tint: PALETTE_HEX.brass,
+                });
                 this.clearActiveTargets();
                 this.ettaDone = true;
                 this.store.update((s) => {
@@ -1781,6 +1794,9 @@ export class SkyIslandScene extends Phaser.Scene {
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
           playWrenAction(this.wrenSprite);
+          playActorAttention(this, this.ettaSprite, {
+            tint: PALETTE_HEX.brass,
+          });
           playBodyImpact(this, this.wrenContainer, {
             kind: "mote",
             color: PALETTE_HEX.brass,

@@ -34,6 +34,7 @@ import {
   addIdleBreath,
   addLocalGroundShadow,
   playBodyImpact,
+  playActorAttention,
   pulseUiObject,
   playRealmClearResonance,
   stageContainerEntrance,
@@ -528,6 +529,9 @@ export class WinterMountainScene extends Phaser.Scene {
       onComplete: () => {
         playClack();
         this.clearActiveTargets();
+        playActorAttention(this, this.heldurSprite, {
+          tint: PALETTE_HEX.frost,
+        });
         this.setHeldurDialog(HELDUR_RESPONSES[idx]);
         this.time.delayedCall(1800, () => this.runHeldurExchange(idx + 1));
       },
@@ -1552,6 +1556,9 @@ export class WinterMountainScene extends Phaser.Scene {
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
           playWrenAction(this.wrenSprite);
+          playActorAttention(this, this.huntressSprite, {
+            tint: PALETTE_HEX.frost,
+          });
           playBodyImpact(this, this.wrenContainer, {
             kind: "snow",
             color: PALETTE_HEX.frost,

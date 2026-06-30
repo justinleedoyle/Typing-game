@@ -118,6 +118,15 @@ type ScalePulseTarget = Phaser.GameObjects.GameObject & {
   setScale(x: number, y?: number): ScalePulseTarget;
 };
 
+type ActorAttentionTarget = Phaser.GameObjects.GameObject & {
+  active: boolean;
+  scaleX: number;
+  scaleY: number;
+  setScale(x: number, y?: number): ActorAttentionTarget;
+  setTintFill?: (color: number) => ActorAttentionTarget;
+  clearTint?: () => ActorAttentionTarget;
+};
+
 export interface ContainerWakeOptions {
   kind: AmbientKind;
   intervalMs?: number;
@@ -181,6 +190,12 @@ export interface WordBodyAnchorHandle {
 export interface UiObjectPulseOptions {
   scale?: number;
   durationMs?: number;
+}
+
+export interface ActorAttentionOptions {
+  scale?: number;
+  durationMs?: number;
+  tint?: number;
 }
 
 export interface MeterPulseOptions {
@@ -706,6 +721,33 @@ export function pulseUiObject(
     scaleY: 1,
     duration: opts.durationMs ?? 260,
     ease: "Back.easeOut",
+  });
+}
+
+/** Small response for staged side characters when Wren types a line involving
+ *  them. It avoids killing y-tweens, so idle breath continues underneath. */
+export function playActorAttention(
+  scene: Phaser.Scene,
+  target: ActorAttentionTarget | null | undefined,
+  opts: ActorAttentionOptions = {},
+): void {
+  if (!target?.active) return;
+  const baseScaleX = target.scaleX;
+  const baseScaleY = target.scaleY;
+  const scale = opts.scale ?? 1.025;
+  target.setScale(baseScaleX * scale, baseScaleY * scale);
+  if (opts.tint !== undefined) {
+    target.setTintFill?.(opts.tint);
+    scene.time.delayedCall(Math.min(140, opts.durationMs ?? 180), () =>
+      target.clearTint?.(),
+    );
+  }
+  scene.tweens.add({
+    targets: target,
+    scaleX: baseScaleX,
+    scaleY: baseScaleY,
+    duration: opts.durationMs ?? 180,
+    ease: "Sine.easeOut",
   });
 }
 

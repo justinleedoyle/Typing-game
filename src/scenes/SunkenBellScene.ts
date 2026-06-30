@@ -24,6 +24,11 @@ import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
+import {
+  addAmbientDrift,
+  addIdleBreath,
+  addLocalGroundShadow,
+} from "../game/livingScene";
 import { pickAdaptiveWords, SUNKEN_BELL_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
@@ -173,6 +178,19 @@ export class SunkenBellScene extends Phaser.Scene {
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addAmbientDrift(this, {
+      kind: "bubble",
+      count: 42,
+      depth: -2,
+      area: { x: 80, y: 80, width: this.scale.width - 160, height: 740 },
+      alpha: 0.28,
+      minSize: 2,
+      maxSize: 7,
+      driftX: 34,
+      driftY: -360,
+      minDurationMs: 6500,
+      maxDurationMs: 13000,
+    });
     this.wrenContainer = this.drawWren(WREN_X, WREN_Y);
 
     this.typingInput = new TypingInputController(this.store);
@@ -1575,6 +1593,7 @@ export class SunkenBellScene extends Phaser.Scene {
    *  The container drives alpha (restAlpha 0.7) + the danger-ramp tint, so this
    *  just places the art. */
   private drawGhostInto(c: Phaser.GameObjects.Container): void {
+    c.add(addLocalGroundShadow(this, 88, 18, { y: 8, alpha: 0.18 }));
     const sprite = this.add.image(0, 0, "bell-ghost");
     sprite.setScale(GHOST_SPRITE_HEIGHT / sprite.height);
     c.add(sprite);
@@ -1705,8 +1724,10 @@ export class SunkenBellScene extends Phaser.Scene {
     // Retains the inner sprite reference on this.wrenSprite so the keystroke
     // hooks can bob / flash the actual image (not just the container).
     const c = this.add.container(x, y);
+    c.add(addLocalGroundShadow(this, 92, 20, { y: 6, alpha: 0.26 }));
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
+    addIdleBreath(this, c, { dy: -4, durationMs: 2300 });
     return c;
   }
 
@@ -1723,4 +1744,3 @@ export class SunkenBellScene extends Phaser.Scene {
     sprite.setScale(OLIN_SPRITE_HEIGHT / sprite.height);
   }
 }
-

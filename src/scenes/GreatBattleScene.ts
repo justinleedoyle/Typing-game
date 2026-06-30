@@ -29,6 +29,7 @@ import {
   HAUNTED_WOOD_WORD_BANK,
 } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
+import { addAmbientDrift } from "../game/livingScene";
 import greatBattleBackdrop from "../../art/references/great-battle-clean.png";
 import runaPortrait from "../../art/runa/runa-front.png";
 
@@ -256,6 +257,19 @@ export class GreatBattleScene extends Phaser.Scene {
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addAmbientDrift(this, {
+      kind: "ash",
+      count: 48,
+      depth: -2,
+      area: { x: 0, y: 120, width: this.scale.width, height: 700 },
+      alpha: 0.28,
+      minSize: 1.5,
+      maxSize: 4.5,
+      driftX: 110,
+      driftY: -220,
+      minDurationMs: 5200,
+      maxDurationMs: 12500,
+    });
 
     // UI cohesion — the console band. The finale has no heart/soul HUD; its candle
     // (fail-state) + spell-charge meters dock into the band, with Runa at the portrait

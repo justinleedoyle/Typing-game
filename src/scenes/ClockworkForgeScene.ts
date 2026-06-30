@@ -35,6 +35,11 @@ import { SPELL_COST } from "../game/sessionStats";
 import { type ClaimMods, TypingInputController } from "../game/typingInput";
 import { WaveDirector } from "../game/waveDirector";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
+import {
+  addAmbientDrift,
+  addIdleBreath,
+  addLocalGroundShadow,
+} from "../game/livingScene";
 import { pickAdaptiveWords, FORGE_COMMAND_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
@@ -203,6 +208,19 @@ export class ClockworkForgeScene extends Phaser.Scene {
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addAmbientDrift(this, {
+      kind: "ember",
+      count: 44,
+      depth: -1,
+      area: { x: 0, y: 360, width: this.scale.width, height: 480 },
+      alpha: 0.55,
+      minSize: 1.5,
+      maxSize: 4.5,
+      driftX: 70,
+      driftY: -300,
+      minDurationMs: 3600,
+      maxDurationMs: 8200,
+    });
     this.drawForgeGlow();
     this.drawCatwalk();
     this.drawWren(this.scale.width / 2, CATWALK_Y + 20);
@@ -1733,8 +1751,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private drawWren(x: number, y: number): void {
     const c = this.add.container(x, y);
+    c.add(addLocalGroundShadow(this, 92, 18, { y: 6, alpha: 0.32 }));
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
+    addIdleBreath(this, c, { dy: -3, durationMs: 1900 });
   }
 
   /** Add the painted golem sprite into a container, scaled to the old procedural
@@ -1744,6 +1764,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     c: Phaser.GameObjects.Container,
     _isBoss: boolean,
   ): Phaser.GameObjects.Image {
+    c.add(addLocalGroundShadow(this, 132, 24, { y: 10, alpha: 0.42 }));
     const sprite = this.add.image(0, 0, "forge-golem");
     sprite.setScale(GOLEM_SPRITE_HEIGHT / sprite.height);
     c.add(sprite);
@@ -1757,6 +1778,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     c: Phaser.GameObjects.Container,
     _isBoss: boolean,
   ): Phaser.GameObjects.Image {
+    c.add(addLocalGroundShadow(this, 164, 30, { y: 12, alpha: 0.46 }));
     const sprite = this.add.image(0, 0, "forge-command-golem");
     sprite.setScale(COMMAND_GOLEM_SPRITE_HEIGHT / sprite.height);
     c.add(sprite);

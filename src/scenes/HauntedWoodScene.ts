@@ -38,6 +38,11 @@ import {
   woodWardWord,
 } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
+import {
+  addAmbientDrift,
+  addIdleBreath,
+  addLocalGroundShadow,
+} from "../game/livingScene";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
 import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
@@ -173,6 +178,19 @@ export class HauntedWoodScene extends Phaser.Scene {
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addAmbientDrift(this, {
+      kind: "mist",
+      count: 24,
+      depth: -2,
+      area: { x: -160, y: 430, width: this.scale.width + 320, height: 330 },
+      alpha: 0.1,
+      minSize: 5,
+      maxSize: 11,
+      driftX: 260,
+      driftY: -30,
+      minDurationMs: 9000,
+      maxDurationMs: 17000,
+    });
     this.drawShrine();
     this.drawWren(WREN_X, WREN_Y);
 
@@ -1157,6 +1175,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     // to the procedural body height so the word anchor + hit feel line up. The
     // enemy applies restAlpha (0.6) to the whole container, keeping the ghostly
     // translucence the flat shape used to bake in.
+    c.add(addLocalGroundShadow(this, 96, 20, { y: 8, alpha: 0.18 }));
     const sprite = this.add.image(0, 0, "wood-ghost");
     sprite.setScale(WOOD_GHOST_SPRITE_HEIGHT / sprite.height);
     c.add(sprite);
@@ -1457,8 +1476,10 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {
     const c = this.add.container(x, y);
+    c.add(addLocalGroundShadow(this, 92, 20, { y: 6, alpha: 0.27 }));
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
+    addIdleBreath(this, c, { dy: -4, durationMs: 2300 });
     return c;
   }
 

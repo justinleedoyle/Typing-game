@@ -16,6 +16,13 @@ import {
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
+import {
+  addAmbientDrift,
+  addGroundShadow,
+  addIdleBreath,
+  addLocalGroundShadow,
+} from "../game/livingScene";
+import { preloadSatchelIcons, satchelIconFor } from "../game/ui/satchelIcons";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
 import hubBackdrop from "../../art/references/hub-portal-chamber-clean.png";
 import portalActiveSheet from "../../art/portal/portal-active-sheet.png";
@@ -101,6 +108,7 @@ export class PortalChamberScene extends Phaser.Scene {
   preload(): void {
     this.load.image("hub-backdrop", hubBackdrop);
     this.load.image("runa-sprite", runaSprite);
+    preloadSatchelIcons(this, this.store.get().satchel ?? []);
     // 8-frame portal swirl, re-aligned by scripts/key_portal_sheet.py so each
     // frame's arch sits at the exact same x/y within its cell — no slide
     // when cycling.
@@ -152,7 +160,7 @@ export class PortalChamberScene extends Phaser.Scene {
     // hub's Runa-narrator beats (arrival, desk reflections, the endgame calls)
     // route through say(id); say() is the voice hook when audio lands. The
     // bottom `hint` above keeps only the functional prompts (arch name, shelf).
-    this.narration = new NarrationManager(this, { y: 150 });
+    this.narration = new NarrationManager(this, { y: 150, framed: true });
 
     // Fragment display — shows the accumulating Quiet Lord word in the upper-
     // centre of the room, growing one letter per realm cleared.
@@ -218,6 +226,7 @@ export class PortalChamberScene extends Phaser.Scene {
     if (!animate || targetX === this.wrenContainer.x) {
       this.wrenContainer.x = targetX;
       setWrenPose(this.wrenSprite, "front");
+      addIdleBreath(this, this.wrenContainer, { dy: -4, durationMs: 2100 });
       return;
     }
     setWrenPose(this.wrenSprite, "walk", targetX < this.wrenContainer.x);
@@ -226,7 +235,10 @@ export class PortalChamberScene extends Phaser.Scene {
       x: targetX,
       duration: 600,
       ease: "Sine.easeInOut",
-      onComplete: () => setWrenPose(this.wrenSprite, "front"),
+      onComplete: () => {
+        setWrenPose(this.wrenSprite, "front");
+        addIdleBreath(this, this.wrenContainer, { dy: -4, durationMs: 2100 });
+      },
     });
   }
 
@@ -252,6 +264,7 @@ export class PortalChamberScene extends Phaser.Scene {
         x: arch.x,
         y: archTargetY(nextAvailableIdx),
         fontSize: 30,
+        outline: true,
         onComplete: () => this.onEnterPortal(arch.sceneKey, false),
       });
       this.typingInput.register(primary);
@@ -275,6 +288,8 @@ export class PortalChamberScene extends Phaser.Scene {
           x: this.scale.width / 2,
           y: 460,
           fontSize: 42,
+          outline: true,
+          frame: "banner",
           onComplete: () => {
             this.cameras.main.fadeOut(600, 10, 8, 15);
             this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
@@ -294,6 +309,8 @@ export class PortalChamberScene extends Phaser.Scene {
           x: this.scale.width / 2,
           y: 460,
           fontSize: 38,
+          outline: true,
+          frame: "banner",
           onComplete: () => this.startNewGame(),
         });
         this.typingInput.register(ngPlusTarget);
@@ -313,6 +330,7 @@ export class PortalChamberScene extends Phaser.Scene {
         y: archTargetY(i),
         fontSize: 22,
         priority: -1,
+        outline: true,
         onComplete: () => this.onEnterPortal(arch.sceneKey, true),
       });
       this.typingInput.register(revisit);
@@ -451,6 +469,8 @@ export class PortalChamberScene extends Phaser.Scene {
       y,
       fontSize: 26,
       priority: -2,
+      outline: true,
+      frame: "banner",
       onComplete,
     });
     this.typingInput.register(t);
@@ -482,6 +502,7 @@ export class PortalChamberScene extends Phaser.Scene {
       y: this.scale.height - 36,
       fontSize: 24,
       priority: -1,
+      outline: true,
       onComplete: () => this.openAlmanac(),
     });
     this.typingInput.register(target);
@@ -505,6 +526,8 @@ export class PortalChamberScene extends Phaser.Scene {
         y: 90,
         fontSize: 22,
         priority: -1,
+        outline: true,
+        frame: "banner",
         onComplete: () => void signOut(),
       });
       this.typingInput.register(target);
@@ -524,6 +547,8 @@ export class PortalChamberScene extends Phaser.Scene {
         y: 90,
         fontSize: 22,
         priority: -1,
+        outline: true,
+        frame: "banner",
         onComplete: () => void signInWithGoogle(window.location.href),
       });
       this.typingInput.register(target);
@@ -681,6 +706,19 @@ export class PortalChamberScene extends Phaser.Scene {
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addAmbientDrift(this, {
+      kind: "mote",
+      count: 34,
+      depth: -3,
+      area: { x: 80, y: 90, width: this.scale.width - 160, height: 780 },
+      alpha: 0.2,
+      minSize: 1.5,
+      maxSize: 4,
+      driftX: 54,
+      driftY: -95,
+      minDurationMs: 8000,
+      maxDurationMs: 15000,
+    });
 
     // Dim zone hints beneath the painted desk and display cabinet.
     const labelStyle = {
@@ -695,10 +733,12 @@ export class PortalChamberScene extends Phaser.Scene {
 
   /** Painted Runa stands at her desk on the far left of the hub. */
   private drawRuna(): void {
+    addGroundShadow(this, 420, 982, 170, 26, { depth: -1, alpha: 0.34 });
     const img = this.add
       .image(420, 975, "runa-sprite")
       .setOrigin(0.5, 1);
     img.setScale(360 / img.height);
+    addIdleBreath(this, img, { dy: -4, durationMs: 2200, delayMs: 300 });
   }
 
   /** Relic icons displayed on the painted cabinet shelves (far right). */
@@ -717,28 +757,25 @@ export class PortalChamberScene extends Phaser.Scene {
       return;
     }
 
-    const g = this.add.graphics();
     items.forEach((id, i) => {
-      if (!RELICS[id]) return;
       const ix = 1702 + (i % 3) * 40;
       const iy = 470 + Math.floor(i / 3) * 90;
-      g.fillStyle(PALETTE_HEX.brass, 0.8);
-      if (id.includes("horn") || id.includes("flute")) {
-        g.fillEllipse(ix, iy, 24, 15);
-      } else if (id.includes("token") || id.includes("key") || id.includes("pelt")) {
-        g.fillCircle(ix, iy, 10);
-      } else if (id.includes("hammer") || id.includes("wrench") || id.includes("tongue")) {
-        g.fillRect(ix - 5, iy - 12, 10, 24);
-      } else if (
-        id.includes("cub") || id.includes("fish") || id.includes("bird") ||
-        id.includes("moth") || id.includes("cat")
-      ) {
-        g.fillCircle(ix, iy, 9);
-        g.fillStyle(PALETTE_HEX.cream, 0.5);
-        g.fillCircle(ix, iy, 4);
-      } else {
-        g.fillEllipse(ix, iy, 18, 26);
+      const icon = satchelIconFor(id);
+      if (icon && this.textures.exists(icon.key)) {
+        const img = this.add.image(ix, iy, icon.key);
+        img.setScale(Math.min(34 / img.width, 34 / img.height));
+        img.setAlpha(0.86);
+        addIdleBreath(this, img, {
+          dy: -2,
+          durationMs: 1800 + (i % 3) * 180,
+          delayMs: i * 70,
+        });
+        return;
       }
+      if (!RELICS[id]) return;
+      const fallback = this.add.graphics();
+      fallback.fillStyle(PALETTE_HEX.brass, 0.8);
+      fallback.fillEllipse(ix, iy, 18, 26);
     });
   }
 
@@ -770,8 +807,10 @@ export class PortalChamberScene extends Phaser.Scene {
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {
     const c = this.add.container(x, y);
+    c.add(addLocalGroundShadow(this, 94, 22, { y: 6, alpha: 0.32 }));
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
+    addIdleBreath(this, c, { dy: -4, durationMs: 2100 });
     return c;
   }
 }

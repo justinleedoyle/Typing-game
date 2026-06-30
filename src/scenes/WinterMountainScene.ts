@@ -25,6 +25,11 @@ import {
   circlerY,
 } from "../game/winterMechanics";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
+import {
+  addAmbientDrift,
+  addIdleBreath,
+  addLocalGroundShadow,
+} from "../game/livingScene";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import {
@@ -274,6 +279,19 @@ export class WinterMountainScene extends Phaser.Scene {
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addAmbientDrift(this, {
+      kind: "snow",
+      count: 70,
+      depth: -2,
+      area: { x: 0, y: 0, width: this.scale.width, height: 840 },
+      alpha: 0.5,
+      minSize: 2,
+      maxSize: 6,
+      driftX: -260,
+      driftY: 620,
+      minDurationMs: 5200,
+      maxDurationMs: 10500,
+    });
     this.wrenContainer = this.drawWren(this.scale.width / 2, 880);
 
     // UI cohesion — the console band houses the meters + Winter's candle/thunder
@@ -903,6 +921,8 @@ export class WinterMountainScene extends Phaser.Scene {
       x: this.scale.width / 2,
       duration: 280,
       ease: "Sine.easeOut",
+      onComplete: () =>
+        addIdleBreath(this, this.wrenContainer, { dy: -4, durationMs: 2100 }),
     });
   }
 
@@ -1628,6 +1648,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {
     const c = this.add.container(x, y);
+    c.add(addLocalGroundShadow(this, 98, 22, { y: 7, alpha: 0.34 }));
     this.wrenGlow = this.add.graphics();
     this.wrenGlow.fillStyle(PALETTE_HEX.brass, 1);
     this.wrenGlow.fillCircle(0, -40, 60);
@@ -1636,14 +1657,17 @@ export class WinterMountainScene extends Phaser.Scene {
 
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
+    addIdleBreath(this, c, { dy: -4, durationMs: 2100 });
     return c;
   }
 
   private drawWolfInto(c: Phaser.GameObjects.Container, facingLeft: boolean): void {
+    c.add(addLocalGroundShadow(this, 118, 22, { y: 8, alpha: 0.38 }));
     c.add(makeWolfSprite(this, false, facingLeft));
   }
 
   private drawBossInto(c: Phaser.GameObjects.Container): Phaser.GameObjects.Image {
+    c.add(addLocalGroundShadow(this, 160, 30, { y: 10, alpha: 0.42 }));
     const sprite = makeWolfSprite(this, true, false);
     c.add(sprite);
     return sprite;

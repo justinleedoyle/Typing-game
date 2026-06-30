@@ -36,6 +36,11 @@ import {
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
+import {
+  addAmbientDrift,
+  addIdleBreath,
+  addLocalGroundShadow,
+} from "../game/livingScene";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
 import skyIslandBackdrop from "../../art/references/sky-island-clean.png";
 import lanternSpiritSprite from "../../art/sky/lantern-spirit.png";
@@ -248,6 +253,19 @@ export class SkyIslandScene extends Phaser.Scene {
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addAmbientDrift(this, {
+      kind: "mote",
+      count: 38,
+      depth: -2,
+      area: { x: 80, y: 100, width: this.scale.width - 160, height: 700 },
+      alpha: 0.24,
+      minSize: 1.5,
+      maxSize: 4.5,
+      driftX: 90,
+      driftY: -170,
+      minDurationMs: 6200,
+      maxDurationMs: 13000,
+    });
     this.drawTempleStones();
     this.drawAmbientLanterns();
     this.wrenContainer = this.drawWren(this.scale.width / 2, 900);
@@ -1820,8 +1838,10 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {
     const c = this.add.container(x, y);
+    c.add(addLocalGroundShadow(this, 92, 20, { y: 6, alpha: 0.28 }));
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
+    addIdleBreath(this, c, { dy: -5, durationMs: 2200 });
     return c;
   }
 

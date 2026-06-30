@@ -6,6 +6,11 @@ import { NarrationManager } from "../game/narrationManager";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
+import {
+  addAmbientDrift,
+  addGroundShadow,
+  addIdleBreath,
+} from "../game/livingScene";
 import openingBackdrop from "../../art/references/opening-typewriter-study-clean.png";
 import { makeQuietLordSprite, preloadQuietLord } from "../game/quietLord";
 import runaSprite from "../../art/runa/runa-front.png";
@@ -67,9 +72,22 @@ export class OpeningScene extends Phaser.Scene {
       .setOrigin(0)
       .setDisplaySize(width, this.scale.height)
       .setDepth(-100);
+    addAmbientDrift(this, {
+      kind: "mote",
+      count: 26,
+      depth: -2,
+      area: { x: 80, y: 90, width: this.scale.width - 160, height: 760 },
+      alpha: 0.18,
+      minSize: 1.5,
+      maxSize: 3.5,
+      driftX: 42,
+      driftY: -75,
+      minDurationMs: 8500,
+      maxDurationMs: 15000,
+    });
 
     // ── Narrator text ────────────────────────────────────────────────────────
-    this.narration = new NarrationManager(this, { y: 120 });
+    this.narration = new NarrationManager(this, { y: 120, framed: true });
 
     // ── Input ────────────────────────────────────────────────────────────────
     this.typingInput = new TypingInputController(this.store);
@@ -139,6 +157,8 @@ export class OpeningScene extends Phaser.Scene {
       x: TYPE_TARGET.x - 220,
       y: TYPE_TARGET.y,
       fontSize: 52,
+      outline: true,
+      frame: "banner",
       onComplete: () => pick("boy"),
     });
     const girl = new TextWordTarget({
@@ -147,6 +167,8 @@ export class OpeningScene extends Phaser.Scene {
       x: TYPE_TARGET.x + 220,
       y: TYPE_TARGET.y,
       fontSize: 52,
+      outline: true,
+      frame: "banner",
       onComplete: () => pick("girl"),
     });
     this.typingInput.register(boy);
@@ -178,6 +200,7 @@ export class OpeningScene extends Phaser.Scene {
       x: TYPE_TARGET.x,
       y: TYPE_TARGET.y,
       fontSize: 48,
+      outline: true,
       onComplete: () => this.onBeat4Complete(),
     });
     this.typingInput.register(target);
@@ -198,6 +221,7 @@ export class OpeningScene extends Phaser.Scene {
       x: TYPE_TARGET.x,
       y: TYPE_TARGET.y,
       fontSize: 48,
+      outline: true,
       onComplete: () => this.onBeat5Complete(),
     });
     this.typingInput.register(target);
@@ -267,6 +291,8 @@ export class OpeningScene extends Phaser.Scene {
       x: TYPE_TARGET.x,
       y: TYPE_TARGET.y,
       fontSize: 44,
+      outline: true,
+      frame: "banner",
       onComplete: () => this.onBeat8Complete(),
     });
     this.typingInput.register(target);
@@ -328,6 +354,7 @@ export class OpeningScene extends Phaser.Scene {
    *  on the left. Positioned left of the painted chair (which sits at ≈x=900)
    *  so she doesn't appear to stand on it. */
   private drawRuna(): void {
+    addGroundShadow(this, 480, 952, 180, 28, { depth: -1, alpha: 0.32 });
     const img = this.add
       .image(480, 945, "runa-sprite")
       .setOrigin(0.5, 1);
@@ -339,6 +366,7 @@ export class OpeningScene extends Phaser.Scene {
       alpha: 1,
       duration: 500,
       ease: "Sine.easeOut",
+      onComplete: () => addIdleBreath(this, img, { dy: -4, durationMs: 2200 }),
     });
   }
 
@@ -353,6 +381,10 @@ export class OpeningScene extends Phaser.Scene {
    */
   private drawSibling(): void {
     const isBoy = this.wrenGender === "boy";
+    addGroundShadow(this, 1180, 957, isBoy ? 110 : 130, 22, {
+      depth: -1,
+      alpha: 0.28,
+    });
     const img = this.add
       .image(1180, 950, "sibling-sprite")
       .setOrigin(0.5, 1);
@@ -369,6 +401,7 @@ export class OpeningScene extends Phaser.Scene {
       alpha: 1,
       duration: 500,
       ease: "Sine.easeOut",
+      onComplete: () => addIdleBreath(this, img, { dy: -3, durationMs: 2100 }),
     });
   }
 }

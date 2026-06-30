@@ -79,6 +79,15 @@ const SHELF_GRID = {
   tileSize: 40,
   iconSize: 30,
 } as const;
+const ACCOUNT_PANEL = {
+  x: 1812,
+  y: 84,
+  width: 220,
+  height: 126,
+  statusY: 38,
+  authY: 82,
+  settingsY: 128,
+} as const;
 
 // Maps the last-cleared realm to its Runa desk-line ID in runaLines.ts. The
 // line text now lives there (single source of truth); the hub renders it via
@@ -355,9 +364,11 @@ export class PortalChamberScene extends Phaser.Scene {
     // Zone navigation (away from portals).
     this.registerNavTarget("runa", 420, 908, () => this.enterZone("desk"));
     this.registerNavTarget("shelf", 1740, 930, () => this.enterZone("shelf"));
-    // Settings entry — small chrome-y target in the upper-right corner so it
-    // stays out of the main portal sight-lines but is discoverable.
-    this.registerNavTarget("settings", 1812, 72, () => this.enterSettings(), { fontSize: 22 });
+    // Settings lives in the account plaque, separated from sign-in/out so the
+    // top-right controls read as a deliberate station instead of overlapping UI.
+    this.registerNavTarget("settings", ACCOUNT_PANEL.x, ACCOUNT_PANEL.settingsY, () => this.enterSettings(), {
+      fontSize: 19,
+    });
   }
 
   private enterSettings(): void {
@@ -567,20 +578,21 @@ export class PortalChamberScene extends Phaser.Scene {
     const name = await currentUserDisplayName();
     if (name) {
       this.add
-        .text(1812, 44, `signed in as ${name}`, {
+        .text(ACCOUNT_PANEL.x, ACCOUNT_PANEL.statusY, `signed in as ${name}`, {
           fontFamily: SERIF,
           fontSize: "15px",
           fontStyle: "italic",
           color: "#9d8f6d",
           align: "center",
-          wordWrap: { width: 188 },
+          wordWrap: { width: ACCOUNT_PANEL.width - 30 },
         })
-        .setOrigin(0.5);
+        .setOrigin(0.5)
+        .setDepth(1);
       const target = new TextWordTarget({
         scene: this,
         word: "sign out",
-        x: 1812,
-        y: 86,
+        x: ACCOUNT_PANEL.x,
+        y: ACCOUNT_PANEL.authY,
         fontSize: 20,
         priority: -1,
         outline: true,
@@ -590,20 +602,21 @@ export class PortalChamberScene extends Phaser.Scene {
       this.typingInput.register(target);
     } else {
       this.add
-        .text(1812, 44, "local save only", {
+        .text(ACCOUNT_PANEL.x, ACCOUNT_PANEL.statusY, "local save only", {
           fontFamily: SERIF,
           fontSize: "15px",
           fontStyle: "italic",
           color: "#9d8f6d",
           align: "center",
-          wordWrap: { width: 188 },
+          wordWrap: { width: ACCOUNT_PANEL.width - 30 },
         })
-        .setOrigin(0.5);
+        .setOrigin(0.5)
+        .setDepth(1);
       const target = new TextWordTarget({
         scene: this,
         word: "sign in",
-        x: 1812,
-        y: 86,
+        x: ACCOUNT_PANEL.x,
+        y: ACCOUNT_PANEL.authY,
         fontSize: 20,
         priority: -1,
         outline: true,
@@ -887,7 +900,10 @@ export class PortalChamberScene extends Phaser.Scene {
     this.drawStationPlaque(230, 1030, 230, 44, "almanac", { alpha: 0.28, labelAlpha: 0 });
     this.drawStationPlaque(this.scale.width / 2, 962, 330, 46, "portal floor", { alpha: 0.22 });
     this.drawStationPlaque(1740, 978, 290, 52, "your shelf");
-    this.drawStationPlaque(1812, 72, 218, 82, "account", { alpha: 0.24, labelAlpha: 0 });
+    this.drawStationPlaque(ACCOUNT_PANEL.x, ACCOUNT_PANEL.y, ACCOUNT_PANEL.width, ACCOUNT_PANEL.height, "account", {
+      alpha: 0.28,
+      labelAlpha: 0.5,
+    });
   }
 
   private drawStationPlaque(

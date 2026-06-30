@@ -30,6 +30,7 @@ import {
   addAmbientDrift,
   addBackdropDrift,
   addContainerWake,
+  dismissCompanionCameo,
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
@@ -39,6 +40,7 @@ import {
   playRealmClearResonance,
   stageContainerEntrance,
   stageAnchoredSprite,
+  stageCompanionCameo,
 } from "../game/livingScene";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
@@ -60,6 +62,7 @@ import {
   setWrenPose,
 } from "../game/wren";
 import winterBackdrop from "../../art/references/winter-mountain-clean.png";
+import snowFoxSprite from "../../art/companions/snow-fox.png";
 
 // Danger ramps in over the LAST 60% of a wolf's advance — earlier portion
 // stays cream so players can read the word, then it shifts red as the wolf
@@ -220,6 +223,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private heldurSprite: Phaser.GameObjects.Image | null = null;
   private heldurDialogText: Phaser.GameObjects.Text | null = null;
   private huntressSprite: Phaser.GameObjects.Image | null = null;
+  private foxCompanion: Phaser.GameObjects.Container | null = null;
   private candleGroup!: Phaser.GameObjects.Container;
   private chargeGroup!: Phaser.GameObjects.Container;
   private drawnCandles: number | null = null;
@@ -266,6 +270,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.heldurSprite = null;
     this.heldurDialogText = null;
     this.huntressSprite = null;
+    this.foxCompanion = null;
     this.wolves = [];
     this.boss = null;
     this.bossBodySprite = null;
@@ -292,6 +297,7 @@ export class WinterMountainScene extends Phaser.Scene {
     preloadWren(this);
     preloadWolves(this);
     preloadWinterNpcs(this);
+    this.load.image("winter-companion-snow-fox", snowFoxSprite);
   }
 
   create(): void {
@@ -1425,10 +1431,14 @@ export class WinterMountainScene extends Phaser.Scene {
           // Firefly branch taken — fox returns but looks for Sigrid
           nearMissLine =
             "The fox steps into the clearing, nose working. She looks past you — searching for something, or someone. She waits a long moment. Then turns back into the pines.";
+          this.showFoxCompanion();
+          this.time.delayedCall(2200, () => this.dismissFoxCompanion(620, 820));
         } else {
           // Pelt taken — fox sees what Wren carries and steps away
           nearMissLine =
             "The fox pads to the clearing's edge. Her eye finds the pelt in your hands. She holds very still. Then she steps back. She is gone.";
+          this.showFoxCompanion();
+          this.time.delayedCall(2200, () => this.dismissFoxCompanion(620, 820));
         }
         this.setNarrator(nearMissLine);
         this.time.delayedCall(3200, () => this.startTrueNamePassage());
@@ -1438,6 +1448,7 @@ export class WinterMountainScene extends Phaser.Scene {
       return;
     }
 
+    this.showFoxCompanion();
     this.narration.say("winter_fox_companion_accept");
 
     const whisperTarget = this.makeWord({
@@ -1447,6 +1458,7 @@ export class WinterMountainScene extends Phaser.Scene {
       y: this.scale.height - 340,
       frame: "banner",
       fontSize: 32,
+      onClaim: () => this.pulseFoxCompanion(),
       onComplete: () => {
         this.clearActiveTargets();
         this.store.update((s) => {
@@ -1464,9 +1476,11 @@ export class WinterMountainScene extends Phaser.Scene {
       y: this.scale.height - 340,
       frame: "banner",
       fontSize: 32,
+      onClaim: () => this.pulseFoxCompanion(),
       onComplete: () => {
         this.clearActiveTargets();
         this.narration.say("winter_fox_companion_no");
+        this.dismissFoxCompanion(620, 820);
         this.time.delayedCall(2000, () => this.startTrueNamePassage());
       },
     });
@@ -1474,6 +1488,44 @@ export class WinterMountainScene extends Phaser.Scene {
     this.typingInput.register(whisperTarget);
     this.typingInput.register(letGoTarget);
     this.activeTargets.push(whisperTarget, letGoTarget);
+  }
+
+  private showFoxCompanion(): void {
+    if (this.foxCompanion?.scene) return;
+    this.foxCompanion = stageCompanionCameo(this, {
+      textureKey: "winter-companion-snow-fox",
+      startX: 610,
+      x: 700,
+      y: 830,
+      height: 108,
+      depth: 43,
+      shadowWidth: 88,
+      shadowHeight: 16,
+      shadowAlpha: 0.24,
+      breathDy: -3,
+      breathMs: 1900,
+      wake: {
+        kind: "snow",
+        intervalMs: 210,
+        offsetY: -12,
+        spreadX: 18,
+        spreadY: 8,
+        depth: 42,
+        alpha: 0.35,
+      },
+    });
+  }
+
+  private pulseFoxCompanion(): void {
+    playActorAttention(this, this.foxCompanion, {
+      scale: 1.035,
+      durationMs: 220,
+    });
+  }
+
+  private dismissFoxCompanion(x: number, y: number): void {
+    dismissCompanionCameo(this, this.foxCompanion, { x, y, durationMs: 760 });
+    this.foxCompanion = null;
   }
 
   /** The realm's true-name passage — three short lines, the mountain

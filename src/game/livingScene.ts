@@ -78,6 +78,32 @@ export interface StagedContainerEntranceOptions {
   breathDelayMs?: number;
 }
 
+export interface CompanionCameoOptions {
+  textureKey: string;
+  x: number;
+  y: number;
+  height: number;
+  depth?: number;
+  startX?: number;
+  startY?: number;
+  entranceMs?: number;
+  restAlpha?: number;
+  flipX?: boolean;
+  shadowWidth?: number;
+  shadowHeight?: number;
+  shadowOffsetY?: number;
+  shadowAlpha?: number;
+  breathDy?: number;
+  breathMs?: number;
+  wake?: ContainerWakeOptions;
+}
+
+export interface DismissCompanionCameoOptions {
+  x?: number;
+  y?: number;
+  durationMs?: number;
+}
+
 type TweenableObject = Phaser.GameObjects.GameObject & {
   y: number;
 };
@@ -377,6 +403,70 @@ export function fadeOutStagedSprite(
       ease: opts.ease ?? "Sine.easeIn",
     });
   }
+}
+
+/** Stage a companion creature for a late-realm gate. The caller keeps the
+ *  returned container so typed choices can pulse or dismiss the animal. */
+export function stageCompanionCameo(
+  scene: Phaser.Scene,
+  opts: CompanionCameoOptions,
+): Phaser.GameObjects.Container {
+  const c = scene.add
+    .container(opts.startX ?? opts.x, opts.startY ?? opts.y)
+    .setDepth(opts.depth ?? 44)
+    .setAlpha(0);
+
+  c.add(
+    addLocalGroundShadow(scene, opts.shadowWidth ?? 86, opts.shadowHeight ?? 16, {
+      y: opts.shadowOffsetY ?? 10,
+      alpha: opts.shadowAlpha ?? 0.2,
+    }),
+  );
+
+  const sprite = scene.add.image(0, 0, opts.textureKey).setOrigin(0.5, 1);
+  sprite.setScale(opts.height / Math.max(1, sprite.height));
+  if (opts.flipX) sprite.setFlipX(true);
+  c.add(sprite);
+
+  if (opts.wake) addContainerWake(scene, c, opts.wake);
+
+  scene.tweens.add({
+    targets: c,
+    x: opts.x,
+    y: opts.y,
+    alpha: opts.restAlpha ?? 1,
+    duration: opts.entranceMs ?? 720,
+    ease: "Sine.easeOut",
+    onComplete: () => {
+      if (!c.scene) return;
+      addIdleBreath(scene, c, {
+        dy: opts.breathDy ?? -5,
+        durationMs: opts.breathMs ?? 2100,
+      });
+    },
+  });
+
+  return c;
+}
+
+export function dismissCompanionCameo(
+  scene: Phaser.Scene,
+  target: Phaser.GameObjects.Container | null | undefined,
+  opts: DismissCompanionCameoOptions = {},
+): void {
+  if (!target?.scene) return;
+  scene.tweens.killTweensOf(target);
+  scene.tweens.add({
+    targets: target,
+    x: opts.x ?? target.x,
+    y: opts.y ?? target.y,
+    alpha: 0,
+    duration: opts.durationMs ?? 620,
+    ease: "Sine.easeIn",
+    onComplete: () => {
+      if (target.scene) target.destroy();
+    },
+  });
 }
 
 /** Stage an already-built feet-origin container. This is for actors like Wren

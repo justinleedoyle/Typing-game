@@ -42,6 +42,7 @@ import {
   addBackdropDrift,
   addContainerWake,
   attachWordBodyAnchor,
+  dismissCompanionCameo,
   fadeOutStagedSprite,
   addLocalGroundShadow,
   playBodyImpact,
@@ -51,6 +52,7 @@ import {
   playRealmClearResonance,
   stageContainerEntrance,
   stageAnchoredSprite,
+  stageCompanionCameo,
   type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import {
@@ -67,6 +69,7 @@ import lanternSpiritSprite from "../../art/sky/lantern-spirit.png";
 import scholarSpiritSprite from "../../art/sky/scholar-spirit.png";
 import ettaSprite from "../../art/sky/etta.png";
 import runaPortrait from "../../art/runa/runa-front.png";
+import lanternMothSprite from "../../art/companions/lantern-moth.png";
 
 // Danger ramps in over the LAST 60% of a spirit's advance — earlier portion
 // stays cream so players can read the word, then it shifts red as the spirit
@@ -205,6 +208,7 @@ export class SkyIslandScene extends Phaser.Scene {
    *  also cleaned up on SHUTDOWN as a safety net. */
   private ettaSprite: Phaser.GameObjects.Image | null = null;
   private companionChoice: "take" | "let-go" | null = null;
+  private lanternMothCompanion: Phaser.GameObjects.Container | null = null;
 
   // Boss state
   private bossContainer: Phaser.GameObjects.Container | null = null;
@@ -248,6 +252,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.ettaDone = false;
     this.ettaSprite = null;
     this.companionChoice = null;
+    this.lanternMothCompanion = null;
     this.bossContainer = null;
     this.bossSprite = null;
     this.bossRingTween = null;
@@ -263,6 +268,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.load.image("sky-lantern-spirit", lanternSpiritSprite);
     this.load.image("scholar-spirit", scholarSpiritSprite);
     this.load.image("etta", ettaSprite);
+    this.load.image("sky-companion-lantern-moth", lanternMothSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
@@ -1366,6 +1372,7 @@ export class SkyIslandScene extends Phaser.Scene {
       this.setNarrator(
         "A lantern-moth drifts down from the beacon's height, wings lit like paper.",
       );
+      this.showLanternMothCompanion();
       this.time.delayedCall(1200, () => {
         const takeTarget = this.makeWord({
           scene: this,
@@ -1374,6 +1381,7 @@ export class SkyIslandScene extends Phaser.Scene {
           y: this.scale.height - 340,
           frame: "banner",
           fontSize: 32,
+          onClaim: () => this.pulseLanternMothCompanion(),
           onComplete: () => {
             this.clearActiveTargets();
             this.companionChoice = "take";
@@ -1385,6 +1393,7 @@ export class SkyIslandScene extends Phaser.Scene {
             this.setNarrator(
               "The moth lands on your wrist, wings folding. She is coming with you.",
             );
+            this.pulseLanternMothCompanion();
             this.time.delayedCall(2400, () => this.startTrueNamePassage());
           },
         });
@@ -1395,12 +1404,14 @@ export class SkyIslandScene extends Phaser.Scene {
           y: this.scale.height - 340,
           frame: "banner",
           fontSize: 32,
+          onClaim: () => this.pulseLanternMothCompanion(),
           onComplete: () => {
             this.clearActiveTargets();
             this.companionChoice = "let-go";
             this.setNarrator(
               "She rises again into the golden air, wings a bright smear against the dusk.",
             );
+            this.dismissLanternMothCompanion(1270, 500);
             this.time.delayedCall(2000, () => this.startTrueNamePassage());
           },
         });
@@ -1412,6 +1423,51 @@ export class SkyIslandScene extends Phaser.Scene {
       // Gate not met — no near-miss (single condition, as specified)
       this.startTrueNamePassage();
     }
+  }
+
+  private showLanternMothCompanion(): void {
+    if (this.lanternMothCompanion?.scene) return;
+    this.lanternMothCompanion = stageCompanionCameo(this, {
+      textureKey: "sky-companion-lantern-moth",
+      startX: 1320,
+      startY: 520,
+      x: 1160,
+      y: 650,
+      height: 104,
+      depth: 43,
+      flipX: true,
+      shadowWidth: 70,
+      shadowHeight: 10,
+      shadowOffsetY: 34,
+      shadowAlpha: 0.12,
+      breathDy: -22,
+      breathMs: 1450,
+      wake: {
+        kind: "mote",
+        intervalMs: 120,
+        offsetY: -42,
+        spreadX: 26,
+        spreadY: 24,
+        depth: 42,
+        alpha: 0.42,
+      },
+    });
+  }
+
+  private pulseLanternMothCompanion(): void {
+    playActorAttention(this, this.lanternMothCompanion, {
+      scale: 1.045,
+      durationMs: 220,
+    });
+  }
+
+  private dismissLanternMothCompanion(x: number, y: number): void {
+    dismissCompanionCameo(this, this.lanternMothCompanion, {
+      x,
+      y,
+      durationMs: 720,
+    });
+    this.lanternMothCompanion = null;
   }
 
   // ─── True-name passage ────────────────────────────────────────────────────

@@ -39,6 +39,7 @@ import {
   addAmbientDrift,
   addBackdropDrift,
   addContainerWake,
+  dismissCompanionCameo,
   fadeOutStagedSprite,
   addLocalGroundShadow,
   playBodyImpact,
@@ -46,6 +47,7 @@ import {
   playRealmClearResonance,
   stageContainerEntrance,
   stageAnchoredSprite,
+  stageCompanionCameo,
 } from "../game/livingScene";
 import { pickAdaptiveWords, FORGE_COMMAND_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
@@ -66,6 +68,7 @@ import forgeGolemSprite from "../../art/forge/golem.png";
 import forgeCommandGolemSprite from "../../art/forge/command-golem.png";
 import fornSprite from "../../art/forge/forn.png";
 import runaPortrait from "../../art/runa/runa-front.png";
+import brassSongbirdSprite from "../../art/companions/brass-songbird.png";
 
 // Danger ramps in over the LAST 60% of a golem's advance — earlier portion
 // stays cream so players can read the word, then it shifts ember as the
@@ -183,6 +186,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   /** fork2: "peaceful" | "fought" */
   private fork2Choice: "peaceful" | "fought" | null = null;
   private companionAwarded = false;
+  private songbirdCompanion: Phaser.GameObjects.Container | null = null;
   /** True after the Quiet Lord's §5.5.10 intrusion has fired this playthrough. */
   private quietLordIntruded = false;
   private ambientHandle?: AmbientHandle;
@@ -205,6 +209,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.fork1Choice = null;
     this.fork2Choice = null;
     this.companionAwarded = false;
+    this.songbirdCompanion = null;
     this.quietLordIntruded =
       this.store.get().realms["clockwork-forge"]?.quietLordIntruded ?? false;
   }
@@ -214,6 +219,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.load.image("forge-golem", forgeGolemSprite);
     this.load.image("forge-command-golem", forgeCommandGolemSprite);
     this.load.image("forn", fornSprite);
+    this.load.image("forge-companion-songbird", brassSongbirdSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
@@ -1160,6 +1166,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.setNarrator(
         "A small brass shape perches on a cooling pipe. It trills softly. Do you call to it?",
       );
+      this.showSongbirdCompanion();
       const whistle = this.makeWord({
         scene: this,
         word: "whistle softly",
@@ -1167,6 +1174,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         y: this.scale.height - 320,
         fontSize: 32,
         frame: "banner",
+        onClaim: () => this.pulseSongbirdCompanion(),
         onComplete: () => this.awardSongbird(),
       });
       const leave = this.makeWord({
@@ -1176,7 +1184,11 @@ export class ClockworkForgeScene extends Phaser.Scene {
         y: this.scale.height - 320,
         fontSize: 32,
         frame: "banner",
-        onComplete: () => this.startTrueNamePassage(),
+        onClaim: () => this.pulseSongbirdCompanion(),
+        onComplete: () => {
+          this.dismissSongbirdCompanion(1320, 470);
+          this.startTrueNamePassage();
+        },
       });
       this.typingInput.register(whistle);
       this.typingInput.register(leave);
@@ -1185,6 +1197,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.setNarrator(
         "A flash of brass among the pipes — something small and bright — then it's gone.",
       );
+      this.showSongbirdCompanion(1380, 470);
+      this.time.delayedCall(900, () => this.dismissSongbirdCompanion(1450, 430));
       this.time.delayedCall(2400, () => this.startTrueNamePassage());
     } else {
       this.time.delayedCall(600, () => this.startTrueNamePassage());
@@ -1208,7 +1222,49 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.setNarrator(
       "The brass bird lands on your shoulder. It trills three notes — then goes still.",
     );
+    this.pulseSongbirdCompanion();
     this.time.delayedCall(2200, () => this.startTrueNamePassage());
+  }
+
+  private showSongbirdCompanion(startX = 1380, startY = 430): void {
+    if (this.songbirdCompanion?.scene) return;
+    this.songbirdCompanion = stageCompanionCameo(this, {
+      textureKey: "forge-companion-songbird",
+      startX,
+      startY,
+      x: 1280,
+      y: 470,
+      height: 84,
+      depth: 43,
+      flipX: true,
+      shadowWidth: 58,
+      shadowHeight: 10,
+      shadowOffsetY: 28,
+      shadowAlpha: 0.14,
+      breathDy: -14,
+      breathMs: 1400,
+      wake: {
+        kind: "ember",
+        intervalMs: 130,
+        offsetY: -38,
+        spreadX: 20,
+        spreadY: 16,
+        depth: 42,
+        alpha: 0.46,
+      },
+    });
+  }
+
+  private pulseSongbirdCompanion(): void {
+    playActorAttention(this, this.songbirdCompanion, {
+      scale: 1.045,
+      durationMs: 220,
+    });
+  }
+
+  private dismissSongbirdCompanion(x: number, y: number): void {
+    dismissCompanionCameo(this, this.songbirdCompanion, { x, y, durationMs: 640 });
+    this.songbirdCompanion = null;
   }
 
   // ─── True-name passage + ending ──────────────────────────────────────────────

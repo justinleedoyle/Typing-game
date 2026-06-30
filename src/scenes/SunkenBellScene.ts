@@ -29,6 +29,7 @@ import {
   addAmbientDrift,
   addBackdropDrift,
   addContainerWake,
+  dismissCompanionCameo,
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
@@ -38,6 +39,7 @@ import {
   playRealmClearResonance,
   stageContainerEntrance,
   stageAnchoredSprite,
+  stageCompanionCameo,
 } from "../game/livingScene";
 import { pickAdaptiveWords, SUNKEN_BELL_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
@@ -58,6 +60,7 @@ import bellGhostSprite from "../../art/bell/ghost.png";
 import bellWardenSprite from "../../art/bell/bell-warden.png";
 import olinSprite from "../../art/bell/olin.png";
 import aurlandSprite from "../../art/bell/aurland.png";
+import glassFishSprite from "../../art/companions/glass-fish.png";
 
 // Danger ramps in over the LAST 60% of a ghost's advance — earlier portion
 // stays cream so players can read the word, then it shifts red as the ghost
@@ -116,6 +119,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private aurlandImage?: Phaser.GameObjects.Image;
   /** Old Olin's painted sprite during the Act 1 teaching beat. */
   private olinImage?: Phaser.GameObjects.Image;
+  private glassFishCompanion: Phaser.GameObjects.Container | null = null;
 
   private beatClock!: BeatClock;
   private beatRing!: Phaser.GameObjects.Graphics;
@@ -178,6 +182,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.onWaveCleared = null;
     this.fork1Choice = null;
     this.fork2Choice = null;
+    this.glassFishCompanion = null;
     this.quietLordIntruded =
       this.store.get().realms["sunken-bell"]?.quietLordIntruded ?? false;
   }
@@ -188,6 +193,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.load.image("bell-warden", bellWardenSprite);
     this.load.image("olin", olinSprite);
     this.load.image("aurland", aurlandSprite);
+    this.load.image("bell-companion-glass-fish", glassFishSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
@@ -1446,6 +1452,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.clearActiveTargets();
     if (this.fork2Choice === "free-aurland") {
       this.setNarrator("A small glass-fish leads the way up through the dark water.");
+      this.showGlassFishCompanion();
       this.time.delayedCall(1000, () => {
         const takeTarget = this.makeWord({
           scene: this,
@@ -1454,6 +1461,7 @@ export class SunkenBellScene extends Phaser.Scene {
           y: this.scale.height - 340,
           fontSize: 30,
           frame: "banner",
+          onClaim: () => this.pulseGlassFishCompanion(),
           onComplete: () => {
             this.clearActiveTargets();
             this.store.update((s) => {
@@ -1469,8 +1477,10 @@ export class SunkenBellScene extends Phaser.Scene {
           y: this.scale.height - 340,
           fontSize: 30,
           frame: "banner",
+          onClaim: () => this.pulseGlassFishCompanion(),
           onComplete: () => {
             this.clearActiveTargets();
+            this.dismissGlassFishCompanion(1320, 640);
             this.startTrueNamePassage();
           },
         });
@@ -1481,6 +1491,47 @@ export class SunkenBellScene extends Phaser.Scene {
     } else {
       this.startTrueNamePassage();
     }
+  }
+
+  private showGlassFishCompanion(): void {
+    if (this.glassFishCompanion?.scene) return;
+    this.glassFishCompanion = stageCompanionCameo(this, {
+      textureKey: "bell-companion-glass-fish",
+      startX: 1340,
+      startY: 760,
+      x: 1190,
+      y: 720,
+      height: 96,
+      depth: 43,
+      flipX: true,
+      shadowWidth: 76,
+      shadowHeight: 12,
+      shadowOffsetY: 22,
+      shadowAlpha: 0.13,
+      breathDy: -16,
+      breathMs: 1500,
+      wake: {
+        kind: "bubble",
+        intervalMs: 150,
+        offsetY: -34,
+        spreadX: 24,
+        spreadY: 22,
+        depth: 42,
+        alpha: 0.3,
+      },
+    });
+  }
+
+  private pulseGlassFishCompanion(): void {
+    playActorAttention(this, this.glassFishCompanion, {
+      scale: 1.04,
+      durationMs: 220,
+    });
+  }
+
+  private dismissGlassFishCompanion(x: number, y: number): void {
+    dismissCompanionCameo(this, this.glassFishCompanion, { x, y, durationMs: 720 });
+    this.glassFishCompanion = null;
   }
 
   // ─── True-name passage ───────────────────────────────────────────────────

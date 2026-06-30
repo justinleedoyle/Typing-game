@@ -42,11 +42,13 @@ import {
   addAmbientDrift,
   addBackdropDrift,
   addContainerWake,
+  dismissCompanionCameo,
   addIdleBreath,
   addLocalGroundShadow,
   playActorAttention,
   playBodyImpact,
   playRealmClearResonance,
+  stageCompanionCameo,
   stageContainerEntrance,
 } from "../game/livingScene";
 import {
@@ -65,6 +67,7 @@ import hauntedWoodBackdrop from "../../art/references/haunted-wood-clean.png";
 import woodGhostSprite from "../../art/wood/ghost.png";
 import ghostKingSprite from "../../art/wood/ghost-king.png";
 import runaPortrait from "../../art/runa/runa-front.png";
+import wispCatSprite from "../../art/companions/wisp-cat.png";
 
 interface HauntedWoodSceneData {
   store: SaveStore;
@@ -155,6 +158,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private mistTimer: Phaser.Time.TimerEvent | null = null;
   private ingaFigure: Phaser.GameObjects.Container | null = null;
   private ghostKingBody: Phaser.GameObjects.Image | null = null;
+  private wispCatCompanion: Phaser.GameObjects.Container | null = null;
   /** Four faint punctuation glyphs at N/S/E/W around Wren — teaches the
    *  direction-punctuation mapping diegetically. Drawn on first ghost
    *  spawn, persists through Act 2 + boss. */
@@ -179,6 +183,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.mistTimer = null;
     this.ingaFigure = null;
     this.ghostKingBody = null;
+    this.wispCatCompanion = null;
     this.quietLordIntruded =
       this.store.get().realms["haunted-wood"]?.quietLordIntruded ?? false;
   }
@@ -187,6 +192,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.load.image("haunted-wood-backdrop", hauntedWoodBackdrop);
     this.load.image("wood-ghost", woodGhostSprite);
     this.load.image("ghost-king", ghostKingSprite);
+    this.load.image("wood-companion-wisp-cat", wispCatSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
@@ -292,6 +298,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.compassGlyphs = [];
       this.ingaFigure = null;
       this.ghostKingBody = null;
+      this.wispCatCompanion = null;
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
     });
@@ -989,6 +996,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.setNarrator(
       "A small cat made of pale light watches from the root-throne. She flicks one ear.",
     );
+    this.showWispCatCompanion();
     this.time.delayedCall(1600, () => {
       const callTarget = this.makeWord({
         scene: this,
@@ -997,6 +1005,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         y: this.scale.height - 340,
         fontSize: 30,
         frame: "banner",
+        onClaim: () => this.pulseWispCatCompanion(),
         onComplete: () => {
           this.clearActiveTargets();
           this.companionChoice = "call";
@@ -1007,6 +1016,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           });
           playChime();
           this.setNarrator("She trots to you and curls against your satchel, glowing.");
+          this.pulseWispCatCompanion();
           this.time.delayedCall(1800, () => this.startEnding());
         },
       });
@@ -1017,10 +1027,12 @@ export class HauntedWoodScene extends Phaser.Scene {
         y: this.scale.height - 340,
         fontSize: 30,
         frame: "banner",
+        onClaim: () => this.pulseWispCatCompanion(),
         onComplete: () => {
           this.clearActiveTargets();
           this.companionChoice = "leave";
           this.setNarrator("She watches you go. Her light stays in the clearing.");
+          this.dismissWispCatCompanion(1450, 740);
           this.time.delayedCall(1800, () => this.startEnding());
         },
       });
@@ -1028,6 +1040,46 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.typingInput.register(leaveTarget);
       this.activeTargets.push(callTarget, leaveTarget);
     });
+  }
+
+  private showWispCatCompanion(): void {
+    if (this.wispCatCompanion?.scene) return;
+    this.wispCatCompanion = stageCompanionCameo(this, {
+      textureKey: "wood-companion-wisp-cat",
+      startX: 1460,
+      startY: 770,
+      x: 1300,
+      y: 770,
+      height: 104,
+      depth: 43,
+      shadowWidth: 82,
+      shadowHeight: 16,
+      shadowOffsetY: 9,
+      shadowAlpha: 0.2,
+      breathDy: -4,
+      breathMs: 1800,
+      wake: {
+        kind: "mist",
+        intervalMs: 170,
+        offsetY: -10,
+        spreadX: 20,
+        spreadY: 10,
+        depth: 42,
+        alpha: 0.22,
+      },
+    });
+  }
+
+  private pulseWispCatCompanion(): void {
+    playActorAttention(this, this.wispCatCompanion, {
+      scale: 1.04,
+      durationMs: 220,
+    });
+  }
+
+  private dismissWispCatCompanion(x: number, y: number): void {
+    dismissCompanionCameo(this, this.wispCatCompanion, { x, y, durationMs: 720 });
+    this.wispCatCompanion = null;
   }
 
   // ─── Ending ───────────────────────────────────────────────────────────────

@@ -107,6 +107,7 @@ export class AlmanacScene extends Phaser.Scene {
   private nextTarget?: TextWordTarget;
   private prevTarget?: TextWordTarget;
   private closeTarget?: TextWordTarget;
+  private navTypingPulseTimes = new Map<string, number>();
 
   constructor() {
     super("AlmanacScene");
@@ -117,6 +118,7 @@ export class AlmanacScene extends Phaser.Scene {
     this.currentPage = 0;
     this.pageTexts = [];
     this.pageStack = [];
+    this.navTypingPulseTimes.clear();
   }
 
   preload(): void {
@@ -617,6 +619,7 @@ export class AlmanacScene extends Phaser.Scene {
         outline: true,
         frame: "banner",
         onClaim: () => this.playPageFocus(-1),
+        onAdvance: () => this.playPageTypingPulse(-1),
         onComplete: () => this.turnPage(-1),
       });
       this.typingInput.register(this.prevTarget);
@@ -632,6 +635,7 @@ export class AlmanacScene extends Phaser.Scene {
         outline: true,
         frame: "banner",
         onClaim: () => this.playPageFocus(1),
+        onAdvance: () => this.playPageTypingPulse(1),
         onComplete: () => this.turnPage(1),
       });
       this.typingInput.register(this.nextTarget);
@@ -646,6 +650,7 @@ export class AlmanacScene extends Phaser.Scene {
       outline: true,
       frame: "banner",
       onClaim: () => this.playCloseFocus(),
+      onAdvance: () => this.playCloseTypingPulse(),
       onComplete: () => this.closeBook(),
     });
     this.typingInput.register(this.closeTarget);
@@ -711,6 +716,31 @@ export class AlmanacScene extends Phaser.Scene {
     });
   }
 
+  private playPageTypingPulse(direction: -1 | 1): void {
+    if (!this.shouldPlayNavigationPulse(`page-${direction}`)) return;
+
+    const pageTop = BOOK_Y + 52;
+    const pageHeight = BOOK_HEIGHT - 104;
+    const edgeX =
+      direction > 0 ? BOOK_X + BOOK_WIDTH - 58 : BOOK_X + 58;
+
+    const pulse = this.add.graphics().setDepth(28).setAlpha(0.42);
+    pulse.lineStyle(2, UI_HEX.brass, 0.42);
+    pulse.strokeRoundedRect(-13, 0, 26, pageHeight, 12);
+    pulse.lineStyle(1, UI_HEX.brass, 0.24);
+    pulse.lineBetween(0, 28, 0, pageHeight - 28);
+    pulse.setPosition(edgeX, pageTop);
+
+    this.tweens.add({
+      targets: pulse,
+      alpha: 0,
+      scaleX: 1.08,
+      duration: 170,
+      ease: "Sine.easeOut",
+      onComplete: () => pulse.destroy(),
+    });
+  }
+
   private playCloseFocus(): void {
     const focus = this.add
       .graphics()
@@ -737,6 +767,38 @@ export class AlmanacScene extends Phaser.Scene {
       ease: "Sine.easeOut",
       onComplete: () => focus.destroy(),
     });
+  }
+
+  private playCloseTypingPulse(): void {
+    if (!this.shouldPlayNavigationPulse("close")) return;
+
+    const pulse = this.add
+      .graphics()
+      .setDepth(28)
+      .setAlpha(0.42)
+      .setPosition(this.scale.width / 2, this.scale.height - 70);
+    pulse.fillStyle(UI_HEX.brass, 0.035);
+    pulse.fillRoundedRect(-280, -30, 560, 60, 10);
+    pulse.lineStyle(1, UI_HEX.brass, 0.32);
+    pulse.strokeRoundedRect(-280, -30, 560, 60, 10);
+
+    this.tweens.add({
+      targets: pulse,
+      alpha: 0,
+      scaleX: 1.02,
+      scaleY: 1.08,
+      duration: 170,
+      ease: "Sine.easeOut",
+      onComplete: () => pulse.destroy(),
+    });
+  }
+
+  private shouldPlayNavigationPulse(key: string): boolean {
+    const now = this.time.now;
+    const last = this.navTypingPulseTimes.get(key) ?? -Infinity;
+    if (now - last < 90) return false;
+    this.navTypingPulseTimes.set(key, now);
+    return true;
   }
 
   private clearNavigationTargets(): void {

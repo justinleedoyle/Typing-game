@@ -63,6 +63,7 @@ export class SettingsScene extends Phaser.Scene {
   private rowTexts: Phaser.GameObjects.GameObject[] = [];
   private menuTargets: TextWordTarget[] = [];
   private focusMarks: Phaser.GameObjects.GameObject[] = [];
+  private uiTypingPulseTimes = new Map<string, number>();
 
   // Rename mode owns its own UI separate from the static rows.
   private renameBuffer = "";
@@ -87,6 +88,7 @@ export class SettingsScene extends Phaser.Scene {
     this.rowTexts = [];
     this.menuTargets = [];
     this.focusMarks = [];
+    this.uiTypingPulseTimes.clear();
     this.renameBuffer = "";
   }
 
@@ -294,6 +296,7 @@ export class SettingsScene extends Phaser.Scene {
       frame: "banner",
       priority,
       onClaim: () => this.pulseMenuRow(index),
+      onAdvance: () => this.pulseMenuRowTyping(index),
       onComplete,
     });
     this.typingInput.register(target);
@@ -304,6 +307,21 @@ export class SettingsScene extends Phaser.Scene {
     const y = ROW_START_Y + index * ROW_SPACING;
     const h = index === 0 ? 112 : 92;
     this.pulseFocusBox(ROW_X + 30, y + 28, 940, h);
+  }
+
+  private pulseMenuRowTyping(index: number): void {
+    if (!this.shouldPlayTypingPulse(`row-${index}`)) return;
+    const y = ROW_START_Y + index * ROW_SPACING;
+    const h = index === 0 ? 112 : 92;
+    this.pulseTypingBox(ROW_X + 30, y + 28, 940, h);
+  }
+
+  private shouldPlayTypingPulse(key: string): boolean {
+    const now = this.time.now;
+    const last = this.uiTypingPulseTimes.get(key) ?? -Infinity;
+    if (now - last < 90) return false;
+    this.uiTypingPulseTimes.set(key, now);
+    return true;
   }
 
   private pulseFocusBox(x: number, y: number, w: number, h: number): void {
@@ -326,6 +344,23 @@ export class SettingsScene extends Phaser.Scene {
         mark.destroy();
         this.focusMarks = this.focusMarks.filter((m) => m !== mark);
       },
+    });
+  }
+
+  private pulseTypingBox(x: number, y: number, w: number, h: number): void {
+    const mark = this.add.graphics().setPosition(x, y).setDepth(19).setAlpha(0.42);
+    mark.fillStyle(UI_HEX.brass, 0.035);
+    mark.fillRoundedRect(-w / 2, -h / 2, w, h, 10);
+    mark.lineStyle(1, UI_HEX.brass, 0.34);
+    mark.strokeRoundedRect(-w / 2, -h / 2, w, h, 10);
+    this.tweens.add({
+      targets: mark,
+      alpha: 0,
+      scaleX: 1.018,
+      scaleY: 1.045,
+      duration: 190,
+      ease: "Sine.easeOut",
+      onComplete: () => mark.destroy(),
     });
   }
 
@@ -516,6 +551,7 @@ export class SettingsScene extends Phaser.Scene {
       outline: true,
       frame: "banner",
       onClaim: () => this.pulseResetPanel(),
+      onAdvance: () => this.pulseResetPanelTyping(),
       onComplete: () => this.performReset(),
     });
     this.typingInput.register(confirmTarget);
@@ -530,6 +566,7 @@ export class SettingsScene extends Phaser.Scene {
       outline: true,
       frame: "banner",
       onClaim: () => this.pulseResetPanel(),
+      onAdvance: () => this.pulseResetPanelTyping(),
       onComplete: () => {
         this.mode = "normal";
         this.setNarrator("Save kept. Nothing changed.");
@@ -542,6 +579,11 @@ export class SettingsScene extends Phaser.Scene {
 
   private pulseResetPanel(): void {
     this.pulseFocusBox(this.scale.width / 2, 520, 700, 230);
+  }
+
+  private pulseResetPanelTyping(): void {
+    if (!this.shouldPlayTypingPulse("reset-panel")) return;
+    this.pulseTypingBox(this.scale.width / 2, 520, 700, 230);
   }
 
   private drawResetConfirmPanel(): void {

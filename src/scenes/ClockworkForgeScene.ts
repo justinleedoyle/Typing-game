@@ -251,7 +251,11 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.drawCatwalk();
     this.drawWren(this.scale.width / 2, CATWALK_Y + 20);
 
-    this.narration = new NarrationManager(this, { y: 150, framed: true });
+    this.narration = new NarrationManager(this, {
+      y: 150,
+      framed: true,
+      onSpeak: (speakerName) => this.attendSpeaker(speakerName),
+    });
 
     this.typingInput = new TypingInputController(this.store);
     this.director = new WaveDirector(this.typingInput.getStats());
@@ -1647,6 +1651,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private setNarrator(text: string, speakerName: string | null = null): void {
     this.narration.sayRaw(text, { speakerName });
+  }
+
+  private attendSpeaker(speakerName: string | null): void {
+    if (speakerName === "Forn") {
+      playActorAttention(this, this.fornSprite, {
+        tint: PALETTE_HEX.ember,
+        scale: 1.025,
+        durationMs: 220,
+      });
+    }
   }
 
   private pulseForgeWave(

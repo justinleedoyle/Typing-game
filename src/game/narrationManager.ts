@@ -38,6 +38,10 @@ interface NarrationConfig {
    *  Almanac script is canonically delivered through Runa's voice. Pass null to
    *  suppress the ribbon for a special-purpose caption. */
   speakerName?: string | null;
+  /** Optional scene hook fired whenever a line is rendered. Scenes use this to
+   *  give a visible speaker a small attention beat without coupling narration
+   *  to actor ownership. */
+  onSpeak?: (speakerName: string | null, text: string) => void;
 }
 
 interface NarrationOptions {
@@ -56,6 +60,7 @@ export class NarrationManager {
   private cardCorners?: Phaser.GameObjects.Graphics;
   private speakerBg?: Phaser.GameObjects.Graphics;
   private speakerText?: Phaser.GameObjects.Text;
+  private readonly onSpeak?: (speakerName: string | null, text: string) => void;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -65,6 +70,7 @@ export class NarrationManager {
     this.defaultSpeakerName = config.speakerName === undefined
       ? DEFAULT_SPEAKER_NAME
       : config.speakerName;
+    this.onSpeak = config.onSpeak;
     const cx = scene.scale.width / 2;
     const cy = config.y ?? DEFAULT_Y;
 
@@ -195,6 +201,7 @@ export class NarrationManager {
     this.text.setText(text);
     if (this.framed) this.setSpeaker(speakerName);
     if (this.framed) this.redrawCard();
+    if (text) this.onSpeak?.(speakerName, text);
     const root = this.container ?? this.text;
     root.setAlpha(0);
     this.scene.tweens.add({

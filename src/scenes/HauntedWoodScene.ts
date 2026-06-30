@@ -241,7 +241,11 @@ export class HauntedWoodScene extends Phaser.Scene {
     });
     const band = this.band;
 
-    this.narration = new NarrationManager(this, { y: 150, framed: true });
+    this.narration = new NarrationManager(this, {
+      y: 150,
+      framed: true,
+      onSpeak: (speakerName) => this.attendSpeaker(speakerName),
+    });
 
     this.typingInput = new TypingInputController(this.store);
     this.typingInput.setKeystrokeHooks({
@@ -423,7 +427,6 @@ export class HauntedWoodScene extends Phaser.Scene {
 
     // Inga speaks
     this.setNarrator("i don't know my name.", "Inga");
-    this.attendInga();
     this.time.delayedCall(1800, () => {
       // Wren types a reply
       const reply = this.makeWord({
@@ -439,7 +442,6 @@ export class HauntedWoodScene extends Phaser.Scene {
             "the shrine knows. the shrine keeper might tell you.",
             "Inga",
           );
-          this.attendInga();
           this.time.delayedCall(2400, () => this.startAct2());
         },
       });
@@ -807,7 +809,6 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startBossFight(): void {
     this.setNarrator("Then prove it.", "Ghost-King");
-    this.attendGhostKing();
     this.band.setObjective("Survive the Ghost-King's warded waves.");
     this.ghosts = [];
     this.time.delayedCall(800, () => this.spawnBossWaveA());
@@ -1440,6 +1441,14 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private setNarrator(text: string, speakerName: string | null = null): void {
     this.narration.sayRaw(text, { speakerName });
+  }
+
+  private attendSpeaker(speakerName: string | null): void {
+    if (speakerName === "Inga") {
+      this.attendInga();
+    } else if (speakerName === "Ghost-King") {
+      this.attendGhostKing();
+    }
   }
 
   private pulseWoodWave(

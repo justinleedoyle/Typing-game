@@ -213,7 +213,13 @@ export class PortalChamberScene extends Phaser.Scene {
     // hub's Runa-narrator beats (arrival, desk reflections, the endgame calls)
     // route through say(id); say() is the voice hook when audio lands. The
     // bottom `hint` above keeps only the functional prompts (arch name, shelf).
-    this.narration = new NarrationManager(this, { y: 150, framed: true });
+    this.narration = new NarrationManager(this, {
+      y: 150,
+      framed: true,
+      onSpeak: (speakerName) => {
+        if (speakerName === "Runa") this.playRunaAttention();
+      },
+    });
 
     // Fragment display — shows the accumulating Quiet Lord word in the upper-
     // centre of the room, growing one letter per realm cleared.

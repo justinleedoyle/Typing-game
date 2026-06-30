@@ -246,7 +246,11 @@ export class SunkenBellScene extends Phaser.Scene {
     });
     const band = this.band;
 
-    this.narration = new NarrationManager(this, { y: 120, framed: true });
+    this.narration = new NarrationManager(this, {
+      y: 120,
+      framed: true,
+      onSpeak: (speakerName) => this.attendSpeaker(speakerName),
+    });
     // Bell is "quiet listening" — softer per-keystroke feedback than the
     // Winter Mountain default. 120ms / 0.002 shake instead of 80ms / 0.002.
     this.typingInput.setKeystrokeHooks({
@@ -759,17 +763,11 @@ export class SunkenBellScene extends Phaser.Scene {
         fontSize: 40,
         onComplete: () => {
           this.clearActiveTargets();
-          playActorAttention(this, this.olinImage, {
-            tint: BELL_BURST_COLOR,
-          });
           this.setNarrator(
             "you are listening for the bell. on its toll, you may speak. between tolls, you cannot.",
             "Old Olin",
           );
           this.time.delayedCall(3000, () => {
-            playActorAttention(this, this.olinImage, {
-              tint: BELL_BURST_COLOR,
-            });
             this.setNarrator(
               "i taught the bell its name. i can teach you if you let me.",
               "Old Olin",
@@ -1858,6 +1856,22 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private setNarrator(text: string, speakerName: string | null = null): void {
     this.narration.sayRaw(text, { speakerName });
+  }
+
+  private attendSpeaker(speakerName: string | null): void {
+    if (speakerName === "Old Olin") {
+      playActorAttention(this, this.olinImage, {
+        tint: BELL_BURST_COLOR,
+        scale: 1.025,
+        durationMs: 220,
+      });
+    } else if (speakerName === "King Aurland") {
+      playActorAttention(this, this.aurlandImage, {
+        tint: BELL_BURST_COLOR,
+        scale: 1.025,
+        durationMs: 220,
+      });
+    }
   }
 
   private pulseBellWave(

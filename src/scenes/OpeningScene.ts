@@ -12,6 +12,7 @@ import {
   addBackdropDrift,
   addIdleBreath,
   addLocalGroundShadow,
+  playActorAttention,
 } from "../game/livingScene";
 import openingBackdrop from "../../art/references/opening-typewriter-study-clean.png";
 import { makeQuietLordSprite, preloadQuietLord } from "../game/quietLord";
@@ -39,6 +40,8 @@ export class OpeningScene extends Phaser.Scene {
 
   // The Quiet Lord's first foreshadowing — faint silhouette during Beat 6.
   private quietLordSprite: Phaser.GameObjects.Image | null = null;
+  private runaActor: Phaser.GameObjects.Container | null = null;
+  private siblingActor: Phaser.GameObjects.Container | null = null;
 
   // §5.5.2 — Wren is gender-selectable. Cached from saveState in init(); set
   // by Beat 2.5 on first run; used by beat3 (sibling appearance + dialogue),
@@ -57,6 +60,8 @@ export class OpeningScene extends Phaser.Scene {
     this.store = data.store;
     // Stale sprite reference from a previous run; clear before Beat 6.
     this.quietLordSprite = null;
+    this.runaActor = null;
+    this.siblingActor = null;
     // Honor an existing gender choice on revisit / New Game+; null on a
     // truly fresh save so Beat 2.5 will prompt.
     this.wrenGender = this.store.get().wrenGender;
@@ -95,7 +100,11 @@ export class OpeningScene extends Phaser.Scene {
     });
 
     // ── Narrator text ────────────────────────────────────────────────────────
-    this.narration = new NarrationManager(this, { y: 120, framed: true });
+    this.narration = new NarrationManager(this, {
+      y: 120,
+      framed: true,
+      onSpeak: (speakerName) => this.attendSpeaker(speakerName),
+    });
 
     // ── Input ────────────────────────────────────────────────────────────────
     this.typingInput = new TypingInputController(this.store);
@@ -371,6 +380,14 @@ export class OpeningScene extends Phaser.Scene {
     this.narration.sayRaw(text, { speakerName });
   }
 
+  private attendSpeaker(speakerName: string | null): void {
+    if (speakerName === "Runa") {
+      playActorAttention(this, this.runaActor, { scale: 1.015, durationMs: 190 });
+    } else if (speakerName === "Saga" || speakerName === "Magnus") {
+      playActorAttention(this, this.siblingActor, { scale: 1.025, durationMs: 190 });
+    }
+  }
+
   private playStudyClaimPulse(point: { x: number; y: number; color: number }): void {
     this.playStudyPulse(point, {
       scale: 1.45,
@@ -440,6 +457,7 @@ export class OpeningScene extends Phaser.Scene {
    *  (which sits at ≈x=900) so she doesn't appear to stand on it. */
   private drawRuna(): void {
     const actor = this.add.container(430, 900).setAlpha(0).setDepth(-1);
+    this.runaActor = actor;
     actor.add(addLocalGroundShadow(this, 180, 28, { y: 7, alpha: 0.32 }));
     const img = this.add
       .image(0, 0, "runa-sprite")
@@ -470,6 +488,7 @@ export class OpeningScene extends Phaser.Scene {
   private drawSibling(): void {
     const isBoy = this.wrenGender === "boy";
     const actor = this.add.container(1240, 950).setAlpha(0).setDepth(-1);
+    this.siblingActor = actor;
     actor.add(addLocalGroundShadow(this, isBoy ? 110 : 130, 22, { y: 7, alpha: 0.28 }));
     const img = this.add
       .image(0, 0, "sibling-sprite")

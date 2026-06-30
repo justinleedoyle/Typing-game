@@ -318,7 +318,11 @@ export class SkyIslandScene extends Phaser.Scene {
     });
     const band = this.band;
 
-    this.narration = new NarrationManager(this, { y: 150, framed: true });
+    this.narration = new NarrationManager(this, {
+      y: 150,
+      framed: true,
+      onSpeak: (speakerName) => this.attendSpeaker(speakerName),
+    });
 
     this.typingInput = new TypingInputController(this.store);
     this.typingInput.setKeystrokeHooks({
@@ -1914,6 +1918,22 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private setNarrator(text: string, speakerName: string | null = null): void {
     this.narration.sayRaw(text, { speakerName });
+  }
+
+  private attendSpeaker(speakerName: string | null): void {
+    if (speakerName === "Etta") {
+      playActorAttention(this, this.ettaSprite, {
+        tint: PALETTE_HEX.brass,
+        scale: 1.03,
+        durationMs: 220,
+      });
+    } else if (speakerName === "Scholar-Spirit") {
+      playActorAttention(this, this.bossContainer, {
+        tint: PALETTE_HEX.brass,
+        scale: 1.02,
+        durationMs: 220,
+      });
+    }
   }
 
   private pulseSkyWave(

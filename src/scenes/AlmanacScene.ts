@@ -616,11 +616,7 @@ export class AlmanacScene extends Phaser.Scene {
         fontSize: 26,
         outline: true,
         frame: "banner",
-        onComplete: () => {
-          this.currentPage -= 1;
-          this.renderCurrentPage();
-          this.placeNavigationTargets();
-        },
+        onComplete: () => this.turnPage(-1),
       });
       this.typingInput.register(this.prevTarget);
     }
@@ -634,11 +630,7 @@ export class AlmanacScene extends Phaser.Scene {
         fontSize: 26,
         outline: true,
         frame: "banner",
-        onComplete: () => {
-          this.currentPage += 1;
-          this.renderCurrentPage();
-          this.placeNavigationTargets();
-        },
+        onComplete: () => this.turnPage(1),
       });
       this.typingInput.register(this.nextTarget);
     }
@@ -654,6 +646,43 @@ export class AlmanacScene extends Phaser.Scene {
       onComplete: () => this.closeBook(),
     });
     this.typingInput.register(this.closeTarget);
+  }
+
+  private turnPage(delta: -1 | 1): void {
+    const nextPage = this.currentPage + delta;
+    if (nextPage < 0 || nextPage >= this.pageStack.length) return;
+
+    this.currentPage = nextPage;
+    this.renderCurrentPage();
+    this.placeNavigationTargets();
+    this.playPageTurn(delta);
+  }
+
+  private playPageTurn(direction: -1 | 1): void {
+    const pageTop = BOOK_Y + 34;
+    const pageHeight = BOOK_HEIGHT - 68;
+    const outerX =
+      direction > 0 ? BOOK_X + BOOK_WIDTH - 68 : BOOK_X + 68;
+    const spineX =
+      direction > 0
+        ? BOOK_X + BOOK_WIDTH / 2 + 18
+        : BOOK_X + BOOK_WIDTH / 2 - 18;
+
+    const shimmer = this.add.graphics().setDepth(30).setAlpha(0.62);
+    shimmer.fillStyle(UI_HEX.parchment, 0.42);
+    shimmer.fillRoundedRect(-24, 0, 48, pageHeight, 18);
+    shimmer.lineStyle(2, UI_HEX.brass, 0.35);
+    shimmer.lineBetween(0, 18, 0, pageHeight - 18);
+    shimmer.setPosition(outerX, pageTop);
+
+    this.tweens.add({
+      targets: shimmer,
+      x: spineX,
+      alpha: 0,
+      duration: 420,
+      ease: "Sine.easeOut",
+      onComplete: () => shimmer.destroy(),
+    });
   }
 
   private clearNavigationTargets(): void {

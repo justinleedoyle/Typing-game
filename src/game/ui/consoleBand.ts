@@ -39,6 +39,11 @@ const TILE_Y = MID_Y + 6;
 const ONESHOT_X0 = 1010;
 const ONESHOT_DX = 250;
 const ONESHOT_Y = MID_Y;
+// Objective readout: low in the band, below satchel icons / one-shot cards.
+const OBJECTIVE_X = SATCHEL_X;
+const OBJECTIVE_Y = BAND_H - 38;
+const OBJECTIVE_H = 38;
+const OBJECTIVE_LABEL_W = 68;
 
 export interface ConsoleBandOptions {
   /** Texture key for the speaker portrait shown in the nook (optional). */
@@ -65,9 +70,13 @@ export class ConsoleBand {
   /** Absolute screen anchor for the satchel zone's content row — where a realm
    *  with no satchel docks its own meter (Winter candles, Bell breath). */
   readonly satchelAnchor: { x: number; y: number };
+  private readonly scene: Phaser.Scene;
   private readonly container: Phaser.GameObjects.Container;
+  private objectiveContainer!: Phaser.GameObjects.Container;
+  private objectiveText!: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene, opts: ConsoleBandOptions = {}) {
+    this.scene = scene;
     const W = scene.scale.width;
     const top = scene.scale.height - BAND_H;
     this.bandTopY = top;
@@ -80,6 +89,7 @@ export class ConsoleBand {
     this.drawSurface(scene, W);
     this.drawPortrait(scene, opts);
     this.drawSatchel(scene, opts.passiveIconIds ?? [], opts.satchelLabel ?? "satchel");
+    this.drawObjectiveReadout(scene, W);
 
     this.satchelAnchor = { x: SATCHEL_X, y: top + TILE_Y };
     this.metersAnchor = { x: METERS_RIGHT, y: top + METERS_CY };
@@ -90,6 +100,27 @@ export class ConsoleBand {
 
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.container.destroy());
     scene.events.once(Phaser.Scenes.Events.DESTROY, () => this.container.destroy());
+  }
+
+  /** Small persistent "what now" line inside the console band. It keeps wave,
+   *  fork, and boss instructions in UI chrome instead of relying entirely on
+   *  fast narration cards. */
+  setObjective(text: string): void {
+    const trimmed = text.trim();
+    if (trimmed.length === 0) {
+      this.objectiveContainer.setVisible(false);
+      return;
+    }
+    this.objectiveText.setText(trimmed);
+    this.objectiveContainer.setVisible(true);
+    this.scene.tweens.killTweensOf(this.objectiveContainer);
+    this.objectiveContainer.setAlpha(0.78);
+    this.scene.tweens.add({
+      targets: this.objectiveContainer,
+      alpha: 1,
+      duration: 220,
+      ease: "Sine.easeOut",
+    });
   }
 
   private drawSurface(scene: Phaser.Scene, W: number): void {
@@ -189,5 +220,40 @@ export class ConsoleBand {
       img.setScale(Math.min((TILE - 6) / img.width, (TILE - 6) / img.height));
       this.container.add(img);
     });
+  }
+
+  private drawObjectiveReadout(scene: Phaser.Scene, W: number): void {
+    const width = Math.max(620, W - OBJECTIVE_X - 34);
+    this.objectiveContainer = scene.add
+      .container(OBJECTIVE_X, OBJECTIVE_Y)
+      .setVisible(false);
+
+    const bg = scene.add.graphics();
+    bg.fillStyle(0x0f0c08, 0.52);
+    bg.fillRoundedRect(0, -OBJECTIVE_H / 2, width, OBJECTIVE_H, 7);
+    bg.lineStyle(1, UI_HEX.frame, 0.72);
+    bg.strokeRoundedRect(0, -OBJECTIVE_H / 2, width, OBJECTIVE_H, 7);
+    this.objectiveContainer.add(bg);
+
+    const label = scene.add
+      .text(16, 0, "task", {
+        fontFamily: SERIF,
+        fontSize: "13px",
+        fontStyle: "italic",
+        color: "#a59b89",
+      })
+      .setOrigin(0, 0.5);
+    this.objectiveContainer.add(label);
+
+    this.objectiveText = scene.add
+      .text(OBJECTIVE_LABEL_W, 0, "", {
+        fontFamily: SERIF,
+        fontSize: "17px",
+        color: "#f3ead2",
+        wordWrap: { width: width - OBJECTIVE_LABEL_W - 18 },
+      })
+      .setOrigin(0, 0.5);
+    this.objectiveContainer.add(this.objectiveText);
+    this.container.add(this.objectiveContainer);
   }
 }

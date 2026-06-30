@@ -146,6 +146,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private typingInput!: TypingInputController;
   private director!: WaveDirector;
   private narration!: NarrationManager;
+  private band!: ConsoleBand;
   private golems: MovingWordEnemy[] = [];
   private activeTargets: TextWordTarget[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
@@ -272,11 +273,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // composition) that houses the meters + satchel. Passive relics show as icon
     // tiles ("always on"); the offensive one-shots drop in as charge cards. This
     // replaces the floating top-right HUD and the centered one-shot stack.
-    const band = new ConsoleBand(this, {
+    this.band = new ConsoleBand(this, {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,
     });
+    const band = this.band;
 
     new HeartSoulHud(this, {
       getHeart: () => this.typingInput.getStats().getHeart(),
@@ -540,6 +542,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       "Now do it for real. That one won't wait.",
       "Old Gregor",
     );
+    this.band.setObjective("Redirect the training golem before it reaches Wren.");
 
     const golem = this.spawnAdvancingGolem(1060, FLOOR_Y, "walk", GOLEM_ADVANCE_MS * 1.4, false);
 
@@ -585,6 +588,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
     this.narration.say("forge_wave1_intro");
+    this.band.setObjective("Type each mixed-case command cleanly.");
 
     // Tier 1 signature: every golem is a mixed-case command (lowercase head,
     // CAPITALIZED tail) — the brass only obeys when the capitals are typed with
@@ -617,6 +621,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       "The bellows are broken. The forge fire dims. Someone needs to fix this — or let it fail.",
       "Runa",
     );
+    this.band.setObjective("Reach Smith Forn through the moving foundry.");
     this.time.delayedCall(2400, () => this.startWave2());
   }
 
@@ -626,6 +631,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
     this.narration.say("forge_wave2_intro");
+    this.band.setObjective("Use Shift for CAPITAL order fragments.");
 
     // §5.5.10 — a golem's CAPITALIZED command comes out as scratched-out caps.
     // Fires on Wave 2 (the wave that introduces the capitalized golem) so it
@@ -714,6 +720,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.golems = [];
     this.waveActive = false;
     this.narration.say("forge_fork1_intro");
+    this.band.setObjective("Choose Forn or the apprentices.");
     this.showFornSprite();
 
     const helpForn = this.makeWord({
@@ -844,6 +851,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.setNarrator(
       "The Command-Golem — massive, iron-crowned, its eye burning orange. Phase one begins.",
     );
+    this.band.setObjective("Break the Command-Golem's first words.");
 
     let phaseIdx = 0;
     const nextWord = (): void => {
@@ -885,6 +893,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.flashGolemCommanded(this.bossSprite, true);
 
     this.narration.say("forge_command_golem_phase2");
+    this.band.setObjective("Hold Shift through each all-caps command.");
 
     let phaseIdx = 0;
     const nextWord = (): void => {
@@ -1015,6 +1024,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.setNarrator(
       "The Command-Golem lies still. What now? Type a choice.",
     );
+    this.band.setObjective("Choose the final order for the forge.");
 
     const peaceful = this.makeWord({
       scene: this,
@@ -1050,6 +1060,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.setNarrator(
       "You raise the typewriter keys and give the final command.",
     );
+    this.band.setObjective("Type STAND DOWN with capitals.");
 
     // Type "STAND DOWN" (capitalized, spell mode preferred)
     const standDown = this.makeWord({
@@ -1079,6 +1090,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.setNarrator(
       "Two more golems rise from the slag. You're not done yet.",
     );
+    this.band.setObjective("Stop the last two command-golems.");
 
     this.waveActive = true;
     // Mixed-case command golems. Speed-axis director scales length + advance;

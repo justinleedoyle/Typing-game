@@ -203,6 +203,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private typingInput!: TypingInputController;
   private director!: WaveDirector;
   private narration!: NarrationManager;
+  private band!: ConsoleBand;
   private wolves: MovingWordEnemy[] = [];
   /** The Pack-Leader, also a wolf in `this.wolves`; held separately for the
    *  pack-cleared ward gate and the body-sprite tint on release. */
@@ -315,12 +316,13 @@ export class WinterMountainScene extends Phaser.Scene {
 
     // UI cohesion — the console band houses the meters + Winter's candle/thunder
     // status. Realm 1 has no satchel, so those dock in the satchel zone.
-    const band = new ConsoleBand(this, {
+    this.band = new ConsoleBand(this, {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: [],
       satchelLabel: "",
     });
+    const band = this.band;
 
     this.narration = new NarrationManager(this, { y: 160, framed: true });
 
@@ -684,6 +686,13 @@ export class WinterMountainScene extends Phaser.Scene {
     this.refreshThunderPips();
     const config = WAVES[idx];
     this.setNarrator(config.intro);
+    this.band.setObjective(
+      idx === 0
+        ? "Type the wolf word before it reaches Wren."
+        : idx === 1
+          ? "Track both wolves and keep the candles lit."
+          : "Clear the pack, then name the Pack-Leader.",
+    );
 
     // Wave-start bookend — audio sting + screen shake so each wave feels
     // like an event, not just "more text appears."
@@ -931,6 +940,7 @@ export class WinterMountainScene extends Phaser.Scene {
         this.bossBodySprite.setTintFill(0xffd277);
         this.time.delayedCall(140, () => this.bossBodySprite?.clearTint());
       }
+      this.band.setObjective("Type the Pack-Leader's true name.");
       this.cameras.main.shake(180, 0.003);
       boss.attachWord();
     });
@@ -1106,6 +1116,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private startFork1(nextWave: number): void {
     this.narration.say("winter_fork1_intro");
+    this.band.setObjective("Choose: save the huntress or follow the fireflies.");
 
     const huntress = this.makeWord({
       scene: this,
@@ -1328,6 +1339,7 @@ export class WinterMountainScene extends Phaser.Scene {
   /** Fork 2 — Aftermath: bury under cairn stones OR take the pelt */
   private startFork2(): void {
     this.narration.say("winter_fork2_intro");
+    this.band.setObjective("Choose how Wren answers the Pack-Leader.");
 
     const buryTarget = this.makeWord({
       scene: this,

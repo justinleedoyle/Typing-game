@@ -103,6 +103,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
+  private band!: ConsoleBand;
   private ghosts: MovingWordEnemy[] = [];
   private activeTargets: TextWordTarget[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
@@ -225,12 +226,13 @@ export class SunkenBellScene extends Phaser.Scene {
     // The breath meter is a bespoke bottom gauge, so it docks into the band's
     // satchel zone (satchelLabel:"" — like Winter's candles); the passive relics
     // earned in earlier realms still surface as icon tiles in that zone.
-    const band = new ConsoleBand(this, {
+    this.band = new ConsoleBand(this, {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,
       satchelLabel: "",
     });
+    const band = this.band;
 
     this.narration = new NarrationManager(this, { y: 120, framed: true });
     // Bell is "quiet listening" — softer per-keystroke feedback than the
@@ -809,6 +811,7 @@ export class SunkenBellScene extends Phaser.Scene {
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
     this.ghosts = [];
+    this.band.setObjective("Drive back the tide-ghosts before the air runs out.");
     // Combat begins — the air stake goes live for the choir waves.
     this.setBreathActive(true);
     this.onWaveCleared = () => this.onFirstEncounterCleared();
@@ -843,6 +846,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.cameras.main.shake(140, 0.003);
     this.onWaveCleared = () => this.onWave1Cleared();
     this.narration.say("sunken_choir_wave1");
+    this.band.setObjective("Type each word on the toll; watch the air meter.");
     const words = pickAdaptiveWords(
       SUNKEN_BELL_WORD_BANK,
       4,
@@ -877,6 +881,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.beatPhase = "off";
     this.onWaveCleared = () => this.onAntiphonCleared();
     this.narration.say("sunken_antiphon_intro");
+    this.band.setObjective("Answer between tolls when the ember ring opens.");
     // Short, non-hyphenated words — the demand is the syncopation, not mid-word
     // metering. The half-beat ember ring (onBeatTick) shows the answer window.
     const words = pickAdaptiveWords(
@@ -908,6 +913,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.cameras.main.shake(140, 0.003);
     this.onWaveCleared = () => this.onWave2Cleared();
     this.narration.say("sunken_choir_wave2");
+    this.band.setObjective("Break the splitting ghost before the air runs out.");
 
     // §5.5.10 — the bell tolls, and for one peal the cathedral fills with a
     // scratched whisper of the Lord's text. Fires once per playthrough on the
@@ -987,6 +993,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startFork1(): void {
     this.narration.say("sunken_fork1_intro");
+    this.band.setObjective("Choose how to open the nave doors.");
 
     const chantTarget = this.makeWord({
       scene: this,
@@ -1020,6 +1027,7 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private startFork1Chant(): void {
+    this.band.setObjective("Open the doors slowly, on the bell's rhythm.");
     // Beat-locked passage chain
     const phrases = [
       { word: "slow.", narrator: "The doors remember weight." },
@@ -1047,6 +1055,7 @@ export class SunkenBellScene extends Phaser.Scene {
     // running, so its first letter is beat-gated like any new claim. (The old
     // build had regressed this to a plain lowercase setNarrator("OPEN").)
     this.setNarrator("Force the doors — OPEN, on the toll.");
+    this.band.setObjective("Type OPEN on the toll.");
     this.time.delayedCall(700, () => {
       const openTarget = this.makeWord({
         scene: this,
@@ -1305,6 +1314,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startFork2(): void {
     this.setNarrator("The bell is silent. Two paths beneath it.");
+    this.band.setObjective("Choose Aurland's fate beneath the bell.");
 
     const freeTarget = this.makeWord({
       scene: this,

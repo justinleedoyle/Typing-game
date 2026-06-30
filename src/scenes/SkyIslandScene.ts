@@ -178,6 +178,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
+  private band!: ConsoleBand;
   private spirits: LanternSpirit[] = [];
   private activeTargets: TextWordTarget[] = [];
   /** Temple scrolling-phrase banners currently in flight. */
@@ -298,11 +299,12 @@ export class SkyIslandScene extends Phaser.Scene {
     // composition) that houses the meters + satchel. Passive relics show as icon
     // tiles ("always on"); the offensive one-shots drop in as charge cards. This
     // replaces the floating top-right HUD and the centered one-shot stack.
-    const band = new ConsoleBand(this, {
+    this.band = new ConsoleBand(this, {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,
     });
+    const band = this.band;
 
     this.narration = new NarrationManager(this, { y: 150, framed: true });
 
@@ -514,6 +516,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.cameras.main.shake(220, 0.005);
 
     this.setNarrator("Two lantern-spirits drift from the tower path, pale and unhurried.");
+    this.band.setObjective("Clear the lantern-spirits before they reach Wren.");
     const words = pickAdaptiveWords(
       filterWordsByLength(SKY_ISLAND_WORD_BANK, 6, 8),
       2,
@@ -596,6 +599,11 @@ export class SkyIslandScene extends Phaser.Scene {
       "The fifth and final chamber. They fly, three at once. Type before they leave you.",
     ];
     this.setNarrator(templeNames[idx] ?? "");
+    this.band.setObjective(
+      cfg.count === 1
+        ? "Finish the moving scroll before it leaves the path."
+        : `Triage ${cfg.count} moving scrolls before they leave the path.`,
+    );
 
     // Pick `cfg.count` distinct phrases from the long-phrase bank.
     const phrases = shuffleArr(
@@ -675,6 +683,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.setNarrator(
       "A sealed scroll, pinned in still air. No haste here — but no mistakes. One slip and it reseals.",
     );
+    this.band.setObjective("Type the sealed scroll with no mistakes.");
     // No scrolling banners this temple — clear the blur-driven list.
     this.activePhrases = [];
     this.templePhrasesRemaining = 0;
@@ -981,6 +990,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private startFork1(): void {
     this.narration.say("sky_fork1_intro");
+    this.band.setObjective("Choose whether to help Etta or take the flame.");
 
     const helpTarget = this.makeWord({
       scene: this,
@@ -1074,6 +1084,7 @@ export class SkyIslandScene extends Phaser.Scene {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
     this.setNarrator(RIDDLE_1_DISPLAY, "Scholar-Spirit");
+    this.band.setObjective("Answer the Scholar-Spirit's riddle.");
     this.time.delayedCall(1200, () => {
       const target = this.makeWord({
         scene: this,
@@ -1098,6 +1109,7 @@ export class SkyIslandScene extends Phaser.Scene {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
     this.setNarrator(RIDDLE_2_DISPLAY, "Scholar-Spirit");
+    this.band.setObjective("Answer the second riddle.");
     this.time.delayedCall(1200, () => {
       const target = this.makeWord({
         scene: this,
@@ -1132,6 +1144,7 @@ export class SkyIslandScene extends Phaser.Scene {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
     this.setNarrator(RIDDLE_3_DISPLAY, "Scholar-Spirit");
+    this.band.setObjective("Type the final answer before the spirit fades.");
     this.time.delayedCall(1400, () => {
       // Track typed characters to progressively dim the spirit as the
       // sentence fills in — mirrors the per-word alpha from the old sequential
@@ -1223,6 +1236,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private startFork2(): void {
     this.setNarrator("The summit is quiet. Two choices remain.");
+    this.band.setObjective("Choose how to answer the tethered spirit.");
 
     const kindTarget = this.makeWord({
       scene: this,

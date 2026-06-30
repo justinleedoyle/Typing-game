@@ -116,6 +116,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
+  private band!: ConsoleBand;
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   private ghosts: MovingWordEnemy[] = [];
@@ -219,11 +220,12 @@ export class HauntedWoodScene extends Phaser.Scene {
     // UI cohesion — the console band houses the meters + satchel. Wood's mist is
     // a vision overlay (not a bottom meter), so the satchel zone shows the passive
     // relic icon tiles; the offensive one-shots drop into the band's charge cards.
-    const band = new ConsoleBand(this, {
+    this.band = new ConsoleBand(this, {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,
     });
+    const band = this.band;
 
     this.narration = new NarrationManager(this, { y: 150, framed: true });
 
@@ -451,6 +453,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private beginCrossroads1(): void {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.band.setObjective("Use the compass marks to clear each warded word.");
 
     const directions: WoodDirection[] = ["west", "east", "north"];
     this.ghosts = [];
@@ -478,6 +481,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.narration.say("wood_crossroads2_intro");
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.band.setObjective("Watch all four compass marks through the mist.");
 
     const directions: WoodDirection[] = ["north", "south", "east", "west"];
     this.ghosts = [];
@@ -514,6 +518,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.setNarrator("Older things stir. They come in pairs now.");
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.band.setObjective("Handle paired directions before the mist closes.");
 
     const directions: WoodDirection[] = ["north", "north", "east", "west"];
     this.ghosts = [];
@@ -570,6 +575,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startFork1(): void {
     this.narration.say("wood_fork1_intro");
+    this.band.setObjective("Choose an offering or the bone-flute.");
 
     const offeringTarget = this.makeWord({
       scene: this,
@@ -693,6 +699,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.setNarrator(
       "The Ghost-King speaks in silence. You may bargain — or simply light the grove.",
     );
+    this.band.setObjective("Choose a bargain or light the grove.");
 
     const bargainTarget = this.makeWord({
       scene: this,
@@ -767,6 +774,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startBossFight(): void {
     this.setNarrator("Then prove it.", "Ghost-King");
+    this.band.setObjective("Survive the Ghost-King's warded waves.");
     this.ghosts = [];
     this.time.delayedCall(800, () => this.spawnBossWaveA());
   }
@@ -790,6 +798,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private spawnBossWaveB(): void {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.band.setObjective("South-heavy wards rise from below.");
     // Wave B: south-heavy attack — two from below + one from above. Reads
     // as the Ghost-King's hall rising up against Wren.
     const directions: WoodDirection[] = ["south", "south", "north"];
@@ -811,6 +820,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   // first time. Per §5.5.8 this is the boss's phase 2.
 
   private startBossCapstone(): void {
+    this.band.setObjective("Type every punctuation mark in his final words.");
     const dimOverlay = this.add.graphics().setDepth(40).fillStyle(0x000000, 0.4);
     dimOverlay.fillRect(0, 0, this.scale.width, this.scale.height);
     dimOverlay.setAlpha(0);

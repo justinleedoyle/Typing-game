@@ -275,6 +275,7 @@ export class GreatBattleScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
+  private band!: ConsoleBand;
   private activeTargets: TextWordTarget[] = [];
 
   // HUD
@@ -422,12 +423,13 @@ export class GreatBattleScene extends Phaser.Scene {
     // UI cohesion — the console band. The finale has no heart/soul HUD; its candle
     // (fail-state) + spell-charge meters dock into the band, with Runa at the portrait
     // nook. No satchel icons here (the band's zone holds the two meters instead).
-    const band = new ConsoleBand(this, {
+    this.band = new ConsoleBand(this, {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: [],
       satchelLabel: "",
     });
+    const band = this.band;
 
     // Narrator (framed dialogue card)
     this.narration = new NarrationManager(this, {
@@ -751,6 +753,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.waveCandleLost = false;
 
     this.setNarrator(`The ${waveDef.label} pour over the wall.`);
+    this.band.setObjective("Hold the wall: clear the realm echoes before candles fall.");
 
     let words = pickAdaptiveWords(
       waveDef.bank as readonly string[],
@@ -1417,6 +1420,7 @@ export class GreatBattleScene extends Phaser.Scene {
     if (this.runOver) return;
     // Dynamic prompt (the word varies) — same shape as the Phase-2c spell cue.
     this.setNarrator(`${facet.name} crashes down — type:  ${facet.defenseWord}`);
+    this.band.setObjective(`Type ${facet.defenseWord} before the facet lands.`);
 
     let resolved = false;
     const finish = (): void => {
@@ -2119,6 +2123,7 @@ export class GreatBattleScene extends Phaser.Scene {
         ? "Answer in his own hand — mind the capitals:"
         : "Again, deeper — his name this time:";
     this.setNarrator(`${lead}  ${word}`);
+    this.band.setObjective("Mind the capitals in the Quiet Lord's word.");
 
     const target = this.makeWord({
       scene: this,

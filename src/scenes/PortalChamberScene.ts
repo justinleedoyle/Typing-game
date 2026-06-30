@@ -309,6 +309,7 @@ export class PortalChamberScene extends Phaser.Scene {
         y: archTargetY(nextAvailableIdx),
         fontSize: 30,
         outline: true,
+        onClaim: () => this.focusPortalForScene(arch.sceneKey),
         onComplete: () => this.onEnterPortal(arch.sceneKey, false),
       });
       this.typingInput.register(primary);
@@ -334,6 +335,7 @@ export class PortalChamberScene extends Phaser.Scene {
           fontSize: 42,
           outline: true,
           frame: "banner",
+          onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),
           onComplete: () => {
             this.pulseStation(HUB_STATIONS.portalFloor);
             this.cameras.main.fadeOut(600, 10, 8, 15);
@@ -356,6 +358,7 @@ export class PortalChamberScene extends Phaser.Scene {
           fontSize: 38,
           outline: true,
           frame: "banner",
+          onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),
           onComplete: () => {
             this.pulseStation(HUB_STATIONS.portalFloor);
             this.startNewGame();
@@ -379,6 +382,7 @@ export class PortalChamberScene extends Phaser.Scene {
         fontSize: 22,
         priority: -1,
         outline: true,
+        onClaim: () => this.focusPortalForScene(arch.sceneKey),
         onComplete: () => this.onEnterPortal(arch.sceneKey, true),
       });
       this.typingInput.register(revisit);
@@ -576,6 +580,9 @@ export class PortalChamberScene extends Phaser.Scene {
       priority: opts.priority ?? -2,
       outline: true,
       frame: "banner",
+      onClaim: () => {
+        if (opts.stationPulse) this.focusStation(opts.stationPulse);
+      },
       onComplete: () => {
         if (opts.stationPulse) this.pulseStation(opts.stationPulse);
         onComplete();
@@ -615,6 +622,7 @@ export class PortalChamberScene extends Phaser.Scene {
       priority: -1,
       outline: true,
       frame: "banner",
+      onClaim: () => this.focusStation(HUB_STATIONS.almanac),
       onComplete: () => {
         this.pulseStation(HUB_STATIONS.almanac);
         this.openAlmanac();
@@ -646,6 +654,7 @@ export class PortalChamberScene extends Phaser.Scene {
         priority: -1,
         outline: true,
         frame: "banner",
+        onClaim: () => this.focusStation(HUB_STATIONS.account),
         onComplete: () => {
           this.pulseStation(HUB_STATIONS.account);
           void signOut();
@@ -673,6 +682,7 @@ export class PortalChamberScene extends Phaser.Scene {
         priority: -1,
         outline: true,
         frame: "banner",
+        onClaim: () => this.focusStation(HUB_STATIONS.account),
         onComplete: () => {
           this.pulseStation(HUB_STATIONS.account);
           void signInWithGoogle(window.location.href);
@@ -925,6 +935,51 @@ export class PortalChamberScene extends Phaser.Scene {
     });
   }
 
+  private focusPortalForScene(sceneKey: string): void {
+    const arch = ARCHES.find((a) => a.sceneKey === sceneKey);
+    if (!arch) return;
+
+    const sprite = this.archSprites.get(arch.id);
+    const glow = this.archGlows.get(arch.id);
+    const cx = arch.x;
+    const cy = arch.baseY - arch.height / 2 + 34;
+    const ring = this.add.graphics().setPosition(cx, cy).setDepth(7).setAlpha(0.72);
+    ring.lineStyle(2, PALETTE_HEX.brass, 0.62);
+    ring.strokeEllipse(0, 0, arch.width * 0.78, arch.height * 0.72);
+
+    this.tweens.add({
+      targets: ring,
+      alpha: 0,
+      scaleX: 1.1,
+      scaleY: 1.06,
+      duration: 280,
+      ease: "Sine.easeOut",
+      onComplete: () => ring.destroy(),
+    });
+
+    if (glow?.visible) {
+      this.tweens.add({
+        targets: glow,
+        alpha: { from: Math.max(glow.alpha, 0.34), to: glow.alpha },
+        duration: 260,
+        ease: "Sine.easeOut",
+      });
+    }
+
+    if (!sprite?.visible) return;
+    const scaleX = sprite.scaleX;
+    const scaleY = sprite.scaleY;
+    this.tweens.add({
+      targets: sprite,
+      scaleX: scaleX * 1.025,
+      scaleY: scaleY * 1.02,
+      duration: 130,
+      yoyo: true,
+      ease: "Sine.easeOut",
+      onComplete: () => sprite.setScale(scaleX, scaleY),
+    });
+  }
+
   // ─── Drawing ──────────────────────────────────────────────────────────────
 
   private drawRoom(): void {
@@ -1067,6 +1122,33 @@ export class PortalChamberScene extends Phaser.Scene {
       duration: 420,
       ease: "Sine.easeOut",
       onComplete: () => pulse.destroy(),
+    });
+  }
+
+  private focusStation(station: StationSpec): void {
+    const focus = this.add
+      .container(station.x, station.y)
+      .setDepth(8)
+      .setAlpha(0.68);
+    const g = this.add.graphics();
+    g.lineStyle(2, UI_HEX.brass, 0.52);
+    g.strokeRoundedRect(
+      -station.width / 2,
+      -station.height / 2,
+      station.width,
+      station.height,
+      8,
+    );
+    focus.add(g);
+
+    this.tweens.add({
+      targets: focus,
+      alpha: 0,
+      scaleX: 1.04,
+      scaleY: 1.08,
+      duration: 300,
+      ease: "Sine.easeOut",
+      onComplete: () => focus.destroy(),
     });
   }
 

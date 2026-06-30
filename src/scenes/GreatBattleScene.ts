@@ -6,6 +6,7 @@ import { playDamageThud } from "../audio/damageThud";
 import { playPeriodSnapSting } from "../audio/quietLordSting";
 import { NarrationManager } from "../game/narrationManager";
 import { ConsoleBand } from "../game/ui/consoleBand";
+import { UI_HEX } from "../game/ui/uiTheme";
 import { flashDamageVignette } from "../game/vfx";
 import { flashQuietLordFragment } from "../game/quietLordIntrusion";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -707,33 +708,75 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private drawEnemyShape(g: Phaser.GameObjects.Graphics, realmId: string, x: number, y: number): void {
+    g.fillStyle(0x000000, 0.28);
+    g.fillEllipse(x, y + 38, 92, 18);
+
     switch (realmId) {
       case "winter-mountain":
-        // Shadow-wolf: dark grey filled triangle (downward ▼)
-        g.fillStyle(0x2a2832, 0.95);
-        g.fillTriangle(x - 22, y - 10, x + 22, y - 10, x, y + 20);
+        // Shadow-wolf: crouched silhouette instead of a bare marker.
+        g.fillStyle(0x171923, 0.96);
+        g.fillEllipse(x - 8, y + 8, 78, 30);
+        g.fillEllipse(x + 36, y - 2, 34, 28);
+        g.fillTriangle(x + 24, y - 18, x + 31, y - 36, x + 38, y - 14);
+        g.fillTriangle(x + 38, y - 17, x + 48, y - 33, x + 51, y - 10);
+        g.fillTriangle(x - 44, y + 8, x - 70, y - 8, x - 50, y + 24);
+        g.lineStyle(2, 0x5f6f86, 0.7);
+        g.lineBetween(x + 30, y - 4, x + 43, y - 4);
         break;
       case "sunken-bell":
-        // Tide-wraith: translucent blue-grey ellipse
-        g.fillStyle(0x4a6080, 0.55);
-        g.fillEllipse(x, y, 50, 70);
+        // Tide-wraith: drowned bell-shape with a spectral ring.
+        g.fillStyle(0x314861, 0.56);
+        g.fillEllipse(x, y, 64, 78);
+        g.fillStyle(0x1b2838, 0.42);
+        g.fillRoundedRect(x - 22, y - 6, 44, 42, 12);
+        g.lineStyle(2, 0xa7d2dd, 0.5);
+        g.strokeEllipse(x, y, 70, 84);
+        g.strokeCircle(x, y + 5, 21);
+        g.lineBetween(x - 18, y + 30, x + 18, y + 30);
+        g.fillStyle(0xa7d2dd, 0.52);
+        g.fillCircle(x, y + 32, 4);
         break;
       case "clockwork-forge":
-        // Rogue golem: brass-colored rectangle with a dot eye
-        g.fillStyle(0x7a6030, 0.9);
-        g.fillRect(x - 18, y - 30, 36, 50);
+        // Rogue golem: riveted body plate with an ember eye.
+        g.fillStyle(0x4f4129, 0.94);
+        g.fillRoundedRect(x - 28, y - 32, 56, 62, 6);
+        g.fillStyle(0x6f562c, 0.9);
+        g.fillRoundedRect(x - 38, y - 18, 18, 34, 5);
+        g.fillRoundedRect(x + 20, y - 18, 18, 34, 5);
+        g.lineStyle(2, UI_HEX.brass, 0.52);
+        g.strokeRoundedRect(x - 28, y - 32, 56, 62, 6);
+        g.lineBetween(x - 18, y - 2, x + 18, y - 2);
         g.fillStyle(PALETTE_HEX.ember, 0.9);
-        g.fillCircle(x + 8, y - 12, 4);
+        g.fillCircle(x + 10, y - 15, 5);
+        g.fillStyle(UI_HEX.brass, 0.58);
+        g.fillCircle(x - 16, y - 21, 3);
+        g.fillCircle(x + 16, y + 20, 3);
         break;
       case "sky-island":
-        // Sky-shard: bright gold thin triangle (upward ▲)
-        g.fillStyle(0xd4b84a, 0.92);
-        g.fillTriangle(x, y - 34, x - 14, y + 10, x + 14, y + 10);
+        // Sky-shard: faceted falling glass, not a UI triangle.
+        g.fillStyle(0xd4b84a, 0.88);
+        g.fillTriangle(x, y - 42, x - 26, y + 5, x, y + 36);
+        g.fillStyle(0x8ea7d8, 0.42);
+        g.fillTriangle(x, y - 42, x + 26, y + 5, x, y + 36);
+        g.lineStyle(2, 0xf0df86, 0.7);
+        g.strokeTriangle(x, y - 42, x - 26, y + 5, x, y + 36);
+        g.strokeTriangle(x, y - 42, x + 26, y + 5, x, y + 36);
+        g.lineStyle(1, 0xf6edb2, 0.42);
+        g.lineBetween(x, y - 32, x, y + 28);
+        g.strokeCircle(x, y + 4, 34);
         break;
       case "haunted-wood":
-        // Wood-haunt: translucent pale green-grey ellipse
-        g.fillStyle(0x6a8068, 0.45);
-        g.fillEllipse(x, y, 46, 66);
+        // Wood-haunt: cloaked apparition with branch-like antlers.
+        g.fillStyle(0x334335, 0.5);
+        g.fillTriangle(x, y - 42, x - 36, y + 36, x + 36, y + 36);
+        g.fillStyle(0x6a8068, 0.42);
+        g.fillEllipse(x, y - 12, 42, 50);
+        g.lineStyle(2, 0x9fb69a, 0.45);
+        g.lineBetween(x - 14, y - 36, x - 34, y - 54);
+        g.lineBetween(x + 14, y - 36, x + 34, y - 54);
+        g.lineBetween(x - 30, y - 50, x - 44, y - 48);
+        g.lineBetween(x + 30, y - 50, x + 44, y - 48);
+        g.lineBetween(x - 18, y + 24, x + 18, y + 24);
         break;
     }
   }

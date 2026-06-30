@@ -23,6 +23,7 @@ import {
   addLocalGroundShadow,
 } from "../game/livingScene";
 import { preloadSatchelIcons, satchelIconFor } from "../game/ui/satchelIcons";
+import { cornerTicks, UI_HEX } from "../game/ui/uiTheme";
 import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
 import hubBackdrop from "../../art/references/hub-portal-chamber-clean.png";
 import portalActiveSheet from "../../art/portal/portal-active-sheet.png";
@@ -87,6 +88,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private typingInput!: TypingInputController;
   private archGraphics = new Map<string, Phaser.GameObjects.Graphics>();
   private archSprites = new Map<string, Phaser.GameObjects.Sprite>();
+  private hintPlate!: Phaser.GameObjects.Graphics;
   private hint!: Phaser.GameObjects.Text;
   private narration!: NarrationManager;
   private wrenContainer!: Phaser.GameObjects.Container;
@@ -146,15 +148,17 @@ export class PortalChamberScene extends Phaser.Scene {
 
     this.wrenContainer = this.drawWren(ZONE_X.portals, WREN_Y);
 
+    this.hintPlate = this.add.graphics().setDepth(24);
     this.hint = this.add
-      .text(this.scale.width / 2, this.scale.height - 68, "", {
+      .text(this.scale.width / 2, this.scale.height - 42, "", {
         fontFamily: SERIF,
-        fontSize: "24px",
-        color: PALETTE.dim,
+        fontSize: "20px",
+        color: "#c9b98e",
         align: "center",
         wordWrap: { width: 1200 },
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setDepth(25);
 
     // Runa's narration — the shared top caption every other scene uses. The
     // hub's Runa-narrator beats (arrival, desk reflections, the endgame calls)
@@ -269,7 +273,7 @@ export class PortalChamberScene extends Phaser.Scene {
       });
       this.typingInput.register(primary);
       this.zoneTargets.push(primary);
-      this.hint.setText("type the glowing arch's name to step through  ·  backspace to cancel");
+      this.setHint("type the glowing arch's name to step through  ·  backspace to cancel");
       // First-arrival narration — only while nothing is cleared yet (the
       // "you're new here" state). On returns the desk reflections carry Runa.
       if (!REALM_SEQUENCE.some((id) => state.realms[id]?.cleared)) {
@@ -300,7 +304,7 @@ export class PortalChamberScene extends Phaser.Scene {
         this.typingInput.register(battleTarget);
         this.zoneTargets.push(battleTarget);
         this.narration.say("hub_all_cleared");
-        this.hint.setText("");
+        this.setHint("");
       } else {
         // Battle cleared — show begin again target (New Game+).
         const ngPlusTarget = new TextWordTarget({
@@ -316,7 +320,7 @@ export class PortalChamberScene extends Phaser.Scene {
         this.typingInput.register(ngPlusTarget);
         this.zoneTargets.push(ngPlusTarget);
         this.narration.say("hub_post_battle");
-        this.hint.setText("");
+        this.setHint("");
       }
     }
 
@@ -338,11 +342,11 @@ export class PortalChamberScene extends Phaser.Scene {
     }
 
     // Zone navigation (away from portals).
-    this.registerNavTarget("runa", 950, 920, () => this.enterZone("desk"));
-    this.registerNavTarget("shelf", 1530, 920, () => this.enterZone("shelf"));
+    this.registerNavTarget("runa", 420, 908, () => this.enterZone("desk"));
+    this.registerNavTarget("shelf", 1740, 930, () => this.enterZone("shelf"));
     // Settings entry — small chrome-y target in the upper-right corner so it
     // stays out of the main portal sight-lines but is discoverable.
-    this.registerNavTarget("settings", 1820, 60, () => this.enterSettings());
+    this.registerNavTarget("settings", 1812, 72, () => this.enterSettings(), { fontSize: 22 });
   }
 
   private enterSettings(): void {
@@ -363,9 +367,9 @@ export class PortalChamberScene extends Phaser.Scene {
       .reverse()
       .find((id) => state.realms[id]?.cleared) ?? "none";
     this.narration.say(DESK_LINE_IDS[lastCleared] ?? DESK_LINE_IDS["none"]);
-    this.hint.setText("");
+    this.setHint("");
 
-    this.registerNavTarget("back", ZONE_X.desk + 200, 920, () =>
+    this.registerNavTarget("back", 640, 908, () =>
       this.enterZone("portals"),
     );
   }
@@ -379,15 +383,15 @@ export class PortalChamberScene extends Phaser.Scene {
     this.narration.clear();
 
     if (items.length === 0) {
-      this.hint.setText("your shelf is empty. bring something back from a realm.");
+      this.setHint("your shelf is empty. bring something back from a realm.");
     } else {
       const names = items
         .map((id) => RELICS[id]?.name ?? id)
         .join(" · ");
-      this.hint.setText(`on your shelf: ${names}`);
+      this.setHint(`on your shelf: ${names}`);
     }
 
-    this.registerNavTarget("back", ZONE_X.shelf - 200, 920, () =>
+    this.registerNavTarget("back", 1520, 930, () =>
       this.enterZone("portals"),
     );
   }
@@ -461,14 +465,15 @@ export class PortalChamberScene extends Phaser.Scene {
     x: number,
     y: number,
     onComplete: () => void,
+    opts: { fontSize?: number; priority?: number } = {},
   ): void {
     const t = new TextWordTarget({
       scene: this,
       word,
       x,
       y,
-      fontSize: 26,
-      priority: -2,
+      fontSize: opts.fontSize ?? 26,
+      priority: opts.priority ?? -2,
       outline: true,
       frame: "banner",
       onComplete,
@@ -481,7 +486,7 @@ export class PortalChamberScene extends Phaser.Scene {
 
   private onEnterPortal(sceneKey: string, revisit: boolean): void {
     playChime();
-    this.hint.setText("");
+    this.setHint("");
     this.narration.clear();
     this.cameras.main.fadeOut(500, 11, 10, 15);
     this.cameras.main.once(
@@ -498,11 +503,12 @@ export class PortalChamberScene extends Phaser.Scene {
     const target = new TextWordTarget({
       scene: this,
       word: "almanac",
-      x: 220,
-      y: this.scale.height - 36,
+      x: 230,
+      y: 1030,
       fontSize: 24,
       priority: -1,
       outline: true,
+      frame: "banner",
       onComplete: () => this.openAlmanac(),
     });
     this.typingInput.register(target);
@@ -720,15 +726,63 @@ export class PortalChamberScene extends Phaser.Scene {
       maxDurationMs: 15000,
     });
 
-    // Dim zone hints beneath the painted desk and display cabinet.
-    const labelStyle = {
-      fontFamily: SERIF,
-      fontSize: "18px",
-      color: "#3a3550",
-      fontStyle: "italic",
-    };
-    this.add.text(210, 958, "runa's desk", labelStyle).setOrigin(0.5);
-    this.add.text(1740, 958, "your shelf", labelStyle).setOrigin(0.5);
+    this.drawHubStations();
+  }
+
+  private drawHubStations(): void {
+    this.drawStationPlaque(420, 956, 300, 52, "runa's desk");
+    this.drawStationPlaque(230, 1030, 230, 44, "almanac", { alpha: 0.28, labelAlpha: 0 });
+    this.drawStationPlaque(this.scale.width / 2, 962, 330, 46, "portal floor", { alpha: 0.22 });
+    this.drawStationPlaque(1740, 978, 290, 52, "your shelf");
+    this.drawStationPlaque(1812, 72, 210, 44, "account", { alpha: 0.24, labelAlpha: 0 });
+  }
+
+  private drawStationPlaque(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    label: string,
+    opts: { alpha?: number; labelAlpha?: number } = {},
+  ): void {
+    const alpha = opts.alpha ?? 0.34;
+    const g = this.add.graphics().setDepth(-2);
+    g.fillStyle(UI_HEX.panel, alpha);
+    g.fillRoundedRect(x - width / 2, y - height / 2, width, height, 8);
+    g.lineStyle(1, UI_HEX.brass, alpha + 0.14);
+    g.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 8);
+
+    cornerTicks(this, width, height, { inset: 5, size: 8, width: 1 })
+      .setPosition(x, y)
+      .setAlpha(Math.min(0.6, alpha + 0.12))
+      .setDepth(-1.9);
+
+    if ((opts.labelAlpha ?? 0.72) <= 0) return;
+    this.add
+      .text(x, y - height / 2 + 9, label, {
+        fontFamily: SERIF,
+        fontSize: "15px",
+        fontStyle: "italic",
+        color: "#8f8161",
+      })
+      .setOrigin(0.5)
+      .setAlpha(opts.labelAlpha ?? 0.72)
+      .setDepth(-1.8);
+  }
+
+  private setHint(text: string): void {
+    this.hint.setText(text);
+    this.hintPlate.clear();
+    if (!text) return;
+
+    const width = Math.min(1260, Math.max(420, this.hint.width + 70));
+    const height = Math.max(42, this.hint.height + 18);
+    const x = this.hint.x - width / 2;
+    const y = this.hint.y - height / 2;
+    this.hintPlate.fillStyle(UI_HEX.panel, 0.72);
+    this.hintPlate.fillRoundedRect(x, y, width, height, 8);
+    this.hintPlate.lineStyle(1, UI_HEX.brass, 0.64);
+    this.hintPlate.strokeRoundedRect(x, y, width, height, 8);
   }
 
   /** Painted Runa stands at her desk on the far left of the hub. */

@@ -602,6 +602,52 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
+  /** Final phrase words rebuild the revealed `Again`, rather than floating alone. */
+  private makeFinalPhraseWord(opts: TextWordTargetOptions): TextWordTarget {
+    const originalOnClaim = opts.onClaim;
+    const originalOnAdvance = opts.onAdvance;
+    const originalOnComplete = opts.onComplete;
+    const phraseColor = 0xd4b8ff;
+
+    return this.makeWord({
+      ...opts,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          opts.x,
+          opts.y - 10,
+          this.againText.x,
+          this.againText.y + 24,
+          { color: phraseColor, depth: 8, durationMs: 440 },
+        );
+        originalOnClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, this.againText, {
+          kind: "mote",
+          color: phraseColor,
+          offsetY: 4,
+          depth: 11,
+          ringRadius: 30,
+          durationMs: 240,
+        });
+        originalOnAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        playBodyImpact(this, this.againText, {
+          kind: "mote",
+          color: phraseColor,
+          offsetY: 4,
+          depth: 11,
+          ringRadius: 54,
+          count: 10,
+          durationMs: 430,
+        });
+        originalOnComplete();
+      },
+    });
+  }
+
   private clearActiveTargets(): void {
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
@@ -2419,7 +2465,7 @@ export class GreatBattleScene extends Phaser.Scene {
     }
     const word = words[idx]!;
 
-    const target = this.makeWord({
+    const target = this.makeFinalPhraseWord({
       scene: this,
       word,
       x: this.scale.width / 2,

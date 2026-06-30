@@ -87,6 +87,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private archGraphics = new Map<string, Phaser.GameObjects.Graphics>();
+  private archGlows = new Map<string, Phaser.GameObjects.Graphics>();
   private archSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private hintPlate!: Phaser.GameObjects.Graphics;
   private hint!: Phaser.GameObjects.Text;
@@ -103,6 +104,7 @@ export class PortalChamberScene extends Phaser.Scene {
   init(data: ChamberSceneData): void {
     this.store = data.store;
     this.archGraphics = new Map();
+    this.archGlows = new Map();
     this.archSprites = new Map();
     this.zoneTargets = [];
   }
@@ -488,13 +490,16 @@ export class PortalChamberScene extends Phaser.Scene {
     playChime();
     this.setHint("");
     this.narration.clear();
-    this.cameras.main.fadeOut(500, 11, 10, 15);
-    this.cameras.main.once(
-      Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-      () => {
-        this.scene.start(sceneKey, { store: this.store, revisit });
-      },
-    );
+    this.flashPortalForScene(sceneKey);
+    this.time.delayedCall(140, () => {
+      this.cameras.main.fadeOut(500, 11, 10, 15);
+      this.cameras.main.once(
+        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+        () => {
+          this.scene.start(sceneKey, { store: this.store, revisit });
+        },
+      );
+    });
   }
 
   // ─── Persistent targets ───────────────────────────────────────────────────
@@ -605,8 +610,30 @@ export class PortalChamberScene extends Phaser.Scene {
 
   private drawArch(spec: ArchSpec): void {
     // Graphics for the warm-amber cleared-realm ring (static).
-    const g = this.add.graphics();
+    const g = this.add.graphics().setDepth(-4);
     this.archGraphics.set(spec.id, g);
+
+    // A living glow inside the painted arch. The sprite carries the actual
+    // portal sheet; this soft aperture makes the arch breathe even in still
+    // screenshots and reads as world light rather than UI chrome.
+    const glow = this.add
+      .graphics()
+      .setPosition(spec.x, spec.baseY - spec.height / 2 + 34)
+      .setDepth(-6)
+      .setVisible(false)
+      .setAlpha(0.2);
+    this.archGlows.set(spec.id, glow);
+    const stagger = ARCHES.findIndex((a) => a.id === spec.id) * 130;
+    this.tweens.add({
+      targets: glow,
+      alpha: { from: 0.15, to: 0.36 },
+      scaleX: { from: 0.97, to: 1.04 },
+      scaleY: { from: 0.98, to: 1.03 },
+      duration: 1900 + stagger,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
 
     // Painted portal sprite — 168x338 frames, arch fills the frame top to
     // bottom. Anchored bottom-center on the painted arch bottom (baseY).
@@ -616,7 +643,8 @@ export class PortalChamberScene extends Phaser.Scene {
     const sprite = this.add
       .sprite(spec.x, spec.baseY, "portal-active", 0)
       .setOrigin(0.5, 1)
-      .setVisible(false);
+      .setVisible(false)
+      .setDepth(-5);
     sprite.setScale(spec.width / 168, spec.height / 338);
     this.archSprites.set(spec.id, sprite);
   }
@@ -626,11 +654,13 @@ export class PortalChamberScene extends Phaser.Scene {
     state: "next" | "cleared" | "dark" | "locked",
   ): void {
     const g = this.archGraphics.get(spec.id);
+    const glow = this.archGlows.get(spec.id);
     const sprite = this.archSprites.get(spec.id);
     if (!g || !sprite) return;
     g.clear();
 
     if (state === "locked" || state === "dark") {
+      glow?.setVisible(false);
       sprite.setVisible(false);
       if (sprite.anims.isPlaying) sprite.stop();
       return;
@@ -640,6 +670,10 @@ export class PortalChamberScene extends Phaser.Scene {
       // Warm amber ring under the painted arch — revisitable cue.
       const archMidY = spec.baseY - spec.height + spec.width / 2;
       const radius = spec.width / 2;
+      if (glow) {
+        this.drawPortalGlow(glow, spec, PALETTE_HEX.brass, 0.42);
+        glow.setVisible(true);
+      }
       g.lineStyle(2, PALETTE_HEX.brass, 0.35);
       g.beginPath();
       g.arc(spec.x, archMidY + 60, radius * 0.55, 0, Math.PI * 2);
@@ -652,10 +686,27 @@ export class PortalChamberScene extends Phaser.Scene {
     }
 
     // state === "next": full-strength painted swirl, animated.
+    if (glow) {
+      this.drawPortalGlow(glow, spec, 0x84d681, 0.48);
+      glow.setVisible(true);
+    }
     sprite.setVisible(true);
     sprite.clearTint();
     sprite.setAlpha(1);
     if (!sprite.anims.isPlaying) sprite.play("portal-spin");
+  }
+
+  private drawPortalGlow(
+    g: Phaser.GameObjects.Graphics,
+    spec: ArchSpec,
+    color: number,
+    alpha: number,
+  ): void {
+    g.clear();
+    g.fillStyle(color, alpha);
+    g.fillEllipse(0, 0, spec.width * 0.72, spec.height * 0.72);
+    g.lineStyle(2, color, alpha * 0.9);
+    g.strokeEllipse(0, 0, spec.width * 0.82, spec.height * 0.78);
   }
 
   private drawArchLabels(): void {
@@ -671,40 +722,94 @@ export class PortalChamberScene extends Phaser.Scene {
       const isCleared = state.realms[arch.id]?.cleared === true;
       const isLocked  = i > nextIdx;
 
-      // For active and cleared arches the typing target above already shows
-      // the realm name — skip the under-arch label so it doesn't appear twice.
-      // Locked arches have no typing target, so they keep their name.
-      if (!isNext && !isCleared) {
-        this.add
-          .text(arch.x, arch.baseY + 30, arch.label, {
-            fontFamily: SERIF,
-            fontSize: "22px",
-            fontStyle: "italic",
-            color: isLocked ? "#3a3550" : PALETTE.dim,
-          })
-          .setOrigin(0.5);
-      }
-
-      // Status row sits 30px below where the name would be — or 30px below
-      // the arch baseY when the name is suppressed.
-      const statusY = !isNext && !isCleared ? arch.baseY + 58 : arch.baseY + 32;
-      if (isCleared) {
-        this.add
-          .text(arch.x, statusY, "✓ stamped", {
-            fontFamily: SERIF,
-            fontSize: "17px",
-            color: PALETTE.brass,
-          })
-          .setOrigin(0.5);
+      if (isNext) {
+        this.drawArchStatusPlaque(arch, "open passage", "", "next");
+      } else if (isCleared) {
+        this.drawArchStatusPlaque(arch, "stamped", "", "cleared");
       } else if (isLocked) {
-        this.add
-          .text(arch.x, statusY, "sealed", {
-            fontFamily: SERIF,
-            fontSize: "17px",
-            color: "#3a3550",
-          })
-          .setOrigin(0.5);
+        this.drawArchStatusPlaque(arch, arch.label, "sealed", "locked");
       }
+    });
+  }
+
+  private drawArchStatusPlaque(
+    arch: ArchSpec,
+    title: string,
+    subtitle: string,
+    tone: "next" | "cleared" | "locked",
+  ): void {
+    const width = tone === "locked" ? 212 : 164;
+    const height = subtitle ? 58 : 42;
+    const y = arch.baseY + (subtitle ? 48 : 34);
+    const isLocked = tone === "locked";
+    const alpha = isLocked ? 0.24 : tone === "next" ? 0.42 : 0.34;
+    const textColor = isLocked
+      ? "#4a4352"
+      : tone === "next"
+        ? "#d9c579"
+        : "#c9a14a";
+
+    const g = this.add.graphics().setDepth(-1);
+    g.fillStyle(UI_HEX.panel, alpha);
+    g.fillRoundedRect(arch.x - width / 2, y - height / 2, width, height, 8);
+    g.lineStyle(1, isLocked ? 0x4a4352 : UI_HEX.brass, alpha + 0.2);
+    g.strokeRoundedRect(arch.x - width / 2, y - height / 2, width, height, 8);
+
+    this.add
+      .text(arch.x, y - (subtitle ? 9 : 1), title, {
+        fontFamily: SERIF,
+        fontSize: isLocked ? "17px" : "16px",
+        fontStyle: "italic",
+        color: textColor,
+      })
+      .setOrigin(0.5)
+      .setDepth(0);
+
+    if (!subtitle) return;
+    this.add
+      .text(arch.x, y + 13, subtitle, {
+        fontFamily: SERIF,
+        fontSize: "14px",
+        color: "#4a4352",
+      })
+      .setOrigin(0.5)
+      .setDepth(0);
+  }
+
+  private flashPortalForScene(sceneKey: string): void {
+    const arch = ARCHES.find((a) => a.sceneKey === sceneKey);
+    if (!arch) return;
+
+    const cx = arch.x;
+    const cy = arch.baseY - arch.height / 2 + 34;
+    const pulse = this.add.graphics().setPosition(cx, cy).setDepth(8);
+    pulse.fillStyle(PALETTE_HEX.brass, 0.22);
+    pulse.fillEllipse(0, 0, arch.width * 0.82, arch.height * 0.74);
+    pulse.lineStyle(3, PALETTE_HEX.brass, 0.75);
+    pulse.strokeEllipse(0, 0, arch.width * 0.92, arch.height * 0.82);
+    this.tweens.add({
+      targets: pulse,
+      alpha: 0,
+      scaleX: 1.22,
+      scaleY: 1.12,
+      duration: 340,
+      ease: "Sine.easeOut",
+      onComplete: () => pulse.destroy(),
+    });
+
+    const sprite = this.archSprites.get(arch.id);
+    if (!sprite) return;
+    const scaleX = sprite.scaleX;
+    const scaleY = sprite.scaleY;
+    this.tweens.add({
+      targets: sprite,
+      scaleX: scaleX * 1.05,
+      scaleY: scaleY * 1.04,
+      alpha: 1,
+      duration: 150,
+      yoyo: true,
+      ease: "Sine.easeOut",
+      onComplete: () => sprite.setScale(scaleX, scaleY),
     });
   }
 

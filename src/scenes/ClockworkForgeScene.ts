@@ -1654,12 +1654,23 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private attendSpeaker(speakerName: string | null): void {
+    this.setBandSpeaker(speakerName);
     if (speakerName === "Forn") {
       playActorAttention(this, this.fornSprite, {
         tint: PALETTE_HEX.ember,
         scale: 1.025,
         durationMs: 220,
       });
+    }
+  }
+
+  private setBandSpeaker(speakerName: string | null): void {
+    if (!speakerName || speakerName === "Runa") {
+      this.band.setPortrait("band-portrait-runa", "Runa");
+    } else if (speakerName === "Forn") {
+      this.band.setPortrait("forn", "Forn");
+    } else {
+      this.band.setPortrait(undefined, speakerName);
     }
   }
 

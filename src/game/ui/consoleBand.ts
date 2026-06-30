@@ -74,6 +74,8 @@ export class ConsoleBand {
   private readonly container: Phaser.GameObjects.Container;
   private objectiveContainer!: Phaser.GameObjects.Container;
   private objectiveText!: Phaser.GameObjects.Text;
+  private portraitImage?: Phaser.GameObjects.Image;
+  private portraitLabel?: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene, opts: ConsoleBandOptions = {}) {
     this.scene = scene;
@@ -87,7 +89,8 @@ export class ConsoleBand {
       .setDepth(DEPTH);
 
     this.drawSurface(scene, W);
-    this.drawPortrait(scene, opts);
+    this.drawPortraitFrame(scene);
+    this.setPortrait(opts.portraitKey, opts.portraitName);
     this.drawSatchel(scene, opts.passiveIconIds ?? [], opts.satchelLabel ?? "satchel");
     this.drawObjectiveReadout(scene, W);
 
@@ -123,6 +126,47 @@ export class ConsoleBand {
     });
   }
 
+  /** Swap the speaker portrait in the left nook. Scenes call this from the
+   *  narration speaker hook so the band does not keep showing Runa while an
+   *  in-world NPC is speaking. Passing no key clears the image and keeps only
+   *  the label/frame; unknown textures are ignored safely. */
+  setPortrait(textureKey?: string, name?: string): void {
+    this.portraitImage?.destroy();
+    this.portraitImage = undefined;
+
+    if (textureKey && this.scene.textures.exists(textureKey)) {
+      const img = this.scene.add.image(PORTRAIT_CX, MID_Y, textureKey);
+      const fit = Math.min(
+        (PORTRAIT_W - 8) / img.width,
+        (PORTRAIT_H - 8) / img.height,
+      );
+      img.setScale(fit);
+      this.container.add(img);
+      this.portraitImage = img;
+      img.setAlpha(0.84);
+      this.scene.tweens.add({
+        targets: img,
+        alpha: 1,
+        duration: 160,
+        ease: "Sine.easeOut",
+      });
+    }
+
+    if (!this.portraitLabel) {
+      this.portraitLabel = this.scene.add
+        .text(PORTRAIT_CX, MID_Y + PORTRAIT_H / 2 + 11, "", {
+          fontFamily: SERIF,
+          fontStyle: "italic",
+          fontSize: "13px",
+          color: "#a59b89",
+        })
+        .setOrigin(0.5);
+      this.container.add(this.portraitLabel);
+    }
+    this.portraitLabel.setText(name ?? "");
+    this.container.bringToTop(this.portraitLabel);
+  }
+
   private drawSurface(scene: Phaser.Scene, W: number): void {
     const g = scene.add.graphics();
     // Soft cast shadow rising onto the world, so the band reads as foreground.
@@ -149,7 +193,7 @@ export class ConsoleBand {
     this.container.add(b);
   }
 
-  private drawPortrait(scene: Phaser.Scene, opts: ConsoleBandOptions): void {
+  private drawPortraitFrame(scene: Phaser.Scene): void {
     const x = PORTRAIT_CX, y = MID_Y;
     const frame = scene.add.graphics();
     frame.fillStyle(0x0f0c08, 1);
@@ -157,27 +201,6 @@ export class ConsoleBand {
     frame.lineStyle(2, UI_HEX.brass, 0.9);
     frame.strokeRoundedRect(x - PORTRAIT_W / 2, y - PORTRAIT_H / 2, PORTRAIT_W, PORTRAIT_H, 7);
     this.container.add(frame);
-
-    if (opts.portraitKey && scene.textures.exists(opts.portraitKey)) {
-      const img = scene.add.image(x, y, opts.portraitKey);
-      const fit = Math.min(
-        (PORTRAIT_W - 8) / img.width,
-        (PORTRAIT_H - 8) / img.height,
-      );
-      img.setScale(fit);
-      this.container.add(img);
-    }
-    if (opts.portraitName) {
-      const label = scene.add
-        .text(x, y + PORTRAIT_H / 2 + 11, opts.portraitName, {
-          fontFamily: SERIF,
-          fontStyle: "italic",
-          fontSize: "13px",
-          color: "#a59b89",
-        })
-        .setOrigin(0.5);
-      this.container.add(label);
-    }
   }
 
   private drawSatchel(

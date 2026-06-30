@@ -1444,10 +1444,23 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private attendSpeaker(speakerName: string | null): void {
+    this.setBandSpeaker(speakerName);
     if (speakerName === "Inga") {
       this.attendInga();
     } else if (speakerName === "Ghost-King") {
       this.attendGhostKing();
+    }
+  }
+
+  private setBandSpeaker(speakerName: string | null): void {
+    if (!speakerName || speakerName === "Runa") {
+      this.band.setPortrait("band-portrait-runa", "Runa");
+    } else if (speakerName === "Ghost-King") {
+      this.band.setPortrait("ghost-king", "Ghost-King");
+    } else if (speakerName === "Inga") {
+      this.band.setPortrait(undefined, "Inga");
+    } else {
+      this.band.setPortrait(undefined, speakerName);
     }
   }
 

@@ -1921,6 +1921,7 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private attendSpeaker(speakerName: string | null): void {
+    this.setBandSpeaker(speakerName);
     if (speakerName === "Etta") {
       playActorAttention(this, this.ettaSprite, {
         tint: PALETTE_HEX.brass,
@@ -1933,6 +1934,18 @@ export class SkyIslandScene extends Phaser.Scene {
         scale: 1.02,
         durationMs: 220,
       });
+    }
+  }
+
+  private setBandSpeaker(speakerName: string | null): void {
+    if (!speakerName || speakerName === "Runa") {
+      this.band.setPortrait("band-portrait-runa", "Runa");
+    } else if (speakerName === "Etta") {
+      this.band.setPortrait("etta", "Etta");
+    } else if (speakerName === "Scholar-Spirit") {
+      this.band.setPortrait("scholar-spirit", "Scholar-Spirit");
+    } else {
+      this.band.setPortrait(undefined, speakerName);
     }
   }
 

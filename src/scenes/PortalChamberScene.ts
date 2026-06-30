@@ -35,6 +35,13 @@ interface ChamberSceneData {
 
 type Zone = "portals" | "desk" | "shelf";
 
+interface StationSpec {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 interface ArchSpec {
   readonly id: string;
   readonly x: number;
@@ -87,6 +94,18 @@ const ACCOUNT_PANEL = {
   statusY: 38,
   authY: 82,
   settingsY: 128,
+} as const;
+const HUB_STATIONS = {
+  desk: { x: 420, y: 956, width: 300, height: 52 },
+  almanac: { x: 230, y: 1030, width: 230, height: 44 },
+  portalFloor: { x: 960, y: 962, width: 330, height: 46 },
+  shelf: { x: 1740, y: 978, width: 290, height: 52 },
+  account: {
+    x: ACCOUNT_PANEL.x,
+    y: ACCOUNT_PANEL.y,
+    width: ACCOUNT_PANEL.width,
+    height: ACCOUNT_PANEL.height,
+  },
 } as const;
 
 // Maps the last-cleared realm to its Runa desk-line ID in runaLines.ts. The
@@ -315,6 +334,7 @@ export class PortalChamberScene extends Phaser.Scene {
           outline: true,
           frame: "banner",
           onComplete: () => {
+            this.pulseStation(HUB_STATIONS.portalFloor);
             this.cameras.main.fadeOut(600, 10, 8, 15);
             this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
               this.scene.start("GreatBattleScene", { store: this.store });
@@ -335,7 +355,10 @@ export class PortalChamberScene extends Phaser.Scene {
           fontSize: 38,
           outline: true,
           frame: "banner",
-          onComplete: () => this.startNewGame(),
+          onComplete: () => {
+            this.pulseStation(HUB_STATIONS.portalFloor);
+            this.startNewGame();
+          },
         });
         this.typingInput.register(ngPlusTarget);
         this.zoneTargets.push(ngPlusTarget);
@@ -362,13 +385,24 @@ export class PortalChamberScene extends Phaser.Scene {
     }
 
     // Zone navigation (away from portals).
-    this.registerNavTarget("runa", 420, 908, () => this.enterZone("desk"));
-    this.registerNavTarget("shelf", 1740, 930, () => this.enterZone("shelf"));
+    this.registerNavTarget("runa", 420, 908, () => this.enterZone("desk"), {
+      stationPulse: HUB_STATIONS.desk,
+    });
+    this.registerNavTarget("shelf", 1740, 930, () => this.enterZone("shelf"), {
+      stationPulse: HUB_STATIONS.shelf,
+    });
     // Settings lives in the account plaque, separated from sign-in/out so the
     // top-right controls read as a deliberate station instead of overlapping UI.
-    this.registerNavTarget("settings", ACCOUNT_PANEL.x, ACCOUNT_PANEL.settingsY, () => this.enterSettings(), {
-      fontSize: 19,
-    });
+    this.registerNavTarget(
+      "settings",
+      ACCOUNT_PANEL.x,
+      ACCOUNT_PANEL.settingsY,
+      () => this.enterSettings(),
+      {
+        fontSize: 19,
+        stationPulse: HUB_STATIONS.account,
+      },
+    );
   }
 
   private enterSettings(): void {
@@ -391,8 +425,12 @@ export class PortalChamberScene extends Phaser.Scene {
     this.narration.say(DESK_LINE_IDS[lastCleared] ?? DESK_LINE_IDS["none"]);
     this.setHint("");
 
-    this.registerNavTarget("back", 640, 908, () =>
-      this.enterZone("portals"),
+    this.registerNavTarget(
+      "back",
+      640,
+      908,
+      () => this.enterZone("portals"),
+      { stationPulse: HUB_STATIONS.portalFloor },
     );
   }
 
@@ -413,8 +451,12 @@ export class PortalChamberScene extends Phaser.Scene {
       this.setHint(`on your shelf: ${names}`);
     }
 
-    this.registerNavTarget("back", 1520, 930, () =>
-      this.enterZone("portals"),
+    this.registerNavTarget(
+      "back",
+      1520,
+      930,
+      () => this.enterZone("portals"),
+      { stationPulse: HUB_STATIONS.portalFloor },
     );
   }
 
@@ -522,7 +564,7 @@ export class PortalChamberScene extends Phaser.Scene {
     x: number,
     y: number,
     onComplete: () => void,
-    opts: { fontSize?: number; priority?: number } = {},
+    opts: { fontSize?: number; priority?: number; stationPulse?: StationSpec } = {},
   ): void {
     const t = new TextWordTarget({
       scene: this,
@@ -533,7 +575,10 @@ export class PortalChamberScene extends Phaser.Scene {
       priority: opts.priority ?? -2,
       outline: true,
       frame: "banner",
-      onComplete,
+      onComplete: () => {
+        if (opts.stationPulse) this.pulseStation(opts.stationPulse);
+        onComplete();
+      },
     });
     this.typingInput.register(t);
     this.zoneTargets.push(t);
@@ -569,7 +614,10 @@ export class PortalChamberScene extends Phaser.Scene {
       priority: -1,
       outline: true,
       frame: "banner",
-      onComplete: () => this.openAlmanac(),
+      onComplete: () => {
+        this.pulseStation(HUB_STATIONS.almanac);
+        this.openAlmanac();
+      },
     });
     this.typingInput.register(target);
   }
@@ -597,7 +645,10 @@ export class PortalChamberScene extends Phaser.Scene {
         priority: -1,
         outline: true,
         frame: "banner",
-        onComplete: () => void signOut(),
+        onComplete: () => {
+          this.pulseStation(HUB_STATIONS.account);
+          void signOut();
+        },
       });
       this.typingInput.register(target);
     } else {
@@ -621,7 +672,10 @@ export class PortalChamberScene extends Phaser.Scene {
         priority: -1,
         outline: true,
         frame: "banner",
-        onComplete: () => void signInWithGoogle(window.location.href),
+        onComplete: () => {
+          this.pulseStation(HUB_STATIONS.account);
+          void signInWithGoogle(window.location.href);
+        },
       });
       this.typingInput.register(target);
     }
@@ -896,14 +950,47 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private drawHubStations(): void {
-    this.drawStationPlaque(420, 956, 300, 52, "runa's desk");
-    this.drawStationPlaque(230, 1030, 230, 44, "almanac", { alpha: 0.28, labelAlpha: 0 });
-    this.drawStationPlaque(this.scale.width / 2, 962, 330, 46, "portal floor", { alpha: 0.22 });
-    this.drawStationPlaque(1740, 978, 290, 52, "your shelf");
-    this.drawStationPlaque(ACCOUNT_PANEL.x, ACCOUNT_PANEL.y, ACCOUNT_PANEL.width, ACCOUNT_PANEL.height, "account", {
-      alpha: 0.28,
-      labelAlpha: 0.5,
-    });
+    this.drawStationPlaque(
+      HUB_STATIONS.desk.x,
+      HUB_STATIONS.desk.y,
+      HUB_STATIONS.desk.width,
+      HUB_STATIONS.desk.height,
+      "runa's desk",
+    );
+    this.drawStationPlaque(
+      HUB_STATIONS.almanac.x,
+      HUB_STATIONS.almanac.y,
+      HUB_STATIONS.almanac.width,
+      HUB_STATIONS.almanac.height,
+      "almanac",
+      { alpha: 0.28, labelAlpha: 0 },
+    );
+    this.drawStationPlaque(
+      HUB_STATIONS.portalFloor.x,
+      HUB_STATIONS.portalFloor.y,
+      HUB_STATIONS.portalFloor.width,
+      HUB_STATIONS.portalFloor.height,
+      "portal floor",
+      { alpha: 0.22 },
+    );
+    this.drawStationPlaque(
+      HUB_STATIONS.shelf.x,
+      HUB_STATIONS.shelf.y,
+      HUB_STATIONS.shelf.width,
+      HUB_STATIONS.shelf.height,
+      "your shelf",
+    );
+    this.drawStationPlaque(
+      HUB_STATIONS.account.x,
+      HUB_STATIONS.account.y,
+      HUB_STATIONS.account.width,
+      HUB_STATIONS.account.height,
+      "account",
+      {
+        alpha: 0.28,
+        labelAlpha: 0.5,
+      },
+    );
   }
 
   private drawStationPlaque(
@@ -937,6 +1024,48 @@ export class PortalChamberScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setAlpha(opts.labelAlpha ?? 0.72)
       .setDepth(-1.8);
+  }
+
+  private pulseStation(station: StationSpec): void {
+    const pulse = this.add
+      .container(station.x, station.y)
+      .setDepth(9)
+      .setAlpha(0.86);
+    const g = this.add.graphics();
+    g.fillStyle(UI_HEX.brass, 0.08);
+    g.fillRoundedRect(
+      -station.width / 2,
+      -station.height / 2,
+      station.width,
+      station.height,
+      8,
+    );
+    g.lineStyle(2, UI_HEX.brass, 0.72);
+    g.strokeRoundedRect(
+      -station.width / 2,
+      -station.height / 2,
+      station.width,
+      station.height,
+      8,
+    );
+    pulse.add(g);
+    pulse.add(
+      cornerTicks(this, station.width, station.height, {
+        inset: 5,
+        size: 10,
+        width: 2,
+      }),
+    );
+
+    this.tweens.add({
+      targets: pulse,
+      alpha: 0,
+      scaleX: 1.08,
+      scaleY: 1.18,
+      duration: 420,
+      ease: "Sine.easeOut",
+      onComplete: () => pulse.destroy(),
+    });
   }
 
   private setHint(text: string): void {

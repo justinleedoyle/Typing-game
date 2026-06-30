@@ -40,6 +40,11 @@ import {
 } from "../game/livingScene";
 import greatBattleBackdrop from "../../art/references/great-battle-clean.png";
 import runaPortrait from "../../art/runa/runa-front.png";
+import snowFoxSprite from "../../art/companions/snow-fox.png";
+import glassFishSprite from "../../art/companions/glass-fish.png";
+import brassSongbirdSprite from "../../art/companions/brass-songbird.png";
+import lanternMothSprite from "../../art/companions/lantern-moth.png";
+import wispCatSprite from "../../art/companions/wisp-cat.png";
 
 // ─── Scene data ────────────────────────────────────────────────────────────────
 
@@ -83,6 +88,23 @@ interface WaveDef {
   companionId: string;
   companionLine: string;
   label: string;
+}
+
+interface CompanionCameoSpec {
+  textureKey: string;
+  startX: number;
+  endX: number;
+  exitX: number;
+  y: number;
+  height: number;
+  shadowWidth: number;
+  shadowHeight: number;
+  shadowY: number;
+  shadowAlpha: number;
+  wake: ContainerWakeOptions;
+  liftY?: number;
+  bobMs?: number;
+  flipX?: boolean;
 }
 
 const WAVE_DEFS: WaveDef[] = [
@@ -324,6 +346,11 @@ export class GreatBattleScene extends Phaser.Scene {
   preload(): void {
     this.load.image("great-battle-backdrop", greatBattleBackdrop);
     this.load.image("band-portrait-runa", runaPortrait);
+    this.load.image("finale-companion-snow-fox", snowFoxSprite);
+    this.load.image("finale-companion-glass-fish", glassFishSprite);
+    this.load.image("finale-companion-brass-songbird", brassSongbirdSprite);
+    this.load.image("finale-companion-lantern-moth", lanternMothSprite);
+    this.load.image("finale-companion-wisp-cat", wispCatSprite);
     preloadQuietLord(this);
   }
 
@@ -957,12 +984,166 @@ export class GreatBattleScene extends Phaser.Scene {
     }
 
     if (satchel.includes(waveDef.companionId)) {
-      // Show companion cameo
+      this.showCompanionCameo(waveDef);
       this.setNarrator(waveDef.companionLine);
-      this.time.delayedCall(2500, () => this.runNextWave());
+      this.time.delayedCall(2600, () => this.runNextWave());
     } else {
       // Brief pause, no cameo
       this.time.delayedCall(800, () => this.runNextWave());
+    }
+  }
+
+  private showCompanionCameo(waveDef: WaveDef): void {
+    const spec = this.companionCameoSpec(waveDef);
+    if (!spec) return;
+
+    const container = this.add
+      .container(spec.startX, spec.y)
+      .setDepth(7)
+      .setAlpha(0);
+    container.add(
+      addLocalGroundShadow(this, spec.shadowWidth, spec.shadowHeight, {
+        y: spec.shadowY,
+        alpha: spec.shadowAlpha,
+      }),
+    );
+
+    const sprite = this.add.image(0, 0, spec.textureKey).setOrigin(0.5, 1);
+    sprite.setScale(spec.height / Math.max(1, sprite.height));
+    if (spec.flipX) sprite.setFlipX(true);
+    container.add(sprite);
+
+    addContainerWake(this, container, {
+      ...spec.wake,
+      depth: spec.wake.depth ?? 6,
+    });
+
+    this.tweens.add({
+      targets: container,
+      x: spec.endX,
+      alpha: 1,
+      duration: 640,
+      ease: "Sine.easeOut",
+    });
+    this.tweens.add({
+      targets: container,
+      y: spec.y - (spec.liftY ?? 8),
+      duration: spec.bobMs ?? 820,
+      yoyo: true,
+      repeat: 1,
+      ease: "Sine.easeInOut",
+    });
+    this.tweens.add({
+      targets: sprite,
+      angle: { from: -2, to: 2 },
+      duration: 360,
+      yoyo: true,
+      repeat: 3,
+      ease: "Sine.easeInOut",
+    });
+    this.time.delayedCall(1780, () => {
+      if (!container.scene) return;
+      this.tweens.add({
+        targets: container,
+        x: spec.exitX,
+        alpha: 0,
+        duration: 680,
+        ease: "Sine.easeIn",
+        onComplete: () => container.destroy(),
+      });
+    });
+  }
+
+  private companionCameoSpec(waveDef: WaveDef): CompanionCameoSpec | null {
+    const width = this.scale.width;
+    const wake = finaleWakeForRealm(waveDef.realmId);
+
+    switch (waveDef.companionId) {
+      case "snow-fox-cub":
+        return {
+          textureKey: "finale-companion-snow-fox",
+          startX: -110,
+          endX: width * 0.24,
+          exitX: width * 0.36,
+          y: 788,
+          height: 118,
+          shadowWidth: 96,
+          shadowHeight: 18,
+          shadowY: 9,
+          shadowAlpha: 0.26,
+          wake: { ...wake, intervalMs: 150, offsetY: -8, depth: 6 },
+          liftY: 7,
+          bobMs: 620,
+        };
+      case "glass-fish":
+        return {
+          textureKey: "finale-companion-glass-fish",
+          startX: width + 100,
+          endX: width * 0.72,
+          exitX: width * 0.58,
+          y: 690,
+          height: 92,
+          shadowWidth: 72,
+          shadowHeight: 12,
+          shadowY: 22,
+          shadowAlpha: 0.16,
+          wake: { ...wake, intervalMs: 150, offsetY: -32, spreadY: 18, depth: 6 },
+          liftY: 18,
+          bobMs: 720,
+          flipX: true,
+        };
+      case "brass-songbird":
+        return {
+          textureKey: "finale-companion-brass-songbird",
+          startX: width + 95,
+          endX: width * 0.74,
+          exitX: width * 0.61,
+          y: 630,
+          height: 82,
+          shadowWidth: 58,
+          shadowHeight: 10,
+          shadowY: 28,
+          shadowAlpha: 0.15,
+          wake: { ...wake, intervalMs: 120, offsetY: -28, spreadY: 18, depth: 6 },
+          liftY: 20,
+          bobMs: 650,
+          flipX: true,
+        };
+      case "lantern-moth":
+        return {
+          textureKey: "finale-companion-lantern-moth",
+          startX: width + 90,
+          endX: width * 0.7,
+          exitX: width * 0.57,
+          y: 615,
+          height: 94,
+          shadowWidth: 64,
+          shadowHeight: 10,
+          shadowY: 34,
+          shadowAlpha: 0.14,
+          wake: { ...wake, intervalMs: 120, offsetY: -30, spreadY: 22, depth: 6 },
+          liftY: 24,
+          bobMs: 700,
+          flipX: true,
+        };
+      case "wisp-cat":
+        return {
+          textureKey: "finale-companion-wisp-cat",
+          startX: -105,
+          endX: width * 0.27,
+          exitX: width * 0.41,
+          y: 770,
+          height: 112,
+          shadowWidth: 90,
+          shadowHeight: 16,
+          shadowY: 10,
+          shadowAlpha: 0.22,
+          wake: { ...wake, intervalMs: 160, offsetY: -4, depth: 6 },
+          liftY: 9,
+          bobMs: 700,
+        };
+      default:
+        return null;
     }
   }
 

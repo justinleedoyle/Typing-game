@@ -44,6 +44,7 @@ import {
   addContainerWake,
   addIdleBreath,
   addLocalGroundShadow,
+  playActorAttention,
   playBodyImpact,
   playRealmClearResonance,
   stageContainerEntrance,
@@ -152,6 +153,8 @@ export class HauntedWoodScene extends Phaser.Scene {
   private oneShotInvoker: OneShotInvoker<MovingWordEnemy> | null = null;
 
   private mistTimer: Phaser.Time.TimerEvent | null = null;
+  private ingaFigure: Phaser.GameObjects.Container | null = null;
+  private ghostKingBody: Phaser.GameObjects.Image | null = null;
   /** Four faint punctuation glyphs at N/S/E/W around Wren — teaches the
    *  direction-punctuation mapping diegetically. Drawn on first ghost
    *  spawn, persists through Act 2 + boss. */
@@ -174,6 +177,8 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.fork2Choice = null;
     this.companionChoice = null;
     this.mistTimer = null;
+    this.ingaFigure = null;
+    this.ghostKingBody = null;
     this.quietLordIntruded =
       this.store.get().realms["haunted-wood"]?.quietLordIntruded ?? false;
   }
@@ -285,6 +290,8 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.mistTimer?.remove();
       this.compassGlyphs.forEach((g) => g.destroy());
       this.compassGlyphs = [];
+      this.ingaFigure = null;
+      this.ghostKingBody = null;
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
     });
@@ -408,6 +415,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
     // Inga speaks
     this.setNarrator("i don't know my name.", "Inga");
+    this.attendInga();
     this.time.delayedCall(1800, () => {
       // Wren types a reply
       const reply = this.makeWord({
@@ -416,12 +424,14 @@ export class HauntedWoodScene extends Phaser.Scene {
         x: this.scale.width / 2,
         y: this.scale.height - 340,
         fontSize: 36,
+        onClaim: () => this.attendInga(),
         onComplete: () => {
           this.clearActiveTargets();
           this.setNarrator(
             "the shrine knows. the shrine keeper might tell you.",
             "Inga",
           );
+          this.attendInga();
           this.time.delayedCall(2400, () => this.startAct2());
         },
       });
@@ -632,6 +642,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           playChime();
           this.cameras.main.flash(400, 200, 220, 180, false);
           this.setNarrator("Inga stirs. The shrine keeper whispers a name.");
+          this.attendInga();
           this.time.delayedCall(2000, () => this.startIngaNameReveal());
         },
       );
@@ -646,6 +657,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       x: this.scale.width / 2,
       y: this.scale.height - 340,
       fontSize: 44,
+      onClaim: () => this.attendInga(),
       onComplete: () => {
         this.clearActiveTargets();
         playChime();
@@ -655,6 +667,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           }
         });
         this.setNarrator("She looks at her hands. 'Oh,' she says. 'Oh.'");
+        this.attendInga();
         this.time.delayedCall(2400, () => this.startAct3());
       },
     });
@@ -701,6 +714,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.setNarrator(
       "The Ghost-King speaks in silence. You may bargain — or simply light the grove.",
     );
+    this.attendGhostKing();
     this.band.setObjective("Choose a bargain or light the grove.");
 
     const bargainTarget = this.makeWord({
@@ -710,9 +724,11 @@ export class HauntedWoodScene extends Phaser.Scene {
       y: this.scale.height - 340,
       fontSize: 28,
       frame: "banner",
+      onClaim: () => this.attendGhostKing(),
       onComplete: () => {
         this.clearActiveTargets();
         this.fork2Choice = "bargain";
+        this.attendGhostKing();
         this.startFork2Bargain();
       },
     });
@@ -723,6 +739,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       y: this.scale.height - 340,
       fontSize: 28,
       frame: "banner",
+      onClaim: () => this.attendGhostKing(),
       onComplete: () => {
         this.clearActiveTargets();
         this.fork2Choice = "force";
@@ -730,6 +747,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         this.store.update((s) => {
           if (!s.satchel.includes("ash-vial")) s.satchel.push("ash-vial");
         });
+        this.attendGhostKing();
         this.startBossFight();
       },
     });
@@ -742,6 +760,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startFork2Bargain(): void {
     this.setNarrator("The Ghost-King pauses. He turns to face you fully.");
+    this.attendGhostKing();
     this.time.delayedCall(1600, () => {
       this.runPassageChain(
         [
@@ -766,6 +785,7 @@ export class HauntedWoodScene extends Phaser.Scene {
             }
           });
           playChime();
+          this.attendGhostKing();
           this.time.delayedCall(1400, () => this.startBossFight());
         },
       );
@@ -776,6 +796,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startBossFight(): void {
     this.setNarrator("Then prove it.", "Ghost-King");
+    this.attendGhostKing();
     this.band.setObjective("Survive the Ghost-King's warded waves.");
     this.ghosts = [];
     this.time.delayedCall(800, () => this.spawnBossWaveA());
@@ -794,6 +815,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private onBossWaveACleared(): void {
     this.setNarrator("The first wave fades. More rise.");
+    this.attendGhostKing();
     this.time.delayedCall(1200, () => this.spawnBossWaveB());
   }
 
@@ -811,6 +833,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private onBossWaveBCleared(): void {
     this.setNarrator("The hall goes still. The Ghost-King rises fully.");
+    this.attendGhostKing();
     this.time.delayedCall(2200, () => this.startBossCapstone());
   }
 
@@ -829,6 +852,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.tweens.add({ targets: dimOverlay, alpha: 1, duration: 700 });
 
     this.narration.say("wood_ghost_king_phase2");
+    this.attendGhostKing();
     this.time.delayedCall(1800, () => {
       const passage = [
         "stop!",
@@ -866,6 +890,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startFinalPassage(): void {
     this.narration.say("wood_truename_intro");
+    this.attendGhostKing();
     const passage1 = ["we", "are", "remembered.", "we", "are", "quiet."];
     const passage2 = ["but", "we", "are", "not", "silent."];
 
@@ -920,6 +945,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.clearActiveTargets();
     // Ghost-King dissolves
     this.cameras.main.flash(500, 220, 230, 210, false);
+    this.fadeGhostKingBody();
     this.narration.say("wood_ghost_king_defeated");
     // Almanac lore page 5 — the Wood's true name, stamped when the realm's
     // true-name passage resolves.
@@ -1358,6 +1384,38 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.narration.sayRaw(text, { speakerName });
   }
 
+  private attendInga(): void {
+    playActorAttention(this, this.ingaFigure, {
+      scale: 1.035,
+      durationMs: 220,
+    });
+  }
+
+  private attendGhostKing(): void {
+    playActorAttention(this, this.ghostKingBody, {
+      scale: 1.025,
+      durationMs: 220,
+      tint: PALETTE_HEX.moss,
+    });
+  }
+
+  private fadeGhostKingBody(): void {
+    const body = this.ghostKingBody;
+    if (!body?.scene) return;
+    this.tweens.killTweensOf(body);
+    this.tweens.add({
+      targets: body,
+      alpha: 0,
+      y: body.y - 36,
+      duration: 900,
+      ease: "Sine.easeInOut",
+      onComplete: () => {
+        if (body.scene) body.destroy();
+        if (this.ghostKingBody === body) this.ghostKingBody = null;
+      },
+    });
+  }
+
   // ─── Tier 4 relic helpers ───────────────────────────────────────────────────
 
   /** The live, non-frozen ghosts summarised for an offensive one-shot's "strongest
@@ -1539,29 +1597,40 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private drawInga(x: number, y: number): void {
+    if (this.ingaFigure?.scene) this.ingaFigure.destroy();
+    const c = this.add.container(x, y);
+    c.add(addLocalGroundShadow(this, 54, 14, { y: 32, alpha: 0.18 }));
+
     // Inga: smaller translucent ellipse, slightly warmer tone
     const g = this.add.graphics();
     // Translucent body — warmer than the grey ghosts
     g.fillStyle(0xf0e8d8, 0.38);
-    g.fillEllipse(x, y, 42, 58);
+    g.fillEllipse(0, 0, 42, 58);
     // Inner glow
     g.fillStyle(0xfaf4e8, 0.18);
-    g.fillEllipse(x, y - 4, 24, 34);
+    g.fillEllipse(0, -4, 24, 34);
     // Eyes
     g.fillStyle(0x2a1a0a, 0.6);
-    g.fillCircle(x - 7, y - 4, 3);
-    g.fillCircle(x + 7, y - 4, 3);
+    g.fillCircle(-7, -4, 3);
+    g.fillCircle(7, -4, 3);
     // Lantern post
     g.lineStyle(2, 0x3a3630, 0.85);
     g.beginPath();
-    g.moveTo(x + 30, y - 60);
-    g.lineTo(x + 30, y + 40);
+    g.moveTo(30, -60);
+    g.lineTo(30, 40);
     g.strokePath();
     // Lantern box
     g.lineStyle(1, 0xc9a14a, 0.7);
-    g.strokeRect(x + 22, y - 76, 16, 18);
+    g.strokeRect(22, -76, 16, 18);
     g.fillStyle(0xc9a14a, 0.3);
-    g.fillRect(x + 22, y - 76, 16, 18);
+    g.fillRect(22, -76, 16, 18);
+    c.add(g);
+    this.ingaFigure = c;
+    stageContainerEntrance(this, c, {
+      entranceMs: 680,
+      breathDy: -3,
+      breathMs: 2600,
+    });
   }
 
   private drawGhostKing(): void {
@@ -1587,6 +1656,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     const sprite = this.add.image(gkx, gky + 44, "ghost-king");
     sprite.setScale(GHOST_KING_SPRITE_HEIGHT / sprite.height);
     sprite.setAlpha(0);
+    this.ghostKingBody = sprite;
 
     // Fade both in together.
     this.tweens.add({

@@ -133,6 +133,7 @@ export class OpeningScene extends Phaser.Scene {
   private beat2_5(): void {
     this.setNarrator(
       "Before we begin, I should know who I am calling down into all of this. Type 'boy' or 'girl'.",
+      "Runa",
     );
 
     const pick = (gender: "boy" | "girl") => {
@@ -185,6 +186,7 @@ export class OpeningScene extends Phaser.Scene {
       isBoy
         ? "At the doorway, a small figure in nightclothes hangs back, a drawing held to the chest like a shield. “Are the portals really real, Runa?”"
         : "At the doorway, a taller figure leans in the frame, arms folded over a worry they are trying to wear as a joke. “You don’t have to do this. There has to be another way.”",
+      isBoy ? "Saga" : "Magnus",
     );
     this.drawSibling();
     this.time.delayedCall(2000, () => this.beat4());
@@ -311,6 +313,7 @@ export class OpeningScene extends Phaser.Scene {
       isBoy
         ? "At the doorway, she holds the drawing out at last — both hands, no more hiding it. ‘Wren. I made you something.’"
         : "At the doorway, the joke finally leaves his face. ‘Wren. I’ll be here. Don’t take long.’",
+      isBoy ? "Saga" : "Magnus",
     );
     this.time.delayedCall(2400, () => this.beat10());
   }
@@ -344,8 +347,8 @@ export class OpeningScene extends Phaser.Scene {
 
   // ── Narrator helper ────────────────────────────────────────────────────────
 
-  private setNarrator(text: string): void {
-    this.narration.sayRaw(text, { speakerName: null });
+  private setNarrator(text: string, speakerName: string | null = null): void {
+    this.narration.sayRaw(text, { speakerName });
   }
 
   // ── Drawing ────────────────────────────────────────────────────────────────

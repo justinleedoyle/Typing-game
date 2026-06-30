@@ -452,7 +452,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private startLanternLighter(): void {
     this.narration.say("sky_lantern_lighter_intro");
     this.time.delayedCall(2000, () => {
-      this.setNarrator(LIGHTER_LINE_1);
+      this.setNarrator(LIGHTER_LINE_1, "Lantern-Lighter");
       this.time.delayedCall(600, () => {
         const t = this.makeWord({
           scene: this,
@@ -463,9 +463,9 @@ export class SkyIslandScene extends Phaser.Scene {
           onComplete: () => {
             playChime();
             this.clearActiveTargets();
-            this.setNarrator(LIGHTER_LINE_2);
+            this.setNarrator(LIGHTER_LINE_2, "Lantern-Lighter");
             this.time.delayedCall(3200, () => {
-              this.setNarrator(LIGHTER_LINE_3);
+              this.setNarrator(LIGHTER_LINE_3, "Lantern-Lighter");
               this.time.delayedCall(2800, () => this.onLighterConvoComplete());
             });
           },
@@ -845,7 +845,7 @@ export class SkyIslandScene extends Phaser.Scene {
     );
     this.showEtta();
     this.time.delayedCall(2000, () => {
-      this.setNarrator(ETTA_LINE);
+      this.setNarrator(ETTA_LINE, "Etta");
       this.time.delayedCall(600, () => {
         const helpTarget = this.makeWord({
           scene: this,
@@ -1060,7 +1060,7 @@ export class SkyIslandScene extends Phaser.Scene {
     // with the same event-weight as a wave.
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
-    this.setNarrator(`The spirit speaks: "${RIDDLE_1_DISPLAY}"`);
+    this.setNarrator(RIDDLE_1_DISPLAY, "Scholar-Spirit");
     this.time.delayedCall(1200, () => {
       const target = this.makeWord({
         scene: this,
@@ -1084,7 +1084,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private startBossPhase2(): void {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
-    this.setNarrator(`The spirit asks again: "${RIDDLE_2_DISPLAY}"`);
+    this.setNarrator(RIDDLE_2_DISPLAY, "Scholar-Spirit");
     this.time.delayedCall(1200, () => {
       const target = this.makeWord({
         scene: this,
@@ -1118,7 +1118,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private startBossPhase3(): void {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
-    this.setNarrator(`The spirit speaks its last riddle: "${RIDDLE_3_DISPLAY}"`);
+    this.setNarrator(RIDDLE_3_DISPLAY, "Scholar-Spirit");
     this.time.delayedCall(1400, () => {
       // Track typed characters to progressively dim the spirit as the
       // sentence fills in — mirrors the per-word alpha from the old sequential
@@ -1688,8 +1688,8 @@ export class SkyIslandScene extends Phaser.Scene {
     this.typingInput.handleChar(event.key);
   }
 
-  private setNarrator(text: string): void {
-    this.narration.sayRaw(text, { speakerName: null });
+  private setNarrator(text: string, speakerName: string | null = null): void {
+    this.narration.sayRaw(text, { speakerName });
   }
 
   /** UI-cohesion: every Sky-Island word target gets the legibility outline by

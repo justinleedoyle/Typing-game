@@ -411,7 +411,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private startGregorConversation(): void {
     this.clearActiveTargets();
     this.setNarrator(
-      "Old Gregor at a workbench. \"You hold it wrong. Typewriters are not hammers.\"",
+      "You hold it wrong. Typewriters are not hammers.",
+      "Old Gregor",
     );
 
     // First exchange: Wren types "i know."
@@ -430,14 +431,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private gregorStep2(): void {
     this.clearActiveTargets();
     this.setNarrator(
-      "Gregor: \"Lowercase moves them. CAPITALS command them. Try both.\"",
+      "Lowercase moves them. CAPITALS command them. Try both.",
+      "Old Gregor",
     );
     this.time.delayedCall(2000, () => this.gregorTutorialMove());
   }
 
   private gregorTutorialMove(): void {
     this.setNarrator(
-      "Gregor points to a small golem. \"Type 'turn' — watch it.\"",
+      "Type 'turn' — watch it.",
+      "Old Gregor",
     );
     // Spawn a tutorial golem that doesn't advance
     const tutorialGolem = this.spawnStaticGolem(860, FLOOR_Y, false);
@@ -463,7 +466,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private gregorTutorialCommand(tutorialGolem: StaticGolem): void {
     this.clearActiveTargets();
     this.setNarrator(
-      "\"Now hold Shift and type 'TURN' — give it a command.\"",
+      "Now hold Shift and type 'TURN' — give it a command.",
+      "Old Gregor",
     );
 
     const target = this.makeWord({
@@ -522,7 +526,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private beginTutorialGolemFight(): void {
     this.clearActiveTargets();
     this.setNarrator(
-      "Gregor nods. \"Now do it for real. That one won't wait.\"",
+      "Now do it for real. That one won't wait.",
+      "Old Gregor",
     );
 
     const golem = this.spawnAdvancingGolem(1060, FLOOR_Y, "walk", GOLEM_ADVANCE_MS * 1.4, false);
@@ -598,7 +603,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.golems = [];
     this.waveActive = false;
     this.setNarrator(
-      "Runa: \"The bellows are broken. The forge fire dims. Someone needs to fix this — or let it fail.\"",
+      "The bellows are broken. The forge fire dims. Someone needs to fix this — or let it fail.",
+      "Runa",
     );
     this.time.delayedCall(2400, () => this.startWave2());
   }
@@ -726,7 +732,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.fork1Choice = "forn";
     this.clearActiveTargets();
     this.setNarrator(
-      "Old Forn looks up from the broken bellows. \"Aye. I could use steady hands.\"",
+      "Aye. I could use steady hands.",
+      "Forn",
     );
     this.time.delayedCall(1800, () => {
       this.runPassageChain(
@@ -746,7 +753,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.fork1Choice = "cabal";
     this.clearActiveTargets();
     this.setNarrator(
-      "A young apprentice grins. \"About time someone helped us.\"",
+      "About time someone helped us.",
+      "Apprentice",
     );
     this.time.delayedCall(1800, () => {
       this.runPassageChain(
@@ -1526,8 +1534,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-  private setNarrator(text: string): void {
-    this.narration.sayRaw(text, { speakerName: null });
+  private setNarrator(text: string, speakerName: string | null = null): void {
+    this.narration.sayRaw(text, { speakerName });
   }
 
   // ─── Tier 4 relic helpers ───────────────────────────────────────────────────

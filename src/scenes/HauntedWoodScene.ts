@@ -391,7 +391,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     });
 
     // Inga speaks
-    this.setNarrator("i don't know my name.");
+    this.setNarrator("i don't know my name.", "Inga");
     this.time.delayedCall(1800, () => {
       // Wren types a reply
       const reply = this.makeWord({
@@ -402,7 +402,10 @@ export class HauntedWoodScene extends Phaser.Scene {
         fontSize: 36,
         onComplete: () => {
           this.clearActiveTargets();
-          this.setNarrator("the shrine knows. the shrine keeper might tell you.");
+          this.setNarrator(
+            "the shrine knows. the shrine keeper might tell you.",
+            "Inga",
+          );
           this.time.delayedCall(2400, () => this.startAct2());
         },
       });
@@ -751,7 +754,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Boss Fight — two waves ────────────────────────────────────────────────
 
   private startBossFight(): void {
-    this.setNarrator("\"Then prove it.\" Ghost-wave rises from the hall.");
+    this.setNarrator("Then prove it.", "Ghost-King");
     this.ghosts = [];
     this.time.delayedCall(800, () => this.spawnBossWaveA());
   }
@@ -1283,8 +1286,8 @@ export class HauntedWoodScene extends Phaser.Scene {
     return new TextWordTarget({ outline: true, ...opts });
   }
 
-  private setNarrator(text: string): void {
-    this.narration.sayRaw(text, { speakerName: null });
+  private setNarrator(text: string, speakerName: string | null = null): void {
+    this.narration.sayRaw(text, { speakerName });
   }
 
   // ─── Tier 4 relic helpers ───────────────────────────────────────────────────

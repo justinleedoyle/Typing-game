@@ -710,7 +710,7 @@ export class SunkenBellScene extends Phaser.Scene {
     // Draw Olin — hunched silhouette on a pew
     this.drawOlin();
 
-    this.setNarrator("tell me your name, child.");
+    this.setNarrator("tell me your name, child.", "Old Olin");
     this.time.delayedCall(600, () => {
       const nameTarget = this.makeWord({
         scene: this,
@@ -722,10 +722,12 @@ export class SunkenBellScene extends Phaser.Scene {
           this.clearActiveTargets();
           this.setNarrator(
             "you are listening for the bell. on its toll, you may speak. between tolls, you cannot.",
+            "Old Olin",
           );
           this.time.delayedCall(3000, () => {
             this.setNarrator(
               "i taught the bell its name. i can teach you if you let me.",
+              "Old Olin",
             );
             this.time.delayedCall(800, () => {
               const teachTarget = this.makeWord({
@@ -1700,8 +1702,8 @@ export class SunkenBellScene extends Phaser.Scene {
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
-  private setNarrator(text: string): void {
-    this.narration.sayRaw(text, { speakerName: null });
+  private setNarrator(text: string, speakerName: string | null = null): void {
+    this.narration.sayRaw(text, { speakerName });
   }
 
   private clearActiveTargets(): void {

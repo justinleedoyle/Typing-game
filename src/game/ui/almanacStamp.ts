@@ -55,7 +55,13 @@ export function showAlmanacStampCard(
   rule.lineBetween(-width / 2 + 48, -8, width / 2 - 48, -8);
 
   const corners = cornerTicks(scene, width, height, { inset: 9, size: 13, width: 2 });
-  container.add([bg, corners, rule, eyebrow, title]);
+  const seal = scene.add
+    .graphics()
+    .setPosition(width / 2 - 82, height / 2 - 38)
+    .setAlpha(0)
+    .setScale(1.45);
+  drawSeal(seal);
+  container.add([bg, corners, rule, eyebrow, title, seal]);
 
   scene.tweens.add({
     targets: container,
@@ -65,6 +71,13 @@ export function showAlmanacStampCard(
     ease: "Back.easeOut",
     onComplete: () => {
       opts.onReveal?.();
+      scene.tweens.add({
+        targets: seal,
+        alpha: 0.86,
+        scale: 1,
+        duration: 180,
+        ease: "Back.easeOut",
+      });
       scene.time.delayedCall(holdMs, () => {
         scene.tweens.add({
           targets: container,
@@ -82,4 +95,18 @@ export function showAlmanacStampCard(
   });
 
   return container;
+}
+
+function drawSeal(g: Phaser.GameObjects.Graphics): void {
+  g.clear();
+  g.lineStyle(5, UI_HEX.ember, 0.72);
+  g.strokeCircle(0, 0, 34);
+  g.lineStyle(2, UI_HEX.ember, 0.58);
+  g.strokeCircle(0, 0, 24);
+  g.lineStyle(4, UI_HEX.ember, 0.68);
+  g.lineBetween(-18, -2, -4, 14);
+  g.lineBetween(-4, 14, 22, -17);
+  g.lineStyle(1, UI_HEX.ember, 0.42);
+  g.lineBetween(-28, -26, 28, 26);
+  g.lineBetween(-26, 28, 26, -28);
 }

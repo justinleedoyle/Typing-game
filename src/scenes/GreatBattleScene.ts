@@ -317,6 +317,7 @@ export class GreatBattleScene extends Phaser.Scene {
   private strikeLineGraphic!: Phaser.GameObjects.Graphics;
   private phase2Round1Words: string[] = [];
   private facetSigil: Phaser.GameObjects.Graphics | null = null;
+  private facetChannel: Phaser.GameObjects.Graphics | null = null;
 
   // Phase 2 — relic state
   private bellsTongueSuperHitAvailable = false;
@@ -532,7 +533,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   /** UI-cohesion: every finale word target gets the legibility outline (TTT-style). */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
-    return new TextWordTarget({ outline: true, ...opts });
+    return new TextWordTarget({ outline: true, depth: 6, ...opts });
   }
 
   private clearActiveTargets(): void {
@@ -1401,6 +1402,15 @@ export class GreatBattleScene extends Phaser.Scene {
       if (counteredBy) {
         // A relic answers it — neutralized, no challenge. The Lord flickers.
         this.narration.say(FACET_LINES[facet.id].countered);
+        playClaimLine(
+          this,
+          this.scale.width / 2,
+          this.scale.height - 250,
+          this.scale.width / 2,
+          300,
+          { color: UI_HEX.brass, depth: 6, durationMs: 520 },
+        );
+        this.playFacetImpact(facet, "countered");
         this.tweens.add({
           targets: this.quietLordContainer,
           alpha: { from: this.quietLordContainer.alpha, to: 0.7 },
@@ -1434,6 +1444,7 @@ export class GreatBattleScene extends Phaser.Scene {
       if (resolved) return;
       resolved = true;
       this.clearActiveTargets();
+      this.playFacetImpact(facet, "landed");
       this.clearFacetSigil();
       // It lands — the realms' hit cue + a candle gutters.
       this.cameras.main.shake(220, 0.006);
@@ -1450,12 +1461,32 @@ export class GreatBattleScene extends Phaser.Scene {
       x: this.scale.width / 2,
       y: 500,
       fontSize: 46,
+      onClaim: () =>
+        playClaimLine(
+          this,
+          this.scale.width / 2,
+          this.scale.height - 250,
+          this.scale.width / 2,
+          500,
+          { color: UI_HEX.brass, depth: 6 },
+        ),
+      onAdvance: () =>
+        this.facetSigil &&
+        playBodyTypePulse(this, this.facetSigil, {
+          kind: this.facetParticleKind(facet),
+          color: UI_HEX.brass,
+          offsetY: 0,
+          depth: 7,
+          ringRadius: 34,
+          durationMs: 260,
+        }),
       onComplete: () => {
         if (resolved) return;
         resolved = true;
         timer.remove();
         playChime();
         this.clearActiveTargets();
+        this.playFacetImpact(facet, "held");
         this.clearFacetSigil();
         this.narration.say("finale_facet_held");
         finish();
@@ -1470,6 +1501,14 @@ export class GreatBattleScene extends Phaser.Scene {
 
     const color = mode === "countered" ? UI_HEX.brass : UI_HEX.ember;
     const alpha = mode === "countered" ? 0.46 : 0.6;
+    const channel = this.add
+      .graphics()
+      .setDepth(2.8)
+      .setAlpha(0)
+      .setPosition(this.scale.width / 2, 0);
+    this.drawFacetChannelInto(channel, color, mode);
+    this.facetChannel = channel;
+
     const g = this.add.graphics().setDepth(3).setAlpha(0).setPosition(this.scale.width / 2, 300);
     this.drawFacetSigilInto(g, facet.id, color, mode);
     this.facetSigil = g;
@@ -1483,6 +1522,20 @@ export class GreatBattleScene extends Phaser.Scene {
       ease: "Sine.easeOut",
     });
     this.tweens.add({
+      targets: channel,
+      alpha: mode === "countered" ? 0.34 : 0.46,
+      duration: 520,
+      ease: "Sine.easeOut",
+    });
+    this.tweens.add({
+      targets: channel,
+      alpha: mode === "countered" ? 0.18 : 0.28,
+      duration: 1400,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    this.tweens.add({
       targets: g,
       angle: mode === "countered" ? 3 : -3,
       duration: 1700,
@@ -1494,22 +1547,93 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private clearFacetSigil(fade = true): void {
     const sigil = this.facetSigil;
+    const channel = this.facetChannel;
     this.facetSigil = null;
-    if (!sigil) return;
-    this.tweens.killTweensOf(sigil);
+    this.facetChannel = null;
+    if (sigil) this.tweens.killTweensOf(sigil);
+    if (channel) this.tweens.killTweensOf(channel);
     if (!fade) {
-      sigil.destroy();
+      sigil?.destroy();
+      channel?.destroy();
       return;
     }
-    this.tweens.add({
-      targets: sigil,
-      alpha: 0,
-      scaleX: 1.08,
-      scaleY: 1.08,
-      duration: 260,
-      ease: "Sine.easeIn",
-      onComplete: () => sigil.destroy(),
+    if (sigil) {
+      this.tweens.add({
+        targets: sigil,
+        alpha: 0,
+        scaleX: 1.08,
+        scaleY: 1.08,
+        duration: 260,
+        ease: "Sine.easeIn",
+        onComplete: () => sigil.destroy(),
+      });
+    }
+    if (channel) {
+      this.tweens.add({
+        targets: channel,
+        alpha: 0,
+        duration: 220,
+        ease: "Sine.easeIn",
+        onComplete: () => channel.destroy(),
+      });
+    }
+  }
+
+  private playFacetImpact(
+    facet: Facet,
+    outcome: "countered" | "held" | "landed",
+  ): void {
+    if (!this.facetSigil) return;
+    playBodyImpact(this, this.facetSigil, {
+      kind: this.facetParticleKind(facet),
+      color: outcome === "landed" ? UI_HEX.ember : UI_HEX.brass,
+      offsetY: 0,
+      depth: 7,
+      ringRadius: outcome === "landed" ? 86 : 64,
+      count: outcome === "landed" ? 18 : 13,
+      durationMs: outcome === "landed" ? 560 : 460,
     });
+  }
+
+  private facetParticleKind(facet: Facet): "ash" | "bubble" | "ember" | "mist" | "mote" | "snow" {
+    switch (facet.id) {
+      case "cold":
+        return "snow";
+      case "toll":
+        return "bubble";
+      case "armor":
+        return "ember";
+      case "light":
+        return "mote";
+      case "grief":
+        return "mist";
+    }
+  }
+
+  private drawFacetChannelInto(
+    g: Phaser.GameObjects.Graphics,
+    color: number,
+    mode: "countered" | "threat",
+  ): void {
+    const alpha = mode === "countered" ? 0.38 : 0.48;
+    g.clear();
+    g.lineStyle(3, color, alpha);
+    g.beginPath();
+    g.moveTo(0, 372);
+    g.lineTo(-72, 432);
+    g.lineTo(-36, 505);
+    g.lineTo(0, 548);
+    g.lineTo(36, 505);
+    g.lineTo(72, 432);
+    g.lineTo(0, 372);
+    g.strokePath();
+
+    g.lineStyle(1, color, alpha * 0.72);
+    g.lineBetween(0, 396, 0, 542);
+    g.lineBetween(-58, 444, 58, 444);
+    g.lineBetween(-28, 502, 28, 502);
+    g.fillStyle(color, mode === "countered" ? 0.1 : 0.14);
+    g.fillCircle(0, 548, 36);
   }
 
   private drawFacetSigilInto(

@@ -16,6 +16,8 @@ export interface TextWordTargetOptions {
   word: string;
   x: number;
   y: number;
+  /** Optional render depth for scenes where the word must sit above an actor/body. */
+  depth?: number;
   fontSize?: number;
   /** Higher wins on first-letter ties. Default 0. */
   priority?: number;
@@ -172,6 +174,7 @@ export class TextWordTarget implements WordTarget {
     this.container = opts.scene.add
       .container(opts.x, opts.y, [this.typedText, this.remainingText])
       .setSize(this.remainingText.width, this.remainingText.height);
+    if (opts.depth !== undefined) this.container.setDepth(opts.depth);
 
     // UI-cohesion: a dark stroke makes the word legible on busy painted art.
     if (opts.outline) {

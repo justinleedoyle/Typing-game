@@ -12,6 +12,7 @@ import { decideBeatGate } from "../game/beatGate";
 import { BreathMeter } from "../game/breathMeter";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
+import { showAlmanacStampCard } from "../game/ui/almanacStamp";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import {
@@ -1472,36 +1473,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private showAlmanacStamp(onDone: () => void): void {
     this.setNarrator("");
-    const stamp = this.add
-      .text(this.scale.width / 2, this.scale.height / 2, "the sunken bell", {
-        fontFamily: SERIF,
-        fontSize: "64px",
-        color: PALETTE.cream,
-        backgroundColor: "#081820",
-        padding: { left: 40, right: 40, top: 20, bottom: 20 },
-      })
-      .setOrigin(0.5)
-      .setAlpha(0)
-      .setScale(0.6);
-
-    this.tweens.add({
-      targets: stamp,
-      alpha: 1,
-      scale: 1,
-      duration: 350,
-      ease: "Back.easeOut",
-      onComplete: () => {
-        playChime();
-        this.time.delayedCall(1500, () => {
-          this.tweens.add({
-            targets: stamp,
-            alpha: 0,
-            duration: 300,
-            onComplete: onDone,
-          });
-        });
-      },
-    });
+    showAlmanacStampCard(this, "the sunken bell", onDone, { onReveal: playChime });
   }
 
   // ─── Ghost enemies ────────────────────────────────────────────────────────

@@ -34,6 +34,7 @@ import {
   SKY_ISLAND_WORD_BANK,
 } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
+import { showAlmanacStampCard } from "../game/ui/almanacStamp";
 import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
 import {
@@ -1397,35 +1398,9 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private showAlmanacStamp(onDone: () => void): void {
-    const stamp = this.add
-      .text(this.scale.width / 2, this.scale.height / 2, "the sky island of lanterns", {
-        fontFamily: SERIF,
-        fontSize: "60px",
-        color: PALETTE.cream,
-        backgroundColor: "#1a1008",
-        padding: { left: 40, right: 40, top: 20, bottom: 20 },
-      })
-      .setOrigin(0.5)
-      .setAlpha(0)
-      .setScale(0.6);
-
-    this.tweens.add({
-      targets: stamp,
-      alpha: 1,
-      scale: 1,
-      duration: 350,
-      ease: "Back.easeOut",
-      onComplete: () => {
-        playChime();
-        this.time.delayedCall(1500, () => {
-          this.tweens.add({
-            targets: stamp,
-            alpha: 0,
-            duration: 300,
-            onComplete: onDone,
-          });
-        });
-      },
+    showAlmanacStampCard(this, "the sky island of lanterns", onDone, {
+      fontSize: 50,
+      onReveal: playChime,
     });
   }
 

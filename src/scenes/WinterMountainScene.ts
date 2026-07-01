@@ -30,12 +30,14 @@ import {
   addAmbientDrift,
   addBackdropDrift,
   addContainerWake,
+  attachWordBodyAnchor,
   dismissCompanionCameo,
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
   playBodyImpact,
   playBodyTypePulse,
+  playClaimLine,
   playActorAttention,
   pulseUiObject,
   playRealmClearResonance,
@@ -43,6 +45,7 @@ import {
   stageContainerEntrance,
   stageAnchoredSprite,
   stageCompanionCameo,
+  type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
@@ -223,6 +226,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private wrenGlow!: Phaser.GameObjects.Graphics;
   private wrenSprite!: Phaser.GameObjects.Image;
   private heldurSprite: Phaser.GameObjects.Image | null = null;
+  private heldurWordAnchors: WordBodyAnchorHandle[] = [];
   private huntressSprite: Phaser.GameObjects.Image | null = null;
   private riverCue: Phaser.GameObjects.Container | null = null;
   private foxCompanion: Phaser.GameObjects.Container | null = null;
@@ -270,6 +274,7 @@ export class WinterMountainScene extends Phaser.Scene {
     // Stale sprite references from a previous visit point at destroyed
     // GameObjects; clear them so fadeInHeldur/fadeInHuntress create fresh ones.
     this.heldurSprite = null;
+    this.heldurWordAnchors = [];
     this.huntressSprite = null;
     this.riverCue = null;
     this.foxCompanion = null;
@@ -653,7 +658,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
     this.setNarrator(HELDUR_NARRATOR_PROMPTS[idx]);
 
-    const target = this.makeWord({
+    const target = this.makeHeldurWord({
       scene: this,
       word: HELDUR_QUESTIONS[idx],
       x: this.scale.width / 2,
@@ -708,6 +713,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private fadeOutHeldur(): void {
     if (!this.heldurSprite) return;
+    this.clearHeldurWordAnchors();
     const sprite = this.heldurSprite;
     this.heldurSprite = null;
     fadeOutStagedSprite(this, sprite, {
@@ -891,6 +897,87 @@ export class WinterMountainScene extends Phaser.Scene {
         onComplete();
       },
     });
+  }
+
+  private makeHeldurWord(opts: TextWordTargetOptions): TextWordTarget {
+    const body = this.heldurSprite;
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.heldurWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.heldurWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.frost,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y - 170,
+          { color: PALETTE_HEX.frost, depth: 58 },
+        );
+        playActorAttention(this, body, {
+          tint: PALETTE_HEX.frost,
+          scale: 1.018,
+          durationMs: 180,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "snow",
+          color: PALETTE_HEX.frost,
+          offsetY: -170,
+          depth: 58,
+          ringRadius: 30,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "snow",
+          color: PALETTE_HEX.frost,
+          offsetY: -170,
+          depth: 58,
+          ringRadius: 54,
+          count: 11,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.frost,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -170,
+        targetOffsetY: 24,
+      },
+    );
+    this.heldurWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
+  private clearHeldurWordAnchors(): void {
+    for (const anchor of this.heldurWordAnchors) anchor.destroy();
+    this.heldurWordAnchors = [];
   }
 
   private playWrenTypingPulse(): void {
@@ -1878,6 +1965,7 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private clearActiveTargets(): void {
+    this.clearHeldurWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

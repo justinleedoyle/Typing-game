@@ -229,6 +229,10 @@ export class WinterMountainScene extends Phaser.Scene {
   private heldurWordAnchors: WordBodyAnchorHandle[] = [];
   private huntressSprite: Phaser.GameObjects.Image | null = null;
   private riverCue: Phaser.GameObjects.Container | null = null;
+  private fireflyCue: Phaser.GameObjects.Container | null = null;
+  private cairnCue: Phaser.GameObjects.Container | null = null;
+  private peltCue: Phaser.GameObjects.Container | null = null;
+  private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
   private foxCompanion: Phaser.GameObjects.Container | null = null;
   private foxWordAnchors: WordBodyAnchorHandle[] = [];
   private candleGroup!: Phaser.GameObjects.Container;
@@ -278,6 +282,10 @@ export class WinterMountainScene extends Phaser.Scene {
     this.heldurWordAnchors = [];
     this.huntressSprite = null;
     this.riverCue = null;
+    this.fireflyCue = null;
+    this.cairnCue = null;
+    this.peltCue = null;
+    this.forkChoiceWordAnchors = [];
     this.foxCompanion = null;
     this.foxWordAnchors = [];
     this.wolves = [];
@@ -405,6 +413,7 @@ export class WinterMountainScene extends Phaser.Scene {
       this.typingInput.reset();
       this.coldDecayTimer?.remove();
       this.riverCue = null;
+      this.clearWinterForkCues();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.input.keyboard?.off("keyup", this.onKeyUp, this);
       this.ambientHandle?.stop();
@@ -1049,9 +1058,95 @@ export class WinterMountainScene extends Phaser.Scene {
     return target;
   }
 
+  private makeWinterForkWord(
+    body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined,
+    opts: TextWordTargetOptions,
+    vfx: { kind: "snow" | "mote"; color: number; sourceOffsetY: number },
+  ): TextWordTarget {
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.forkChoiceWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.forkChoiceWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? vfx.color,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y + vfx.sourceOffsetY,
+          { color: vfx.color, depth: 58 },
+        );
+        playBodyTypePulse(this, body, {
+          kind: vfx.kind,
+          color: vfx.color,
+          offsetY: vfx.sourceOffsetY,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: vfx.kind,
+          color: vfx.color,
+          offsetY: vfx.sourceOffsetY,
+          depth: 58,
+          ringRadius: 22,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: vfx.kind,
+          color: vfx.color,
+          offsetY: vfx.sourceOffsetY,
+          depth: 58,
+          ringRadius: 44,
+          count: 9,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: vfx.color,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: vfx.sourceOffsetY,
+        targetOffsetY: 24,
+      },
+    );
+    this.forkChoiceWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
   private clearHeldurWordAnchors(): void {
     for (const anchor of this.heldurWordAnchors) anchor.destroy();
     this.heldurWordAnchors = [];
+  }
+
+  private clearForkChoiceWordAnchors(): void {
+    for (const anchor of this.forkChoiceWordAnchors) anchor.destroy();
+    this.forkChoiceWordAnchors = [];
   }
 
   private clearFoxWordAnchors(): void {
@@ -1424,8 +1519,10 @@ export class WinterMountainScene extends Phaser.Scene {
   private startFork1(nextWave: number): void {
     this.narration.say("winter_fork1_intro");
     this.band.setObjective("Choose: save the huntress or follow the fireflies.");
+    this.fadeInHuntress();
+    const fireflies = this.showFireflyCue();
 
-    const huntress = this.makeWord({
+    const huntress = this.makeWinterForkWord(this.huntressSprite, {
       scene: this,
       word: "save the huntress",
       x: this.scale.width / 2 - 380,
@@ -1436,8 +1533,8 @@ export class WinterMountainScene extends Phaser.Scene {
         this.fork1Choice = "huntress";
         this.startHuntressBranch(nextWave);
       },
-    });
-    const firefly = this.makeWord({
+    }, { kind: "snow", color: PALETTE_HEX.frost, sourceOffsetY: -150 });
+    const firefly = this.makeWinterForkWord(fireflies, {
       scene: this,
       word: "follow the fireflies",
       x: this.scale.width / 2 + 380,
@@ -1448,7 +1545,7 @@ export class WinterMountainScene extends Phaser.Scene {
         this.fork1Choice = "firefly";
         this.startFireflyBranch(nextWave);
       },
-    });
+    }, { kind: "mote", color: PALETTE_HEX.brass, sourceOffsetY: -34 });
     this.typingInput.register(huntress);
     this.typingInput.register(firefly);
     this.activeTargets.push(huntress, firefly);
@@ -1456,6 +1553,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private startHuntressBranch(nextWave: number): void {
     this.clearActiveTargets();
+    this.dismissFireflyCue();
     this.narration.say("winter_huntress_intro");
     this.band.setObjective("Type the passage words to free the huntress.");
     this.fadeInHuntress();
@@ -1507,6 +1605,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private startFireflyBranch(nextWave: number): void {
     this.clearActiveTargets();
+    this.fadeOutHuntress();
     this.narration.say("winter_firefly_intro");
     this.band.setObjective("Type the passage words to follow the fireflies.");
     this.store.update((s) => {
@@ -1521,8 +1620,86 @@ export class WinterMountainScene extends Phaser.Scene {
           "The lights bob between the pines, patient, waiting for you.",
           "They settle inside a paper lantern hidden in a hollow tree.",
         ],
-        () => this.startWave(nextWave),
+        () => {
+          this.dismissFireflyCue();
+          this.startWave(nextWave);
+        },
       );
+    });
+  }
+
+  private showFireflyCue(): Phaser.GameObjects.Container {
+    if (this.fireflyCue?.scene) return this.fireflyCue;
+
+    const c = this.add.container(1330, 790).setDepth(43).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 120, 18, { y: 24, alpha: 0.12 }));
+
+    const g = this.add.graphics();
+    const motes = [
+      { x: -42, y: -22, r: 5 },
+      { x: -12, y: -48, r: 4 },
+      { x: 18, y: -26, r: 5 },
+      { x: 46, y: -58, r: 4 },
+      { x: 66, y: -18, r: 4 },
+    ];
+    for (const mote of motes) {
+      g.fillStyle(0xf8d070, 0.18);
+      g.fillCircle(mote.x, mote.y, mote.r * 4);
+      g.fillStyle(0xf7e0a0, 0.82);
+      g.fillCircle(mote.x, mote.y, mote.r);
+    }
+    c.add(g);
+
+    addContainerWake(this, c, {
+      kind: "mote",
+      intervalMs: 170,
+      offsetY: -42,
+      spreadX: 54,
+      spreadY: 28,
+      color: PALETTE_HEX.brass,
+      depth: 42,
+      alpha: 0.32,
+    });
+    this.tweens.add({
+      targets: c,
+      alpha: 0.95,
+      y: 774,
+      duration: 620,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (c.scene) addIdleBreath(this, c, { dy: -8, durationMs: 1600 });
+      },
+    });
+    this.tweens.add({
+      targets: g,
+      scaleX: 1.08,
+      scaleY: 1.08,
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+
+    this.fireflyCue = c;
+    return c;
+  }
+
+  private dismissFireflyCue(): void {
+    const cue = this.fireflyCue;
+    this.clearForkChoiceWordAnchors();
+    if (!cue?.scene) {
+      this.fireflyCue = null;
+      return;
+    }
+    this.fireflyCue = null;
+    this.tweens.killTweensOf(cue);
+    this.tweens.add({
+      targets: cue,
+      alpha: 0,
+      y: cue.y - 26,
+      duration: 420,
+      ease: "Sine.easeIn",
+      onComplete: () => cue.destroy(),
     });
   }
 
@@ -1649,8 +1826,10 @@ export class WinterMountainScene extends Phaser.Scene {
   private startFork2(): void {
     this.narration.say("winter_fork2_intro");
     this.band.setObjective("Choose how Wren answers the Pack-Leader.");
+    const cairn = this.showCairnCue();
+    const pelt = this.showPeltCue();
 
-    const buryTarget = this.makeWord({
+    const buryTarget = this.makeWinterForkWord(cairn, {
       scene: this,
       word: "bury the pack leader",
       x: this.scale.width / 2 - 380,
@@ -1667,12 +1846,15 @@ export class WinterMountainScene extends Phaser.Scene {
             "Stone by stone, you build the cairn. The mountain is quiet.",
             "The pack will not follow here again.",
           ],
-          () => this.startFoxGate(),
+          () => {
+            this.clearWinterForkCues();
+            this.startFoxGate();
+          },
         );
       },
-    });
+    }, { kind: "snow", color: PALETTE_HEX.frost, sourceOffsetY: -42 });
 
-    const peltTarget = this.makeWord({
+    const peltTarget = this.makeWinterForkWord(pelt, {
       scene: this,
       word: "take the pelt",
       x: this.scale.width / 2 + 380,
@@ -1689,14 +1871,89 @@ export class WinterMountainScene extends Phaser.Scene {
             "The old one's pelt is heavy with winter. You roll it carefully.",
             "It smells of frost and old forests. It will mean something at the battle.",
           ],
-          () => this.startFoxGate(),
+          () => {
+            this.clearWinterForkCues();
+            this.startFoxGate();
+          },
         );
       },
-    });
+    }, { kind: "snow", color: PALETTE_HEX.frost, sourceOffsetY: -38 });
 
     this.typingInput.register(buryTarget);
     this.typingInput.register(peltTarget);
     this.activeTargets.push(buryTarget, peltTarget);
+  }
+
+  private showCairnCue(): Phaser.GameObjects.Container {
+    if (this.cairnCue?.scene) return this.cairnCue;
+
+    const c = this.add.container(650, 812).setDepth(43).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 150, 18, { y: 18, alpha: 0.18 }));
+    const g = this.add.graphics();
+    const stones = [
+      { x: -48, y: 0, w: 66, h: 24, color: 0x6d7580 },
+      { x: 18, y: 2, w: 70, h: 26, color: 0x59636f },
+      { x: -14, y: -24, w: 62, h: 24, color: 0x747d88 },
+      { x: 34, y: -42, w: 46, h: 20, color: 0x626b76 },
+      { x: -26, y: -55, w: 42, h: 18, color: 0x818992 },
+    ];
+    for (const stone of stones) {
+      g.fillStyle(stone.color, 0.9);
+      g.fillEllipse(stone.x, stone.y, stone.w, stone.h);
+      g.lineStyle(2, PALETTE_HEX.frost, 0.18);
+      g.strokeEllipse(stone.x, stone.y, stone.w * 0.88, stone.h * 0.72);
+    }
+    c.add(g);
+    this.tweens.add({
+      targets: c,
+      alpha: 1,
+      y: 792,
+      duration: 560,
+      ease: "Sine.easeOut",
+    });
+    this.cairnCue = c;
+    return c;
+  }
+
+  private showPeltCue(): Phaser.GameObjects.Container {
+    if (this.peltCue?.scene) return this.peltCue;
+
+    const c = this.add.container(1270, 808).setDepth(43).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 170, 20, { y: 18, alpha: 0.18 }));
+    const g = this.add.graphics();
+    g.fillStyle(0x726151, 0.92);
+    g.fillEllipse(-12, -10, 128, 46);
+    g.fillStyle(0x8a7662, 0.86);
+    g.fillEllipse(-46, -22, 58, 34);
+    g.fillEllipse(36, -26, 66, 30);
+    g.fillStyle(0xd8e7f0, 0.42);
+    g.fillEllipse(-42, -30, 28, 10);
+    g.fillEllipse(24, -36, 32, 10);
+    g.lineStyle(2, PALETTE_HEX.frost, 0.22);
+    g.strokeEllipse(-12, -10, 118, 36);
+    c.add(g);
+    this.tweens.add({
+      targets: c,
+      alpha: 1,
+      y: 790,
+      duration: 560,
+      ease: "Sine.easeOut",
+    });
+    this.peltCue = c;
+    return c;
+  }
+
+  private clearWinterForkCues(): void {
+    this.clearForkChoiceWordAnchors();
+    const cues = [this.fireflyCue, this.cairnCue, this.peltCue];
+    this.fireflyCue = null;
+    this.cairnCue = null;
+    this.peltCue = null;
+    for (const cue of cues) {
+      if (!cue?.scene) continue;
+      this.tweens.killTweensOf(cue);
+      cue.destroy();
+    }
   }
 
   /** Snow-fox companion gate — only if all three kindness conditions met.
@@ -2044,6 +2301,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private clearActiveTargets(): void {
     this.clearHeldurWordAnchors();
+    this.clearForkChoiceWordAnchors();
     this.clearFoxWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);

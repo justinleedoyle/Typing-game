@@ -236,6 +236,7 @@ export class SkyIslandScene extends Phaser.Scene {
   // Forge), both acting on the scrolling banners. Null until create().
   private oneShotInvoker: OneShotInvoker<ScrollingPhrase> | null = null;
   private pathCue: Phaser.GameObjects.Container | null = null;
+  private pathWordAnchors: WordBodyAnchorHandle[] = [];
 
   private ambientHandle?: AmbientHandle;
   private revisit = false;
@@ -252,6 +253,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.activePhrases = [];
     this.oneShotInvoker = null;
     this.pathCue = null;
+    this.pathWordAnchors = [];
     this.fork1Choice = null;
     this.fork2Choice = null;
     this.ettaDone = false;
@@ -475,7 +477,7 @@ export class SkyIslandScene extends Phaser.Scene {
     ];
     this.showPathCue(beat);
     this.setNarrator(narrations[idx] ?? "");
-    const target = this.makeWord({
+    const target = this.makePathWord({
       scene: this,
       word: beat,
       x: this.scale.width / 2,
@@ -608,6 +610,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private dismissPathCue(animate = true): void {
     const cue = this.pathCue;
+    this.clearPathWordAnchors();
     if (!cue?.scene) {
       this.pathCue = null;
       return;
@@ -2140,6 +2143,82 @@ export class SkyIslandScene extends Phaser.Scene {
     });
   }
 
+  private makePathWord(opts: TextWordTargetOptions): TextWordTarget {
+    const cue = this.pathCue;
+    if (!cue?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.pathWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.pathWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.brass,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          cue.x,
+          cue.y - 16,
+          { color: PALETTE_HEX.brass, depth: 58 },
+        );
+        playActorAttention(this, cue, {
+          tint: PALETTE_HEX.brass,
+          scale: 1.022,
+          durationMs: 180,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, cue, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: -18,
+          depth: 58,
+          ringRadius: 28,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, cue, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: -18,
+          depth: 58,
+          ringRadius: 48,
+          count: 10,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      cue,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.brass,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -18,
+        targetOffsetY: 24,
+      },
+    );
+    this.pathWordAnchors.push(anchor);
+    cue.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
   private playWrenTypingPulse(): void {
     playBodyTypePulse(this, this.wrenContainer, {
       kind: "mote",
@@ -2224,8 +2303,14 @@ export class SkyIslandScene extends Phaser.Scene {
     this.bossWordAnchors = [];
   }
 
+  private clearPathWordAnchors(): void {
+    for (const anchor of this.pathWordAnchors) anchor.destroy();
+    this.pathWordAnchors = [];
+  }
+
   private clearActiveTargets(): void {
     this.clearBossWordAnchors();
+    this.clearPathWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

@@ -690,6 +690,7 @@ export class SunkenBellScene extends Phaser.Scene {
     // BeatClock stays not-running here; gating engages only once start() is
     // called at the end of Olin's exchange.
     this.narration.say("sunken_intro_arrival");
+    this.band.setObjective("Light the descent lanterns before the bell teaches its rhythm.");
     this.time.delayedCall(2500, () => this.startDescent());
   }
 
@@ -852,6 +853,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startOlinNPC(): void {
     this.clearActiveTargets();
+    this.band.setObjective("Answer Old Olin to learn the bell's rhythm.");
     // Draw Olin — hunched silhouette on a pew
     this.drawOlin();
 

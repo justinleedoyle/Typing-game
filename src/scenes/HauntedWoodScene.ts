@@ -389,6 +389,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startArrival(): void {
     this.narration.say("wood_intro_arrival");
+    this.band.setObjective("Type the path words to reach the lantern in the trees.");
     this.time.delayedCall(2800, () => this.startPathExploration());
   }
 
@@ -591,6 +592,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Act 1 — Inga NPC ────────────────────────────────────────────────────
 
   private startIngaNPC(): void {
+    this.band.setObjective("Answer Inga and follow her toward the shrine.");
     this.drawInga(560, 760);
 
     this.store.update((s) => {

@@ -453,6 +453,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private startAct1(): void {
     this.narration.say("sky_intro_arrival");
+    this.band.setObjective("Type each path word to cross the floating stones.");
     this.time.delayedCall(2800, () => this.runPathBeats(0));
   }
 
@@ -627,6 +628,7 @@ export class SkyIslandScene extends Phaser.Scene {
   // ─── Lantern-Lighter NPC ──────────────────────────────────────────────────
 
   private startLanternLighter(): void {
+    this.band.setObjective("Answer the Lantern-Lighter before the spirits wake.");
     this.narration.say("sky_lantern_lighter_intro");
     this.time.delayedCall(2000, () => {
       this.setNarrator(LIGHTER_LINE_1, "Lantern-Lighter");

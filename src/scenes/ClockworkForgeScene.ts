@@ -417,6 +417,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private startAct1Arrival(): void {
     this.narration.say("forge_intro_arrival");
+    this.band.setObjective("Type each catwalk word to reach Gregor's station.");
     this.time.delayedCall(2600, () => this.startCatwalkBeats(0));
   }
 
@@ -456,6 +457,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private startGregorConversation(): void {
     this.clearActiveTargets();
+    this.band.setObjective("Answer Gregor and test lowercase against capitals.");
     this.setNarrator(
       "You hold it wrong. Typewriters are not hammers.",
       "Old Gregor",
@@ -484,6 +486,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private gregorTutorialMove(): void {
+    this.band.setObjective("Type turn to nudge the training golem.");
     this.setNarrator(
       "Type 'turn' — watch it.",
       "Old Gregor",
@@ -511,6 +514,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private gregorTutorialCommand(tutorialGolem: StaticGolem): void {
     this.clearActiveTargets();
+    this.band.setObjective("Hold Shift through TURN to command the golem.");
     this.setNarrator(
       "Now hold Shift and type 'TURN' — give it a command.",
       "Old Gregor",

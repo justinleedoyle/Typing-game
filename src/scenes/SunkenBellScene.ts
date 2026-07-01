@@ -284,6 +284,19 @@ export class SunkenBellScene extends Phaser.Scene {
       durationMs: 3000,
       delayMs: 1200,
     });
+    addAmbientDrift(this, {
+      kind: "bubble",
+      count: 14,
+      depth: -1.45,
+      area: { x: 120, y: 300, width: this.scale.width - 240, height: 500 },
+      alpha: 0.18,
+      minSize: 6,
+      maxSize: 14,
+      driftX: 46,
+      driftY: -280,
+      minDurationMs: 5600,
+      maxDurationMs: 11800,
+    });
     this.wrenContainer = this.drawWren(WREN_X, WREN_Y);
 
     this.typingInput = new TypingInputController(this.store);

@@ -384,6 +384,19 @@ export class WinterMountainScene extends Phaser.Scene {
       durationMs: 1800,
       delayMs: 700,
     });
+    addAmbientDrift(this, {
+      kind: "snow",
+      count: 18,
+      depth: -1.45,
+      area: { x: -80, y: 240, width: this.scale.width + 160, height: 620 },
+      alpha: 0.22,
+      minSize: 5,
+      maxSize: 11,
+      driftX: -300,
+      driftY: 560,
+      minDurationMs: 4600,
+      maxDurationMs: 9000,
+    });
     this.wrenContainer = this.drawWren(this.scale.width / 2, 880);
 
     // UI cohesion — the console band houses the meters + Winter's candle/thunder

@@ -349,6 +349,19 @@ export class SkyIslandScene extends Phaser.Scene {
       delayMs: 500,
       scale: 1.035,
     });
+    addAmbientDrift(this, {
+      kind: "mote",
+      count: 14,
+      depth: -1.45,
+      area: { x: 80, y: 300, width: this.scale.width - 160, height: 470 },
+      alpha: 0.16,
+      minSize: 4,
+      maxSize: 9,
+      driftX: 120,
+      driftY: -210,
+      minDurationMs: 5200,
+      maxDurationMs: 10800,
+    });
     this.drawTempleStones();
     this.drawAmbientLanterns();
     this.wrenContainer = this.drawWren(this.scale.width / 2, 900);

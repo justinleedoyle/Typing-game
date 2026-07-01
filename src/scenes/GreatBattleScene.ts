@@ -590,6 +590,19 @@ export class GreatBattleScene extends Phaser.Scene {
       delayMs: 1100,
       scale: 1.04,
     });
+    addAmbientDrift(this, {
+      kind: "ash",
+      count: 18,
+      depth: -1.45,
+      area: { x: 0, y: 260, width: this.scale.width, height: 540 },
+      alpha: 0.17,
+      minSize: 3.5,
+      maxSize: 8,
+      driftX: 150,
+      driftY: -260,
+      minDurationMs: 4200,
+      maxDurationMs: 9800,
+    });
 
     // UI cohesion — the console band. The finale has no heart/soul HUD; its candle
     // (fail-state) + spell-charge meters dock into the band, with Runa at the portrait

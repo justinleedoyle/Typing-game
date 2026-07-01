@@ -138,6 +138,19 @@ export class OpeningScene extends Phaser.Scene {
       delayMs: 600,
       scale: 1.045,
     });
+    addAmbientDrift(this, {
+      kind: "mote",
+      count: 10,
+      depth: -1.4,
+      area: { x: 120, y: 360, width: this.scale.width - 240, height: 440 },
+      alpha: 0.13,
+      minSize: 3,
+      maxSize: 7,
+      driftX: 24,
+      driftY: -62,
+      minDurationMs: 6800,
+      maxDurationMs: 12000,
+    });
 
     // ── Narrator text ────────────────────────────────────────────────────────
     this.narration = new NarrationManager(this, {

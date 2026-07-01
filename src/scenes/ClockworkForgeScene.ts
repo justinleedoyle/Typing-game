@@ -287,6 +287,19 @@ export class ClockworkForgeScene extends Phaser.Scene {
         scale: 1.035,
       });
     }
+    addAmbientDrift(this, {
+      kind: "ember",
+      count: 16,
+      depth: -1.35,
+      area: { x: 0, y: 420, width: this.scale.width, height: 360 },
+      alpha: 0.22,
+      minSize: 4,
+      maxSize: 9,
+      driftX: 85,
+      driftY: -250,
+      minDurationMs: 3400,
+      maxDurationMs: 7600,
+    });
     this.drawForgeGlow();
     this.drawCatwalk();
     this.drawWren(this.scale.width / 2, CATWALK_Y + 20);

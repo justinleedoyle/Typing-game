@@ -278,6 +278,19 @@ export class HauntedWoodScene extends Phaser.Scene {
       delayMs: 1300,
       scale: 1.04,
     });
+    addAmbientDrift(this, {
+      kind: "mist",
+      count: 12,
+      depth: -1.45,
+      area: { x: -180, y: 500, width: this.scale.width + 360, height: 260 },
+      alpha: 0.085,
+      minSize: 11,
+      maxSize: 24,
+      driftX: 320,
+      driftY: -42,
+      minDurationMs: 8200,
+      maxDurationMs: 16000,
+    });
     this.drawShrine();
     this.wrenContainer = this.drawWren(WREN_X, WREN_Y);
 

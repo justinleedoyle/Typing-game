@@ -76,6 +76,19 @@ export class TitleScene extends Phaser.Scene {
       delayMs: 600,
       scale: 1.045,
     });
+    addAmbientDrift(this, {
+      kind: "mote",
+      count: 10,
+      depth: -1.4,
+      area: { x: 140, y: height * 0.38, width: width - 280, height: height * 0.46 },
+      alpha: 0.14,
+      minSize: 3,
+      maxSize: 7,
+      driftX: 26,
+      driftY: -58,
+      minDurationMs: 6800,
+      maxDurationMs: 11800,
+    });
 
     this.drawTitlePlate(width / 2, height / 2 - 54);
 

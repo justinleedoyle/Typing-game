@@ -1159,6 +1159,19 @@ export class PortalChamberScene extends Phaser.Scene {
       durationMs: 3400,
       scale: 1.035,
     });
+    addAmbientDrift(this, {
+      kind: "mote",
+      count: 12,
+      depth: -2.3,
+      area: { x: 120, y: 360, width: this.scale.width - 240, height: 520 },
+      alpha: 0.13,
+      minSize: 3,
+      maxSize: 6.5,
+      driftX: 36,
+      driftY: -70,
+      minDurationMs: 7200,
+      maxDurationMs: 13000,
+    });
 
     this.drawHubStations();
   }

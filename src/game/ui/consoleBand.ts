@@ -25,6 +25,8 @@ const PAD = 26;
 const PORTRAIT_W = 72;
 const PORTRAIT_H = 104;
 const PORTRAIT_CX = PAD + PORTRAIT_W / 2;
+const PORTRAIT_LABEL_Y = MID_Y + PORTRAIT_H / 2 + 13;
+const PORTRAIT_LABEL_WRAP = 104;
 // Meters slot (HeartSoulHud mounts right-aligned to METERS_RIGHT)
 const METERS_RIGHT = 470;
 const METERS_CY = MID_Y - 10;
@@ -86,6 +88,7 @@ export class ConsoleBand {
   private noticeActive = false;
   private noticeTimer: Phaser.Time.TimerEvent | null = null;
   private portraitImage?: Phaser.GameObjects.Image;
+  private portraitFallback?: Phaser.GameObjects.Text;
   private portraitLabel?: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene, opts: ConsoleBandOptions = {}) {
@@ -179,11 +182,14 @@ export class ConsoleBand {
 
   /** Swap the speaker portrait in the left nook. Scenes call this from the
    *  narration speaker hook so the band does not keep showing Runa while an
-   *  in-world NPC is speaking. Passing no key clears the image and keeps only
-   *  the label/frame; unknown textures are ignored safely. */
+   *  in-world NPC is speaking. Passing no key (or an unloaded key) falls back
+   *  to an intentional monogram inside the frame instead of an empty box. */
   setPortrait(textureKey?: string, name?: string): void {
     this.portraitImage?.destroy();
     this.portraitImage = undefined;
+    this.portraitFallback?.destroy();
+    this.portraitFallback = undefined;
+    const trimmedName = name?.trim() ?? "";
 
     if (textureKey && this.scene.textures.exists(textureKey)) {
       const img = this.scene.add.image(PORTRAIT_CX, MID_Y, textureKey);
@@ -201,21 +207,57 @@ export class ConsoleBand {
         duration: 160,
         ease: "Sine.easeOut",
       });
+    } else if (trimmedName.length > 0) {
+      const fallback = this.scene.add
+        .text(PORTRAIT_CX, MID_Y - 2, this.initialsForName(trimmedName), {
+          fontFamily: SERIF,
+          fontSize: "28px",
+          fontStyle: "italic",
+          color: "#e8dcc0",
+          align: "center",
+        })
+        .setOrigin(0.5)
+        .setAlpha(0.68);
+      this.container.add(fallback);
+      this.portraitFallback = fallback;
+      this.scene.tweens.add({
+        targets: fallback,
+        alpha: 0.9,
+        duration: 160,
+        ease: "Sine.easeOut",
+      });
     }
 
     if (!this.portraitLabel) {
       this.portraitLabel = this.scene.add
-        .text(PORTRAIT_CX, MID_Y + PORTRAIT_H / 2 + 11, "", {
+        .text(PORTRAIT_CX, PORTRAIT_LABEL_Y, "", {
           fontFamily: SERIF,
           fontStyle: "italic",
           fontSize: "13px",
           color: "#a59b89",
+          align: "center",
+          wordWrap: { width: PORTRAIT_LABEL_WRAP },
         })
         .setOrigin(0.5);
       this.container.add(this.portraitLabel);
     }
-    this.portraitLabel.setText(name ?? "");
+    this.portraitLabel.setText(this.formatPortraitName(trimmedName));
+    if (this.portraitFallback) this.container.bringToTop(this.portraitFallback);
     this.container.bringToTop(this.portraitLabel);
+  }
+
+  private formatPortraitName(name: string): string {
+    if (name.length <= 12) return name;
+    if (name.includes("-")) return name.replace("-", "-\n");
+    const words = name.split(/\s+/);
+    if (words.length > 1) return `${words[0]}\n${words.slice(1).join(" ")}`;
+    return name;
+  }
+
+  private initialsForName(name: string): string {
+    const parts = name.split(/[\s-]+/).filter(Boolean);
+    const initials = parts.map((part) => part[0]).join("").slice(0, 2);
+    return initials.toUpperCase();
   }
 
   private drawSurface(scene: Phaser.Scene, W: number): void {

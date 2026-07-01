@@ -290,7 +290,11 @@ export class HauntedWoodScene extends Phaser.Scene {
     new HeartSoulHud(this, {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
-      onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
+      onSustainedLowHeart: () =>
+        this.band.showNotice(pickLowHeartLine().text, {
+          label: "heart",
+          durationMs: 2400,
+        }),
       anchor: band.metersAnchor,
       plate: false,
     });

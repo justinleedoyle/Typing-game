@@ -324,7 +324,11 @@ export class ClockworkForgeScene extends Phaser.Scene {
       getSoul: () => this.typingInput.getStats().getSoul(),
       getCombo: () => this.typingInput.getStats().getCombo(),
       getCastReady: () => this.typingInput.getStats().canCast(this.spellCost),
-      onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
+      onSustainedLowHeart: () =>
+        this.band.showNotice(pickLowHeartLine().text, {
+          label: "heart",
+          durationMs: 2400,
+        }),
       anchor: band.metersAnchor,
       plate: false,
     });

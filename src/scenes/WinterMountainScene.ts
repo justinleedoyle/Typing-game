@@ -224,6 +224,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private wrenSprite!: Phaser.GameObjects.Image;
   private heldurSprite: Phaser.GameObjects.Image | null = null;
   private huntressSprite: Phaser.GameObjects.Image | null = null;
+  private riverCue: Phaser.GameObjects.Container | null = null;
   private foxCompanion: Phaser.GameObjects.Container | null = null;
   private candleGroup!: Phaser.GameObjects.Container;
   private chargeGroup!: Phaser.GameObjects.Container;
@@ -270,6 +271,7 @@ export class WinterMountainScene extends Phaser.Scene {
     // GameObjects; clear them so fadeInHeldur/fadeInHuntress create fresh ones.
     this.heldurSprite = null;
     this.huntressSprite = null;
+    this.riverCue = null;
     this.foxCompanion = null;
     this.wolves = [];
     this.boss = null;
@@ -395,6 +397,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
       this.coldDecayTimer?.remove();
+      this.riverCue = null;
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.input.keyboard?.off("keyup", this.onKeyUp, this);
       this.ambientHandle?.stop();
@@ -482,6 +485,7 @@ export class WinterMountainScene extends Phaser.Scene {
   /** Three short exploration beats: lift / step / duck */
   private runRiverBeats(idx: number): void {
     if (idx >= RIVER_BEATS.length) {
+      this.dismissRiverCue();
       this.time.delayedCall(800, () => this.startHeldur());
       return;
     }
@@ -491,6 +495,7 @@ export class WinterMountainScene extends Phaser.Scene {
       "The ice looks thin here. Place your feet carefully.",
       "A low branch catches the light. Duck under it.",
     ];
+    this.showRiverCue(beat);
     this.setNarrator(narrations[idx]);
     const target = this.makeWord({
       scene: this,
@@ -498,15 +503,127 @@ export class WinterMountainScene extends Phaser.Scene {
       x: this.scale.width / 2,
       y: this.scale.height / 2,
       fontSize: 44,
-      onClaim: () => playWrenFocus(this.wrenSprite),
+      onClaim: () => {
+        playWrenFocus(this.wrenSprite);
+        this.pulseRiverCue(false);
+      },
       onComplete: () => {
         this.playWrenTrailAction();
+        this.pulseRiverCue(true);
         playChime();
         this.time.delayedCall(700, () => this.runRiverBeats(idx + 1));
       },
     });
     this.typingInput.register(target);
     this.activeTargets.push(target);
+  }
+
+  private showRiverCue(beat: (typeof RIVER_BEATS)[number]): void {
+    this.dismissRiverCue(false);
+    const pos =
+      beat === "lift"
+        ? { x: this.scale.width / 2 - 92, y: 846 }
+        : beat === "step"
+          ? { x: this.scale.width / 2 + 84, y: 858 }
+          : { x: this.scale.width / 2 + 18, y: 748 };
+    const cue = this.add.container(pos.x, pos.y).setDepth(-1).setAlpha(0);
+    this.riverCue = cue;
+
+    if (beat !== "duck") {
+      cue.add(addLocalGroundShadow(this, beat === "lift" ? 180 : 150, 20, {
+        y: 10,
+        alpha: 0.2,
+      }));
+    }
+
+    if (beat === "lift") {
+      const log = this.add.graphics().setAngle(-8);
+      log.fillStyle(0x33291f, 0.96);
+      log.fillRoundedRect(-88, -18, 176, 36, 18);
+      log.fillStyle(0x4b3929, 0.92);
+      log.fillRoundedRect(-82, -10, 164, 12, 8);
+      log.lineStyle(2, 0x8e785c, 0.32);
+      log.lineBetween(-64, -16, -48, 16);
+      log.lineBetween(10, -18, 30, 16);
+      log.lineBetween(66, -14, 78, 14);
+      cue.add(log);
+      const snowcap = this.add.graphics().setAngle(-8);
+      snowcap.fillStyle(0xe8f0f8, 0.78);
+      snowcap.fillRoundedRect(-70, -24, 118, 12, 8);
+      cue.add(snowcap);
+    } else if (beat === "step") {
+      const ice = this.add.graphics();
+      ice.fillStyle(0xaed6ee, 0.18);
+      ice.fillEllipse(0, 0, 166, 58);
+      ice.lineStyle(2, 0xd5ecff, 0.34);
+      ice.strokeEllipse(0, 0, 150, 48);
+      ice.lineStyle(1.5, 0xd5ecff, 0.42);
+      ice.lineBetween(-54, -4, -20, 8);
+      ice.lineBetween(-16, 6, 18, -8);
+      ice.lineBetween(20, -8, 52, 6);
+      cue.add(ice);
+    } else {
+      const branch = this.add.graphics().setAngle(7);
+      branch.lineStyle(8, 0x2a3426, 0.92);
+      branch.lineBetween(-138, 0, 138, 0);
+      branch.lineStyle(4, 0x445338, 0.88);
+      branch.lineBetween(-80, -4, -44, -38);
+      branch.lineBetween(-16, 0, 28, -34);
+      branch.lineBetween(60, 2, 94, 34);
+      branch.fillStyle(0xe8f0f8, 0.78);
+      branch.fillEllipse(-82, -8, 38, 12);
+      branch.fillEllipse(10, -8, 46, 13);
+      branch.fillEllipse(70, 10, 34, 11);
+      cue.add(branch);
+    }
+
+    this.tweens.add({
+      targets: cue,
+      alpha: 0.86,
+      y: pos.y - 6,
+      duration: 360,
+      ease: "Sine.easeOut",
+      onComplete: () => addIdleBreath(this, cue, { dy: -2, durationMs: 2600 }),
+    });
+  }
+
+  private pulseRiverCue(completion: boolean): void {
+    if (!this.riverCue?.scene) return;
+    playActorAttention(this, this.riverCue, {
+      scale: completion ? 1.035 : 1.018,
+      durationMs: completion ? 260 : 180,
+    });
+    playBodyImpact(this, this.riverCue, {
+      kind: "snow",
+      color: PALETTE_HEX.frost,
+      offsetY: -22,
+      depth: 10,
+      ringRadius: completion ? 44 : 28,
+      count: completion ? 9 : 5,
+      durationMs: completion ? 460 : 260,
+    });
+  }
+
+  private dismissRiverCue(animate = true): void {
+    const cue = this.riverCue;
+    if (!cue?.scene) {
+      this.riverCue = null;
+      return;
+    }
+    this.riverCue = null;
+    this.tweens.killTweensOf(cue);
+    if (!animate) {
+      cue.destroy();
+      return;
+    }
+    this.tweens.add({
+      targets: cue,
+      alpha: 0,
+      y: cue.y - 18,
+      duration: 240,
+      ease: "Sine.easeIn",
+      onComplete: () => cue.destroy(),
+    });
   }
 
   /** The Wayshrine Knight — Heldur */

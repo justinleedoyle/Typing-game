@@ -125,6 +125,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private ghosts: MovingWordEnemy[] = [];
   private activeTargets: TextWordTarget[] = [];
   private bossWordAnchors: WordBodyAnchorHandle[] = [];
+  private olinWordAnchors: WordBodyAnchorHandle[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   /** King Aurland's painted sprite — fades in when he's freed at fork 2 and is
@@ -189,6 +190,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.ghosts = [];
     this.activeTargets = [];
     this.bossWordAnchors = [];
+    this.olinWordAnchors = [];
     this.beatPhase = "on";
     this.beatLocked = false;
     this.breath.reset();
@@ -862,7 +864,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
     this.setNarrator("tell me your name, child.", "Old Olin");
     this.time.delayedCall(600, () => {
-      const nameTarget = this.makeWord({
+      const nameTarget = this.makeOlinWord({
         scene: this,
         word: "wren",
         x: this.scale.width / 2,
@@ -880,7 +882,7 @@ export class SunkenBellScene extends Phaser.Scene {
               "Old Olin",
             );
             this.time.delayedCall(800, () => {
-              const teachTarget = this.makeWord({
+              const teachTarget = this.makeOlinWord({
                 scene: this,
                 word: "teach me",
                 x: this.scale.width / 2,
@@ -1808,9 +1810,90 @@ export class SunkenBellScene extends Phaser.Scene {
     return target;
   }
 
+  private makeOlinWord(opts: TextWordTargetOptions): TextWordTarget {
+    const olin = this.olinImage;
+    if (!olin) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.olinWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.olinWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? BELL_BURST_COLOR,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          olin.x,
+          olin.y - 92,
+          { color: BELL_BURST_COLOR, depth: 58 },
+        );
+        playActorAttention(this, olin, {
+          tint: BELL_BURST_COLOR,
+          scale: 1.02,
+          durationMs: 180,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, olin, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -92,
+          depth: 58,
+          ringRadius: 22,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, olin, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -92,
+          depth: 58,
+          ringRadius: 42,
+          count: 10,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      olin,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: BELL_BURST_COLOR,
+        alpha: 0.2,
+        depth: 44,
+        sourceOffsetY: -92,
+        targetOffsetY: 24,
+      },
+    );
+    this.olinWordAnchors.push(anchor);
+    olin.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
   private clearBossWordAnchors(): void {
     for (const anchor of this.bossWordAnchors) anchor.destroy();
     this.bossWordAnchors = [];
+  }
+
+  private clearOlinWordAnchors(): void {
+    for (const anchor of this.olinWordAnchors) anchor.destroy();
+    this.olinWordAnchors = [];
   }
 
   private spawnGhost(
@@ -2102,6 +2185,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private clearActiveTargets(): void {
     this.clearBossWordAnchors();
+    this.clearOlinWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

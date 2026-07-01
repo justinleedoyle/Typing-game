@@ -162,6 +162,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private activeTargets: TextWordTarget[] = [];
   private bossWordAnchors: WordBodyAnchorHandle[] = [];
   private tutorialWordAnchors: WordBodyAnchorHandle[] = [];
+  private fornWordAnchors: WordBodyAnchorHandle[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   private catwalkCue: Phaser.GameObjects.Container | null = null;
@@ -213,6 +214,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.activeTargets = [];
     this.bossWordAnchors = [];
     this.tutorialWordAnchors = [];
+    this.fornWordAnchors = [];
     this.catwalkCue = null;
     this.oneShotInvoker = null;
     this.shiftHeld = false;
@@ -346,6 +348,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.ambientHandle?.stop();
       this.catwalkCue?.destroy();
       this.catwalkCue = null;
+      this.clearFornWordAnchors();
       this.fornSprite?.destroy();
       this.fornSprite = undefined;
     });
@@ -752,6 +755,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private hideFornSprite(): void {
     const sprite = this.fornSprite;
     if (!sprite) return;
+    this.clearFornWordAnchors();
     this.fornSprite = undefined;
     fadeOutStagedSprite(this, sprite, {
       durationMs: 620,
@@ -1603,7 +1607,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         advance();
         return;
       }
-      const target = this.makeWord({
+      const target = this.makeFornWord({
         scene: this,
         word,
         x: this.scale.width / 2,
@@ -2200,6 +2204,82 @@ export class ClockworkForgeScene extends Phaser.Scene {
     return target;
   }
 
+  private makeFornWord(opts: TextWordTargetOptions): TextWordTarget {
+    const forn = this.fornSprite;
+    if (!forn) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.fornWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.fornWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.ember,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          forn.x,
+          forn.y - 128,
+          { color: PALETTE_HEX.ember, depth: 58 },
+        );
+        playActorAttention(this, forn, {
+          tint: PALETTE_HEX.ember,
+          scale: 1.02,
+          durationMs: 180,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, forn, {
+          kind: "ember",
+          color: PALETTE_HEX.ember,
+          offsetY: -128,
+          depth: 58,
+          ringRadius: 28,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, forn, {
+          kind: "ember",
+          color: PALETTE_HEX.ember,
+          offsetY: -128,
+          depth: 58,
+          ringRadius: 52,
+          count: 12,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      forn,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.ember,
+        alpha: 0.2,
+        depth: 44,
+        sourceOffsetY: -128,
+        targetOffsetY: 24,
+      },
+    );
+    this.fornWordAnchors.push(anchor);
+    forn.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
   private clearBossWordAnchors(): void {
     for (const anchor of this.bossWordAnchors) anchor.destroy();
     this.bossWordAnchors = [];
@@ -2210,9 +2290,15 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.tutorialWordAnchors = [];
   }
 
+  private clearFornWordAnchors(): void {
+    for (const anchor of this.fornWordAnchors) anchor.destroy();
+    this.fornWordAnchors = [];
+  }
+
   private clearActiveTargets(): void {
     this.clearBossWordAnchors();
     this.clearTutorialWordAnchors();
+    this.clearFornWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

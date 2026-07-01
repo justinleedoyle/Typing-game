@@ -46,6 +46,19 @@ export interface BackdropDriftOptions {
   delayMs?: number;
 }
 
+export interface LivingLightOptions {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: number;
+  alpha?: number;
+  depth?: number;
+  durationMs?: number;
+  delayMs?: number;
+  scale?: number;
+}
+
 export interface StagedSpriteOptions {
   shadowWidth: number;
   shadowHeight: number;
@@ -334,6 +347,40 @@ export function addBackdropDrift(
     repeat: -1,
     ease: "Sine.easeInOut",
   });
+}
+
+/** Subtle additive light for painted sources such as portals, candles, aurora,
+ *  and lanterns. This gives static backdrop details a living pulse without
+ *  introducing new interactive objects. */
+export function addLivingLight(
+  scene: Phaser.Scene,
+  opts: LivingLightOptions,
+): Phaser.GameObjects.Graphics {
+  const alpha = opts.alpha ?? 0.16;
+  const g = scene.add
+    .graphics()
+    .setPosition(opts.x, opts.y)
+    .setDepth(opts.depth ?? -6)
+    .setAlpha(alpha)
+    .setBlendMode(Phaser.BlendModes.ADD);
+  g.fillStyle(opts.color, 0.22);
+  g.fillEllipse(0, 0, opts.width, opts.height);
+  g.fillStyle(opts.color, 0.12);
+  g.fillEllipse(0, 0, opts.width * 1.42, opts.height * 1.36);
+
+  const scale = opts.scale ?? 1.08;
+  scene.tweens.add({
+    targets: g,
+    alpha: alpha * 0.56,
+    scaleX: scale,
+    scaleY: scale,
+    duration: opts.durationMs ?? 2400,
+    delay: opts.delayMs ?? 0,
+    yoyo: true,
+    repeat: -1,
+    ease: "Sine.easeInOut",
+  });
+  return g;
 }
 
 /** Stage a feet-anchored cutout as a character in the scene: planted shadow,

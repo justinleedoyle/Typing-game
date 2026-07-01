@@ -35,6 +35,7 @@ import {
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
+  addLivingLight,
   playBodyImpact,
   playBodyTypePulse,
   playClaimLine,
@@ -337,6 +338,51 @@ export class WinterMountainScene extends Phaser.Scene {
       driftY: 620,
       minDurationMs: 5200,
       maxDurationMs: 10500,
+    });
+    addLivingLight(this, {
+      x: 1100,
+      y: 235,
+      width: 650,
+      height: 150,
+      color: 0x8b7cff,
+      alpha: 0.08,
+      depth: -5,
+      durationMs: 3600,
+      scale: 1.045,
+    });
+    addLivingLight(this, {
+      x: 1540,
+      y: 245,
+      width: 520,
+      height: 120,
+      color: 0x5cb7e8,
+      alpha: 0.055,
+      depth: -5,
+      durationMs: 4100,
+      delayMs: 900,
+      scale: 1.05,
+    });
+    addLivingLight(this, {
+      x: 258,
+      y: 498,
+      width: 180,
+      height: 220,
+      color: 0xbfd9ff,
+      alpha: 0.06,
+      depth: -4,
+      durationMs: 3000,
+      delayMs: 380,
+    });
+    addLivingLight(this, {
+      x: 1818,
+      y: 782,
+      width: 120,
+      height: 150,
+      color: 0xf0ad58,
+      alpha: 0.08,
+      depth: -4,
+      durationMs: 1800,
+      delayMs: 700,
     });
     this.wrenContainer = this.drawWren(this.scale.width / 2, 880);
 

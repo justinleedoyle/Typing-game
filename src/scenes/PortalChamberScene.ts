@@ -22,6 +22,7 @@ import {
   addGroundShadow,
   addIdleBreath,
   addLocalGroundShadow,
+  addLivingLight,
   attachWordBodyAnchor,
   playClaimLine,
   type WordBodyAnchorHandle,
@@ -1118,6 +1119,45 @@ export class PortalChamberScene extends Phaser.Scene {
       driftY: -95,
       minDurationMs: 8000,
       maxDurationMs: 15000,
+    });
+    addLivingLight(this, {
+      x: 150,
+      y: 720,
+      width: 150,
+      height: 220,
+      color: 0xf5ad55,
+      alpha: 0.11,
+      durationMs: 1900,
+    });
+    addLivingLight(this, {
+      x: 915,
+      y: 255,
+      width: 190,
+      height: 100,
+      color: 0xf2be68,
+      alpha: 0.07,
+      durationMs: 2600,
+      delayMs: 420,
+    });
+    addLivingLight(this, {
+      x: 1508,
+      y: 255,
+      width: 190,
+      height: 100,
+      color: 0xf2be68,
+      alpha: 0.07,
+      durationMs: 2800,
+      delayMs: 900,
+    });
+    addLivingLight(this, {
+      x: 1148,
+      y: 650,
+      width: 980,
+      height: 340,
+      color: 0x78c980,
+      alpha: 0.045,
+      durationMs: 3400,
+      scale: 1.035,
     });
 
     this.drawHubStations();

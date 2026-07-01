@@ -163,6 +163,10 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private mistTimer: Phaser.Time.TimerEvent | null = null;
   private shrineFigure: Phaser.GameObjects.Container | null = null;
+  private offeringCue: Phaser.GameObjects.Container | null = null;
+  private boneFluteCue: Phaser.GameObjects.Container | null = null;
+  private groveLightCue: Phaser.GameObjects.Container | null = null;
+  private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
   private pathCue: Phaser.GameObjects.Container | null = null;
   private ingaFigure: Phaser.GameObjects.Container | null = null;
   private ingaWordAnchors: WordBodyAnchorHandle[] = [];
@@ -193,6 +197,10 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.companionChoice = null;
     this.mistTimer = null;
     this.shrineFigure = null;
+    this.offeringCue = null;
+    this.boneFluteCue = null;
+    this.groveLightCue = null;
+    this.forkChoiceWordAnchors = [];
     this.pathCue = null;
     this.ingaFigure = null;
     this.ingaWordAnchors = [];
@@ -316,6 +324,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.mistTimer?.remove();
       this.compassGlyphs.forEach((g) => g.destroy());
       this.compassGlyphs = [];
+      this.clearWoodForkCues();
       this.shrineFigure = null;
       this.pathCue = null;
       this.clearIngaWordAnchors();
@@ -785,35 +794,34 @@ export class HauntedWoodScene extends Phaser.Scene {
   private startFork1(): void {
     this.narration.say("wood_fork1_intro");
     this.band.setObjective("Choose an offering or the bone-flute.");
+    this.showFork1Cues();
 
-    const offeringTarget = this.makeWord({
+    const offeringTarget = this.makeWoodForkWord(this.offeringCue, {
       scene: this,
       word: "leave an offering",
       x: this.scale.width / 2 - 380,
       y: this.scale.height - 340,
       fontSize: 30,
       frame: "banner",
-      onClaim: () => this.pulseShrine(),
       onComplete: () => {
         this.clearActiveTargets();
         this.fork1Choice = "offering";
         this.startFork1Offering();
       },
-    });
-    const fluteTarget = this.makeWord({
+    }, -42);
+    const fluteTarget = this.makeWoodForkWord(this.boneFluteCue, {
       scene: this,
       word: "take the bone-flute",
       x: this.scale.width / 2 + 380,
       y: this.scale.height - 340,
       fontSize: 30,
       frame: "banner",
-      onClaim: () => this.pulseShrine(),
       onComplete: () => {
         this.clearActiveTargets();
         this.fork1Choice = "bone-flute";
         this.startFork1BoneFlute();
       },
-    });
+    }, -62);
     this.typingInput.register(offeringTarget);
     this.typingInput.register(fluteTarget);
     this.activeTargets.push(offeringTarget, fluteTarget);
@@ -822,6 +830,8 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Fork 1A — Offering ───────────────────────────────────────────────────
 
   private startFork1Offering(): void {
+    this.fadeOutForkCue(this.boneFluteCue);
+    this.boneFluteCue = null;
     this.setNarrator("Wren steps to the bowl and speaks.");
     this.time.delayedCall(1200, () => {
       this.runPassageChain(
@@ -843,8 +853,11 @@ export class HauntedWoodScene extends Phaser.Scene {
           this.cameras.main.flash(400, 200, 220, 180, false);
           this.setNarrator("Inga stirs. The shrine keeper whispers a name.");
           this.attendInga();
+          this.fadeOutForkCue(this.offeringCue);
+          this.offeringCue = null;
           this.time.delayedCall(2000, () => this.startIngaNameReveal());
         },
+        { body: this.offeringCue, sourceOffsetY: -42 },
       );
     });
   }
@@ -877,6 +890,8 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Fork 1B — Bone-Flute ─────────────────────────────────────────────────
 
   private startFork1BoneFlute(): void {
+    this.fadeOutForkCue(this.offeringCue);
+    this.offeringCue = null;
     this.setNarrator("The bone-flute is cold inside the stone hollow.");
     this.time.delayedCall(1200, () => {
       this.runPassageChain(
@@ -891,8 +906,11 @@ export class HauntedWoodScene extends Phaser.Scene {
             }
           });
           playChime();
+          this.fadeOutForkCue(this.boneFluteCue);
+          this.boneFluteCue = null;
           this.time.delayedCall(1600, () => this.startAct3());
         },
+        { body: this.boneFluteCue, sourceOffsetY: -62 },
       );
     });
   }
@@ -915,15 +933,15 @@ export class HauntedWoodScene extends Phaser.Scene {
     );
     this.attendGhostKing();
     this.band.setObjective("Choose a bargain or light the grove.");
+    this.showFork2Cues();
 
-    const bargainTarget = this.makeWord({
+    const bargainTarget = this.makeGhostKingWord({
       scene: this,
       word: "speak your true name",
       x: this.scale.width / 2 - 400,
       y: this.scale.height - 340,
       fontSize: 28,
       frame: "banner",
-      onClaim: () => this.attendGhostKing(),
       onComplete: () => {
         this.clearActiveTargets();
         this.fork2Choice = "bargain";
@@ -931,14 +949,13 @@ export class HauntedWoodScene extends Phaser.Scene {
         this.startFork2Bargain();
       },
     });
-    const forceTarget = this.makeWord({
+    const forceTarget = this.makeWoodForkWord(this.groveLightCue, {
       scene: this,
       word: "light the grove",
       x: this.scale.width / 2 + 400,
       y: this.scale.height - 340,
       fontSize: 28,
       frame: "banner",
-      onClaim: () => this.attendGhostKing(),
       onComplete: () => {
         this.clearActiveTargets();
         this.fork2Choice = "force";
@@ -947,9 +964,11 @@ export class HauntedWoodScene extends Phaser.Scene {
           if (!s.satchel.includes("ash-vial")) s.satchel.push("ash-vial");
         });
         this.attendGhostKing();
+        this.fadeOutForkCue(this.groveLightCue);
+        this.groveLightCue = null;
         this.startBossFight();
       },
-    });
+    }, -58);
     this.typingInput.register(bargainTarget);
     this.typingInput.register(forceTarget);
     this.activeTargets.push(bargainTarget, forceTarget);
@@ -958,6 +977,8 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Fork 2A — Bargain ────────────────────────────────────────────────────
 
   private startFork2Bargain(): void {
+    this.fadeOutForkCue(this.groveLightCue);
+    this.groveLightCue = null;
     this.setNarrator("The Ghost-King pauses. He turns to face you fully.");
     this.attendGhostKing();
     this.time.delayedCall(1600, () => {
@@ -987,6 +1008,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           this.attendGhostKing();
           this.time.delayedCall(1400, () => this.startBossFight());
         },
+        { ghostKing: true },
       );
     });
   }
@@ -1550,6 +1572,11 @@ export class HauntedWoodScene extends Phaser.Scene {
   private runPassageChain(
     steps: Array<{ word: string; narrator: string }>,
     onDone: () => void,
+    owner?: {
+      body?: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined;
+      sourceOffsetY?: number;
+      ghostKing?: boolean;
+    },
   ): void {
     let idx = 0;
     const advance = (): void => {
@@ -1559,7 +1586,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       }
       const step = steps[idx];
       if (!step) return;
-      const target = this.makeWord({
+      const opts: TextWordTargetOptions = {
         scene: this,
         word: step.word,
         x: this.scale.width / 2,
@@ -1582,7 +1609,12 @@ export class HauntedWoodScene extends Phaser.Scene {
           if (step.narrator) this.setNarrator(step.narrator);
           this.time.delayedCall(1400, advance);
         },
-      });
+      };
+      const target = owner?.ghostKing
+        ? this.makeGhostKingWord(opts)
+        : owner?.body?.scene
+          ? this.makeWoodForkWord(owner.body, opts, owner.sourceOffsetY)
+          : this.makeWord(opts);
       this.typingInput.register(target);
       this.activeTargets.push(target);
     };
@@ -1778,6 +1810,274 @@ export class HauntedWoodScene extends Phaser.Scene {
     );
     this.bossWordAnchors.push(anchor);
     return target;
+  }
+
+  private makeWoodForkWord(
+    body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined,
+    opts: TextWordTargetOptions,
+    sourceOffsetY = -48,
+  ): TextWordTarget {
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.forkChoiceWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.forkChoiceWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.moss,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y + sourceOffsetY,
+          { color: PALETTE_HEX.moss, depth: 58 },
+        );
+        playActorAttention(this, body, {
+          tint: PALETTE_HEX.moss,
+          scale: 1.024,
+          durationMs: 180,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "mist",
+          color: PALETTE_HEX.moss,
+          offsetY: sourceOffsetY,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "mist",
+          color: PALETTE_HEX.moss,
+          offsetY: sourceOffsetY,
+          depth: 58,
+          ringRadius: 46,
+          count: 10,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.moss,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY,
+        targetOffsetY: 24,
+      },
+    );
+    this.forkChoiceWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
+  private showFork1Cues(): void {
+    if (!this.offeringCue?.scene) {
+      this.offeringCue = this.createOfferingCue();
+    }
+    if (!this.boneFluteCue?.scene) {
+      this.boneFluteCue = this.createBoneFluteCue();
+    }
+  }
+
+  private showFork2Cues(): void {
+    if (!this.groveLightCue?.scene) {
+      this.groveLightCue = this.createGroveLightCue();
+    }
+  }
+
+  private createOfferingCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(690, 812).setDepth(42).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 122, 18, { y: 12, alpha: 0.2 }));
+
+    const g = this.add.graphics();
+    g.fillStyle(0x181510, 0.88);
+    g.fillEllipse(0, -24, 72, 24);
+    g.fillStyle(0x4c3e2c, 0.88);
+    g.fillEllipse(0, -30, 60, 18);
+    g.fillStyle(0xd7ded8, 0.34);
+    g.fillEllipse(0, -34, 38, 10);
+    g.fillStyle(PALETTE_HEX.moss, 0.6);
+    g.fillCircle(-20, -52, 6);
+    g.fillCircle(0, -60, 5);
+    g.fillCircle(22, -50, 6);
+    g.lineStyle(2, 0xd7ded8, 0.28);
+    g.strokeEllipse(0, -42, 104, 56);
+    c.add(g);
+
+    addContainerWake(this, c, {
+      kind: "mist",
+      intervalMs: 540,
+      spreadX: 34,
+      spreadY: 16,
+      offsetY: -38,
+      alpha: 0.2,
+      size: 4,
+      depth: 41,
+      driftX: 30,
+      driftY: -30,
+      durationMs: 1400,
+    });
+
+    this.tweens.add({
+      targets: c,
+      y: 792,
+      alpha: 0.9,
+      duration: 640,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!c.scene) return;
+        addIdleBreath(this, c, { dy: -3, durationMs: 2700 });
+      },
+    });
+    return c;
+  }
+
+  private createBoneFluteCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(1230, 812).setDepth(42).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 128, 18, { y: 12, alpha: 0.2 }));
+
+    const g = this.add.graphics();
+    g.fillStyle(0x1c2019, 0.88);
+    g.fillRoundedRect(-58, -38, 116, 34, 12);
+    g.lineStyle(2, 0xd7ded8, 0.22);
+    g.strokeRoundedRect(-58, -38, 116, 34, 12);
+    g.lineStyle(7, 0xd7ded8, 0.8);
+    g.lineBetween(-46, -60, 48, -88);
+    g.lineStyle(3, 0x6f725c, 0.58);
+    g.lineBetween(-46, -60, 48, -88);
+    g.fillStyle(0x1f241d, 0.9);
+    for (const p of [-24, 4, 30]) {
+      g.fillCircle(p, -67 - (p + 24) * 0.3, 4);
+    }
+    g.lineStyle(2, PALETTE_HEX.moss, 0.28);
+    g.strokeEllipse(0, -74, 132, 58);
+    c.add(g);
+
+    addContainerWake(this, c, {
+      kind: "mist",
+      intervalMs: 560,
+      spreadX: 36,
+      spreadY: 18,
+      offsetY: -54,
+      alpha: 0.18,
+      size: 4,
+      depth: 41,
+      driftX: 32,
+      driftY: -28,
+      durationMs: 1350,
+    });
+
+    this.tweens.add({
+      targets: c,
+      y: 790,
+      alpha: 0.9,
+      duration: 660,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!c.scene) return;
+        addIdleBreath(this, c, { dy: -4, durationMs: 2500 });
+      },
+    });
+    return c;
+  }
+
+  private createGroveLightCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(1210, 790).setDepth(42).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 136, 18, { y: 12, alpha: 0.2 }));
+
+    const g = this.add.graphics();
+    g.lineStyle(4, 0x342b1e, 0.78);
+    g.lineBetween(-28, -10, -28, -92);
+    g.lineBetween(30, -10, 30, -88);
+    g.fillStyle(0x1d160f, 0.8);
+    g.fillRoundedRect(-48, -88, 96, 42, 12);
+    g.lineStyle(2, PALETTE_HEX.moss, 0.34);
+    g.strokeRoundedRect(-48, -88, 96, 42, 12);
+    g.fillStyle(0xc9a14a, 0.5);
+    g.fillEllipse(0, -66, 46, 24);
+    g.fillStyle(0xf0d78a, 0.72);
+    g.fillEllipse(0, -70, 18, 30);
+    g.lineStyle(2, 0xf0d78a, 0.28);
+    g.strokeEllipse(0, -68, 128, 72);
+    c.add(g);
+
+    addContainerWake(this, c, {
+      kind: "mist",
+      intervalMs: 520,
+      spreadX: 34,
+      spreadY: 18,
+      offsetY: -58,
+      alpha: 0.2,
+      size: 4,
+      depth: 41,
+      driftX: 28,
+      driftY: -36,
+      durationMs: 1300,
+    });
+
+    this.tweens.add({
+      targets: c,
+      y: 770,
+      alpha: 0.88,
+      duration: 680,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!c.scene) return;
+        addIdleBreath(this, c, { dy: -3, durationMs: 2500 });
+      },
+    });
+    return c;
+  }
+
+  private fadeOutForkCue(
+    cue: Phaser.GameObjects.Container | null,
+    opts: { riseY?: number; durationMs?: number } = {},
+  ): void {
+    if (!cue?.scene) return;
+    this.tweens.killTweensOf(cue);
+    this.tweens.add({
+      targets: cue,
+      y: cue.y + (opts.riseY ?? 18),
+      alpha: 0,
+      duration: opts.durationMs ?? 540,
+      ease: "Sine.easeIn",
+      onComplete: () => {
+        if (cue.scene) cue.destroy();
+      },
+    });
+  }
+
+  private clearWoodForkCues(): void {
+    this.clearForkChoiceWordAnchors();
+    for (const cue of [this.offeringCue, this.boneFluteCue, this.groveLightCue]) {
+      if (!cue?.scene) continue;
+      this.tweens.killTweensOf(cue);
+      cue.destroy();
+    }
+    this.offeringCue = null;
+    this.boneFluteCue = null;
+    this.groveLightCue = null;
   }
 
   private makeWispCatWord(opts: TextWordTargetOptions): TextWordTarget {
@@ -2080,6 +2380,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private clearActiveTargets(): void {
     this.clearIngaWordAnchors();
     this.clearBossWordAnchors();
+    this.clearForkChoiceWordAnchors();
     this.clearWispCatWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
@@ -2096,6 +2397,11 @@ export class HauntedWoodScene extends Phaser.Scene {
   private clearBossWordAnchors(): void {
     for (const anchor of this.bossWordAnchors) anchor.destroy();
     this.bossWordAnchors = [];
+  }
+
+  private clearForkChoiceWordAnchors(): void {
+    for (const anchor of this.forkChoiceWordAnchors) anchor.destroy();
+    this.forkChoiceWordAnchors = [];
   }
 
   private clearWispCatWordAnchors(): void {

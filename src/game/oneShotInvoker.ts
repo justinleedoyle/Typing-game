@@ -27,7 +27,7 @@ import {
 } from "./oneShotInvocation";
 import { PALETTE, PALETTE_HEX, SERIF } from "./palette";
 import type { TypingInputController } from "./typingInput";
-import { UI_HEX } from "./ui/uiTheme";
+import { cornerTicks, framedPlate, UI_HEX } from "./ui/uiTheme";
 import { TextWordTarget } from "./wordTarget";
 
 /** A live enemy as the realm sees it, plus the threat summary the pick needs. The
@@ -76,6 +76,7 @@ interface Widget {
   readonly placeholder: Phaser.GameObjects.Text;
   readonly barBg: Phaser.GameObjects.Graphics;
   readonly barFill: Phaser.GameObjects.Graphics;
+  readonly readyRail: Phaser.GameObjects.Graphics | null;
   /** Absolute screen position for the live word target (container x,y + offset). */
   readonly wordX: number;
   readonly wordY: number;
@@ -150,7 +151,6 @@ export class OneShotInvoker<E> {
   // ── build ──────────────────────────────────────────────────────────────────
 
   private buildWidget(effect: OffensiveOneShot, cx: number, y: number): Widget {
-    const inv = INVOCATIONS[effect];
     const { scene } = this.cfg;
     const container = scene.add
       .container(cx, y)
@@ -166,14 +166,37 @@ export class OneShotInvoker<E> {
     if (this.compact) {
       const cw = this.barW + 30;
       const ch = 70;
-      const card = scene.add.graphics();
-      card.fillStyle(UI_HEX.panel, 0.92);
-      card.fillRoundedRect(-cw / 2, -ch / 2, cw, ch, 7);
-      card.lineStyle(1, UI_HEX.frame, 0.9);
-      card.strokeRoundedRect(-cw / 2, -ch / 2, cw, ch, 7);
+      const card = framedPlate(scene, cw, ch, {
+        fill: UI_HEX.panel,
+        fillAlpha: 0.92,
+        border: UI_HEX.frame,
+        borderWidth: 1,
+        radius: 7,
+      });
+      const ticks = cornerTicks(scene, cw, ch, { inset: 5, size: 7, width: 1 });
+      const readyRail = scene.add.graphics().setAlpha(0);
+      readyRail.fillStyle(UI_HEX.ember, 0.74);
+      readyRail.fillRoundedRect(-cw / 2 + 12, -ch / 2 + 7, cw - 24, 3, 2);
       container.add(card);
+      container.add(ticks);
+      container.add(readyRail);
+      return this.finishWidget(effect, container, titleY, wordOffsetY, cx, y, readyRail);
     }
 
+    return this.finishWidget(effect, container, titleY, wordOffsetY, cx, y, null);
+  }
+
+  private finishWidget(
+    effect: OffensiveOneShot,
+    container: Phaser.GameObjects.Container,
+    titleY: number,
+    wordOffsetY: number,
+    cx: number,
+    y: number,
+    readyRail: Phaser.GameObjects.Graphics | null,
+  ): Widget {
+    const inv = INVOCATIONS[effect];
+    const { scene } = this.cfg;
     const titleText = scene.add
       .text(0, titleY, inv.title, {
         fontFamily: SERIF,
@@ -206,6 +229,7 @@ export class OneShotInvoker<E> {
       placeholder,
       barBg,
       barFill,
+      readyRail,
       wordX: cx,
       wordY: y + wordOffsetY,
       state: "charging",
@@ -288,8 +312,11 @@ export class OneShotInvoker<E> {
 
     // A soft pulse on the title so "it's ready" reads at a glance.
     w.pulse?.stop();
+    w.readyRail?.setAlpha(0.45);
+    const pulseTargets: Phaser.GameObjects.GameObject[] = [w.titleText];
+    if (w.readyRail) pulseTargets.push(w.readyRail);
     w.pulse = this.cfg.scene.tweens.add({
-      targets: w.titleText,
+      targets: pulseTargets,
       alpha: { from: 0.55, to: 1 },
       duration: 600,
       yoyo: true,
@@ -313,6 +340,7 @@ export class OneShotInvoker<E> {
     }
     w.pulse?.stop();
     w.pulse = null;
+    w.readyRail?.setAlpha(0);
     w.titleText.setColor(PALETTE.dim).setAlpha(1);
     w.placeholder.setAlpha(1);
   }
@@ -384,6 +412,7 @@ export class OneShotInvoker<E> {
     w.state = "spent";
     w.pulse?.stop();
     w.pulse = null;
+    w.readyRail?.setAlpha(0);
     if (w.target) {
       this.cfg.typingInput.unregister(w.target);
       w.target.destroy();

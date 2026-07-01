@@ -377,6 +377,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     }
 
     this.setNarrator(narratorLine);
+    this.band.setObjective("Type the forge memory to return to the Almanac.");
     this.time.delayedCall(2400, () => this.deliverRevisitPassage(words));
   }
 
@@ -401,7 +402,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
         x: this.scale.width / 2,
         y: this.scale.height - 340,
         fontSize: 44,
+        onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
+          playWrenAction(this.wrenSprite);
           playChime();
           idx += 1;
           this.typingInput.unregister(target);

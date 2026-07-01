@@ -44,6 +44,7 @@ import {
   attachWordBodyAnchor,
   dismissCompanionCameo,
   fadeOutStagedSprite,
+  addIdleBreath,
   addLocalGroundShadow,
   playBodyImpact,
   playBodyTypePulse,
@@ -234,6 +235,7 @@ export class SkyIslandScene extends Phaser.Scene {
   // that's toll-strike (bells-tongue) + jam-foe (sabotage-wrench, earned in the
   // Forge), both acting on the scrolling banners. Null until create().
   private oneShotInvoker: OneShotInvoker<ScrollingPhrase> | null = null;
+  private pathCue: Phaser.GameObjects.Container | null = null;
 
   private ambientHandle?: AmbientHandle;
   private revisit = false;
@@ -249,6 +251,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.activeTargets = [];
     this.activePhrases = [];
     this.oneShotInvoker = null;
+    this.pathCue = null;
     this.fork1Choice = null;
     this.fork2Choice = null;
     this.ettaDone = false;
@@ -369,6 +372,7 @@ export class SkyIslandScene extends Phaser.Scene {
       this.oneShotInvoker?.destroy();
       this.oneShotInvoker = null;
       this.bossRingTween?.stop();
+      this.pathCue = null;
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
       this.templeLanterns.forEach((g) => g.destroy());
@@ -455,6 +459,7 @@ export class SkyIslandScene extends Phaser.Scene {
   /** Three exploration beats: balance / lantern / stepping */
   private runPathBeats(idx: number): void {
     if (idx >= PATH_BEATS.length) {
+      this.dismissPathCue();
       this.time.delayedCall(700, () => this.startLanternLighter());
       return;
     }
@@ -464,6 +469,7 @@ export class SkyIslandScene extends Phaser.Scene {
       "A paper lantern hangs right across the path, still lit. Lift it aside gently.",
       "Stepping stones. The gaps are wide, the island hums below your feet.",
     ];
+    this.showPathCue(beat);
     this.setNarrator(narrations[idx] ?? "");
     const target = this.makeWord({
       scene: this,
@@ -471,13 +477,151 @@ export class SkyIslandScene extends Phaser.Scene {
       x: this.scale.width / 2,
       y: this.scale.height / 2,
       fontSize: 44,
+      onClaim: () => {
+        playWrenFocus(this.wrenSprite);
+        this.pulsePathCue(false);
+      },
       onComplete: () => {
+        playWrenAction(this.wrenSprite);
+        this.pulsePathCue(true);
         playChime();
         this.time.delayedCall(600, () => this.runPathBeats(idx + 1));
       },
     });
     this.typingInput.register(target);
     this.activeTargets.push(target);
+  }
+
+  private showPathCue(beat: (typeof PATH_BEATS)[number]): void {
+    this.dismissPathCue(false);
+    const cue =
+      beat === "balance"
+        ? this.drawBalanceBridgeCue()
+        : beat === "lantern"
+          ? this.drawPathLanternCue()
+          : this.drawSteppingStonesCue();
+    this.pathCue = cue;
+    this.tweens.add({
+      targets: cue,
+      alpha: 0.88,
+      y: cue.y - 8,
+      duration: 380,
+      ease: "Sine.easeOut",
+      onComplete: () => addIdleBreath(this, cue, { dy: -3, durationMs: 2700 }),
+    });
+  }
+
+  private drawBalanceBridgeCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(this.scale.width / 2 - 52, 802).setDepth(-1).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 250, 24, { y: 20, alpha: 0.14 }));
+    const bridge = this.add.graphics().setAngle(-3);
+    bridge.fillStyle(0x6b5c45, 0.82);
+    bridge.fillRoundedRect(-132, -16, 264, 32, 12);
+    bridge.fillStyle(0x9b8a6a, 0.72);
+    bridge.fillRoundedRect(-118, -10, 70, 12, 6);
+    bridge.fillRoundedRect(-28, -10, 58, 12, 6);
+    bridge.fillRoundedRect(52, -10, 60, 12, 6);
+    bridge.lineStyle(2, 0xd6c386, 0.24);
+    bridge.lineBetween(-118, -18, -92, 18);
+    bridge.lineBetween(-18, -18, 6, 18);
+    bridge.lineBetween(86, -18, 106, 18);
+    c.add(bridge);
+    return c;
+  }
+
+  private drawPathLanternCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(this.scale.width / 2 + 22, 748).setDepth(-1).setAlpha(0);
+    const cord = this.add.graphics();
+    cord.lineStyle(1.5, 0x8a7060, 0.54);
+    cord.lineBetween(0, -104, 0, -34);
+    cord.lineStyle(1, 0xc9a14a, 0.46);
+    cord.lineBetween(-24, -34, 24, -34);
+    c.add(cord);
+
+    const glow = this.add.graphics();
+    glow.fillStyle(0xf5c842, 0.1);
+    glow.fillEllipse(0, 8, 126, 126);
+    glow.lineStyle(2, 0xf5c842, 0.16);
+    glow.strokeEllipse(0, 8, 96, 102);
+    c.add(glow);
+
+    const body = this.add.graphics();
+    body.fillStyle(0xd49020, 0.7);
+    body.fillRoundedRect(-21, -26, 42, 58, 18);
+    body.lineStyle(2, 0xfdedb0, 0.74);
+    body.strokeRoundedRect(-21, -26, 42, 58, 18);
+    body.fillStyle(0xfdedb0, 0.74);
+    body.fillEllipse(0, 2, 16, 26);
+    c.add(body);
+
+    this.tweens.add({
+      targets: [glow, body],
+      scaleX: 1.08,
+      scaleY: 1.12,
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    return c;
+  }
+
+  private drawSteppingStonesCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(this.scale.width / 2 + 36, 820).setDepth(-1).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 240, 22, { y: 18, alpha: 0.12 }));
+    const stones = this.add.graphics();
+    const stoneSpecs = [
+      { x: -102, y: 18, w: 78, h: 30 },
+      { x: -24, y: -6, w: 88, h: 34 },
+      { x: 74, y: 14, w: 76, h: 30 },
+    ];
+    stoneSpecs.forEach((stone, i) => {
+      stones.fillStyle(i === 1 ? 0x6c725f : 0x565d50, 0.92);
+      stones.fillEllipse(stone.x, stone.y, stone.w, stone.h);
+      stones.lineStyle(2, 0xd6c386, 0.18);
+      stones.strokeEllipse(stone.x, stone.y, stone.w * 0.9, stone.h * 0.78);
+    });
+    c.add(stones);
+    return c;
+  }
+
+  private pulsePathCue(completion: boolean): void {
+    if (!this.pathCue?.scene) return;
+    playActorAttention(this, this.pathCue, {
+      scale: completion ? 1.035 : 1.018,
+      durationMs: completion ? 260 : 180,
+    });
+    playBodyImpact(this, this.pathCue, {
+      kind: "mote",
+      color: PALETTE_HEX.brass,
+      offsetY: -12,
+      depth: 12,
+      ringRadius: completion ? 44 : 28,
+      count: completion ? 9 : 5,
+      durationMs: completion ? 460 : 260,
+    });
+  }
+
+  private dismissPathCue(animate = true): void {
+    const cue = this.pathCue;
+    if (!cue?.scene) {
+      this.pathCue = null;
+      return;
+    }
+    this.pathCue = null;
+    this.tweens.killTweensOf(cue);
+    if (!animate) {
+      cue.destroy();
+      return;
+    }
+    this.tweens.add({
+      targets: cue,
+      alpha: 0,
+      y: cue.y - 20,
+      duration: 260,
+      ease: "Sine.easeIn",
+      onComplete: () => cue.destroy(),
+    });
   }
 
   // ─── Lantern-Lighter NPC ──────────────────────────────────────────────────

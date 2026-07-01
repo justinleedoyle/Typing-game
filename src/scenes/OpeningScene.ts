@@ -12,7 +12,10 @@ import {
   addBackdropDrift,
   addIdleBreath,
   addLocalGroundShadow,
+  attachWordBodyAnchor,
   playActorAttention,
+  playClaimLine,
+  type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import openingBackdrop from "../../art/references/opening-typewriter-study-clean.png";
 import { makeQuietLordSprite, preloadQuietLord } from "../game/quietLord";
@@ -34,6 +37,15 @@ const STUDY_RESPONSE = {
 } as const;
 type StudyResponsePoint = (typeof STUDY_RESPONSE)[keyof typeof STUDY_RESPONSE];
 
+interface StudyTargetOptions {
+  word: string;
+  x: number;
+  y: number;
+  fontSize: number;
+  response: StudyResponsePoint;
+  onComplete: () => void;
+}
+
 export class OpeningScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
@@ -45,6 +57,7 @@ export class OpeningScene extends Phaser.Scene {
   private siblingActor: Phaser.GameObjects.Container | null = null;
   private siblingKeepsake: Phaser.GameObjects.Graphics | null = null;
   private studyTypingPulseTimes = new WeakMap<StudyResponsePoint, number>();
+  private studyWordAnchorReleases: Array<() => void> = [];
 
   // §5.5.2 — Wren is gender-selectable. Cached from saveState in init(); set
   // by Beat 2.5 on first run; used by beat3 (sibling appearance + dialogue),
@@ -67,6 +80,7 @@ export class OpeningScene extends Phaser.Scene {
     this.siblingActor = null;
     this.siblingKeepsake = null;
     this.studyTypingPulseTimes = new WeakMap();
+    this.studyWordAnchorReleases = [];
     // Honor an existing gender choice on revisit / New Game+; null on a
     // truly fresh save so Beat 2.5 will prompt.
     this.wrenGender = this.store.get().wrenGender;
@@ -122,6 +136,7 @@ export class OpeningScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
+      this.clearStudyWordAnchors();
       this.siblingKeepsake = null;
     });
 
@@ -167,6 +182,7 @@ export class OpeningScene extends Phaser.Scene {
         t.destroy();
       }
       this.beat2_5Targets = [];
+      this.clearStudyWordAnchors();
       this.wrenGender = gender;
       this.store.update((s) => {
         s.wrenGender = gender;
@@ -176,28 +192,20 @@ export class OpeningScene extends Phaser.Scene {
       this.time.delayedCall(700, () => this.beat3());
     };
 
-    const boy = new TextWordTarget({
-      scene: this,
+    const boy = this.makeStudyTarget({
       word: "boy",
       x: TYPE_TARGET.x - 220,
       y: TYPE_TARGET.y,
       fontSize: 52,
-      outline: true,
-      frame: "banner",
-      onClaim: () => this.playStudyClaimPulse(STUDY_RESPONSE.name),
-      onAdvance: () => this.playStudyTypingPulse(STUDY_RESPONSE.name),
+      response: STUDY_RESPONSE.name,
       onComplete: () => pick("boy"),
     });
-    const girl = new TextWordTarget({
-      scene: this,
+    const girl = this.makeStudyTarget({
       word: "girl",
       x: TYPE_TARGET.x + 220,
       y: TYPE_TARGET.y,
       fontSize: 52,
-      outline: true,
-      frame: "banner",
-      onClaim: () => this.playStudyClaimPulse(STUDY_RESPONSE.name),
-      onAdvance: () => this.playStudyTypingPulse(STUDY_RESPONSE.name),
+      response: STUDY_RESPONSE.name,
       onComplete: () => pick("girl"),
     });
     this.typingInput.register(boy);
@@ -224,16 +232,12 @@ export class OpeningScene extends Phaser.Scene {
   private beat4(): void {
     this.narration.say("opening_beat4_type_name");
 
-    const target = new TextWordTarget({
-      scene: this,
+    const target = this.makeStudyTarget({
       word: "Wren",
       x: TYPE_TARGET.x,
       y: TYPE_TARGET.y,
       fontSize: 48,
-      outline: true,
-      frame: "banner",
-      onClaim: () => this.playStudyClaimPulse(STUDY_RESPONSE.name),
-      onAdvance: () => this.playStudyTypingPulse(STUDY_RESPONSE.name),
+      response: STUDY_RESPONSE.name,
       onComplete: () => this.onBeat4Complete(),
     });
     this.typingInput.register(target);
@@ -249,16 +253,12 @@ export class OpeningScene extends Phaser.Scene {
   private beat5(): void {
     this.narration.say("opening_beat5_type_typewriter");
 
-    const target = new TextWordTarget({
-      scene: this,
+    const target = this.makeStudyTarget({
       word: "Bjarn",
       x: TYPE_TARGET.x,
       y: TYPE_TARGET.y,
       fontSize: 48,
-      outline: true,
-      frame: "banner",
-      onClaim: () => this.playStudyClaimPulse(STUDY_RESPONSE.typewriter),
-      onAdvance: () => this.playStudyTypingPulse(STUDY_RESPONSE.typewriter),
+      response: STUDY_RESPONSE.typewriter,
       onComplete: () => this.onBeat5Complete(),
     });
     this.typingInput.register(target);
@@ -324,16 +324,12 @@ export class OpeningScene extends Phaser.Scene {
   private beat8(): void {
     this.narration.say("opening_beat8_winter_woken");
 
-    const target = new TextWordTarget({
-      scene: this,
+    const target = this.makeStudyTarget({
       word: "Winter Mountain",
       x: TYPE_TARGET.x,
       y: TYPE_TARGET.y,
       fontSize: 44,
-      outline: true,
-      frame: "banner",
-      onClaim: () => this.playStudyClaimPulse(STUDY_RESPONSE.portal),
-      onAdvance: () => this.playStudyTypingPulse(STUDY_RESPONSE.portal),
+      response: STUDY_RESPONSE.portal,
       onComplete: () => this.onBeat8Complete(),
     });
     this.typingInput.register(target);
@@ -424,6 +420,86 @@ export class OpeningScene extends Phaser.Scene {
       duration: 260,
       ease: "Sine.easeOut",
     });
+  }
+
+  private makeStudyTarget(opts: StudyTargetOptions): TextWordTarget {
+    let target!: TextWordTarget;
+    let releaseAnchor = (): void => {};
+    target = new TextWordTarget({
+      scene: this,
+      word: opts.word,
+      x: opts.x,
+      y: opts.y,
+      fontSize: opts.fontSize,
+      outline: true,
+      frame: "banner",
+      onClaim: () => {
+        this.playStudyClaimLine(opts.response, target);
+        this.playStudyClaimPulse(opts.response);
+      },
+      onAdvance: () => this.playStudyTypingPulse(opts.response),
+      onComplete: () => {
+        releaseAnchor();
+        opts.onComplete();
+      },
+    });
+    releaseAnchor = this.attachStudyWordAnchor(target, opts.response);
+    return target;
+  }
+
+  private attachStudyWordAnchor(
+    target: TextWordTarget,
+    point: StudyResponsePoint,
+  ): () => void {
+    const body = this.add.zone(point.x, point.y, 1, 1);
+    const handle: WordBodyAnchorHandle = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: point.color,
+        alpha: 0.13,
+        depth: -2,
+        targetOffsetY: 24,
+      },
+    );
+
+    let released = false;
+    const release = (): void => {
+      if (released) return;
+      released = true;
+      handle.destroy();
+      body.destroy();
+      const idx = this.studyWordAnchorReleases.indexOf(release);
+      if (idx >= 0) this.studyWordAnchorReleases.splice(idx, 1);
+    };
+    this.studyWordAnchorReleases.push(release);
+    return release;
+  }
+
+  private clearStudyWordAnchors(): void {
+    for (const release of [...this.studyWordAnchorReleases]) {
+      release();
+    }
+    this.studyWordAnchorReleases = [];
+  }
+
+  private playStudyClaimLine(
+    point: StudyResponsePoint,
+    target: TextWordTarget,
+  ): void {
+    playClaimLine(
+      this,
+      point.x,
+      point.y,
+      target.getAnchorX(),
+      target.getAnchorY(),
+      {
+        color: point.color,
+        depth: -1,
+        durationMs: 300,
+      },
+    );
   }
 
   private playStudyClaimPulse(point: StudyResponsePoint): void {

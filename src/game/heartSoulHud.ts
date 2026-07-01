@@ -62,6 +62,8 @@ export class HeartSoulHud {
   private readonly soulPips: Phaser.GameObjects.Rectangle[] = [];
   private currentHeart = 100;
   private currentSoul = 0;
+  private heartTargetTier: number | null = null;
+  private soulTargetTier: number | null = null;
   private lowHeartSinceMs: number | null = null;
   private lowHeartLastFiredMs = -Infinity;
   private soulLabel!: Phaser.GameObjects.Text;
@@ -184,6 +186,8 @@ export class HeartSoulHud {
     this.pulseMs += deltaMs;
     const heart = this.opts.getHeart();
     const soul = this.opts.getSoul();
+    this.maybePulseRow("heart", heart);
+    this.maybePulseRow("soul", soul);
     const t = 1 - Math.pow(1 - LERP_RATE, deltaMs / 16.67);
     this.currentHeart += (heart - this.currentHeart) * t;
     this.currentSoul += (soul - this.currentSoul) * t;
@@ -192,6 +196,40 @@ export class HeartSoulHud {
     this.tickCombo();
     this.tickCastReady();
     this.tickLowHeartWatcher(heart);
+  }
+
+  private maybePulseRow(kind: "heart" | "soul", value: number): void {
+    const tier = meterTier(value);
+    if (kind === "heart") {
+      if (this.heartTargetTier !== null && tier !== this.heartTargetTier) {
+        this.pulseRow(this.heartPips, PALETTE_HEX.ember);
+      }
+      this.heartTargetTier = tier;
+      return;
+    }
+    if (this.soulTargetTier !== null && tier !== this.soulTargetTier) {
+      this.pulseRow(this.soulPips, PALETTE_HEX.brass);
+    }
+    this.soulTargetTier = tier;
+  }
+
+  private pulseRow(
+    pips: Phaser.GameObjects.Rectangle[],
+    color: number,
+  ): void {
+    for (const pip of pips) {
+      this.scene.tweens.killTweensOf(pip);
+      pip.setStrokeStyle(2, color, 0.95);
+      pip.setScale(1.28);
+      this.scene.tweens.add({
+        targets: pip,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 240,
+        ease: "Back.easeOut",
+        onComplete: () => pip.setStrokeStyle(1, PIP_OUTLINE, 0.8),
+      });
+    }
   }
 
   private tickCombo(): void {
@@ -276,4 +314,8 @@ function comboTierOf(combo: number): number {
   if (combo >= 20) return 2;
   if (combo >= 8) return 1;
   return 0;
+}
+
+function meterTier(value: number): number {
+  return Math.max(0, Math.min(PIP_COUNT, Math.round((value / 100) * PIP_COUNT)));
 }

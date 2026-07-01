@@ -38,13 +38,42 @@ import {
   woodWardWord,
 } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
-import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
+import {
+  addAmbientDrift,
+  addBackdropDrift,
+  addContainerWake,
+  attachWordBodyAnchor,
+  dismissCompanionCameo,
+  addIdleBreath,
+  addLocalGroundShadow,
+  addLivingLight,
+  playActorAttention,
+  playBodyImpact,
+  playBodyTypePulse,
+  playClaimLine,
+  playRealmClearResonance,
+  playSceneEventPulse,
+  stageCompanionCameo,
+  stageContainerEntrance,
+  type WordBodyAnchorHandle,
+} from "../game/livingScene";
+import {
+  bobWrenSprite,
+  flashWrenMiss,
+  makeWrenSprite,
+  playWrenAction,
+  playWrenFocus,
+  playWrenHurt,
+  preloadWren,
+} from "../game/wren";
 import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
+import { showAlmanacStampCard } from "../game/ui/almanacStamp";
 import hauntedWoodBackdrop from "../../art/references/haunted-wood-clean.png";
 import woodGhostSprite from "../../art/wood/ghost.png";
 import ghostKingSprite from "../../art/wood/ghost-king.png";
 import runaPortrait from "../../art/runa/runa-front.png";
+import wispCatSprite from "../../art/companions/wisp-cat.png";
 
 interface HauntedWoodSceneData {
   store: SaveStore;
@@ -85,6 +114,7 @@ const GHOST_BURST_COLOR = 0xdde8dd;
 // ~232px. Both drawn at native 1:1 (no scaled container). Tune on live.
 const WOOD_GHOST_SPRITE_HEIGHT = 84;
 const GHOST_KING_SPRITE_HEIGHT = 232;
+const INGA_GHOST_SPRITE_HEIGHT = 92;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -99,6 +129,8 @@ export class HauntedWoodScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
+  private band!: ConsoleBand;
+  private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   private ghosts: MovingWordEnemy[] = [];
   private activeTargets: TextWordTarget[] = [];
@@ -131,6 +163,18 @@ export class HauntedWoodScene extends Phaser.Scene {
   private oneShotInvoker: OneShotInvoker<MovingWordEnemy> | null = null;
 
   private mistTimer: Phaser.Time.TimerEvent | null = null;
+  private shrineFigure: Phaser.GameObjects.Container | null = null;
+  private offeringCue: Phaser.GameObjects.Container | null = null;
+  private boneFluteCue: Phaser.GameObjects.Container | null = null;
+  private groveLightCue: Phaser.GameObjects.Container | null = null;
+  private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
+  private pathCue: Phaser.GameObjects.Container | null = null;
+  private ingaFigure: Phaser.GameObjects.Container | null = null;
+  private ingaWordAnchors: WordBodyAnchorHandle[] = [];
+  private ghostKingBody: Phaser.GameObjects.Image | null = null;
+  private bossWordAnchors: WordBodyAnchorHandle[] = [];
+  private wispCatCompanion: Phaser.GameObjects.Container | null = null;
+  private wispCatWordAnchors: WordBodyAnchorHandle[] = [];
   /** Four faint punctuation glyphs at N/S/E/W around Wren — teaches the
    *  direction-punctuation mapping diegetically. Drawn on first ghost
    *  spawn, persists through Act 2 + boss. */
@@ -153,6 +197,18 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.fork2Choice = null;
     this.companionChoice = null;
     this.mistTimer = null;
+    this.shrineFigure = null;
+    this.offeringCue = null;
+    this.boneFluteCue = null;
+    this.groveLightCue = null;
+    this.forkChoiceWordAnchors = [];
+    this.pathCue = null;
+    this.ingaFigure = null;
+    this.ingaWordAnchors = [];
+    this.ghostKingBody = null;
+    this.bossWordAnchors = [];
+    this.wispCatCompanion = null;
+    this.wispCatWordAnchors = [];
     this.quietLordIntruded =
       this.store.get().realms["haunted-wood"]?.quietLordIntruded ?? false;
   }
@@ -161,6 +217,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.load.image("haunted-wood-backdrop", hauntedWoodBackdrop);
     this.load.image("wood-ghost", woodGhostSprite);
     this.load.image("ghost-king", ghostKingSprite);
+    this.load.image("wood-companion-wisp-cat", wispCatSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
@@ -168,13 +225,74 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.fadeIn(600, 14, 18, 14);
-    this.add
+    const backdrop = this.add
       .image(0, 0, "haunted-wood-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addBackdropDrift(this, backdrop, { durationMs: 20000, driftX: -4, driftY: -3 });
+    addAmbientDrift(this, {
+      kind: "mist",
+      count: 24,
+      depth: -2,
+      area: { x: -160, y: 430, width: this.scale.width + 320, height: 330 },
+      alpha: 0.1,
+      minSize: 5,
+      maxSize: 11,
+      driftX: 260,
+      driftY: -30,
+      minDurationMs: 9000,
+      maxDurationMs: 17000,
+    });
+    addLivingLight(this, {
+      x: 960,
+      y: 770,
+      width: 500,
+      height: 270,
+      color: 0xa7d8a2,
+      alpha: 0.045,
+      depth: -5,
+      durationMs: 3600,
+    });
+    addLivingLight(this, {
+      x: 470,
+      y: 520,
+      width: 360,
+      height: 230,
+      color: 0x9271c9,
+      alpha: 0.035,
+      depth: -6,
+      durationMs: 4700,
+      delayMs: 900,
+      scale: 1.04,
+    });
+    addLivingLight(this, {
+      x: 1460,
+      y: 520,
+      width: 360,
+      height: 230,
+      color: 0x7fbf88,
+      alpha: 0.035,
+      depth: -6,
+      durationMs: 4300,
+      delayMs: 1300,
+      scale: 1.04,
+    });
+    addAmbientDrift(this, {
+      kind: "mist",
+      count: 12,
+      depth: -1.45,
+      area: { x: -180, y: 500, width: this.scale.width + 360, height: 260 },
+      alpha: 0.085,
+      minSize: 11,
+      maxSize: 24,
+      driftX: 320,
+      driftY: -42,
+      minDurationMs: 8200,
+      maxDurationMs: 16000,
+    });
     this.drawShrine();
-    this.drawWren(WREN_X, WREN_Y);
+    this.wrenContainer = this.drawWren(WREN_X, WREN_Y);
 
     // Tier 4 — a revisit is a free-passage replay (no combat) → neutral loadout.
     // Resolved here (before the band) so the console band can show the passive
@@ -187,13 +305,18 @@ export class HauntedWoodScene extends Phaser.Scene {
     // UI cohesion — the console band houses the meters + satchel. Wood's mist is
     // a vision overlay (not a bottom meter), so the satchel zone shows the passive
     // relic icon tiles; the offensive one-shots drop into the band's charge cards.
-    const band = new ConsoleBand(this, {
+    this.band = new ConsoleBand(this, {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,
     });
+    const band = this.band;
 
-    this.narration = new NarrationManager(this, { y: 150, framed: true });
+    this.narration = new NarrationManager(this, {
+      y: 150,
+      framed: true,
+      onSpeak: (speakerName) => this.attendSpeaker(speakerName),
+    });
 
     this.typingInput = new TypingInputController(this.store);
     this.typingInput.setKeystrokeHooks({
@@ -215,7 +338,11 @@ export class HauntedWoodScene extends Phaser.Scene {
     new HeartSoulHud(this, {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
-      onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
+      onSustainedLowHeart: () =>
+        this.band.showNotice(pickLowHeartLine().text, {
+          label: "heart",
+          durationMs: 2400,
+        }),
       anchor: band.metersAnchor,
       plate: false,
     });
@@ -236,7 +363,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       applyEffect: (effect, targets) => this.applyOneShot(effect, targets),
       isActive: () =>
         this.ghosts.length > 0 && this.ghosts.some((g) => !g.isDefeated()),
-      announce: (text) => this.setNarrator(text),
+      announce: (text) => this.band.showNotice(text, { label: "relic" }),
       slots: band.oneShotSlots,
       compact: true,
     });
@@ -249,6 +376,13 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.mistTimer?.remove();
       this.compassGlyphs.forEach((g) => g.destroy());
       this.compassGlyphs = [];
+      this.clearWoodForkCues();
+      this.shrineFigure = null;
+      this.pathCue = null;
+      this.clearIngaWordAnchors();
+      this.ingaFigure = null;
+      this.ghostKingBody = null;
+      this.wispCatCompanion = null;
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
     });
@@ -281,6 +415,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     }
 
     this.setNarrator(narratorLine);
+    this.band.setObjective("Type the wood memory to return to the Almanac.");
     this.time.delayedCall(2400, () => this.deliverRevisitPassage(words));
   }
 
@@ -305,7 +440,9 @@ export class HauntedWoodScene extends Phaser.Scene {
         x: this.scale.width / 2,
         y: this.scale.height / 2,
         fontSize: 44,
+        onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
+          playWrenAction(this.wrenSprite);
           playChime();
           idx += 1;
           this.typingInput.unregister(target);
@@ -321,6 +458,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startArrival(): void {
     this.narration.say("wood_intro_arrival");
+    this.band.setObjective("Type the path words to reach the lantern in the trees.");
     this.time.delayedCall(2800, () => this.startPathExploration());
   }
 
@@ -334,18 +472,26 @@ export class HauntedWoodScene extends Phaser.Scene {
     let i = 0;
     const advance = (): void => {
       if (i >= beats.length) {
+        this.dismissPathCue();
         this.time.delayedCall(800, () => this.startIngaNPC());
         return;
       }
       const beat = beats[i];
       if (!beat) return;
+      this.showPathCue(i);
       const target = this.makeWord({
         scene: this,
         word: beat.word,
         x: this.scale.width / 2,
         y: this.scale.height / 2,
         fontSize: 40,
+        onClaim: () => {
+          playWrenFocus(this.wrenSprite);
+          this.pulsePathCue(false);
+        },
         onComplete: () => {
+          playWrenAction(this.wrenSprite);
+          this.pulsePathCue(true);
           playChime();
           this.clearActiveTargets();
           this.setNarrator(beat.narrator);
@@ -359,9 +505,163 @@ export class HauntedWoodScene extends Phaser.Scene {
     advance();
   }
 
+  private showPathCue(idx: number): void {
+    this.dismissPathCue(false);
+    const cue =
+      idx === 0
+        ? this.drawRootPathCue()
+        : idx === 1
+          ? this.drawCanopyPathCue()
+          : this.drawLanternPostCue();
+    this.pathCue = cue;
+    this.tweens.add({
+      targets: cue,
+      alpha: 0.82,
+      y: cue.y - 7,
+      duration: 400,
+      ease: "Sine.easeOut",
+      onComplete: () => addIdleBreath(this, cue, { dy: -3, durationMs: 3100 }),
+    });
+  }
+
+  private drawRootPathCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(this.scale.width / 2 - 72, 820).setDepth(-1).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 230, 20, { y: 14, alpha: 0.14 }));
+    const roots = this.add.graphics();
+    roots.lineStyle(9, 0x1f241b, 0.86);
+    roots.beginPath();
+    roots.moveTo(-120, 12);
+    roots.lineTo(-88, -2);
+    roots.lineTo(-52, -16);
+    roots.lineTo(-12, 2);
+    roots.lineTo(34, 24);
+    roots.lineTo(78, 22);
+    roots.lineTo(128, 2);
+    roots.strokePath();
+    roots.lineStyle(5, 0x344030, 0.74);
+    roots.beginPath();
+    roots.moveTo(-86, 6);
+    roots.lineTo(-38, 16);
+    roots.lineTo(6, 0);
+    roots.lineTo(22, -18);
+    roots.strokePath();
+    roots.beginPath();
+    roots.moveTo(12, 8);
+    roots.lineTo(48, -8);
+    roots.lineTo(92, 18);
+    roots.strokePath();
+    roots.fillStyle(0xd7ded8, 0.16);
+    roots.fillEllipse(-28, -6, 66, 13);
+    roots.fillEllipse(64, 8, 70, 14);
+    c.add(roots);
+    return c;
+  }
+
+  private drawCanopyPathCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(this.scale.width / 2 + 36, 690).setDepth(-1).setAlpha(0);
+    const mist = this.add.graphics();
+    mist.fillStyle(0xd7ded8, 0.12);
+    mist.fillEllipse(0, 32, 190, 48);
+    mist.fillEllipse(-44, 8, 118, 30);
+    mist.fillEllipse(50, -4, 132, 32);
+    c.add(mist);
+    const leaves = this.add.graphics();
+    leaves.fillStyle(0x233020, 0.82);
+    leaves.fillEllipse(-80, -20, 92, 38);
+    leaves.fillEllipse(-18, -34, 110, 44);
+    leaves.fillEllipse(62, -24, 96, 40);
+    leaves.lineStyle(2, 0x5d7452, 0.22);
+    leaves.lineBetween(-98, -14, -54, -24);
+    leaves.lineBetween(-12, -28, 28, -42);
+    leaves.lineBetween(48, -18, 88, -34);
+    c.add(leaves);
+    this.tweens.add({
+      targets: mist,
+      scaleX: 1.08,
+      alpha: 0.2,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    return c;
+  }
+
+  private drawLanternPostCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(this.scale.width / 2 + 96, 806).setDepth(-1).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 90, 18, { y: 18, alpha: 0.16 }));
+    const post = this.add.graphics();
+    post.lineStyle(4, 0x2f2a23, 0.9);
+    post.lineBetween(0, -104, 0, 24);
+    post.lineStyle(2, 0x504535, 0.76);
+    post.lineBetween(0, -86, 36, -98);
+    post.fillStyle(0x1a1711, 0.92);
+    post.fillRoundedRect(26, -100, 32, 46, 7);
+    post.fillStyle(0xd4a040, 0.52);
+    post.fillEllipse(42, -76, 24, 30);
+    post.fillStyle(0xf6e5a8, 0.82);
+    post.fillEllipse(42, -78, 10, 16);
+    c.add(post);
+    const glow = this.add.graphics().setPosition(42, -78);
+    glow.fillStyle(0xd4a040, 0.12);
+    glow.fillEllipse(0, 0, 82, 70);
+    c.addAt(glow, 0);
+    this.tweens.add({
+      targets: glow,
+      scaleX: 1.12,
+      scaleY: 1.18,
+      alpha: 0.72,
+      duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    return c;
+  }
+
+  private pulsePathCue(completion: boolean): void {
+    if (!this.pathCue?.scene) return;
+    playActorAttention(this, this.pathCue, {
+      scale: completion ? 1.035 : 1.018,
+      durationMs: completion ? 260 : 180,
+    });
+    playBodyImpact(this, this.pathCue, {
+      kind: "mist",
+      color: 0xd7ded8,
+      offsetY: -20,
+      depth: 12,
+      ringRadius: completion ? 44 : 28,
+      count: completion ? 9 : 5,
+      durationMs: completion ? 460 : 260,
+    });
+  }
+
+  private dismissPathCue(animate = true): void {
+    const cue = this.pathCue;
+    if (!cue?.scene) {
+      this.pathCue = null;
+      return;
+    }
+    this.pathCue = null;
+    this.tweens.killTweensOf(cue);
+    if (!animate) {
+      cue.destroy();
+      return;
+    }
+    this.tweens.add({
+      targets: cue,
+      alpha: 0,
+      y: cue.y - 20,
+      duration: 260,
+      ease: "Sine.easeIn",
+      onComplete: () => cue.destroy(),
+    });
+  }
+
   // ─── Act 1 — Inga NPC ────────────────────────────────────────────────────
 
   private startIngaNPC(): void {
+    this.band.setObjective("Answer Inga and follow her toward the shrine.");
     this.drawInga(560, 760);
 
     this.store.update((s) => {
@@ -371,10 +671,10 @@ export class HauntedWoodScene extends Phaser.Scene {
     });
 
     // Inga speaks
-    this.setNarrator("i don't know my name.");
+    this.setNarrator("i don't know my name.", "Inga");
     this.time.delayedCall(1800, () => {
       // Wren types a reply
-      const reply = this.makeWord({
+      const reply = this.makeIngaWord({
         scene: this,
         word: "i'll find it.",
         x: this.scale.width / 2,
@@ -382,7 +682,11 @@ export class HauntedWoodScene extends Phaser.Scene {
         fontSize: 36,
         onComplete: () => {
           this.clearActiveTargets();
-          this.setNarrator("the shrine knows. the shrine keeper might tell you.");
+          this.setNarrator(
+            "the shrine knows. the shrine keeper might tell you.",
+            "Inga",
+          );
+          this.pulseShrine();
           this.time.delayedCall(2400, () => this.startAct2());
         },
       });
@@ -416,6 +720,8 @@ export class HauntedWoodScene extends Phaser.Scene {
   private beginCrossroads1(): void {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseWoodWave();
+    this.band.setObjective("Use the compass marks to clear each warded word.");
 
     const directions: WoodDirection[] = ["west", "east", "north"];
     this.ghosts = [];
@@ -443,6 +749,8 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.narration.say("wood_crossroads2_intro");
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseWoodWave();
+    this.band.setObjective("Watch all four compass marks through the mist.");
 
     const directions: WoodDirection[] = ["north", "south", "east", "west"];
     this.ghosts = [];
@@ -479,6 +787,8 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.setNarrator("Older things stir. They come in pairs now.");
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseWoodWave();
+    this.band.setObjective("Handle paired directions before the mist closes.");
 
     const directions: WoodDirection[] = ["north", "north", "east", "west"];
     this.ghosts = [];
@@ -535,8 +845,10 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startFork1(): void {
     this.narration.say("wood_fork1_intro");
+    this.band.setObjective("Choose an offering or the bone-flute.");
+    this.showFork1Cues();
 
-    const offeringTarget = this.makeWord({
+    const offeringTarget = this.makeWoodForkWord(this.offeringCue, {
       scene: this,
       word: "leave an offering",
       x: this.scale.width / 2 - 380,
@@ -548,8 +860,8 @@ export class HauntedWoodScene extends Phaser.Scene {
         this.fork1Choice = "offering";
         this.startFork1Offering();
       },
-    });
-    const fluteTarget = this.makeWord({
+    }, -42);
+    const fluteTarget = this.makeWoodForkWord(this.boneFluteCue, {
       scene: this,
       word: "take the bone-flute",
       x: this.scale.width / 2 + 380,
@@ -561,7 +873,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         this.fork1Choice = "bone-flute";
         this.startFork1BoneFlute();
       },
-    });
+    }, -62);
     this.typingInput.register(offeringTarget);
     this.typingInput.register(fluteTarget);
     this.activeTargets.push(offeringTarget, fluteTarget);
@@ -570,6 +882,8 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Fork 1A — Offering ───────────────────────────────────────────────────
 
   private startFork1Offering(): void {
+    this.fadeOutForkCue(this.boneFluteCue);
+    this.boneFluteCue = null;
     this.setNarrator("Wren steps to the bowl and speaks.");
     this.time.delayedCall(1200, () => {
       this.runPassageChain(
@@ -581,6 +895,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         ],
         () => {
           // Shrine glows — award ally + relic
+          this.pulseShrine();
           this.store.update((s) => {
             if (!s.satchel.includes("shrine-token")) {
               s.satchel.push("shrine-token");
@@ -589,15 +904,19 @@ export class HauntedWoodScene extends Phaser.Scene {
           playChime();
           this.cameras.main.flash(400, 200, 220, 180, false);
           this.setNarrator("Inga stirs. The shrine keeper whispers a name.");
+          this.attendInga();
+          this.fadeOutForkCue(this.offeringCue);
+          this.offeringCue = null;
           this.time.delayedCall(2000, () => this.startIngaNameReveal());
         },
+        { body: this.offeringCue, sourceOffsetY: -42 },
       );
     });
   }
 
   private startIngaNameReveal(): void {
     this.setNarrator("Her name. Type it back to her.");
-    const target = this.makeWord({
+    const target = this.makeIngaWord({
       scene: this,
       word: "inga",
       x: this.scale.width / 2,
@@ -612,6 +931,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           }
         });
         this.setNarrator("She looks at her hands. 'Oh,' she says. 'Oh.'");
+        this.attendInga();
         this.time.delayedCall(2400, () => this.startAct3());
       },
     });
@@ -622,6 +942,8 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Fork 1B — Bone-Flute ─────────────────────────────────────────────────
 
   private startFork1BoneFlute(): void {
+    this.fadeOutForkCue(this.offeringCue);
+    this.offeringCue = null;
     this.setNarrator("The bone-flute is cold inside the stone hollow.");
     this.time.delayedCall(1200, () => {
       this.runPassageChain(
@@ -636,8 +958,11 @@ export class HauntedWoodScene extends Phaser.Scene {
             }
           });
           playChime();
+          this.fadeOutForkCue(this.boneFluteCue);
+          this.boneFluteCue = null;
           this.time.delayedCall(1600, () => this.startAct3());
         },
+        { body: this.boneFluteCue, sourceOffsetY: -62 },
       );
     });
   }
@@ -658,8 +983,11 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.setNarrator(
       "The Ghost-King speaks in silence. You may bargain — or simply light the grove.",
     );
+    this.attendGhostKing();
+    this.band.setObjective("Choose a bargain or light the grove.");
+    this.showFork2Cues();
 
-    const bargainTarget = this.makeWord({
+    const bargainTarget = this.makeGhostKingWord({
       scene: this,
       word: "speak your true name",
       x: this.scale.width / 2 - 400,
@@ -669,10 +997,11 @@ export class HauntedWoodScene extends Phaser.Scene {
       onComplete: () => {
         this.clearActiveTargets();
         this.fork2Choice = "bargain";
+        this.attendGhostKing();
         this.startFork2Bargain();
       },
     });
-    const forceTarget = this.makeWord({
+    const forceTarget = this.makeWoodForkWord(this.groveLightCue, {
       scene: this,
       word: "light the grove",
       x: this.scale.width / 2 + 400,
@@ -686,9 +1015,12 @@ export class HauntedWoodScene extends Phaser.Scene {
         this.store.update((s) => {
           if (!s.satchel.includes("ash-vial")) s.satchel.push("ash-vial");
         });
+        this.attendGhostKing();
+        this.fadeOutForkCue(this.groveLightCue);
+        this.groveLightCue = null;
         this.startBossFight();
       },
-    });
+    }, -58);
     this.typingInput.register(bargainTarget);
     this.typingInput.register(forceTarget);
     this.activeTargets.push(bargainTarget, forceTarget);
@@ -697,7 +1029,10 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Fork 2A — Bargain ────────────────────────────────────────────────────
 
   private startFork2Bargain(): void {
+    this.fadeOutForkCue(this.groveLightCue);
+    this.groveLightCue = null;
     this.setNarrator("The Ghost-King pauses. He turns to face you fully.");
+    this.attendGhostKing();
     this.time.delayedCall(1600, () => {
       this.runPassageChain(
         [
@@ -722,8 +1057,10 @@ export class HauntedWoodScene extends Phaser.Scene {
             }
           });
           playChime();
+          this.attendGhostKing();
           this.time.delayedCall(1400, () => this.startBossFight());
         },
+        { ghostKing: true },
       );
     });
   }
@@ -731,7 +1068,8 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Boss Fight — two waves ────────────────────────────────────────────────
 
   private startBossFight(): void {
-    this.setNarrator("\"Then prove it.\" Ghost-wave rises from the hall.");
+    this.setNarrator("Then prove it.", "Ghost-King");
+    this.band.setObjective("Survive the Ghost-King's warded waves.");
     this.ghosts = [];
     this.time.delayedCall(800, () => this.spawnBossWaveA());
   }
@@ -739,6 +1077,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private spawnBossWaveA(): void {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseWoodWave({ y: 650, ringWidth: 900, ringHeight: 210, count: 14 });
     // Wave A: three directions, slower spawn pace. The player should still
     // recognize the learned punctuation-direction mapping from Act 2.
     const directions: WoodDirection[] = ["west", "east", "north"];
@@ -749,12 +1088,15 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private onBossWaveACleared(): void {
     this.setNarrator("The first wave fades. More rise.");
+    this.attendGhostKing();
     this.time.delayedCall(1200, () => this.spawnBossWaveB());
   }
 
   private spawnBossWaveB(): void {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseWoodWave({ y: 650, ringWidth: 900, ringHeight: 210, count: 14 });
+    this.band.setObjective("South-heavy wards rise from below.");
     // Wave B: south-heavy attack — two from below + one from above. Reads
     // as the Ghost-King's hall rising up against Wren.
     const directions: WoodDirection[] = ["south", "south", "north"];
@@ -765,6 +1107,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private onBossWaveBCleared(): void {
     this.setNarrator("The hall goes still. The Ghost-King rises fully.");
+    this.attendGhostKing();
     this.time.delayedCall(2200, () => this.startBossCapstone());
   }
 
@@ -776,12 +1119,14 @@ export class HauntedWoodScene extends Phaser.Scene {
   // first time. Per §5.5.8 this is the boss's phase 2.
 
   private startBossCapstone(): void {
+    this.band.setObjective("Type every punctuation mark in his final words.");
     const dimOverlay = this.add.graphics().setDepth(40).fillStyle(0x000000, 0.4);
     dimOverlay.fillRect(0, 0, this.scale.width, this.scale.height);
     dimOverlay.setAlpha(0);
     this.tweens.add({ targets: dimOverlay, alpha: 1, duration: 700 });
 
     this.narration.say("wood_ghost_king_phase2");
+    this.attendGhostKing();
     this.time.delayedCall(1800, () => {
       const passage = [
         "stop!",
@@ -819,6 +1164,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startFinalPassage(): void {
     this.narration.say("wood_truename_intro");
+    this.attendGhostKing();
     const passage1 = ["we", "are", "remembered.", "we", "are", "quiet."];
     const passage2 = ["but", "we", "are", "not", "silent."];
 
@@ -841,14 +1187,23 @@ export class HauntedWoodScene extends Phaser.Scene {
       }
       const word = words[idx];
       if (word === undefined) return;
-      const target = this.makeWord({
+      const target = this.makeGhostKingWord({
         scene: this,
         word,
         x: this.scale.width / 2,
         y: this.scale.height / 2,
         fontSize: 48,
+        onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
           playChime();
+          playBodyImpact(this, this.wrenContainer, {
+            kind: "mist",
+            color: PALETTE_HEX.moss,
+            offsetY: -108,
+            ringRadius: 30,
+            count: 7,
+            depth: 58,
+          });
           idx += 1;
           this.clearActiveTargets();
           this.time.delayedCall(160, advance);
@@ -864,6 +1219,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.clearActiveTargets();
     // Ghost-King dissolves
     this.cameras.main.flash(500, 220, 230, 210, false);
+    this.fadeGhostKingBody();
     this.narration.say("wood_ghost_king_defeated");
     // Almanac lore page 5 — the Wood's true name, stamped when the realm's
     // true-name passage resolves.
@@ -907,8 +1263,9 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.setNarrator(
       "A small cat made of pale light watches from the root-throne. She flicks one ear.",
     );
+    this.showWispCatCompanion();
     this.time.delayedCall(1600, () => {
-      const callTarget = this.makeWord({
+      const callTarget = this.makeWispCatWord({
         scene: this,
         word: "call to her",
         x: this.scale.width / 2 - 320,
@@ -925,10 +1282,11 @@ export class HauntedWoodScene extends Phaser.Scene {
           });
           playChime();
           this.setNarrator("She trots to you and curls against your satchel, glowing.");
+          this.pulseWispCatCompanion();
           this.time.delayedCall(1800, () => this.startEnding());
         },
       });
-      const leaveTarget = this.makeWord({
+      const leaveTarget = this.makeWispCatWord({
         scene: this,
         word: "leave her",
         x: this.scale.width / 2 + 320,
@@ -939,6 +1297,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           this.clearActiveTargets();
           this.companionChoice = "leave";
           this.setNarrator("She watches you go. Her light stays in the clearing.");
+          this.dismissWispCatCompanion(1450, 740);
           this.time.delayedCall(1800, () => this.startEnding());
         },
       });
@@ -946,6 +1305,47 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.typingInput.register(leaveTarget);
       this.activeTargets.push(callTarget, leaveTarget);
     });
+  }
+
+  private showWispCatCompanion(): void {
+    if (this.wispCatCompanion?.scene) return;
+    this.wispCatCompanion = stageCompanionCameo(this, {
+      textureKey: "wood-companion-wisp-cat",
+      startX: 1460,
+      startY: 770,
+      x: 1300,
+      y: 770,
+      height: 104,
+      depth: 43,
+      shadowWidth: 82,
+      shadowHeight: 16,
+      shadowOffsetY: 9,
+      shadowAlpha: 0.2,
+      breathDy: -4,
+      breathMs: 1800,
+      wake: {
+        kind: "mist",
+        intervalMs: 170,
+        offsetY: -10,
+        spreadX: 20,
+        spreadY: 10,
+        depth: 42,
+        alpha: 0.22,
+      },
+    });
+  }
+
+  private pulseWispCatCompanion(): void {
+    playActorAttention(this, this.wispCatCompanion, {
+      scale: 1.04,
+      durationMs: 220,
+    });
+  }
+
+  private dismissWispCatCompanion(x: number, y: number): void {
+    this.clearWispCatWordAnchors();
+    dismissCompanionCameo(this, this.wispCatCompanion, { x, y, durationMs: 720 });
+    this.wispCatCompanion = null;
   }
 
   // ─── Ending ───────────────────────────────────────────────────────────────
@@ -977,36 +1377,11 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private showAlmanacStamp(onDone: () => void): void {
-    const stamp = this.add
-      .text(this.scale.width / 2, this.scale.height / 2, "the haunted wood", {
-        fontFamily: SERIF,
-        fontSize: "64px",
-        color: PALETTE.cream,
-        backgroundColor: "#0e120e",
-        padding: { left: 40, right: 40, top: 20, bottom: 20 },
-      })
-      .setOrigin(0.5)
-      .setAlpha(0)
-      .setScale(0.6);
-
-    this.tweens.add({
-      targets: stamp,
-      alpha: 1,
-      scale: 1,
-      duration: 350,
-      ease: "Back.easeOut",
-      onComplete: () => {
-        playChime();
-        this.time.delayedCall(1500, () => {
-          this.tweens.add({
-            targets: stamp,
-            alpha: 0,
-            duration: 300,
-            onComplete: onDone,
-          });
-        });
-      },
+    playRealmClearResonance(this, {
+      color: PALETTE_HEX.moss,
+      y: this.scale.height / 2 - 30,
     });
+    showAlmanacStampCard(this, "the haunted wood", onDone, { onReveal: playChime });
   }
 
   // ─── Ghost spawning + combat ──────────────────────────────────────────────
@@ -1026,6 +1401,19 @@ export class HauntedWoodScene extends Phaser.Scene {
     const container = this.add.container(pos.startX, pos.startY);
     const isPunctWord = hasPunctuation(word);
     this.drawGhostInto(container, isPunctWord);
+    addContainerWake(this, container, {
+      kind: "mist",
+      intervalMs: 300,
+      spreadX: 34,
+      spreadY: 10,
+      offsetY: 8,
+      alpha: 0.2,
+      size: 8,
+      depth: -1,
+      driftX: 26,
+      driftY: -18,
+      durationMs: 1050,
+    });
     container.setAlpha(0);
 
     const ghost = new MovingWordEnemy({
@@ -1057,6 +1445,13 @@ export class HauntedWoodScene extends Phaser.Scene {
       fontSize: 32,
       // Wisp-themed pale gray-green burst — a ghost going down in mist, not brass.
       burstColor: GHOST_BURST_COLOR,
+      defeatImpactKind: "mist",
+      defeatImpactColor: GHOST_BURST_COLOR,
+      claimLineFrom: () => ({
+        x: this.wrenContainer.x,
+        y: this.wrenContainer.y - 116,
+      }),
+      claimLineColor: GHOST_BURST_COLOR,
       // UI-cohesion: the legibility outline (TTT-style) so the word reads against
       // the painted wood + mist.
       outline: true,
@@ -1074,6 +1469,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       },
       onReachWren: () => {
         this.cameras.main.shake(180, 0.004);
+        playWrenHurt(this.wrenSprite, { knockX: 0 });
         playDamageThud();
         flashDamageVignette(this);
       },
@@ -1157,6 +1553,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     // to the procedural body height so the word anchor + hit feel line up. The
     // enemy applies restAlpha (0.6) to the whole container, keeping the ghostly
     // translucence the flat shape used to bake in.
+    c.add(addLocalGroundShadow(this, 96, 20, { y: 8, alpha: 0.18 }));
     const sprite = this.add.image(0, 0, "wood-ghost");
     sprite.setScale(WOOD_GHOST_SPRITE_HEIGHT / sprite.height);
     c.add(sprite);
@@ -1227,6 +1624,11 @@ export class HauntedWoodScene extends Phaser.Scene {
   private runPassageChain(
     steps: Array<{ word: string; narrator: string }>,
     onDone: () => void,
+    owner?: {
+      body?: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined;
+      sourceOffsetY?: number;
+      ghostKing?: boolean;
+    },
   ): void {
     let idx = 0;
     const advance = (): void => {
@@ -1236,20 +1638,35 @@ export class HauntedWoodScene extends Phaser.Scene {
       }
       const step = steps[idx];
       if (!step) return;
-      const target = this.makeWord({
+      const opts: TextWordTargetOptions = {
         scene: this,
         word: step.word,
         x: this.scale.width / 2,
         y: this.scale.height - 340,
         fontSize: 36,
+        onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
           playChime();
+          playWrenAction(this.wrenSprite);
+          playBodyImpact(this, this.wrenContainer, {
+            kind: "mist",
+            color: PALETTE_HEX.moss,
+            offsetY: -108,
+            ringRadius: 30,
+            count: 7,
+            depth: 58,
+          });
           idx += 1;
           this.clearActiveTargets();
           if (step.narrator) this.setNarrator(step.narrator);
           this.time.delayedCall(1400, advance);
         },
-      });
+      };
+      const target = owner?.ghostKing
+        ? this.makeGhostKingWord(opts)
+        : owner?.body?.scene
+          ? this.makeWoodForkWord(owner.body, opts, owner.sourceOffsetY)
+          : this.makeWord(opts);
       this.typingInput.register(target);
       this.activeTargets.push(target);
     };
@@ -1275,11 +1692,606 @@ export class HauntedWoodScene extends Phaser.Scene {
   /** UI-cohesion: every Wood word target gets the legibility outline by default
    *  (TTT-style). Fork choices pass frame: "banner". */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
-    return new TextWordTarget({ outline: true, ...opts });
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    return new TextWordTarget({
+      outline: true,
+      ...opts,
+      onClaim: (mods) => {
+        if (opts.frame === "banner") playWrenFocus(this.wrenSprite);
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        this.playWrenTypingPulse();
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        if (opts.frame === "banner") playWrenAction(this.wrenSprite);
+        onComplete();
+      },
+    });
   }
 
-  private setNarrator(text: string): void {
-    this.narration.sayRaw(text);
+  private makeIngaWord(opts: TextWordTargetOptions): TextWordTarget {
+    const body = this.ingaFigure;
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.ingaWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.ingaWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.moss,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y - 62,
+          { color: PALETTE_HEX.moss, depth: 58 },
+        );
+        this.attendInga();
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "mist",
+          color: PALETTE_HEX.moss,
+          offsetY: -62,
+          depth: 58,
+          ringRadius: 28,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "mist",
+          color: PALETTE_HEX.moss,
+          offsetY: -62,
+          depth: 58,
+          ringRadius: 46,
+          count: 10,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.moss,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -62,
+        targetOffsetY: 24,
+      },
+    );
+    this.ingaWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
+  private playWrenTypingPulse(): void {
+    playBodyTypePulse(this, this.wrenContainer, {
+      kind: "mist",
+      color: PALETTE_HEX.moss,
+      offsetY: -108,
+      depth: 58,
+      ringRadius: 22,
+    });
+  }
+
+  private makeGhostKingWord(opts: TextWordTargetOptions): TextWordTarget {
+    if (!this.ghostKingBody) return this.makeWord(opts);
+    const body = this.ghostKingBody;
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.bossWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.bossWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.moss,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y - 30,
+          { color: PALETTE_HEX.moss, depth: 58 },
+        );
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "mist",
+          color: PALETTE_HEX.moss,
+          offsetY: -28,
+          depth: 58,
+          ringRadius: 30,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "mist",
+          color: PALETTE_HEX.moss,
+          offsetY: -28,
+          depth: 58,
+          ringRadius: 58,
+          count: 14,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.moss,
+        alpha: 0.2,
+        depth: 44,
+        sourceOffsetY: -30,
+        targetOffsetY: 24,
+      },
+    );
+    this.bossWordAnchors.push(anchor);
+    return target;
+  }
+
+  private makeWoodForkWord(
+    body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined,
+    opts: TextWordTargetOptions,
+    sourceOffsetY = -48,
+  ): TextWordTarget {
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.forkChoiceWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.forkChoiceWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.moss,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y + sourceOffsetY,
+          { color: PALETTE_HEX.moss, depth: 58 },
+        );
+        playActorAttention(this, body, {
+          tint: PALETTE_HEX.moss,
+          scale: 1.024,
+          durationMs: 180,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "mist",
+          color: PALETTE_HEX.moss,
+          offsetY: sourceOffsetY,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "mist",
+          color: PALETTE_HEX.moss,
+          offsetY: sourceOffsetY,
+          depth: 58,
+          ringRadius: 46,
+          count: 10,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.moss,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY,
+        targetOffsetY: 24,
+      },
+    );
+    this.forkChoiceWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
+  private showFork1Cues(): void {
+    if (!this.offeringCue?.scene) {
+      this.offeringCue = this.createOfferingCue();
+    }
+    if (!this.boneFluteCue?.scene) {
+      this.boneFluteCue = this.createBoneFluteCue();
+    }
+  }
+
+  private showFork2Cues(): void {
+    if (!this.groveLightCue?.scene) {
+      this.groveLightCue = this.createGroveLightCue();
+    }
+  }
+
+  private createOfferingCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(690, 812).setDepth(42).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 122, 18, { y: 12, alpha: 0.2 }));
+
+    const g = this.add.graphics();
+    g.fillStyle(0x181510, 0.88);
+    g.fillEllipse(0, -24, 72, 24);
+    g.fillStyle(0x4c3e2c, 0.88);
+    g.fillEllipse(0, -30, 60, 18);
+    g.fillStyle(0xd7ded8, 0.34);
+    g.fillEllipse(0, -34, 38, 10);
+    g.fillStyle(PALETTE_HEX.moss, 0.6);
+    g.fillCircle(-20, -52, 6);
+    g.fillCircle(0, -60, 5);
+    g.fillCircle(22, -50, 6);
+    g.lineStyle(2, 0xd7ded8, 0.28);
+    g.strokeEllipse(0, -42, 104, 56);
+    c.add(g);
+
+    addContainerWake(this, c, {
+      kind: "mist",
+      intervalMs: 540,
+      spreadX: 34,
+      spreadY: 16,
+      offsetY: -38,
+      alpha: 0.2,
+      size: 4,
+      depth: 41,
+      driftX: 30,
+      driftY: -30,
+      durationMs: 1400,
+    });
+
+    this.tweens.add({
+      targets: c,
+      y: 792,
+      alpha: 0.9,
+      duration: 640,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!c.scene) return;
+        addIdleBreath(this, c, { dy: -3, durationMs: 2700 });
+      },
+    });
+    return c;
+  }
+
+  private createBoneFluteCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(1230, 812).setDepth(42).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 128, 18, { y: 12, alpha: 0.2 }));
+
+    const g = this.add.graphics();
+    g.fillStyle(0x1c2019, 0.88);
+    g.fillRoundedRect(-58, -38, 116, 34, 12);
+    g.lineStyle(2, 0xd7ded8, 0.22);
+    g.strokeRoundedRect(-58, -38, 116, 34, 12);
+    g.lineStyle(7, 0xd7ded8, 0.8);
+    g.lineBetween(-46, -60, 48, -88);
+    g.lineStyle(3, 0x6f725c, 0.58);
+    g.lineBetween(-46, -60, 48, -88);
+    g.fillStyle(0x1f241d, 0.9);
+    for (const p of [-24, 4, 30]) {
+      g.fillCircle(p, -67 - (p + 24) * 0.3, 4);
+    }
+    g.lineStyle(2, PALETTE_HEX.moss, 0.28);
+    g.strokeEllipse(0, -74, 132, 58);
+    c.add(g);
+
+    addContainerWake(this, c, {
+      kind: "mist",
+      intervalMs: 560,
+      spreadX: 36,
+      spreadY: 18,
+      offsetY: -54,
+      alpha: 0.18,
+      size: 4,
+      depth: 41,
+      driftX: 32,
+      driftY: -28,
+      durationMs: 1350,
+    });
+
+    this.tweens.add({
+      targets: c,
+      y: 790,
+      alpha: 0.9,
+      duration: 660,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!c.scene) return;
+        addIdleBreath(this, c, { dy: -4, durationMs: 2500 });
+      },
+    });
+    return c;
+  }
+
+  private createGroveLightCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(1210, 790).setDepth(42).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 136, 18, { y: 12, alpha: 0.2 }));
+
+    const g = this.add.graphics();
+    g.lineStyle(4, 0x342b1e, 0.78);
+    g.lineBetween(-28, -10, -28, -92);
+    g.lineBetween(30, -10, 30, -88);
+    g.fillStyle(0x1d160f, 0.8);
+    g.fillRoundedRect(-48, -88, 96, 42, 12);
+    g.lineStyle(2, PALETTE_HEX.moss, 0.34);
+    g.strokeRoundedRect(-48, -88, 96, 42, 12);
+    g.fillStyle(0xc9a14a, 0.5);
+    g.fillEllipse(0, -66, 46, 24);
+    g.fillStyle(0xf0d78a, 0.72);
+    g.fillEllipse(0, -70, 18, 30);
+    g.lineStyle(2, 0xf0d78a, 0.28);
+    g.strokeEllipse(0, -68, 128, 72);
+    c.add(g);
+
+    addContainerWake(this, c, {
+      kind: "mist",
+      intervalMs: 520,
+      spreadX: 34,
+      spreadY: 18,
+      offsetY: -58,
+      alpha: 0.2,
+      size: 4,
+      depth: 41,
+      driftX: 28,
+      driftY: -36,
+      durationMs: 1300,
+    });
+
+    this.tweens.add({
+      targets: c,
+      y: 770,
+      alpha: 0.88,
+      duration: 680,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!c.scene) return;
+        addIdleBreath(this, c, { dy: -3, durationMs: 2500 });
+      },
+    });
+    return c;
+  }
+
+  private fadeOutForkCue(
+    cue: Phaser.GameObjects.Container | null,
+    opts: { riseY?: number; durationMs?: number } = {},
+  ): void {
+    if (!cue?.scene) return;
+    this.tweens.killTweensOf(cue);
+    this.tweens.add({
+      targets: cue,
+      y: cue.y + (opts.riseY ?? 18),
+      alpha: 0,
+      duration: opts.durationMs ?? 540,
+      ease: "Sine.easeIn",
+      onComplete: () => {
+        if (cue.scene) cue.destroy();
+      },
+    });
+  }
+
+  private clearWoodForkCues(): void {
+    this.clearForkChoiceWordAnchors();
+    for (const cue of [this.offeringCue, this.boneFluteCue, this.groveLightCue]) {
+      if (!cue?.scene) continue;
+      this.tweens.killTweensOf(cue);
+      cue.destroy();
+    }
+    this.offeringCue = null;
+    this.boneFluteCue = null;
+    this.groveLightCue = null;
+  }
+
+  private makeWispCatWord(opts: TextWordTargetOptions): TextWordTarget {
+    const body = this.wispCatCompanion;
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.wispCatWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.wispCatWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.moss,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y - 58,
+          { color: PALETTE_HEX.moss, depth: 58 },
+        );
+        this.pulseWispCatCompanion();
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "mist",
+          color: PALETTE_HEX.moss,
+          offsetY: -58,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "mist",
+          color: PALETTE_HEX.moss,
+          offsetY: -58,
+          depth: 58,
+          ringRadius: 42,
+          count: 9,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.moss,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -58,
+        targetOffsetY: 24,
+      },
+    );
+    this.wispCatWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
+  private setNarrator(text: string, speakerName: string | null = null): void {
+    this.narration.sayRaw(text, { speakerName });
+  }
+
+  private attendSpeaker(speakerName: string | null): void {
+    this.setBandSpeaker(speakerName);
+    if (speakerName === "Inga") {
+      this.attendInga();
+    } else if (speakerName === "Ghost-King") {
+      this.attendGhostKing();
+    }
+  }
+
+  private setBandSpeaker(speakerName: string | null): void {
+    if (!speakerName || speakerName === "Runa") {
+      this.band.setPortrait("band-portrait-runa", "Runa");
+    } else if (speakerName === "Ghost-King") {
+      this.band.setPortrait("ghost-king", "Ghost-King");
+    } else if (speakerName === "Inga") {
+      this.band.setPortrait("wood-ghost", "Inga");
+    } else {
+      this.band.setPortrait(undefined, speakerName);
+    }
+  }
+
+  private pulseWoodWave(
+    opts: { y?: number; ringWidth?: number; ringHeight?: number; count?: number } = {},
+  ): void {
+    playSceneEventPulse(this, {
+      kind: "mist",
+      color: 0xa7d8a2,
+      x: this.scale.width / 2,
+      y: 700,
+      ringWidth: 1120,
+      ringHeight: 190,
+      count: 12,
+      alpha: 0.13,
+      ...opts,
+    });
+  }
+
+  private attendInga(): void {
+    playActorAttention(this, this.ingaFigure, {
+      scale: 1.035,
+      durationMs: 220,
+    });
+  }
+
+  private attendGhostKing(): void {
+    playActorAttention(this, this.ghostKingBody, {
+      scale: 1.025,
+      durationMs: 220,
+      tint: PALETTE_HEX.moss,
+    });
+  }
+
+  private pulseShrine(): void {
+    if (!this.shrineFigure?.scene) return;
+    playActorAttention(this, this.shrineFigure, {
+      scale: 1.018,
+      durationMs: 280,
+    });
+    playBodyImpact(this, this.shrineFigure, {
+      kind: "mist",
+      color: 0xd7ded8,
+      offsetY: -78,
+      depth: 8,
+      ringRadius: 42,
+      count: 8,
+      durationMs: 500,
+    });
+  }
+
+  private fadeGhostKingBody(): void {
+    const body = this.ghostKingBody;
+    if (!body?.scene) return;
+    this.tweens.killTweensOf(body);
+    this.tweens.add({
+      targets: body,
+      alpha: 0,
+      y: body.y - 36,
+      duration: 900,
+      ease: "Sine.easeInOut",
+      onComplete: () => {
+        if (body.scene) body.destroy();
+        if (this.ghostKingBody === body) this.ghostKingBody = null;
+      },
+    });
   }
 
   // ─── Tier 4 relic helpers ───────────────────────────────────────────────────
@@ -1336,26 +2348,22 @@ export class HauntedWoodScene extends Phaser.Scene {
     }
   }
 
-  /** Surface the active relic effects once, before the realm's first combat, so
-   *  the player sees their earlier-realm choices paying off. Empty loadout
-   *  (incl. revisits) passes straight through. */
+  /** Surface that the satchel is doing something here, once and briefly. The
+   *  persistent console-band icons show what you carry, so avoid flooding the
+   *  narration card with one line per relic. */
   private announceCombatLoadout(onDone: () => void): void {
     const lines = this.combat.announcements;
     if (lines.length === 0) {
       onDone();
       return;
     }
-    let i = 0;
-    const showNext = (): void => {
-      if (i >= lines.length) {
-        this.time.delayedCall(700, onDone);
-        return;
-      }
-      this.setNarrator(lines[i]!);
-      i += 1;
-      this.time.delayedCall(2200, showNext);
-    };
-    showNext();
+    this.band.showNotice(
+      lines.length === 1
+        ? lines[0]!
+        : "Your satchel stirs; its relics answer here.",
+      { label: "satchel" },
+    );
+    this.time.delayedCall(1900, onDone);
   }
 
   /** Re-arm the per-wave relic procs at each ghost wave's start. */
@@ -1423,6 +2431,10 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private clearActiveTargets(): void {
+    this.clearIngaWordAnchors();
+    this.clearBossWordAnchors();
+    this.clearForkChoiceWordAnchors();
+    this.clearWispCatWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();
@@ -1430,62 +2442,178 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.activeTargets = [];
   }
 
+  private clearIngaWordAnchors(): void {
+    for (const anchor of this.ingaWordAnchors) anchor.destroy();
+    this.ingaWordAnchors = [];
+  }
+
+  private clearBossWordAnchors(): void {
+    for (const anchor of this.bossWordAnchors) anchor.destroy();
+    this.bossWordAnchors = [];
+  }
+
+  private clearForkChoiceWordAnchors(): void {
+    for (const anchor of this.forkChoiceWordAnchors) anchor.destroy();
+    this.forkChoiceWordAnchors = [];
+  }
+
+  private clearWispCatWordAnchors(): void {
+    for (const anchor of this.wispCatWordAnchors) anchor.destroy();
+    this.wispCatWordAnchors = [];
+  }
+
   // ─── Drawing ──────────────────────────────────────────────────────────────
 
   private drawShrine(): void {
-    // Stone rectangle with a candle glow on top
     const sx = 960;
     const sy = 810;
-    const g = this.add.graphics();
+    const c = this.add.container(sx, sy).setDepth(-1);
+    this.shrineFigure = c;
 
-    // Stone base
-    g.fillStyle(0x303830, 1);
-    g.fillRect(sx - 40, sy - 60, 80, 60);
-    // Stone top slab
-    g.fillStyle(0x3c443c, 1);
-    g.fillRect(sx - 50, sy - 66, 100, 10);
-    // Candle glow — amber circle
-    g.fillStyle(0xd4a040, 0.85);
-    g.fillCircle(sx, sy - 74, 8);
-    // Soft outer glow
-    g.fillStyle(0xeec870, 0.2);
-    g.fillCircle(sx, sy - 74, 18);
-    // Faint step at base
-    g.fillStyle(0x252c25, 1);
-    g.fillRect(sx - 56, sy, 112, 10);
+    c.add(addLocalGroundShadow(this, 150, 18, { y: 14, alpha: 0.18 }));
+
+    const glow = this.add.graphics().setPosition(0, -78);
+    glow.fillStyle(0xe8e5c6, 0.14);
+    glow.fillEllipse(0, 0, 92, 56);
+    glow.fillStyle(0xa7d8a2, 0.09);
+    glow.fillEllipse(0, 14, 138, 44);
+    c.add(glow);
+
+    const stone = this.add.graphics();
+    stone.fillStyle(0x171f18, 0.36);
+    stone.fillRoundedRect(-72, -4, 144, 18, 6);
+    stone.fillStyle(0x263028, 1);
+    stone.fillRoundedRect(-44, -58, 88, 58, 6);
+    stone.fillStyle(0x303a31, 1);
+    stone.fillRoundedRect(-56, -68, 112, 14, 5);
+    stone.fillStyle(0x202820, 1);
+    stone.fillRoundedRect(-60, 0, 120, 12, 5);
+    stone.fillStyle(0x495248, 0.8);
+    stone.fillRoundedRect(-38, -54, 32, 12, 4);
+    stone.fillRoundedRect(8, -50, 28, 14, 4);
+    stone.fillStyle(0x394238, 0.86);
+    stone.fillRoundedRect(-30, -34, 60, 20, 5);
+    stone.lineStyle(2, 0x6f725c, 0.22);
+    stone.lineBetween(-26, -54, -38, -8);
+    stone.lineBetween(18, -50, 34, -12);
+    stone.lineBetween(-56, -68, 56, -68);
+    c.add(stone);
+
+    const bowl = this.add.graphics().setPosition(0, -70);
+    bowl.fillStyle(0x181510, 0.9);
+    bowl.fillEllipse(0, 9, 56, 18);
+    bowl.fillStyle(0x4c3e2c, 0.9);
+    bowl.fillEllipse(0, 4, 46, 14);
+    bowl.fillStyle(0xeec870, 0.26);
+    bowl.fillEllipse(0, 2, 30, 8);
+    c.add(bowl);
+
+    const flame = this.add.graphics().setPosition(0, -82);
+    flame.fillStyle(0xd4a040, 0.55);
+    flame.fillEllipse(0, 4, 22, 28);
+    flame.fillStyle(0xf6e5a8, 0.92);
+    flame.fillEllipse(0, 0, 10, 18);
+    c.add(flame);
+
+    const wick = this.add.graphics().setPosition(0, -72);
+    wick.lineStyle(1.5, 0x17100a, 0.65);
+    wick.lineBetween(0, 0, 0, 10);
+    c.add(wick);
+
+    const wispOffsets = [-46, 44];
+    for (let i = 0; i < wispOffsets.length; i += 1) {
+      const offsetX = wispOffsets[i] ?? 0;
+      const wisp = this.add
+        .graphics()
+        .setPosition(offsetX, -38 + i * 8)
+        .setAlpha(0.16);
+      wisp.fillStyle(0xd7ded8, 0.42);
+      wisp.fillEllipse(0, 0, 72, 14);
+      c.add(wisp);
+      this.tweens.add({
+        targets: wisp,
+        x: offsetX + (i === 0 ? -18 : 18),
+        y: wisp.y - 22,
+        alpha: 0,
+        duration: 2600 + i * 360,
+        delay: 500 + i * 780,
+        repeat: -1,
+        ease: "Sine.easeInOut",
+      });
+    }
+
+    this.tweens.add({
+      targets: glow,
+      scaleX: 1.08,
+      scaleY: 1.16,
+      alpha: 0.82,
+      duration: 1700,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    this.tweens.add({
+      targets: flame,
+      scaleX: 1.12,
+      scaleY: 1.24,
+      y: -86,
+      duration: 740,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    addIdleBreath(this, c, { dy: -2, durationMs: 4200 });
   }
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {
     const c = this.add.container(x, y);
+    c.add(addLocalGroundShadow(this, 92, 20, { y: 6, alpha: 0.27 }));
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
+    stageContainerEntrance(this, c, {
+      breathDy: -4,
+      breathMs: 2300,
+    });
     return c;
   }
 
   private drawInga(x: number, y: number): void {
-    // Inga: smaller translucent ellipse, slightly warmer tone
+    this.clearIngaWordAnchors();
+    if (this.ingaFigure?.scene) this.ingaFigure.destroy();
+    const c = this.add.container(x, y);
+    c.add(addLocalGroundShadow(this, 72, 16, { y: 34, alpha: 0.2 }));
+
+    const glow = this.add.graphics();
+    glow.fillStyle(0xfaf4e8, 0.12);
+    glow.fillEllipse(0, -4, 66, 96);
+    c.add(glow);
+
+    const sprite = this.add.image(0, -2, "wood-ghost");
+    sprite
+      .setScale(INGA_GHOST_SPRITE_HEIGHT / sprite.height)
+      .setTint(0xf0e8d8)
+      .setAlpha(0.72);
+    c.add(sprite);
+
     const g = this.add.graphics();
-    // Translucent body — warmer than the grey ghosts
-    g.fillStyle(0xf0e8d8, 0.38);
-    g.fillEllipse(x, y, 42, 58);
-    // Inner glow
-    g.fillStyle(0xfaf4e8, 0.18);
-    g.fillEllipse(x, y - 4, 24, 34);
-    // Eyes
-    g.fillStyle(0x2a1a0a, 0.6);
-    g.fillCircle(x - 7, y - 4, 3);
-    g.fillCircle(x + 7, y - 4, 3);
     // Lantern post
     g.lineStyle(2, 0x3a3630, 0.85);
     g.beginPath();
-    g.moveTo(x + 30, y - 60);
-    g.lineTo(x + 30, y + 40);
+    g.moveTo(30, -60);
+    g.lineTo(30, 40);
     g.strokePath();
     // Lantern box
     g.lineStyle(1, 0xc9a14a, 0.7);
-    g.strokeRect(x + 22, y - 76, 16, 18);
+    g.strokeRect(22, -76, 16, 18);
     g.fillStyle(0xc9a14a, 0.3);
-    g.fillRect(x + 22, y - 76, 16, 18);
+    g.fillRect(22, -76, 16, 18);
+    c.add(g);
+    this.ingaFigure = c;
+    stageContainerEntrance(this, c, {
+      entranceMs: 680,
+      breathDy: -3,
+      breathMs: 2600,
+    });
   }
 
   private drawGhostKing(): void {
@@ -1511,6 +2639,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     const sprite = this.add.image(gkx, gky + 44, "ghost-king");
     sprite.setScale(GHOST_KING_SPRITE_HEIGHT / sprite.height);
     sprite.setAlpha(0);
+    this.ghostKingBody = sprite;
 
     // Fade both in together.
     this.tweens.add({
@@ -1518,6 +2647,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       alpha: 1,
       duration: 1200,
       ease: "Sine.easeIn",
+      onComplete: () => addIdleBreath(this, sprite, { dy: -4, durationMs: 2600 }),
     });
   }
 }

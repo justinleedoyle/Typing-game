@@ -12,6 +12,7 @@ import { decideBeatGate } from "../game/beatGate";
 import { BreathMeter } from "../game/breathMeter";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
+import { showAlmanacStampCard } from "../game/ui/almanacStamp";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import {
@@ -24,9 +25,39 @@ import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
+import {
+  addAmbientDrift,
+  addBackdropDrift,
+  addContainerWake,
+  dismissCompanionCameo,
+  fadeOutStagedSprite,
+  addIdleBreath,
+  addLocalGroundShadow,
+  addLivingLight,
+  attachWordBodyAnchor,
+  playBodyImpact,
+  playBodyTypePulse,
+  playClaimLine,
+  playActorAttention,
+  playMeterPulse,
+  playRealmClearResonance,
+  playSceneEventPulse,
+  stageContainerEntrance,
+  stageAnchoredSprite,
+  stageCompanionCameo,
+  type WordBodyAnchorHandle,
+} from "../game/livingScene";
 import { pickAdaptiveWords, SUNKEN_BELL_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
-import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
+import {
+  bobWrenSprite,
+  flashWrenMiss,
+  makeWrenSprite,
+  playWrenAction,
+  playWrenFocus,
+  playWrenHurt,
+  preloadWren,
+} from "../game/wren";
 import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
 import runaPortrait from "../../art/runa/runa-front.png";
@@ -35,6 +66,7 @@ import bellGhostSprite from "../../art/bell/ghost.png";
 import bellWardenSprite from "../../art/bell/bell-warden.png";
 import olinSprite from "../../art/bell/olin.png";
 import aurlandSprite from "../../art/bell/aurland.png";
+import glassFishSprite from "../../art/companions/glass-fish.png";
 
 // Danger ramps in over the LAST 60% of a ghost's advance — earlier portion
 // stays cream so players can read the word, then it shifts red as the ghost
@@ -49,6 +81,13 @@ const BELL_BURST_COLOR = 0x4ab8d6;
 interface SunkenBellSceneData {
   store: SaveStore;
   revisit?: boolean;
+}
+
+interface DescentLantern {
+  container: Phaser.GameObjects.Container;
+  glow: Phaser.GameObjects.Graphics;
+  body: Phaser.GameObjects.Graphics;
+  flame: Phaser.GameObjects.Graphics;
 }
 
 // Choir ghosts are now the shared MovingWordEnemy. The splitting ghost is the
@@ -83,13 +122,26 @@ export class SunkenBellScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
+  private band!: ConsoleBand;
   private ghosts: MovingWordEnemy[] = [];
   private activeTargets: TextWordTarget[] = [];
+  private bossWordAnchors: WordBodyAnchorHandle[] = [];
+  private olinWordAnchors: WordBodyAnchorHandle[] = [];
+  private aurlandWordAnchors: WordBodyAnchorHandle[] = [];
+  private glassFishWordAnchors: WordBodyAnchorHandle[] = [];
+  private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   /** King Aurland's painted sprite — fades in when he's freed at fork 2 and is
    *  faded/destroyed when the realm moves past the fork (or on shutdown). */
   private aurlandImage?: Phaser.GameObjects.Image;
+  /** Old Olin's painted sprite during the Act 1 teaching beat. */
+  private olinImage?: Phaser.GameObjects.Image;
+  private glassFishCompanion: Phaser.GameObjects.Container | null = null;
+  private doorChantCue: Phaser.GameObjects.Container | null = null;
+  private doorForceCue: Phaser.GameObjects.Container | null = null;
+  private aurlandFateCue: Phaser.GameObjects.Container | null = null;
+  private bellTongueCue: Phaser.GameObjects.Container | null = null;
 
   private beatClock!: BeatClock;
   private beatRing!: Phaser.GameObjects.Graphics;
@@ -113,6 +165,7 @@ export class SunkenBellScene extends Phaser.Scene {
   /** Screen anchor where the air gauge docks inside the console band's satchel
    *  zone (set in create() from band.satchelAnchor) — like Winter's candles. */
   private breathAnchor = { x: 0, y: 0 };
+  private drawnBreathFraction: number | null = null;
 
   // Tier 4 — relics earned in EARLIER realms shape this realm's combat. The
   // bounded loadout is resolved once in create() (neutral on a revisit); the
@@ -144,6 +197,11 @@ export class SunkenBellScene extends Phaser.Scene {
     this.store = data.store;
     this.ghosts = [];
     this.activeTargets = [];
+    this.bossWordAnchors = [];
+    this.olinWordAnchors = [];
+    this.aurlandWordAnchors = [];
+    this.glassFishWordAnchors = [];
+    this.forkChoiceWordAnchors = [];
     this.beatPhase = "on";
     this.beatLocked = false;
     this.breath.reset();
@@ -151,6 +209,11 @@ export class SunkenBellScene extends Phaser.Scene {
     this.onWaveCleared = null;
     this.fork1Choice = null;
     this.fork2Choice = null;
+    this.glassFishCompanion = null;
+    this.doorChantCue = null;
+    this.doorForceCue = null;
+    this.aurlandFateCue = null;
+    this.bellTongueCue = null;
     this.quietLordIntruded =
       this.store.get().realms["sunken-bell"]?.quietLordIntruded ?? false;
   }
@@ -161,6 +224,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.load.image("bell-warden", bellWardenSprite);
     this.load.image("olin", olinSprite);
     this.load.image("aurland", aurlandSprite);
+    this.load.image("bell-companion-glass-fish", glassFishSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
@@ -168,11 +232,71 @@ export class SunkenBellScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.fadeIn(600, 8, 24, 32);
-    this.add
+    const backdrop = this.add
       .image(0, 0, "sunken-bell-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addBackdropDrift(this, backdrop, { durationMs: 19000, driftX: -3, driftY: -5 });
+    addAmbientDrift(this, {
+      kind: "bubble",
+      count: 42,
+      depth: -2,
+      area: { x: 80, y: 80, width: this.scale.width - 160, height: 740 },
+      alpha: 0.28,
+      minSize: 2,
+      maxSize: 7,
+      driftX: 34,
+      driftY: -360,
+      minDurationMs: 6500,
+      maxDurationMs: 13000,
+    });
+    addLivingLight(this, {
+      x: 410,
+      y: 650,
+      width: 360,
+      height: 250,
+      color: 0x4ab8d6,
+      alpha: 0.045,
+      depth: -5,
+      durationMs: 3300,
+    });
+    addLivingLight(this, {
+      x: 1000,
+      y: 540,
+      width: 560,
+      height: 280,
+      color: 0x77d6c9,
+      alpha: 0.04,
+      depth: -5,
+      durationMs: 3900,
+      delayMs: 700,
+      scale: 1.04,
+    });
+    addLivingLight(this, {
+      x: 1515,
+      y: 740,
+      width: 300,
+      height: 210,
+      color: 0x9fe4ff,
+      alpha: 0.045,
+      depth: -5,
+      durationMs: 3000,
+      delayMs: 1200,
+    });
+    addAmbientDrift(this, {
+      kind: "bubble",
+      count: 14,
+      depth: -1.45,
+      area: { x: 120, y: 300, width: this.scale.width - 240, height: 500 },
+      alpha: 0.18,
+      minSize: 6,
+      maxSize: 14,
+      driftX: 46,
+      driftY: -280,
+      minDurationMs: 5600,
+      maxDurationMs: 11800,
+    });
     this.wrenContainer = this.drawWren(WREN_X, WREN_Y);
 
     this.typingInput = new TypingInputController(this.store);
@@ -190,14 +314,19 @@ export class SunkenBellScene extends Phaser.Scene {
     // The breath meter is a bespoke bottom gauge, so it docks into the band's
     // satchel zone (satchelLabel:"" — like Winter's candles); the passive relics
     // earned in earlier realms still surface as icon tiles in that zone.
-    const band = new ConsoleBand(this, {
+    this.band = new ConsoleBand(this, {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,
       satchelLabel: "",
     });
+    const band = this.band;
 
-    this.narration = new NarrationManager(this, { y: 120, framed: true });
+    this.narration = new NarrationManager(this, {
+      y: 120,
+      framed: true,
+      onSpeak: (speakerName) => this.attendSpeaker(speakerName),
+    });
     // Bell is "quiet listening" — softer per-keystroke feedback than the
     // Winter Mountain default. 120ms / 0.002 shake instead of 80ms / 0.002.
     this.typingInput.setKeystrokeHooks({
@@ -211,7 +340,11 @@ export class SunkenBellScene extends Phaser.Scene {
     new HeartSoulHud(this, {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
-      onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
+      onSustainedLowHeart: () =>
+        this.band.showNotice(pickLowHeartLine().text, {
+          label: "heart",
+          durationMs: 2400,
+        }),
       anchor: band.metersAnchor,
       plate: false,
     });
@@ -260,6 +393,10 @@ export class SunkenBellScene extends Phaser.Scene {
       this.beatClock.stop();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
+      this.clearBellForkCues();
+      this.clearAurlandWordAnchors();
+      this.olinImage?.destroy();
+      this.olinImage = undefined;
       this.aurlandImage?.destroy();
       this.aurlandImage = undefined;
     });
@@ -295,6 +432,7 @@ export class SunkenBellScene extends Phaser.Scene {
     }
 
     this.setNarrator(narratorLine);
+    this.band.setObjective("Type the bell memory to return to the Almanac.");
     this.time.delayedCall(2400, () => this.deliverRevisitPassage(words));
   }
 
@@ -319,7 +457,9 @@ export class SunkenBellScene extends Phaser.Scene {
         x: this.scale.width / 2,
         y: this.scale.height / 2,
         fontSize: 44,
+        onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
+          playWrenAction(this.wrenSprite);
           playChime();
           idx += 1;
           this.typingInput.unregister(target);
@@ -401,6 +541,7 @@ export class SunkenBellScene extends Phaser.Scene {
     if (!this.breathActive) {
       bar.setAlpha(0);
       this.breathLabel.setAlpha(0);
+      this.drawnBreathFraction = null;
       return;
     }
     bar.setAlpha(1);
@@ -415,6 +556,19 @@ export class SunkenBellScene extends Phaser.Scene {
     bar.strokeRoundedRect(x, y, w, h, 4);
     bar.fillStyle(low ? PALETTE_HEX.ember : PALETTE_HEX.frost, low ? 0.95 : 0.8);
     bar.fillRoundedRect(x + 1, y + 1, Math.max(0, (w - 2) * frac), h - 2, 3);
+    if (
+      this.drawnBreathFraction !== null &&
+      Math.abs(this.drawnBreathFraction - frac) > 0.001
+    ) {
+      playMeterPulse(this, {
+        x: this.breathAnchor.x,
+        y: this.breathAnchor.y,
+        width: w + 14,
+        height: h + 12,
+        color: low ? PALETTE_HEX.ember : PALETTE_HEX.frost,
+      });
+    }
+    this.drawnBreathFraction = frac;
   }
 
   /** Out of air — a non-terminal shove (the Bell has no candle/game-over
@@ -431,6 +585,7 @@ export class SunkenBellScene extends Phaser.Scene {
       return;
     }
     this.cameras.main.flash(280, 0, 0, 0, false);
+    playWrenHurt(this.wrenSprite, { knockX: 0 });
     playDamageThud();
     flashDamageVignette(this);
     this.breath.gasp();
@@ -470,26 +625,22 @@ export class SunkenBellScene extends Phaser.Scene {
     });
   }
 
-  /** Surface the active relic effects once, as a short pre-combat sequence, so
-   *  the player sees their earlier-realm choices paying off. An empty loadout
-   *  (incl. revisits) passes straight through. */
+  /** Surface that the satchel is doing something here, once and briefly. The
+   *  persistent console-band icons show what you carry, so avoid flooding the
+   *  narration card with one line per relic. */
   private announceCombatLoadout(onDone: () => void): void {
     const lines = this.combat.announcements;
     if (lines.length === 0) {
       onDone();
       return;
     }
-    let i = 0;
-    const showNext = (): void => {
-      if (i >= lines.length) {
-        this.time.delayedCall(700, onDone);
-        return;
-      }
-      this.setNarrator(lines[i]!);
-      i += 1;
-      this.time.delayedCall(2200, showNext);
-    };
-    showNext();
+    this.band.showNotice(
+      lines.length === 1
+        ? lines[0]!
+        : "Your satchel stirs; its relics answer here.",
+      { label: "satchel" },
+    );
+    this.time.delayedCall(1900, onDone);
   }
 
   /** Reset the per-wave relic procs at the start of each combat wave. */
@@ -612,6 +763,7 @@ export class SunkenBellScene extends Phaser.Scene {
     // BeatClock stays not-running here; gating engages only once start() is
     // called at the end of Olin's exchange.
     this.narration.say("sunken_intro_arrival");
+    this.band.setObjective("Light the descent lanterns before the bell teaches its rhythm.");
     this.time.delayedCall(2500, () => this.startDescent());
   }
 
@@ -626,33 +778,12 @@ export class SunkenBellScene extends Phaser.Scene {
     ];
 
     let lit = 0;
-    const lanternContainers: Phaser.GameObjects.Container[] = [];
-    const lanternPulseTweens: Phaser.Tweens.Tween[] = [];
 
     lanternWords.forEach((word, i) => {
       const pos = lanternPositions[i];
       if (!pos) return;
 
-      // Draw lantern shape
-      const lanternG = this.add.graphics();
-      lanternG.fillStyle(0xc9a14a, 0.6);
-      lanternG.fillEllipse(0, 0, 40, 60);
-      lanternG.lineStyle(2, 0xf3ead2, 0.8);
-      lanternG.strokeEllipse(0, 0, 40, 60);
-
-      const lc = this.add.container(pos.x, pos.y, [lanternG]);
-      lanternContainers.push(lc);
-
-      // Pulse tween
-      const pulseTween = this.tweens.add({
-        targets: lanternG,
-        alpha: { from: 0.6, to: 1 },
-        duration: 800,
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.easeInOut",
-      });
-      lanternPulseTweens.push(pulseTween);
+      const lantern = this.drawDescentLantern(pos.x, pos.y, i);
 
       const target = this.makeWord({
         scene: this,
@@ -660,16 +791,13 @@ export class SunkenBellScene extends Phaser.Scene {
         x: pos.x,
         y: pos.y - 60,
         fontSize: 36,
+        onClaim: () => {
+          playWrenFocus(this.wrenSprite);
+          this.pulseDescentLantern(lantern, false);
+        },
         onComplete: () => {
-          // Still the lantern and brighten it
-          pulseTween.stop();
-          lanternG.setAlpha(1);
-          lanternG.clear();
-          lanternG.fillStyle(0xf3c855, 1);
-          lanternG.fillEllipse(0, 0, 40, 60);
-          lanternG.lineStyle(2, 0xf3ead2, 1);
-          lanternG.strokeEllipse(0, 0, 40, 60);
-
+          playWrenAction(this.wrenSprite);
+          this.lightDescentLantern(lantern);
           lit += 1;
           if (lit >= lanternWords.length) {
             this.time.delayedCall(800, () => this.startOlinNPC());
@@ -681,16 +809,130 @@ export class SunkenBellScene extends Phaser.Scene {
     });
   }
 
+  private drawDescentLantern(x: number, y: number, index: number): DescentLantern {
+    const container = this.add.container(x, y).setDepth(-1).setAlpha(0);
+
+    const tether = this.add.graphics();
+    tether.lineStyle(1.5, 0x7daebc, 0.32);
+    tether.lineBetween(0, -92, 0, -36);
+    tether.lineStyle(1, 0xf3ead2, 0.22);
+    tether.lineBetween(-18, -34, 18, -34);
+    container.add(tether);
+
+    const glow = this.add.graphics().setAlpha(0.58);
+    glow.fillStyle(0x74d5df, 0.08);
+    glow.fillEllipse(0, 4, 106, 118);
+    glow.lineStyle(2, 0x74d5df, 0.13);
+    glow.strokeEllipse(0, 4, 88, 102);
+    container.add(glow);
+
+    const body = this.add.graphics();
+    body.fillStyle(0x203a46, 0.86);
+    body.fillRoundedRect(-22, -30, 44, 64, 17);
+    body.lineStyle(2, 0xf3ead2, 0.54);
+    body.strokeRoundedRect(-22, -30, 44, 64, 17);
+    body.lineStyle(1, 0x7daebc, 0.48);
+    body.lineBetween(-12, -20, -12, 24);
+    body.lineBetween(12, -20, 12, 24);
+    container.add(body);
+
+    const flame = this.add.graphics().setAlpha(0.72);
+    flame.fillStyle(0xc9a14a, 0.45);
+    flame.fillEllipse(0, 4, 24, 36);
+    flame.fillStyle(0xf3ead2, 0.72);
+    flame.fillEllipse(0, 2, 10, 20);
+    container.add(flame);
+
+    for (let bubbleIdx = 0; bubbleIdx < 3; bubbleIdx += 1) {
+      const bubble = this.add
+        .graphics()
+        .setPosition(-22 + bubbleIdx * 22, 38 + bubbleIdx * 4)
+        .setAlpha(0.38);
+      bubble.lineStyle(1, 0xaed8df, 0.55);
+      bubble.strokeCircle(0, 0, 4 + bubbleIdx);
+      container.add(bubble);
+      this.tweens.add({
+        targets: bubble,
+        y: bubble.y - 48,
+        alpha: 0,
+        duration: 1800 + bubbleIdx * 320,
+        delay: index * 260 + bubbleIdx * 360,
+        repeat: -1,
+        ease: "Sine.easeInOut",
+      });
+    }
+
+    this.tweens.add({
+      targets: container,
+      alpha: 0.84,
+      y: y - 8,
+      duration: 420,
+      delay: index * 120,
+      ease: "Sine.easeOut",
+      onComplete: () => addIdleBreath(this, container, {
+        dy: -4,
+        durationMs: 2600 + index * 220,
+      }),
+    });
+    this.tweens.add({
+      targets: [glow, flame],
+      scaleX: 1.08,
+      scaleY: 1.14,
+      alpha: 0.9,
+      duration: 900 + index * 120,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+
+    return { container, glow, body, flame };
+  }
+
+  private lightDescentLantern(lantern: DescentLantern): void {
+    this.tweens.killTweensOf([lantern.glow, lantern.flame]);
+    lantern.body.clear();
+    lantern.body.fillStyle(0x274a52, 0.95);
+    lantern.body.fillRoundedRect(-22, -30, 44, 64, 17);
+    lantern.body.lineStyle(2, 0xf3ead2, 0.86);
+    lantern.body.strokeRoundedRect(-22, -30, 44, 64, 17);
+    lantern.body.lineStyle(1, 0x9fdce7, 0.72);
+    lantern.body.lineBetween(-12, -20, -12, 24);
+    lantern.body.lineBetween(12, -20, 12, 24);
+    lantern.glow.setAlpha(0.9).setScale(1.16);
+    lantern.flame.setAlpha(1).setScale(1.18, 1.28);
+    this.pulseDescentLantern(lantern, true);
+  }
+
+  private pulseDescentLantern(
+    lantern: DescentLantern,
+    completion: boolean,
+  ): void {
+    playActorAttention(this, lantern.container, {
+      scale: completion ? 1.035 : 1.018,
+      durationMs: completion ? 260 : 180,
+    });
+    playBodyImpact(this, lantern.container, {
+      kind: "bubble",
+      color: BELL_BURST_COLOR,
+      offsetY: 2,
+      depth: 12,
+      ringRadius: completion ? 42 : 28,
+      count: completion ? 9 : 5,
+      durationMs: completion ? 460 : 260,
+    });
+  }
+
   // ─── Act 1: Old Olin NPC ──────────────────────────────────────────────────
 
   private startOlinNPC(): void {
     this.clearActiveTargets();
+    this.band.setObjective("Answer Old Olin to learn the bell's rhythm.");
     // Draw Olin — hunched silhouette on a pew
     this.drawOlin();
 
-    this.setNarrator("tell me your name, child.");
+    this.setNarrator("tell me your name, child.", "Old Olin");
     this.time.delayedCall(600, () => {
-      const nameTarget = this.makeWord({
+      const nameTarget = this.makeOlinWord({
         scene: this,
         word: "wren",
         x: this.scale.width / 2,
@@ -700,13 +942,15 @@ export class SunkenBellScene extends Phaser.Scene {
           this.clearActiveTargets();
           this.setNarrator(
             "you are listening for the bell. on its toll, you may speak. between tolls, you cannot.",
+            "Old Olin",
           );
           this.time.delayedCall(3000, () => {
             this.setNarrator(
               "i taught the bell its name. i can teach you if you let me.",
+              "Old Olin",
             );
             this.time.delayedCall(800, () => {
-              const teachTarget = this.makeWord({
+              const teachTarget = this.makeOlinWord({
                 scene: this,
                 word: "teach me",
                 x: this.scale.width / 2,
@@ -730,6 +974,9 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private onOlinTeachComplete(): void {
     playChime();
+    playActorAttention(this, this.olinImage, {
+      tint: BELL_BURST_COLOR,
+    });
     // Almanac lore pages 1 + 5 — Drowned Choir + Olin's hidden confession,
     // both stamped at the end of his teaching beat per §5.5.7.
     this.store.update((s) => {
@@ -761,7 +1008,9 @@ export class SunkenBellScene extends Phaser.Scene {
     // where the realm tips into combat.
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
+    this.pulseBellWave();
     this.ghosts = [];
+    this.band.setObjective("Drive back the tide-ghosts before the air runs out.");
     // Combat begins — the air stake goes live for the choir waves.
     this.setBreathActive(true);
     this.onWaveCleared = () => this.onFirstEncounterCleared();
@@ -794,8 +1043,10 @@ export class SunkenBellScene extends Phaser.Scene {
   private startWave1(): void {
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
+    this.pulseBellWave();
     this.onWaveCleared = () => this.onWave1Cleared();
     this.narration.say("sunken_choir_wave1");
+    this.band.setObjective("Type each word on the toll; watch the air meter.");
     const words = pickAdaptiveWords(
       SUNKEN_BELL_WORD_BANK,
       4,
@@ -825,11 +1076,13 @@ export class SunkenBellScene extends Phaser.Scene {
   private startAntiphon(): void {
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
+    this.pulseBellWave();
     this.ghosts = [];
     // Flip the accept window to the half-beat — answer BETWEEN the tolls.
     this.beatPhase = "off";
     this.onWaveCleared = () => this.onAntiphonCleared();
     this.narration.say("sunken_antiphon_intro");
+    this.band.setObjective("Answer between tolls when the ember ring opens.");
     // Short, non-hyphenated words — the demand is the syncopation, not mid-word
     // metering. The half-beat ember ring (onBeatTick) shows the answer window.
     const words = pickAdaptiveWords(
@@ -859,8 +1112,10 @@ export class SunkenBellScene extends Phaser.Scene {
   private startWave2(): void {
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
+    this.pulseBellWave();
     this.onWaveCleared = () => this.onWave2Cleared();
     this.narration.say("sunken_choir_wave2");
+    this.band.setObjective("Break the splitting ghost before the air runs out.");
 
     // §5.5.10 — the bell tolls, and for one peal the cathedral fills with a
     // scratched whisper of the Lord's text. Fires once per playthrough on the
@@ -940,8 +1195,10 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startFork1(): void {
     this.narration.say("sunken_fork1_intro");
+    this.band.setObjective("Choose how to open the nave doors.");
+    this.showDoorCues();
 
-    const chantTarget = this.makeWord({
+    const chantTarget = this.makeBellForkWord(this.doorChantCue, {
       scene: this,
       word: "open slowly",
       x: this.scale.width / 2 - 380,
@@ -953,8 +1210,8 @@ export class SunkenBellScene extends Phaser.Scene {
         this.fork1Choice = "chant";
         this.startFork1Chant();
       },
-    });
-    const forceTarget = this.makeWord({
+    }, -62);
+    const forceTarget = this.makeBellForkWord(this.doorForceCue, {
       scene: this,
       word: "force them open",
       x: this.scale.width / 2 + 380,
@@ -966,13 +1223,16 @@ export class SunkenBellScene extends Phaser.Scene {
         this.fork1Choice = "force";
         this.startFork1Force();
       },
-    });
+    }, -48);
     this.typingInput.register(chantTarget);
     this.typingInput.register(forceTarget);
     this.activeTargets.push(chantTarget, forceTarget);
   }
 
   private startFork1Chant(): void {
+    this.fadeOutForkCue(this.doorForceCue);
+    this.doorForceCue = null;
+    this.band.setObjective("Open the doors slowly, on the bell's rhythm.");
     // Beat-locked passage chain
     const phrases = [
       { word: "slow.", narrator: "The doors remember weight." },
@@ -990,6 +1250,8 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private startFork1Force(): void {
+    this.fadeOutForkCue(this.doorChantCue);
+    this.doorChantCue = null;
     // §5.5.5 Fork 1B — force the doors open → award Lock-Bar relic
     this.store.update((s) => {
       if (!s.satchel.includes("lock-bar")) s.satchel.push("lock-bar");
@@ -1000,8 +1262,9 @@ export class SunkenBellScene extends Phaser.Scene {
     // running, so its first letter is beat-gated like any new claim. (The old
     // build had regressed this to a plain lowercase setNarrator("OPEN").)
     this.setNarrator("Force the doors — OPEN, on the toll.");
+    this.band.setObjective("Type OPEN on the toll.");
     this.time.delayedCall(700, () => {
-      const openTarget = this.makeWord({
+      const openTarget = this.makeBellForkWord(this.doorForceCue, {
         scene: this,
         word: "OPEN",
         x: this.scale.width / 2,
@@ -1015,7 +1278,7 @@ export class SunkenBellScene extends Phaser.Scene {
           playDamageThud();
           this.startFork1ForceBreak();
         },
-      });
+      }, -48);
       this.typingInput.register(openTarget);
       this.activeTargets.push(openTarget);
     });
@@ -1033,7 +1296,7 @@ export class SunkenBellScene extends Phaser.Scene {
       }
       const word = forcePhrases[step];
       if (word === undefined) return;
-      const target = this.makeWord({
+      const target = this.makeBellForkWord(this.doorForceCue, {
         scene: this,
         word,
         x: this.scale.width / 2,
@@ -1044,7 +1307,7 @@ export class SunkenBellScene extends Phaser.Scene {
           this.clearActiveTargets();
           advance();
         },
-      });
+      }, -48);
       this.typingInput.register(target);
       this.activeTargets.push(target);
     };
@@ -1053,6 +1316,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startAct3Corridor(): void {
     this.clearActiveTargets();
+    this.clearBellForkCues();
     this.setNarrator("The Warden has been waiting.");
     this.time.delayedCall(2000, () => this.startAct3());
   }
@@ -1073,6 +1337,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private startAct3(): void {
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
+    this.pulseBellWave({ y: 640, ringWidth: 900, ringHeight: 180, count: 14 });
     this.ghosts = [];
     const wardenSprite = this.drawWarden();
     // Phase 1
@@ -1087,7 +1352,7 @@ export class SunkenBellScene extends Phaser.Scene {
     let remaining = words.length;
 
     words.forEach((word, i) => {
-      const target = this.makeWord({
+      const target = this.makeWardenWord(wardenSprite, {
         scene: this,
         word,
         x: this.scale.width / 2 - 200 + i * 200,
@@ -1139,7 +1404,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
     this.time.delayedCall(800, () => {
       phrases.forEach((word, i) => {
-        const target = this.makeWord({
+        const target = this.makeWardenWord(wardenSprite, {
           scene: this,
           word,
           x: this.scale.width / 2 - 260 + i * 260,
@@ -1165,11 +1430,11 @@ export class SunkenBellScene extends Phaser.Scene {
                 flashQuietLordFragment(this, {
                   text: "Ag",
                   onDone: () => {
-                    this.time.delayedCall(400, () => this.startWardenPhase3());
+                    this.time.delayedCall(400, () => this.startWardenPhase3(wardenSprite));
                   },
                 });
               } else {
-                this.time.delayedCall(400, () => this.startWardenPhase3());
+                this.time.delayedCall(400, () => this.startWardenPhase3(wardenSprite));
               }
             }
           },
@@ -1180,7 +1445,7 @@ export class SunkenBellScene extends Phaser.Scene {
     });
   }
 
-  private startWardenPhase3(): void {
+  private startWardenPhase3(wardenSprite: Phaser.GameObjects.Image): void {
     this.setNarrator("The bell sings. Type each word on the toll.");
 
     const passage = "i am the bell. i drink the sea.";
@@ -1204,7 +1469,7 @@ export class SunkenBellScene extends Phaser.Scene {
       if (word === undefined) return;
 
       let completed = false;
-      const target = this.makeWord({
+      const target = this.makeWardenWord(wardenSprite, {
         scene: this,
         word,
         x: this.scale.width / 2,
@@ -1258,8 +1523,10 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startFork2(): void {
     this.setNarrator("The bell is silent. Two paths beneath it.");
+    this.band.setObjective("Choose Aurland's fate beneath the bell.");
+    this.showFateCues();
 
-    const freeTarget = this.makeWord({
+    const freeTarget = this.makeBellForkWord(this.aurlandFateCue, {
       scene: this,
       word: "free king aurland",
       x: this.scale.width / 2 - 360,
@@ -1271,8 +1538,8 @@ export class SunkenBellScene extends Phaser.Scene {
         this.fork2Choice = "free-aurland";
         this.startFork2FreeAurland();
       },
-    });
-    const claimTarget = this.makeWord({
+    }, -52);
+    const claimTarget = this.makeBellForkWord(this.bellTongueCue, {
       scene: this,
       word: "claim the tongue",
       x: this.scale.width / 2 + 360,
@@ -1284,13 +1551,15 @@ export class SunkenBellScene extends Phaser.Scene {
         this.fork2Choice = "claim-tongue";
         this.startFork2ClaimTongue();
       },
-    });
+    }, -48);
     this.typingInput.register(freeTarget);
     this.typingInput.register(claimTarget);
     this.activeTargets.push(freeTarget, claimTarget);
   }
 
   private startFork2FreeAurland(): void {
+    this.fadeOutForkCue(this.bellTongueCue);
+    this.bellTongueCue = null;
     // Triumphant beat: the freed king fades in, standing, while the passage is
     // typed. Placed left-of-centre so he's clear of Wren (x=960) and the lower
     // typing targets, and well below the narration band (y≈150).
@@ -1311,6 +1580,8 @@ export class SunkenBellScene extends Phaser.Scene {
       playChime();
       // Realm moves past the fork — the king swims off as the glass-fish gate
       // begins.
+      this.fadeOutForkCue(this.aurlandFateCue);
+      this.aurlandFateCue = null;
       this.hideAurland();
       this.startGlassFishGate();
     });
@@ -1321,28 +1592,37 @@ export class SunkenBellScene extends Phaser.Scene {
     if (this.aurlandImage) return;
     const sprite = this.add
       .image(660, 760, "aurland")
-      .setOrigin(0.5, 1)
-      .setAlpha(0);
+      .setOrigin(0.5, 1);
     sprite.setScale(AURLAND_SPRITE_HEIGHT / sprite.height);
     this.aurlandImage = sprite;
-    this.tweens.add({ targets: sprite, alpha: 1, duration: 1200, ease: "Sine.easeIn" });
+    stageAnchoredSprite(this, sprite, {
+      shadowWidth: 132,
+      shadowHeight: 24,
+      shadowOffsetY: 8,
+      shadowAlpha: 0.2,
+      restAlpha: 0.94,
+      entranceOffsetY: 18,
+      entranceMs: 1100,
+      breathDy: -3,
+      breathMs: 2600,
+    });
   }
 
   /** Fade King Aurland out and destroy him as the realm moves past the fork. */
   private hideAurland(): void {
     const sprite = this.aurlandImage;
     if (!sprite) return;
+    this.clearAurlandWordAnchors();
     this.aurlandImage = undefined;
-    this.tweens.add({
-      targets: sprite,
-      alpha: 0,
-      duration: 1000,
+    fadeOutStagedSprite(this, sprite, {
+      durationMs: 1000,
       ease: "Sine.easeOut",
-      onComplete: () => sprite.destroy(),
     });
   }
 
   private startFork2ClaimTongue(): void {
+    this.fadeOutForkCue(this.aurlandFateCue);
+    this.aurlandFateCue = null;
     const chain = [
       {
         word: "take it",
@@ -1357,6 +1637,8 @@ export class SunkenBellScene extends Phaser.Scene {
         }
       });
       playChime();
+      this.fadeOutForkCue(this.bellTongueCue);
+      this.bellTongueCue = null;
       this.startGlassFishGate();
     });
   }
@@ -1367,8 +1649,9 @@ export class SunkenBellScene extends Phaser.Scene {
     this.clearActiveTargets();
     if (this.fork2Choice === "free-aurland") {
       this.setNarrator("A small glass-fish leads the way up through the dark water.");
+      this.showGlassFishCompanion();
       this.time.delayedCall(1000, () => {
-        const takeTarget = this.makeWord({
+        const takeTarget = this.makeGlassFishWord({
           scene: this,
           word: "take her with you",
           x: this.scale.width / 2 - 300,
@@ -1383,7 +1666,7 @@ export class SunkenBellScene extends Phaser.Scene {
             this.startTrueNamePassage();
           },
         });
-        const letGoTarget = this.makeWord({
+        const letGoTarget = this.makeGlassFishWord({
           scene: this,
           word: "let her go",
           x: this.scale.width / 2 + 300,
@@ -1392,6 +1675,7 @@ export class SunkenBellScene extends Phaser.Scene {
           frame: "banner",
           onComplete: () => {
             this.clearActiveTargets();
+            this.dismissGlassFishCompanion(1320, 640);
             this.startTrueNamePassage();
           },
         });
@@ -1402,6 +1686,48 @@ export class SunkenBellScene extends Phaser.Scene {
     } else {
       this.startTrueNamePassage();
     }
+  }
+
+  private showGlassFishCompanion(): void {
+    if (this.glassFishCompanion?.scene) return;
+    this.glassFishCompanion = stageCompanionCameo(this, {
+      textureKey: "bell-companion-glass-fish",
+      startX: 1340,
+      startY: 760,
+      x: 1190,
+      y: 720,
+      height: 96,
+      depth: 43,
+      flipX: true,
+      shadowWidth: 76,
+      shadowHeight: 12,
+      shadowOffsetY: 22,
+      shadowAlpha: 0.13,
+      breathDy: -16,
+      breathMs: 1500,
+      wake: {
+        kind: "bubble",
+        intervalMs: 150,
+        offsetY: -34,
+        spreadX: 24,
+        spreadY: 22,
+        depth: 42,
+        alpha: 0.3,
+      },
+    });
+  }
+
+  private pulseGlassFishCompanion(): void {
+    playActorAttention(this, this.glassFishCompanion, {
+      scale: 1.04,
+      durationMs: 220,
+    });
+  }
+
+  private dismissGlassFishCompanion(x: number, y: number): void {
+    this.clearGlassFishWordAnchors();
+    dismissCompanionCameo(this, this.glassFishCompanion, { x, y, durationMs: 720 });
+    this.glassFishCompanion = null;
   }
 
   // ─── True-name passage ───────────────────────────────────────────────────
@@ -1454,36 +1780,11 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private showAlmanacStamp(onDone: () => void): void {
     this.setNarrator("");
-    const stamp = this.add
-      .text(this.scale.width / 2, this.scale.height / 2, "the sunken bell", {
-        fontFamily: SERIF,
-        fontSize: "64px",
-        color: PALETTE.cream,
-        backgroundColor: "#081820",
-        padding: { left: 40, right: 40, top: 20, bottom: 20 },
-      })
-      .setOrigin(0.5)
-      .setAlpha(0)
-      .setScale(0.6);
-
-    this.tweens.add({
-      targets: stamp,
-      alpha: 1,
-      scale: 1,
-      duration: 350,
-      ease: "Back.easeOut",
-      onComplete: () => {
-        playChime();
-        this.time.delayedCall(1500, () => {
-          this.tweens.add({
-            targets: stamp,
-            alpha: 0,
-            duration: 300,
-            onComplete: onDone,
-          });
-        });
-      },
+    playRealmClearResonance(this, {
+      color: PALETTE_HEX.frost,
+      y: this.scale.height / 2 - 30,
     });
+    showAlmanacStampCard(this, "the sunken bell", onDone, { onReveal: playChime });
   }
 
   // ─── Ghost enemies ────────────────────────────────────────────────────────
@@ -1491,7 +1792,644 @@ export class SunkenBellScene extends Phaser.Scene {
   /** UI-cohesion: every Bell word target gets the legibility outline by default
    *  (TTT-style). Fork choices pass frame: "banner". */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
-    return new TextWordTarget({ outline: true, ...opts });
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    return new TextWordTarget({
+      outline: true,
+      ...opts,
+      onClaim: (mods) => {
+        if (opts.frame === "banner") playWrenFocus(this.wrenSprite);
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        this.playWrenTypingPulse();
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        if (opts.frame === "banner") playWrenAction(this.wrenSprite);
+        onComplete();
+      },
+    });
+  }
+
+  private playWrenTypingPulse(): void {
+    playBodyTypePulse(this, this.wrenContainer, {
+      kind: "bubble",
+      color: BELL_BURST_COLOR,
+      offsetY: -108,
+      depth: 58,
+      ringRadius: 22,
+    });
+  }
+
+  private makeWardenWord(
+    wardenSprite: Phaser.GameObjects.Image,
+    opts: TextWordTargetOptions,
+  ): TextWordTarget {
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.bossWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.bossWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? BELL_BURST_COLOR,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          wardenSprite.x,
+          wardenSprite.y - 70,
+          { color: BELL_BURST_COLOR, depth: 58 },
+        );
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, wardenSprite, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -58,
+          depth: 58,
+          ringRadius: 30,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, wardenSprite, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -58,
+          depth: 58,
+          ringRadius: 58,
+          count: 14,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      wardenSprite,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: BELL_BURST_COLOR,
+        alpha: 0.22,
+        depth: 44,
+        sourceOffsetY: -68,
+        targetOffsetY: 24,
+      },
+    );
+    this.bossWordAnchors.push(anchor);
+    return target;
+  }
+
+  private makeOlinWord(opts: TextWordTargetOptions): TextWordTarget {
+    const olin = this.olinImage;
+    if (!olin) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.olinWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.olinWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? BELL_BURST_COLOR,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          olin.x,
+          olin.y - 92,
+          { color: BELL_BURST_COLOR, depth: 58 },
+        );
+        playActorAttention(this, olin, {
+          tint: BELL_BURST_COLOR,
+          scale: 1.02,
+          durationMs: 180,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, olin, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -92,
+          depth: 58,
+          ringRadius: 22,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, olin, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -92,
+          depth: 58,
+          ringRadius: 42,
+          count: 10,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      olin,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: BELL_BURST_COLOR,
+        alpha: 0.2,
+        depth: 44,
+        sourceOffsetY: -92,
+        targetOffsetY: 24,
+      },
+    );
+    this.olinWordAnchors.push(anchor);
+    olin.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
+  private makeAurlandWord(opts: TextWordTargetOptions): TextWordTarget {
+    const aurland = this.aurlandImage;
+    if (!aurland) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.aurlandWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.aurlandWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? BELL_BURST_COLOR,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          aurland.x,
+          aurland.y - 142,
+          { color: BELL_BURST_COLOR, depth: 58 },
+        );
+        playActorAttention(this, aurland, {
+          tint: BELL_BURST_COLOR,
+          scale: 1.02,
+          durationMs: 180,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, aurland, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -142,
+          depth: 58,
+          ringRadius: 28,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, aurland, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -142,
+          depth: 58,
+          ringRadius: 54,
+          count: 12,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      aurland,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: BELL_BURST_COLOR,
+        alpha: 0.2,
+        depth: 44,
+        sourceOffsetY: -142,
+        targetOffsetY: 24,
+      },
+    );
+    this.aurlandWordAnchors.push(anchor);
+    aurland.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
+  private makeGlassFishWord(opts: TextWordTargetOptions): TextWordTarget {
+    const body = this.glassFishCompanion;
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.glassFishWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.glassFishWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? BELL_BURST_COLOR,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y - 54,
+          { color: BELL_BURST_COLOR, depth: 58 },
+        );
+        this.pulseGlassFishCompanion();
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -54,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -54,
+          depth: 58,
+          ringRadius: 42,
+          count: 9,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: BELL_BURST_COLOR,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -54,
+        targetOffsetY: 24,
+      },
+    );
+    this.glassFishWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
+  private makeBellForkWord(
+    body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined,
+    opts: TextWordTargetOptions,
+    sourceOffsetY = -48,
+  ): TextWordTarget {
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.forkChoiceWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.forkChoiceWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? BELL_BURST_COLOR,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y + sourceOffsetY,
+          { color: BELL_BURST_COLOR, depth: 58 },
+        );
+        playBodyTypePulse(this, body, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: sourceOffsetY,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: sourceOffsetY,
+          depth: 58,
+          ringRadius: 22,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: sourceOffsetY,
+          depth: 58,
+          ringRadius: 44,
+          count: 10,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: BELL_BURST_COLOR,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY,
+        targetOffsetY: 24,
+      },
+    );
+    this.forkChoiceWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
+  private clearForkChoiceWordAnchors(): void {
+    for (const anchor of this.forkChoiceWordAnchors) anchor.destroy();
+    this.forkChoiceWordAnchors = [];
+  }
+
+  private showDoorCues(): void {
+    if (!this.doorChantCue?.scene) {
+      this.doorChantCue = this.createDoorCue(700, 812, "chant");
+    }
+    if (!this.doorForceCue?.scene) {
+      this.doorForceCue = this.createDoorCue(1220, 812, "force");
+    }
+  }
+
+  private createDoorCue(
+    x: number,
+    y: number,
+    mode: "chant" | "force",
+  ): Phaser.GameObjects.Container {
+    const c = this.add.container(x, y + 18).setDepth(42).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 132, 18, { y: 12, alpha: 0.2 }));
+
+    const g = this.add.graphics();
+    g.fillStyle(0x102335, 0.78);
+    g.fillRoundedRect(-48, -104, 96, 110, 8);
+    g.lineStyle(2, BELL_BURST_COLOR, 0.42);
+    g.strokeRoundedRect(-48, -104, 96, 110, 8);
+    g.lineStyle(1, 0xd8f6ff, 0.18);
+    g.lineBetween(0, -100, 0, 3);
+    g.lineBetween(-36, -66, 36, -66);
+    g.lineBetween(-34, -30, 34, -30);
+
+    if (mode === "chant") {
+      g.lineStyle(2, 0xd8f6ff, 0.28);
+      g.strokeEllipse(0, -50, 116, 62);
+      g.fillStyle(BELL_BURST_COLOR, 0.42);
+      g.fillCircle(-32, -62, 4);
+      g.fillCircle(0, -72, 3.5);
+      g.fillCircle(32, -62, 4);
+    } else {
+      g.fillStyle(0x5d4931, 0.92);
+      g.fillRoundedRect(-60, -56, 120, 18, 6);
+      g.fillStyle(PALETTE_HEX.brass, 0.62);
+      g.fillCircle(-40, -47, 5);
+      g.fillCircle(40, -47, 5);
+      g.lineStyle(3, PALETTE_HEX.brass, 0.46);
+      g.lineBetween(-62, -37, 62, -71);
+    }
+    c.add(g);
+
+    addContainerWake(this, c, {
+      kind: "bubble",
+      intervalMs: 560,
+      spreadX: 36,
+      spreadY: 18,
+      offsetY: -54,
+      alpha: 0.18,
+      size: 4,
+      depth: 41,
+      driftY: -42,
+      durationMs: 1300,
+    });
+
+    this.tweens.add({
+      targets: c,
+      y,
+      alpha: 0.88,
+      duration: 650,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!c.scene) return;
+        addIdleBreath(this, c, { dy: -3, durationMs: 2600 });
+      },
+    });
+    return c;
+  }
+
+  private showFateCues(): void {
+    if (!this.aurlandFateCue?.scene) {
+      this.aurlandFateCue = this.createAurlandFateCue();
+    }
+    if (!this.bellTongueCue?.scene) {
+      this.bellTongueCue = this.createBellTongueCue();
+    }
+  }
+
+  private createAurlandFateCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(690, 812).setDepth(42).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 138, 18, { y: 12, alpha: 0.2 }));
+
+    const g = this.add.graphics();
+    g.lineStyle(2, BELL_BURST_COLOR, 0.34);
+    g.strokeEllipse(0, -52, 96, 110);
+    g.fillStyle(0x0d2b38, 0.62);
+    g.fillEllipse(0, -42, 78, 92);
+    g.fillStyle(PALETTE_HEX.brass, 0.74);
+    g.fillTriangle(-34, -66, -18, -96, -4, -66);
+    g.fillTriangle(-8, -66, 0, -104, 10, -66);
+    g.fillTriangle(6, -66, 24, -96, 36, -66);
+    g.fillRoundedRect(-38, -66, 76, 12, 4);
+    g.lineStyle(2, 0xd8f6ff, 0.26);
+    g.strokeCircle(-42, -36, 10);
+    g.strokeCircle(42, -36, 10);
+    g.lineBetween(-32, -36, 32, -36);
+    c.add(g);
+
+    addContainerWake(this, c, {
+      kind: "bubble",
+      intervalMs: 520,
+      spreadX: 30,
+      spreadY: 18,
+      offsetY: -48,
+      alpha: 0.2,
+      size: 4,
+      depth: 41,
+      driftY: -44,
+      durationMs: 1300,
+    });
+
+    this.tweens.add({
+      targets: c,
+      y: 790,
+      alpha: 0.86,
+      duration: 700,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!c.scene) return;
+        addIdleBreath(this, c, { dy: -4, durationMs: 2700 });
+      },
+    });
+    return c;
+  }
+
+  private createBellTongueCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(1230, 812).setDepth(42).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 126, 18, { y: 12, alpha: 0.2 }));
+
+    const g = this.add.graphics();
+    g.lineStyle(2, PALETTE_HEX.brass, 0.5);
+    g.strokeCircle(0, -98, 18);
+    g.lineStyle(3, BELL_BURST_COLOR, 0.26);
+    g.lineBetween(0, -82, 0, -26);
+    g.fillStyle(0x6a4d29, 0.92);
+    g.fillRoundedRect(-18, -58, 36, 74, 9);
+    g.fillStyle(PALETTE_HEX.brass, 0.75);
+    g.fillCircle(0, -42, 5);
+    g.fillCircle(0, -4, 6);
+    g.lineStyle(2, 0xd8f6ff, 0.22);
+    g.strokeEllipse(0, -25, 72, 38);
+    c.add(g);
+
+    addContainerWake(this, c, {
+      kind: "bubble",
+      intervalMs: 540,
+      spreadX: 28,
+      spreadY: 18,
+      offsetY: -42,
+      alpha: 0.2,
+      size: 4,
+      depth: 41,
+      driftY: -38,
+      durationMs: 1250,
+    });
+
+    this.tweens.add({
+      targets: c,
+      y: 792,
+      alpha: 0.9,
+      duration: 700,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!c.scene) return;
+        addIdleBreath(this, c, { dy: -3, durationMs: 2500 });
+      },
+    });
+    return c;
+  }
+
+  private fadeOutForkCue(
+    cue: Phaser.GameObjects.Container | null,
+    opts: { riseY?: number; durationMs?: number } = {},
+  ): void {
+    if (!cue?.scene) return;
+    this.tweens.killTweensOf(cue);
+    this.tweens.add({
+      targets: cue,
+      y: cue.y + (opts.riseY ?? 18),
+      alpha: 0,
+      duration: opts.durationMs ?? 520,
+      ease: "Sine.easeIn",
+      onComplete: () => {
+        if (cue.scene) cue.destroy();
+      },
+    });
+  }
+
+  private clearBellForkCues(): void {
+    this.clearForkChoiceWordAnchors();
+    for (const cue of [
+      this.doorChantCue,
+      this.doorForceCue,
+      this.aurlandFateCue,
+      this.bellTongueCue,
+    ]) {
+      if (!cue?.scene) continue;
+      this.tweens.killTweensOf(cue);
+      cue.destroy();
+    }
+    this.doorChantCue = null;
+    this.doorForceCue = null;
+    this.aurlandFateCue = null;
+    this.bellTongueCue = null;
+  }
+
+  private clearBossWordAnchors(): void {
+    for (const anchor of this.bossWordAnchors) anchor.destroy();
+    this.bossWordAnchors = [];
+  }
+
+  private clearOlinWordAnchors(): void {
+    for (const anchor of this.olinWordAnchors) anchor.destroy();
+    this.olinWordAnchors = [];
+  }
+
+  private clearAurlandWordAnchors(): void {
+    for (const anchor of this.aurlandWordAnchors) anchor.destroy();
+    this.aurlandWordAnchors = [];
+  }
+
+  private clearGlassFishWordAnchors(): void {
+    for (const anchor of this.glassFishWordAnchors) anchor.destroy();
+    this.glassFishWordAnchors = [];
   }
 
   private spawnGhost(
@@ -1505,6 +2443,19 @@ export class SunkenBellScene extends Phaser.Scene {
   ): void {
     const container = this.add.container(startX, restY);
     this.drawGhostInto(container);
+    addContainerWake(this, container, {
+      kind: "bubble",
+      intervalMs: 330,
+      spreadX: 22,
+      spreadY: 10,
+      offsetY: -8,
+      alpha: 0.32,
+      size: 4,
+      depth: -1,
+      driftX: 18,
+      driftY: -38,
+      durationMs: 1200,
+    });
     container.setAlpha(0);
 
     const ghost = new MovingWordEnemy({
@@ -1531,6 +2482,13 @@ export class SunkenBellScene extends Phaser.Scene {
       fontSize: 32,
       // Sea-green burst — the ghost dissolves into deep water, not brass.
       burstColor: BELL_BURST_COLOR,
+      defeatImpactKind: "bubble",
+      defeatImpactColor: BELL_BURST_COLOR,
+      claimLineFrom: () => ({
+        x: this.wrenContainer.x,
+        y: this.wrenContainer.y - 112,
+      }),
+      claimLineColor: BELL_BURST_COLOR,
       outline: true,
       onTargetAttached: (t) => this.activeTargets.push(t),
       onTargetDetached: (t) => {
@@ -1550,6 +2508,7 @@ export class SunkenBellScene extends Phaser.Scene {
       },
       onReachWren: () => {
         this.cameras.main.flash(300, 0, 0, 0, false);
+        playWrenHurt(this.wrenSprite, { knockX: 0 });
         playDamageThud();
         flashDamageVignette(this);
       },
@@ -1575,6 +2534,7 @@ export class SunkenBellScene extends Phaser.Scene {
    *  The container drives alpha (restAlpha 0.7) + the danger-ramp tint, so this
    *  just places the art. */
   private drawGhostInto(c: Phaser.GameObjects.Container): void {
+    c.add(addLocalGroundShadow(this, 88, 18, { y: 8, alpha: 0.18 }));
     const sprite = this.add.image(0, 0, "bell-ghost");
     sprite.setScale(GHOST_SPRITE_HEIGHT / sprite.height);
     c.add(sprite);
@@ -1629,19 +2589,29 @@ export class SunkenBellScene extends Phaser.Scene {
       }
       const step = steps[idx];
       if (!step) return;
-      const target = this.makeWord({
+      const target = this.makeBellForkWord(this.doorChantCue, {
         scene: this,
         word: step.word,
         x: this.scale.width / 2,
         y: this.scale.height - 340,
         fontSize: 34,
+        onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
+          playWrenAction(this.wrenSprite);
+          playBodyImpact(this, this.wrenContainer, {
+            kind: "bubble",
+            color: BELL_BURST_COLOR,
+            offsetY: -104,
+            ringRadius: 30,
+            count: 7,
+            depth: 58,
+          });
           idx += 1;
           this.clearActiveTargets();
           if (step.narrator) this.setNarrator(step.narrator);
           this.time.delayedCall(1200, advance);
         },
-      });
+      }, -62);
       this.typingInput.register(target);
       this.activeTargets.push(target);
     };
@@ -1665,19 +2635,36 @@ export class SunkenBellScene extends Phaser.Scene {
       }
       const step = steps[idx];
       if (!step) return;
-      const target = this.makeWord({
+      const targetOptions: TextWordTargetOptions = {
         scene: this,
         word: step.word,
         x: this.scale.width / 2,
         y: this.scale.height - 340,
         fontSize: 36,
+        onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
+          playWrenAction(this.wrenSprite);
+          playActorAttention(this, this.aurlandImage, {
+            tint: BELL_BURST_COLOR,
+          });
+          playBodyImpact(this, this.wrenContainer, {
+            kind: "bubble",
+            color: BELL_BURST_COLOR,
+            offsetY: -104,
+            ringRadius: 30,
+            count: 7,
+            depth: 58,
+          });
           idx += 1;
           this.clearActiveTargets();
           if (step.narrator) this.setNarrator(step.narrator);
           this.time.delayedCall(1000, advance);
         },
-      });
+      };
+      const target =
+        this.fork2Choice === "free-aurland"
+          ? this.makeAurlandWord(targetOptions)
+          : this.makeBellForkWord(this.bellTongueCue, targetOptions, -48);
       this.typingInput.register(target);
       this.activeTargets.push(target);
     };
@@ -1687,11 +2674,61 @@ export class SunkenBellScene extends Phaser.Scene {
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
-  private setNarrator(text: string): void {
-    this.narration.sayRaw(text);
+  private setNarrator(text: string, speakerName: string | null = null): void {
+    this.narration.sayRaw(text, { speakerName });
+  }
+
+  private attendSpeaker(speakerName: string | null): void {
+    this.setBandSpeaker(speakerName);
+    if (speakerName === "Old Olin") {
+      playActorAttention(this, this.olinImage, {
+        tint: BELL_BURST_COLOR,
+        scale: 1.025,
+        durationMs: 220,
+      });
+    } else if (speakerName === "King Aurland") {
+      playActorAttention(this, this.aurlandImage, {
+        tint: BELL_BURST_COLOR,
+        scale: 1.025,
+        durationMs: 220,
+      });
+    }
+  }
+
+  private setBandSpeaker(speakerName: string | null): void {
+    if (!speakerName || speakerName === "Runa") {
+      this.band.setPortrait("band-portrait-runa", "Runa");
+    } else if (speakerName === "Old Olin") {
+      this.band.setPortrait("olin", "Old Olin");
+    } else if (speakerName === "King Aurland") {
+      this.band.setPortrait("aurland", "Aurland");
+    } else {
+      this.band.setPortrait(undefined, speakerName);
+    }
+  }
+
+  private pulseBellWave(
+    opts: { y?: number; ringWidth?: number; ringHeight?: number; count?: number } = {},
+  ): void {
+    playSceneEventPulse(this, {
+      kind: "bubble",
+      color: 0x86d7cf,
+      x: this.scale.width / 2,
+      y: 720,
+      ringWidth: 1100,
+      ringHeight: 180,
+      count: 12,
+      alpha: 0.13,
+      ...opts,
+    });
   }
 
   private clearActiveTargets(): void {
+    this.clearBossWordAnchors();
+    this.clearOlinWordAnchors();
+    this.clearAurlandWordAnchors();
+    this.clearGlassFishWordAnchors();
+    this.clearForkChoiceWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();
@@ -1705,12 +2742,18 @@ export class SunkenBellScene extends Phaser.Scene {
     // Retains the inner sprite reference on this.wrenSprite so the keystroke
     // hooks can bob / flash the actual image (not just the container).
     const c = this.add.container(x, y);
+    c.add(addLocalGroundShadow(this, 92, 20, { y: 6, alpha: 0.26 }));
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
+    stageContainerEntrance(this, c, {
+      breathDy: -4,
+      breathMs: 2300,
+    });
     return c;
   }
 
   private drawOlin(): void {
+    if (this.olinImage) return;
     // Wooden pew (kept procedural — the sprite is just Olin himself).
     const g = this.add.graphics();
     g.fillStyle(0x1a2030, 1);
@@ -1721,6 +2764,7 @@ export class SunkenBellScene extends Phaser.Scene {
     // the old procedural body/head/staff silhouette.
     const sprite = this.add.image(300, 822, "olin").setOrigin(0.5, 1);
     sprite.setScale(OLIN_SPRITE_HEIGHT / sprite.height);
+    this.olinImage = sprite;
+    addIdleBreath(this, sprite, { dy: -2, durationMs: 2600, delayMs: 300 });
   }
 }
-

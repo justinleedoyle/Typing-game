@@ -23,6 +23,14 @@
 
 import Phaser from "phaser";
 import {
+  attachWordBodyAnchor,
+  playBodyImpact,
+  playBodyTypePulse,
+  playClaimLine,
+  type AmbientKind,
+  type WordBodyAnchorHandle,
+} from "./livingScene";
+import {
   advanceDurationMs,
   dangerRamp,
   type SplitChildPlacement,
@@ -87,6 +95,19 @@ export interface MovingWordEnemyConfig {
   /** Body fade-up distance and duration on defeat. Defaults −50 / 480. */
   defeatRiseY?: number;
   defeatMs?: number;
+  /** Living-scene impact at the body when the word resolves. Defaults to a
+   *  brass/mote pulse; realms can tint it as snow, bubbles, embers, or mist. */
+  defeatImpactKind?: AmbientKind;
+  defeatImpactColor?: number;
+  defeatImpactOffsetY?: number;
+  /** Living-scene impact when the body finishes its entrance. Defaults to the
+   *  defeat-impact kind when present; pass null to suppress. */
+  arrivalImpactKind?: AmbientKind | null;
+  arrivalImpactColor?: number;
+  arrivalImpactOffsetY?: number;
+  /** Subtle squash/stretch while the body is alive. Default keeps shared
+   *  advancing enemies from reading as static cutouts. */
+  bodyBreathScale?: number;
 
   // ── TextWordTarget passthrough ─────────────────────────────────────────────
   fontSize?: number;
@@ -95,6 +116,10 @@ export interface MovingWordEnemyConfig {
   maskMarks?: boolean;
   /** UI-cohesion: a dark legibility stroke around the enemy's word. */
   outline?: boolean;
+  /** Optional origin for the claim-line flourish that visually connects Wren
+   *  to the threat when its word is first claimed. */
+  claimLineFrom?: () => { x: number; y: number };
+  claimLineColor?: number;
 
   /** Optional vertical weave during the advance: given (restY, progress 0..1) →
    *  the body's y that frame. The Winter circler passes `circlerY`. When set, the
@@ -148,6 +173,7 @@ export class MovingWordEnemy {
   private readonly cfg: MovingWordEnemyConfig;
   private wordTarget: TextWordTarget | null = null;
   private advanceTween: Phaser.Tweens.Tween | null = null;
+  private wordAnchor: WordBodyAnchorHandle | null = null;
   private defeated = false;
   private completedByPlayer = false;
   // Tier 4 freeze (jam-foe / bind-beat): advance halted, word kept typeable.
@@ -169,6 +195,9 @@ export class MovingWordEnemy {
   private readonly defeatRiseY: number;
   private readonly defeatMs: number;
   private readonly advanceMult: number;
+  private readonly baseScaleX: number;
+  private readonly baseScaleY: number;
+  private readonly bodyBreathScale: number;
 
   constructor(config: MovingWordEnemyConfig) {
     this.cfg = config;
@@ -185,6 +214,9 @@ export class MovingWordEnemy {
     this.defeatRiseY = config.defeatRiseY ?? -50;
     this.defeatMs = config.defeatMs ?? 480;
     this.advanceMult = config.advanceMult ?? 1;
+    this.baseScaleX = config.container.scaleX;
+    this.baseScaleY = config.container.scaleY;
+    this.bodyBreathScale = config.bodyBreathScale ?? 0.018;
 
     // Entrance: sweep in from off-screen, fade to rest alpha, then come alive.
     config.scene.tweens.add({
@@ -196,6 +228,7 @@ export class MovingWordEnemy {
       ease: "Sine.easeOut",
       onComplete: () => {
         if (this.defeated || !this.waveActive()) return;
+        this.playArrivalImpact();
         // A ward-gated enemy (the Winter boss) advances mute until attachWord().
         if (!this.cfg.manualAttach) this.attachTarget();
         this.idleBob();
@@ -290,6 +323,13 @@ export class MovingWordEnemy {
     this.advanceTween = null;
     const c = this.cfg.container;
     this.cfg.scene.tweens.killTweensOf(c);
+    playBodyImpact(this.cfg.scene, c, {
+      kind: this.cfg.defeatImpactKind,
+      color:
+        this.cfg.defeatImpactColor ??
+        (this.cfg.burstColor === null ? undefined : this.cfg.burstColor),
+      offsetY: this.cfg.defeatImpactOffsetY ?? this.anchorOffsetY * 0.62,
+    });
     this.cfg.scene.tweens.add({
       targets: c,
       alpha: 0,
@@ -366,8 +406,12 @@ export class MovingWordEnemy {
       caseSensitive: this.cfg.caseSensitive,
       maskMarks: this.cfg.maskMarks,
       outline: this.cfg.outline,
-      onClaim: (mods) => this.cfg.onClaim?.(mods),
+      onClaim: (mods) => {
+        this.cfg.onClaim?.(mods);
+        this.playClaimLine();
+      },
       onRelease: () => this.cfg.onRelease?.(),
+      onAdvance: () => this.playTypedBodyPulse(),
       // All three variants route to one handler so the realm's onComplete always
       // learns whether Shift/Alt were held. Identical to omitting the variants
       // when the realm ignores mods (TextWordTarget falls back to onComplete),
@@ -379,10 +423,75 @@ export class MovingWordEnemy {
     this.wordTarget = target;
     this.cfg.typingInput.register(target);
     this.cfg.onTargetAttached?.(target);
+    this.wordAnchor?.destroy();
+    this.wordAnchor = attachWordBodyAnchor(
+      this.cfg.scene,
+      this.cfg.container,
+      () =>
+        this.wordTarget
+          ? { x: this.wordTarget.getAnchorX(), y: this.wordTarget.getAnchorY() }
+          : null,
+      {
+        color:
+          this.cfg.claimLineColor ??
+          this.cfg.defeatImpactColor ??
+          PALETTE_HEX.brass,
+        alpha: 0.2,
+        depth: 44,
+        sourceOffsetY: Math.min(-26, this.anchorOffsetY * 0.42),
+        targetOffsetY: 24,
+      },
+    );
+  }
+
+  private playClaimLine(): void {
+    const from = this.cfg.claimLineFrom?.();
+    if (!from) return;
+    playClaimLine(
+      this.cfg.scene,
+      from.x,
+      from.y,
+      this.cfg.container.x,
+      this.cfg.container.y + this.anchorOffsetY,
+      { color: this.cfg.claimLineColor },
+    );
+  }
+
+  private playTypedBodyPulse(): void {
+    playBodyTypePulse(this.cfg.scene, this.cfg.container, {
+      kind: this.cfg.defeatImpactKind ?? "mote",
+      color:
+        this.cfg.defeatImpactColor ??
+        this.cfg.claimLineColor ??
+        PALETTE_HEX.brass,
+      offsetY: this.cfg.defeatImpactOffsetY ?? Math.min(-34, this.anchorOffsetY / 2),
+      depth: 49,
+      ringRadius: 24,
+    });
+  }
+
+  private playArrivalImpact(): void {
+    if (this.cfg.arrivalImpactKind === null) return;
+    playBodyImpact(this.cfg.scene, this.cfg.container, {
+      kind: this.cfg.arrivalImpactKind ?? this.cfg.defeatImpactKind ?? "mote",
+      color:
+        this.cfg.arrivalImpactColor ??
+        this.cfg.defeatImpactColor ??
+        this.cfg.claimLineColor,
+      offsetY:
+        this.cfg.arrivalImpactOffsetY ??
+        this.cfg.defeatImpactOffsetY ??
+        Math.min(-34, this.anchorOffsetY / 2),
+      depth: 47,
+      ringRadius: 34,
+      count: 8,
+      durationMs: 360,
+    });
   }
 
   private idleBob(): void {
     const c = this.cfg.container;
+    c.setScale(this.baseScaleX, this.baseScaleY);
     this.cfg.scene.tweens.add({
       targets: c,
       y: { from: c.y, to: c.y - this.idleBobDy },
@@ -391,6 +500,17 @@ export class MovingWordEnemy {
       repeat: -1,
       ease: "Sine.easeInOut",
     });
+    if (this.bodyBreathScale > 0) {
+      this.cfg.scene.tweens.add({
+        targets: c,
+        scaleX: this.baseScaleX * (1 - this.bodyBreathScale * 0.42),
+        scaleY: this.baseScaleY * (1 + this.bodyBreathScale),
+        duration: Math.round(this.idleBobMs * 1.25),
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.easeInOut",
+      });
+    }
   }
 
   private startAdvance(): void {
@@ -529,6 +649,8 @@ export class MovingWordEnemy {
   }
 
   private dropTarget(destroy: boolean): void {
+    this.wordAnchor?.destroy();
+    this.wordAnchor = null;
     const target = this.wordTarget;
     if (!target) return;
     this.cfg.typingInput.unregister(target);

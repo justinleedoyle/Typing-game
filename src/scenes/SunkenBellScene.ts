@@ -82,6 +82,13 @@ interface SunkenBellSceneData {
   revisit?: boolean;
 }
 
+interface DescentLantern {
+  container: Phaser.GameObjects.Container;
+  glow: Phaser.GameObjects.Graphics;
+  body: Phaser.GameObjects.Graphics;
+  flame: Phaser.GameObjects.Graphics;
+}
+
 // Choir ghosts are now the shared MovingWordEnemy. The splitting ghost is the
 // canonical use of the enemy's declarative `split` capability (ebb/drift children).
 
@@ -697,33 +704,12 @@ export class SunkenBellScene extends Phaser.Scene {
     ];
 
     let lit = 0;
-    const lanternContainers: Phaser.GameObjects.Container[] = [];
-    const lanternPulseTweens: Phaser.Tweens.Tween[] = [];
 
     lanternWords.forEach((word, i) => {
       const pos = lanternPositions[i];
       if (!pos) return;
 
-      // Draw lantern shape
-      const lanternG = this.add.graphics();
-      lanternG.fillStyle(0xc9a14a, 0.6);
-      lanternG.fillEllipse(0, 0, 40, 60);
-      lanternG.lineStyle(2, 0xf3ead2, 0.8);
-      lanternG.strokeEllipse(0, 0, 40, 60);
-
-      const lc = this.add.container(pos.x, pos.y, [lanternG]);
-      lanternContainers.push(lc);
-
-      // Pulse tween
-      const pulseTween = this.tweens.add({
-        targets: lanternG,
-        alpha: { from: 0.6, to: 1 },
-        duration: 800,
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.easeInOut",
-      });
-      lanternPulseTweens.push(pulseTween);
+      const lantern = this.drawDescentLantern(pos.x, pos.y, i);
 
       const target = this.makeWord({
         scene: this,
@@ -731,16 +717,13 @@ export class SunkenBellScene extends Phaser.Scene {
         x: pos.x,
         y: pos.y - 60,
         fontSize: 36,
+        onClaim: () => {
+          playWrenFocus(this.wrenSprite);
+          this.pulseDescentLantern(lantern, false);
+        },
         onComplete: () => {
-          // Still the lantern and brighten it
-          pulseTween.stop();
-          lanternG.setAlpha(1);
-          lanternG.clear();
-          lanternG.fillStyle(0xf3c855, 1);
-          lanternG.fillEllipse(0, 0, 40, 60);
-          lanternG.lineStyle(2, 0xf3ead2, 1);
-          lanternG.strokeEllipse(0, 0, 40, 60);
-
+          playWrenAction(this.wrenSprite);
+          this.lightDescentLantern(lantern);
           lit += 1;
           if (lit >= lanternWords.length) {
             this.time.delayedCall(800, () => this.startOlinNPC());
@@ -749,6 +732,119 @@ export class SunkenBellScene extends Phaser.Scene {
       });
       this.typingInput.register(target);
       this.activeTargets.push(target);
+    });
+  }
+
+  private drawDescentLantern(x: number, y: number, index: number): DescentLantern {
+    const container = this.add.container(x, y).setDepth(-1).setAlpha(0);
+
+    const tether = this.add.graphics();
+    tether.lineStyle(1.5, 0x7daebc, 0.32);
+    tether.lineBetween(0, -92, 0, -36);
+    tether.lineStyle(1, 0xf3ead2, 0.22);
+    tether.lineBetween(-18, -34, 18, -34);
+    container.add(tether);
+
+    const glow = this.add.graphics().setAlpha(0.58);
+    glow.fillStyle(0x74d5df, 0.08);
+    glow.fillEllipse(0, 4, 106, 118);
+    glow.lineStyle(2, 0x74d5df, 0.13);
+    glow.strokeEllipse(0, 4, 88, 102);
+    container.add(glow);
+
+    const body = this.add.graphics();
+    body.fillStyle(0x203a46, 0.86);
+    body.fillRoundedRect(-22, -30, 44, 64, 17);
+    body.lineStyle(2, 0xf3ead2, 0.54);
+    body.strokeRoundedRect(-22, -30, 44, 64, 17);
+    body.lineStyle(1, 0x7daebc, 0.48);
+    body.lineBetween(-12, -20, -12, 24);
+    body.lineBetween(12, -20, 12, 24);
+    container.add(body);
+
+    const flame = this.add.graphics().setAlpha(0.72);
+    flame.fillStyle(0xc9a14a, 0.45);
+    flame.fillEllipse(0, 4, 24, 36);
+    flame.fillStyle(0xf3ead2, 0.72);
+    flame.fillEllipse(0, 2, 10, 20);
+    container.add(flame);
+
+    for (let bubbleIdx = 0; bubbleIdx < 3; bubbleIdx += 1) {
+      const bubble = this.add
+        .graphics()
+        .setPosition(-22 + bubbleIdx * 22, 38 + bubbleIdx * 4)
+        .setAlpha(0.38);
+      bubble.lineStyle(1, 0xaed8df, 0.55);
+      bubble.strokeCircle(0, 0, 4 + bubbleIdx);
+      container.add(bubble);
+      this.tweens.add({
+        targets: bubble,
+        y: bubble.y - 48,
+        alpha: 0,
+        duration: 1800 + bubbleIdx * 320,
+        delay: index * 260 + bubbleIdx * 360,
+        repeat: -1,
+        ease: "Sine.easeInOut",
+      });
+    }
+
+    this.tweens.add({
+      targets: container,
+      alpha: 0.84,
+      y: y - 8,
+      duration: 420,
+      delay: index * 120,
+      ease: "Sine.easeOut",
+      onComplete: () => addIdleBreath(this, container, {
+        dy: -4,
+        durationMs: 2600 + index * 220,
+      }),
+    });
+    this.tweens.add({
+      targets: [glow, flame],
+      scaleX: 1.08,
+      scaleY: 1.14,
+      alpha: 0.9,
+      duration: 900 + index * 120,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+
+    return { container, glow, body, flame };
+  }
+
+  private lightDescentLantern(lantern: DescentLantern): void {
+    this.tweens.killTweensOf([lantern.glow, lantern.flame]);
+    lantern.body.clear();
+    lantern.body.fillStyle(0x274a52, 0.95);
+    lantern.body.fillRoundedRect(-22, -30, 44, 64, 17);
+    lantern.body.lineStyle(2, 0xf3ead2, 0.86);
+    lantern.body.strokeRoundedRect(-22, -30, 44, 64, 17);
+    lantern.body.lineStyle(1, 0x9fdce7, 0.72);
+    lantern.body.lineBetween(-12, -20, -12, 24);
+    lantern.body.lineBetween(12, -20, 12, 24);
+    lantern.glow.setAlpha(0.9).setScale(1.16);
+    lantern.flame.setAlpha(1).setScale(1.18, 1.28);
+    this.pulseDescentLantern(lantern, true);
+  }
+
+  private pulseDescentLantern(
+    lantern: DescentLantern,
+    completion: boolean,
+  ): void {
+    playActorAttention(this, lantern.container, {
+      scale: completion ? 1.035 : 1.018,
+      durationMs: completion ? 260 : 180,
+    });
+    playBodyImpact(this, lantern.container, {
+      kind: "bubble",
+      color: BELL_BURST_COLOR,
+      offsetY: 2,
+      depth: 12,
+      ringRadius: completion ? 42 : 28,
+      count: completion ? 9 : 5,
+      durationMs: completion ? 460 : 260,
     });
   }
 

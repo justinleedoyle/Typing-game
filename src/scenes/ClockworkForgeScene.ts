@@ -161,6 +161,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private golems: MovingWordEnemy[] = [];
   private activeTargets: TextWordTarget[] = [];
   private bossWordAnchors: WordBodyAnchorHandle[] = [];
+  private tutorialWordAnchors: WordBodyAnchorHandle[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   private catwalkCue: Phaser.GameObjects.Container | null = null;
@@ -211,6 +212,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.golems = [];
     this.activeTargets = [];
     this.bossWordAnchors = [];
+    this.tutorialWordAnchors = [];
     this.catwalkCue = null;
     this.oneShotInvoker = null;
     this.shiftHeld = false;
@@ -497,7 +499,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // Spawn a tutorial golem that doesn't advance
     const tutorialGolem = this.spawnStaticGolem(860, FLOOR_Y, false);
 
-    const target = this.makeWord({
+    const target = this.makeStaticGolemWord(tutorialGolem, {
       scene: this,
       word: "turn",
       x: this.scale.width / 2,
@@ -523,7 +525,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       "Old Gregor",
     );
 
-    const target = this.makeWord({
+    const target = this.makeStaticGolemWord(tutorialGolem, {
       scene: this,
       word: "TURN",
       x: this.scale.width / 2,
@@ -2108,13 +2110,109 @@ export class ClockworkForgeScene extends Phaser.Scene {
     return target;
   }
 
+  private makeStaticGolemWord(
+    golem: StaticGolem,
+    opts: TextWordTargetOptions,
+  ): TextWordTarget {
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    const onSpellComplete = opts.onSpellComplete;
+    const onAltSpellComplete = opts.onAltSpellComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.tutorialWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.tutorialWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+    const playLessonImpact = (): void => {
+      playBodyImpact(this, golem.container, {
+        kind: "ember",
+        color: PALETTE_HEX.ember,
+        offsetY: -76,
+        depth: 58,
+        ringRadius: 42,
+        count: 10,
+      });
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.ember,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          golem.container.x,
+          golem.container.y - 76,
+          { color: PALETTE_HEX.ember, depth: 58 },
+        );
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, golem.container, {
+          kind: "ember",
+          color: PALETTE_HEX.ember,
+          offsetY: -76,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playLessonImpact();
+        onComplete();
+      },
+      onSpellComplete: onSpellComplete
+        ? () => {
+            releaseAnchor();
+            playLessonImpact();
+            onSpellComplete();
+          }
+        : undefined,
+      onAltSpellComplete: onAltSpellComplete
+        ? () => {
+            releaseAnchor();
+            playLessonImpact();
+            onAltSpellComplete();
+          }
+        : undefined,
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      golem.container,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.ember,
+        alpha: 0.2,
+        depth: 44,
+        sourceOffsetY: -76,
+        targetOffsetY: 24,
+      },
+    );
+    this.tutorialWordAnchors.push(anchor);
+    golem.container.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
   private clearBossWordAnchors(): void {
     for (const anchor of this.bossWordAnchors) anchor.destroy();
     this.bossWordAnchors = [];
   }
 
+  private clearTutorialWordAnchors(): void {
+    for (const anchor of this.tutorialWordAnchors) anchor.destroy();
+    this.tutorialWordAnchors = [];
+  }
+
   private clearActiveTargets(): void {
     this.clearBossWordAnchors();
+    this.clearTutorialWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

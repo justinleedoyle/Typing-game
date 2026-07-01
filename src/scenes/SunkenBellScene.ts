@@ -127,6 +127,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private bossWordAnchors: WordBodyAnchorHandle[] = [];
   private olinWordAnchors: WordBodyAnchorHandle[] = [];
   private aurlandWordAnchors: WordBodyAnchorHandle[] = [];
+  private glassFishWordAnchors: WordBodyAnchorHandle[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   /** King Aurland's painted sprite — fades in when he's freed at fork 2 and is
@@ -193,6 +194,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.bossWordAnchors = [];
     this.olinWordAnchors = [];
     this.aurlandWordAnchors = [];
+    this.glassFishWordAnchors = [];
     this.beatPhase = "on";
     this.beatLocked = false;
     this.breath.reset();
@@ -1571,14 +1573,13 @@ export class SunkenBellScene extends Phaser.Scene {
       this.setNarrator("A small glass-fish leads the way up through the dark water.");
       this.showGlassFishCompanion();
       this.time.delayedCall(1000, () => {
-        const takeTarget = this.makeWord({
+        const takeTarget = this.makeGlassFishWord({
           scene: this,
           word: "take her with you",
           x: this.scale.width / 2 - 300,
           y: this.scale.height - 340,
           fontSize: 30,
           frame: "banner",
-          onClaim: () => this.pulseGlassFishCompanion(),
           onComplete: () => {
             this.clearActiveTargets();
             this.store.update((s) => {
@@ -1587,14 +1588,13 @@ export class SunkenBellScene extends Phaser.Scene {
             this.startTrueNamePassage();
           },
         });
-        const letGoTarget = this.makeWord({
+        const letGoTarget = this.makeGlassFishWord({
           scene: this,
           word: "let her go",
           x: this.scale.width / 2 + 300,
           y: this.scale.height - 340,
           fontSize: 30,
           frame: "banner",
-          onClaim: () => this.pulseGlassFishCompanion(),
           onComplete: () => {
             this.clearActiveTargets();
             this.dismissGlassFishCompanion(1320, 640);
@@ -1647,6 +1647,7 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private dismissGlassFishCompanion(x: number, y: number): void {
+    this.clearGlassFishWordAnchors();
     dismissCompanionCameo(this, this.glassFishCompanion, { x, y, durationMs: 720 });
     this.glassFishCompanion = null;
   }
@@ -1966,6 +1967,78 @@ export class SunkenBellScene extends Phaser.Scene {
     return target;
   }
 
+  private makeGlassFishWord(opts: TextWordTargetOptions): TextWordTarget {
+    const body = this.glassFishCompanion;
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.glassFishWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.glassFishWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? BELL_BURST_COLOR,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y - 54,
+          { color: BELL_BURST_COLOR, depth: 58 },
+        );
+        this.pulseGlassFishCompanion();
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -54,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -54,
+          depth: 58,
+          ringRadius: 42,
+          count: 9,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: BELL_BURST_COLOR,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -54,
+        targetOffsetY: 24,
+      },
+    );
+    this.glassFishWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
   private clearBossWordAnchors(): void {
     for (const anchor of this.bossWordAnchors) anchor.destroy();
     this.bossWordAnchors = [];
@@ -1979,6 +2052,11 @@ export class SunkenBellScene extends Phaser.Scene {
   private clearAurlandWordAnchors(): void {
     for (const anchor of this.aurlandWordAnchors) anchor.destroy();
     this.aurlandWordAnchors = [];
+  }
+
+  private clearGlassFishWordAnchors(): void {
+    for (const anchor of this.glassFishWordAnchors) anchor.destroy();
+    this.glassFishWordAnchors = [];
   }
 
   private spawnGhost(
@@ -2272,6 +2350,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.clearBossWordAnchors();
     this.clearOlinWordAnchors();
     this.clearAurlandWordAnchors();
+    this.clearGlassFishWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

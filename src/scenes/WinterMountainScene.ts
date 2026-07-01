@@ -230,6 +230,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private huntressSprite: Phaser.GameObjects.Image | null = null;
   private riverCue: Phaser.GameObjects.Container | null = null;
   private foxCompanion: Phaser.GameObjects.Container | null = null;
+  private foxWordAnchors: WordBodyAnchorHandle[] = [];
   private candleGroup!: Phaser.GameObjects.Container;
   private chargeGroup!: Phaser.GameObjects.Container;
   private drawnCandles: number | null = null;
@@ -278,6 +279,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.huntressSprite = null;
     this.riverCue = null;
     this.foxCompanion = null;
+    this.foxWordAnchors = [];
     this.wolves = [];
     this.boss = null;
     this.bossBodySprite = null;
@@ -975,9 +977,86 @@ export class WinterMountainScene extends Phaser.Scene {
     return target;
   }
 
+  private makeFoxWord(opts: TextWordTargetOptions): TextWordTarget {
+    const body = this.foxCompanion;
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.foxWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.foxWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.frost,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y - 60,
+          { color: PALETTE_HEX.frost, depth: 58 },
+        );
+        this.pulseFoxCompanion();
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "snow",
+          color: PALETTE_HEX.frost,
+          offsetY: -60,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "snow",
+          color: PALETTE_HEX.frost,
+          offsetY: -60,
+          depth: 58,
+          ringRadius: 42,
+          count: 9,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.frost,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -60,
+        targetOffsetY: 24,
+      },
+    );
+    this.foxWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
   private clearHeldurWordAnchors(): void {
     for (const anchor of this.heldurWordAnchors) anchor.destroy();
     this.heldurWordAnchors = [];
+  }
+
+  private clearFoxWordAnchors(): void {
+    for (const anchor of this.foxWordAnchors) anchor.destroy();
+    this.foxWordAnchors = [];
   }
 
   private playWrenTypingPulse(): void {
@@ -1664,14 +1743,13 @@ export class WinterMountainScene extends Phaser.Scene {
     this.narration.say("winter_fox_companion_accept");
     this.band.setObjective("Choose whether the snow-fox joins your satchel.");
 
-    const whisperTarget = this.makeWord({
+    const whisperTarget = this.makeFoxWord({
       scene: this,
       word: "whisper to her",
       x: this.scale.width / 2 - 260,
       y: this.scale.height - 340,
       frame: "banner",
       fontSize: 32,
-      onClaim: () => this.pulseFoxCompanion(),
       onComplete: () => {
         this.clearActiveTargets();
         this.store.update((s) => {
@@ -1683,14 +1761,13 @@ export class WinterMountainScene extends Phaser.Scene {
       },
     });
 
-    const letGoTarget = this.makeWord({
+    const letGoTarget = this.makeFoxWord({
       scene: this,
       word: "let her go",
       x: this.scale.width / 2 + 260,
       y: this.scale.height - 340,
       frame: "banner",
       fontSize: 32,
-      onClaim: () => this.pulseFoxCompanion(),
       onComplete: () => {
         this.clearActiveTargets();
         this.narration.say("winter_fox_companion_no");
@@ -1739,6 +1816,7 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private dismissFoxCompanion(x: number, y: number): void {
+    this.clearFoxWordAnchors();
     dismissCompanionCameo(this, this.foxCompanion, { x, y, durationMs: 760 });
     this.foxCompanion = null;
   }
@@ -1966,6 +2044,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private clearActiveTargets(): void {
     this.clearHeldurWordAnchors();
+    this.clearFoxWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

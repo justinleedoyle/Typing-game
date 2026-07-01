@@ -196,6 +196,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private fork2Choice: "peaceful" | "fought" | null = null;
   private companionAwarded = false;
   private songbirdCompanion: Phaser.GameObjects.Container | null = null;
+  private songbirdWordAnchors: WordBodyAnchorHandle[] = [];
   /** True after the Quiet Lord's §5.5.10 intrusion has fired this playthrough. */
   private quietLordIntruded = false;
   private ambientHandle?: AmbientHandle;
@@ -223,6 +224,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.fork2Choice = null;
     this.companionAwarded = false;
     this.songbirdCompanion = null;
+    this.songbirdWordAnchors = [];
     this.quietLordIntruded =
       this.store.get().realms["clockwork-forge"]?.quietLordIntruded ?? false;
   }
@@ -1207,24 +1209,22 @@ export class ClockworkForgeScene extends Phaser.Scene {
         "A small brass shape perches on a cooling pipe. It trills softly. Do you call to it?",
       );
       this.showSongbirdCompanion();
-      const whistle = this.makeWord({
+      const whistle = this.makeSongbirdWord({
         scene: this,
         word: "whistle softly",
         x: this.scale.width / 2 - 340,
         y: this.scale.height - 320,
         fontSize: 32,
         frame: "banner",
-        onClaim: () => this.pulseSongbirdCompanion(),
         onComplete: () => this.awardSongbird(),
       });
-      const leave = this.makeWord({
+      const leave = this.makeSongbirdWord({
         scene: this,
         word: "leave it be",
         x: this.scale.width / 2 + 340,
         y: this.scale.height - 320,
         fontSize: 32,
         frame: "banner",
-        onClaim: () => this.pulseSongbirdCompanion(),
         onComplete: () => {
           this.dismissSongbirdCompanion(1320, 470);
           this.startTrueNamePassage();
@@ -1303,6 +1303,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private dismissSongbirdCompanion(x: number, y: number): void {
+    this.clearSongbirdWordAnchors();
     dismissCompanionCameo(this, this.songbirdCompanion, { x, y, durationMs: 640 });
     this.songbirdCompanion = null;
   }
@@ -2280,6 +2281,78 @@ export class ClockworkForgeScene extends Phaser.Scene {
     return target;
   }
 
+  private makeSongbirdWord(opts: TextWordTargetOptions): TextWordTarget {
+    const body = this.songbirdCompanion;
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.songbirdWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.songbirdWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.brass,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y - 54,
+          { color: PALETTE_HEX.brass, depth: 58 },
+        );
+        this.pulseSongbirdCompanion();
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "ember",
+          color: PALETTE_HEX.brass,
+          offsetY: -54,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "ember",
+          color: PALETTE_HEX.brass,
+          offsetY: -54,
+          depth: 58,
+          ringRadius: 42,
+          count: 9,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.brass,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -54,
+        targetOffsetY: 24,
+      },
+    );
+    this.songbirdWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
   private clearBossWordAnchors(): void {
     for (const anchor of this.bossWordAnchors) anchor.destroy();
     this.bossWordAnchors = [];
@@ -2295,10 +2368,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.fornWordAnchors = [];
   }
 
+  private clearSongbirdWordAnchors(): void {
+    for (const anchor of this.songbirdWordAnchors) anchor.destroy();
+    this.songbirdWordAnchors = [];
+  }
+
   private clearActiveTargets(): void {
     this.clearBossWordAnchors();
     this.clearTutorialWordAnchors();
     this.clearFornWordAnchors();
+    this.clearSongbirdWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

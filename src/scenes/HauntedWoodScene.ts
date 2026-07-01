@@ -169,6 +169,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private ghostKingBody: Phaser.GameObjects.Image | null = null;
   private bossWordAnchors: WordBodyAnchorHandle[] = [];
   private wispCatCompanion: Phaser.GameObjects.Container | null = null;
+  private wispCatWordAnchors: WordBodyAnchorHandle[] = [];
   /** Four faint punctuation glyphs at N/S/E/W around Wren — teaches the
    *  direction-punctuation mapping diegetically. Drawn on first ghost
    *  spawn, persists through Act 2 + boss. */
@@ -198,6 +199,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.ghostKingBody = null;
     this.bossWordAnchors = [];
     this.wispCatCompanion = null;
+    this.wispCatWordAnchors = [];
     this.quietLordIntruded =
       this.store.get().realms["haunted-wood"]?.quietLordIntruded ?? false;
   }
@@ -1189,14 +1191,13 @@ export class HauntedWoodScene extends Phaser.Scene {
     );
     this.showWispCatCompanion();
     this.time.delayedCall(1600, () => {
-      const callTarget = this.makeWord({
+      const callTarget = this.makeWispCatWord({
         scene: this,
         word: "call to her",
         x: this.scale.width / 2 - 320,
         y: this.scale.height - 340,
         fontSize: 30,
         frame: "banner",
-        onClaim: () => this.pulseWispCatCompanion(),
         onComplete: () => {
           this.clearActiveTargets();
           this.companionChoice = "call";
@@ -1211,14 +1212,13 @@ export class HauntedWoodScene extends Phaser.Scene {
           this.time.delayedCall(1800, () => this.startEnding());
         },
       });
-      const leaveTarget = this.makeWord({
+      const leaveTarget = this.makeWispCatWord({
         scene: this,
         word: "leave her",
         x: this.scale.width / 2 + 320,
         y: this.scale.height - 340,
         fontSize: 30,
         frame: "banner",
-        onClaim: () => this.pulseWispCatCompanion(),
         onComplete: () => {
           this.clearActiveTargets();
           this.companionChoice = "leave";
@@ -1269,6 +1269,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private dismissWispCatCompanion(x: number, y: number): void {
+    this.clearWispCatWordAnchors();
     dismissCompanionCameo(this, this.wispCatCompanion, { x, y, durationMs: 720 });
     this.wispCatCompanion = null;
   }
@@ -1779,6 +1780,78 @@ export class HauntedWoodScene extends Phaser.Scene {
     return target;
   }
 
+  private makeWispCatWord(opts: TextWordTargetOptions): TextWordTarget {
+    const body = this.wispCatCompanion;
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.wispCatWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.wispCatWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.moss,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y - 58,
+          { color: PALETTE_HEX.moss, depth: 58 },
+        );
+        this.pulseWispCatCompanion();
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "mist",
+          color: PALETTE_HEX.moss,
+          offsetY: -58,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "mist",
+          color: PALETTE_HEX.moss,
+          offsetY: -58,
+          depth: 58,
+          ringRadius: 42,
+          count: 9,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.moss,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -58,
+        targetOffsetY: 24,
+      },
+    );
+    this.wispCatWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
   private setNarrator(text: string, speakerName: string | null = null): void {
     this.narration.sayRaw(text, { speakerName });
   }
@@ -2007,6 +2080,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private clearActiveTargets(): void {
     this.clearIngaWordAnchors();
     this.clearBossWordAnchors();
+    this.clearWispCatWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();
@@ -2022,6 +2096,11 @@ export class HauntedWoodScene extends Phaser.Scene {
   private clearBossWordAnchors(): void {
     for (const anchor of this.bossWordAnchors) anchor.destroy();
     this.bossWordAnchors = [];
+  }
+
+  private clearWispCatWordAnchors(): void {
+    for (const anchor of this.wispCatWordAnchors) anchor.destroy();
+    this.wispCatWordAnchors = [];
   }
 
   // ─── Drawing ──────────────────────────────────────────────────────────────

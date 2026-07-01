@@ -212,6 +212,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private ettaWordAnchors: WordBodyAnchorHandle[] = [];
   private companionChoice: "take" | "let-go" | null = null;
   private lanternMothCompanion: Phaser.GameObjects.Container | null = null;
+  private lanternMothWordAnchors: WordBodyAnchorHandle[] = [];
 
   // Boss state
   private bossContainer: Phaser.GameObjects.Container | null = null;
@@ -262,6 +263,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.ettaWordAnchors = [];
     this.companionChoice = null;
     this.lanternMothCompanion = null;
+    this.lanternMothWordAnchors = [];
     this.bossContainer = null;
     this.bossWordAnchors = [];
     this.bossSprite = null;
@@ -1542,14 +1544,13 @@ export class SkyIslandScene extends Phaser.Scene {
       );
       this.showLanternMothCompanion();
       this.time.delayedCall(1200, () => {
-        const takeTarget = this.makeWord({
+        const takeTarget = this.makeLanternMothWord({
           scene: this,
           word: "take her with you",
           x: this.scale.width / 2 - 300,
           y: this.scale.height - 340,
           frame: "banner",
           fontSize: 32,
-          onClaim: () => this.pulseLanternMothCompanion(),
           onComplete: () => {
             this.clearActiveTargets();
             this.companionChoice = "take";
@@ -1565,14 +1566,13 @@ export class SkyIslandScene extends Phaser.Scene {
             this.time.delayedCall(2400, () => this.startTrueNamePassage());
           },
         });
-        const letGoTarget = this.makeWord({
+        const letGoTarget = this.makeLanternMothWord({
           scene: this,
           word: "let her go",
           x: this.scale.width / 2 + 300,
           y: this.scale.height - 340,
           frame: "banner",
           fontSize: 32,
-          onClaim: () => this.pulseLanternMothCompanion(),
           onComplete: () => {
             this.clearActiveTargets();
             this.companionChoice = "let-go";
@@ -1630,6 +1630,7 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private dismissLanternMothCompanion(x: number, y: number): void {
+    this.clearLanternMothWordAnchors();
     dismissCompanionCameo(this, this.lanternMothCompanion, {
       x,
       y,
@@ -2299,6 +2300,78 @@ export class SkyIslandScene extends Phaser.Scene {
     return target;
   }
 
+  private makeLanternMothWord(opts: TextWordTargetOptions): TextWordTarget {
+    const body = this.lanternMothCompanion;
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.lanternMothWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.lanternMothWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.brass,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y - 70,
+          { color: PALETTE_HEX.brass, depth: 58 },
+        );
+        this.pulseLanternMothCompanion();
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: -70,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: -70,
+          depth: 58,
+          ringRadius: 44,
+          count: 9,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.brass,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -70,
+        targetOffsetY: 24,
+      },
+    );
+    this.lanternMothWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
   private playWrenTypingPulse(): void {
     playBodyTypePulse(this, this.wrenContainer, {
       kind: "mote",
@@ -2393,10 +2466,16 @@ export class SkyIslandScene extends Phaser.Scene {
     this.ettaWordAnchors = [];
   }
 
+  private clearLanternMothWordAnchors(): void {
+    for (const anchor of this.lanternMothWordAnchors) anchor.destroy();
+    this.lanternMothWordAnchors = [];
+  }
+
   private clearActiveTargets(): void {
     this.clearBossWordAnchors();
     this.clearPathWordAnchors();
     this.clearEttaWordAnchors();
+    this.clearLanternMothWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

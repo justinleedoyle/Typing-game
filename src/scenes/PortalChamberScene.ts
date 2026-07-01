@@ -709,7 +709,8 @@ export class PortalChamberScene extends Phaser.Scene {
     this.setHint("");
     this.narration.clear();
     this.flashPortalForScene(sceneKey);
-    this.time.delayedCall(140, () => {
+    this.playPortalTravel(sceneKey);
+    this.time.delayedCall(240, () => {
       this.cameras.main.fadeOut(500, 11, 10, 15);
       this.cameras.main.once(
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
@@ -718,6 +719,112 @@ export class PortalChamberScene extends Phaser.Scene {
         },
       );
     });
+  }
+
+  private playPortalTravel(sceneKey: string): void {
+    const arch = ARCHES.find((a) => a.sceneKey === sceneKey);
+    if (!arch) return;
+
+    const cx = arch.x;
+    const cy = arch.baseY - arch.height / 2 + 34;
+    const wash = this.add.graphics().setDepth(6).setAlpha(0);
+    wash.fillStyle(0x0b0a0f, 0.2);
+    wash.fillRect(0, 0, this.scale.width, this.scale.height);
+    this.tweens.add({
+      targets: wash,
+      alpha: 0.18,
+      duration: 90,
+      hold: 130,
+      yoyo: true,
+      ease: "Sine.easeInOut",
+      onComplete: () => wash.destroy(),
+    });
+
+    const glow = this.archGlows.get(arch.id);
+    if (glow?.visible) {
+      this.tweens.add({
+        targets: glow,
+        alpha: { from: Math.max(glow.alpha, 0.42), to: glow.alpha },
+        scaleX: { from: glow.scaleX * 1.08, to: glow.scaleX },
+        scaleY: { from: glow.scaleY * 1.06, to: glow.scaleY },
+        duration: 360,
+        ease: "Sine.easeOut",
+      });
+    }
+
+    for (let i = 0; i < 3; i++) {
+      const ring = this.add
+        .graphics()
+        .setPosition(cx, cy)
+        .setDepth(9 + i * 0.1)
+        .setAlpha(0.74 - i * 0.12);
+      ring.lineStyle(2, i === 1 ? 0x75bf84 : UI_HEX.brass, 0.7 - i * 0.08);
+      ring.strokeEllipse(0, 0, arch.width * (0.44 + i * 0.12), arch.height * (0.42 + i * 0.1));
+      ring.fillStyle(i === 1 ? 0x75bf84 : UI_HEX.brass, 0.035);
+      ring.fillEllipse(0, 0, arch.width * (0.5 + i * 0.12), arch.height * (0.48 + i * 0.1));
+      ring.setScale(0.68 + i * 0.08);
+
+      this.tweens.add({
+        targets: ring,
+        alpha: 0,
+        scaleX: 1.22 + i * 0.08,
+        scaleY: 1.12 + i * 0.06,
+        duration: 420,
+        delay: i * 46,
+        ease: "Sine.easeOut",
+        onComplete: () => ring.destroy(),
+      });
+    }
+
+    this.playPortalTravelFlecks(arch, cx, cy);
+
+    if (!this.wrenContainer?.active) return;
+    const startX = this.wrenContainer.x;
+    const startY = this.wrenContainer.y;
+    this.tweens.killTweensOf(this.wrenContainer);
+    this.tweens.add({
+      targets: this.wrenContainer,
+      x: startX + (cx - startX) * 0.08,
+      y: startY - 8,
+      alpha: 0.86,
+      duration: 320,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  private playPortalTravelFlecks(arch: ArchSpec, cx: number, cy: number): void {
+    if (!this.wrenContainer?.active) return;
+    const fromX = this.wrenContainer.x;
+    const fromY = this.wrenContainer.y - 118;
+    const colors = [UI_HEX.brass, 0x75bf84, 0xf0d98e];
+
+    for (let i = 0; i < 10; i++) {
+      const angle = (Math.PI * 2 * i) / 10;
+      const startX = fromX + Math.cos(angle) * (20 + (i % 3) * 7);
+      const startY = fromY + Math.sin(angle) * (10 + (i % 2) * 6);
+      const targetX = cx + Math.cos(angle + 0.8) * arch.width * 0.16;
+      const targetY = cy + Math.sin(angle + 0.8) * arch.height * 0.16;
+      const fleck = this.add
+        .graphics()
+        .setPosition(startX, startY)
+        .setDepth(10)
+        .setAlpha(0.72);
+      fleck.fillStyle(colors[i % colors.length], 0.82);
+      fleck.fillCircle(0, 0, 2.5 + (i % 3) * 0.8);
+
+      this.tweens.add({
+        targets: fleck,
+        x: targetX,
+        y: targetY,
+        alpha: 0,
+        scaleX: 0.32,
+        scaleY: 0.32,
+        duration: 300 + i * 18,
+        delay: i * 14,
+        ease: "Sine.easeIn",
+        onComplete: () => fleck.destroy(),
+      });
+    }
   }
 
   // ─── Persistent targets ───────────────────────────────────────────────────

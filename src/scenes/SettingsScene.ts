@@ -17,7 +17,7 @@ import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
 import { setAudioLevel } from "../audio/context";
-import { addAmbientDrift } from "../game/livingScene";
+import { addAmbientDrift, addLivingLight } from "../game/livingScene";
 import { SERIF } from "../game/palette";
 import { difficultyLabel, togglePuristMode } from "../game/purist";
 import {
@@ -119,6 +119,46 @@ export class SettingsScene extends Phaser.Scene {
       driftY: -130,
       minDurationMs: 7000,
       maxDurationMs: 14000,
+    });
+    addAmbientDrift(this, {
+      kind: "mote",
+      count: 9,
+      depth: -0.35,
+      area: {
+        x: PANEL_X - PANEL_W / 2 + 80,
+        y: PANEL_Y - PANEL_H / 2 + 120,
+        width: PANEL_W - 160,
+        height: PANEL_H - 200,
+      },
+      alpha: 0.12,
+      minSize: 3,
+      maxSize: 6,
+      driftX: 34,
+      driftY: -62,
+      minDurationMs: 6500,
+      maxDurationMs: 12000,
+    });
+    addLivingLight(this, {
+      x: PANEL_X - PANEL_W / 2 + 150,
+      y: PANEL_Y - PANEL_H / 2 + 105,
+      width: 360,
+      height: 190,
+      color: UI_HEX.brass,
+      alpha: 0.032,
+      depth: -4,
+      durationMs: 3000,
+    });
+    addLivingLight(this, {
+      x: PANEL_X + PANEL_W / 2 - 155,
+      y: PANEL_Y + PANEL_H / 2 - 125,
+      width: 330,
+      height: 180,
+      color: UI_HEX.parchment,
+      alpha: 0.025,
+      depth: -4,
+      durationMs: 3600,
+      delayMs: 700,
+      scale: 1.035,
     });
 
     this.drawSettingsShell();

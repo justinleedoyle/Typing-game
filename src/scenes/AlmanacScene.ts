@@ -13,6 +13,7 @@ import { RELICS } from "../game/relics";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
+import { addAmbientDrift, addLivingLight } from "../game/livingScene";
 
 /** Page-stack entry. The Almanac walks: overview → for each cleared realm,
  *  the realm summary page then each of that realm's stamped lore pages, in
@@ -137,6 +138,66 @@ export class AlmanacScene extends Phaser.Scene {
     const g = this.add.graphics();
     g.fillStyle(0x0b0a0f, 0.92);
     g.fillRect(0, 0, this.scale.width, this.scale.height);
+    g.setDepth(-20);
+
+    addAmbientDrift(this, {
+      kind: "mote",
+      count: 18,
+      depth: -2,
+      area: {
+        x: 240,
+        y: 120,
+        width: this.scale.width - 480,
+        height: this.scale.height - 230,
+      },
+      alpha: 0.16,
+      minSize: 1.5,
+      maxSize: 4,
+      driftX: 62,
+      driftY: -118,
+      minDurationMs: 7200,
+      maxDurationMs: 14500,
+    });
+    addAmbientDrift(this, {
+      kind: "mote",
+      count: 8,
+      depth: -0.35,
+      area: {
+        x: BOOK_X + 60,
+        y: BOOK_Y + 120,
+        width: BOOK_WIDTH - 120,
+        height: BOOK_HEIGHT - 210,
+      },
+      alpha: 0.12,
+      minSize: 3,
+      maxSize: 6.5,
+      driftX: 32,
+      driftY: -56,
+      minDurationMs: 6600,
+      maxDurationMs: 12200,
+    });
+    addLivingLight(this, {
+      x: BOOK_X + 180,
+      y: BOOK_Y + 150,
+      width: 420,
+      height: 210,
+      color: UI_HEX.brass,
+      alpha: 0.035,
+      depth: -4,
+      durationMs: 3100,
+    });
+    addLivingLight(this, {
+      x: BOOK_X + BOOK_WIDTH - 210,
+      y: BOOK_Y + 650,
+      width: 380,
+      height: 220,
+      color: UI_HEX.parchment,
+      alpha: 0.028,
+      depth: -4,
+      durationMs: 3700,
+      delayMs: 600,
+      scale: 1.035,
+    });
 
     this.bookGraphics = this.add.graphics();
     this.drawBook();

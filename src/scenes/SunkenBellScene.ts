@@ -126,6 +126,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private activeTargets: TextWordTarget[] = [];
   private bossWordAnchors: WordBodyAnchorHandle[] = [];
   private olinWordAnchors: WordBodyAnchorHandle[] = [];
+  private aurlandWordAnchors: WordBodyAnchorHandle[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   /** King Aurland's painted sprite — fades in when he's freed at fork 2 and is
@@ -191,6 +192,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.activeTargets = [];
     this.bossWordAnchors = [];
     this.olinWordAnchors = [];
+    this.aurlandWordAnchors = [];
     this.beatPhase = "on";
     this.beatLocked = false;
     this.breath.reset();
@@ -328,6 +330,7 @@ export class SunkenBellScene extends Phaser.Scene {
       this.beatClock.stop();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
+      this.clearAurlandWordAnchors();
       this.olinImage?.destroy();
       this.olinImage = undefined;
       this.aurlandImage?.destroy();
@@ -1533,6 +1536,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private hideAurland(): void {
     const sprite = this.aurlandImage;
     if (!sprite) return;
+    this.clearAurlandWordAnchors();
     this.aurlandImage = undefined;
     fadeOutStagedSprite(this, sprite, {
       durationMs: 1000,
@@ -1886,6 +1890,82 @@ export class SunkenBellScene extends Phaser.Scene {
     return target;
   }
 
+  private makeAurlandWord(opts: TextWordTargetOptions): TextWordTarget {
+    const aurland = this.aurlandImage;
+    if (!aurland) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.aurlandWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.aurlandWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? BELL_BURST_COLOR,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          aurland.x,
+          aurland.y - 142,
+          { color: BELL_BURST_COLOR, depth: 58 },
+        );
+        playActorAttention(this, aurland, {
+          tint: BELL_BURST_COLOR,
+          scale: 1.02,
+          durationMs: 180,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, aurland, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -142,
+          depth: 58,
+          ringRadius: 28,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, aurland, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -142,
+          depth: 58,
+          ringRadius: 54,
+          count: 12,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      aurland,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: BELL_BURST_COLOR,
+        alpha: 0.2,
+        depth: 44,
+        sourceOffsetY: -142,
+        targetOffsetY: 24,
+      },
+    );
+    this.aurlandWordAnchors.push(anchor);
+    aurland.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
   private clearBossWordAnchors(): void {
     for (const anchor of this.bossWordAnchors) anchor.destroy();
     this.bossWordAnchors = [];
@@ -1894,6 +1974,11 @@ export class SunkenBellScene extends Phaser.Scene {
   private clearOlinWordAnchors(): void {
     for (const anchor of this.olinWordAnchors) anchor.destroy();
     this.olinWordAnchors = [];
+  }
+
+  private clearAurlandWordAnchors(): void {
+    for (const anchor of this.aurlandWordAnchors) anchor.destroy();
+    this.aurlandWordAnchors = [];
   }
 
   private spawnGhost(
@@ -2053,7 +2138,7 @@ export class SunkenBellScene extends Phaser.Scene {
       }
       const step = steps[idx];
       if (!step) return;
-      const target = this.makeWord({
+      const target = this.makeAurlandWord({
         scene: this,
         word: step.word,
         x: this.scale.width / 2,
@@ -2186,6 +2271,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private clearActiveTargets(): void {
     this.clearBossWordAnchors();
     this.clearOlinWordAnchors();
+    this.clearAurlandWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

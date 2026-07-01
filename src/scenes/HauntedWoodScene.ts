@@ -165,6 +165,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private shrineFigure: Phaser.GameObjects.Container | null = null;
   private pathCue: Phaser.GameObjects.Container | null = null;
   private ingaFigure: Phaser.GameObjects.Container | null = null;
+  private ingaWordAnchors: WordBodyAnchorHandle[] = [];
   private ghostKingBody: Phaser.GameObjects.Image | null = null;
   private bossWordAnchors: WordBodyAnchorHandle[] = [];
   private wispCatCompanion: Phaser.GameObjects.Container | null = null;
@@ -193,6 +194,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.shrineFigure = null;
     this.pathCue = null;
     this.ingaFigure = null;
+    this.ingaWordAnchors = [];
     this.ghostKingBody = null;
     this.bossWordAnchors = [];
     this.wispCatCompanion = null;
@@ -314,6 +316,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.compassGlyphs = [];
       this.shrineFigure = null;
       this.pathCue = null;
+      this.clearIngaWordAnchors();
       this.ingaFigure = null;
       this.ghostKingBody = null;
       this.wispCatCompanion = null;
@@ -608,13 +611,12 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.setNarrator("i don't know my name.", "Inga");
     this.time.delayedCall(1800, () => {
       // Wren types a reply
-      const reply = this.makeWord({
+      const reply = this.makeIngaWord({
         scene: this,
         word: "i'll find it.",
         x: this.scale.width / 2,
         y: this.scale.height - 340,
         fontSize: 36,
-        onClaim: () => this.attendInga(),
         onComplete: () => {
           this.clearActiveTargets();
           this.setNarrator(
@@ -847,13 +849,12 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startIngaNameReveal(): void {
     this.setNarrator("Her name. Type it back to her.");
-    const target = this.makeWord({
+    const target = this.makeIngaWord({
       scene: this,
       word: "inga",
       x: this.scale.width / 2,
       y: this.scale.height - 340,
       fontSize: 44,
-      onClaim: () => this.attendInga(),
       onComplete: () => {
         this.clearActiveTargets();
         playChime();
@@ -1627,6 +1628,78 @@ export class HauntedWoodScene extends Phaser.Scene {
     });
   }
 
+  private makeIngaWord(opts: TextWordTargetOptions): TextWordTarget {
+    const body = this.ingaFigure;
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.ingaWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.ingaWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.moss,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y - 62,
+          { color: PALETTE_HEX.moss, depth: 58 },
+        );
+        this.attendInga();
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "mist",
+          color: PALETTE_HEX.moss,
+          offsetY: -62,
+          depth: 58,
+          ringRadius: 28,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "mist",
+          color: PALETTE_HEX.moss,
+          offsetY: -62,
+          depth: 58,
+          ringRadius: 46,
+          count: 10,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.moss,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -62,
+        targetOffsetY: 24,
+      },
+    );
+    this.ingaWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
   private playWrenTypingPulse(): void {
     playBodyTypePulse(this, this.wrenContainer, {
       kind: "mist",
@@ -1932,12 +2005,18 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private clearActiveTargets(): void {
+    this.clearIngaWordAnchors();
     this.clearBossWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();
     }
     this.activeTargets = [];
+  }
+
+  private clearIngaWordAnchors(): void {
+    for (const anchor of this.ingaWordAnchors) anchor.destroy();
+    this.ingaWordAnchors = [];
   }
 
   private clearBossWordAnchors(): void {
@@ -2061,6 +2140,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private drawInga(x: number, y: number): void {
+    this.clearIngaWordAnchors();
     if (this.ingaFigure?.scene) this.ingaFigure.destroy();
     const c = this.add.container(x, y);
     c.add(addLocalGroundShadow(this, 72, 16, { y: 34, alpha: 0.2 }));

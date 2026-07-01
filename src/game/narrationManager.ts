@@ -20,6 +20,9 @@ const FADE_DURATION_MS = 400;
 const CARD_PAD_X = 30;
 const CARD_PAD_Y = 18;
 const DEFAULT_SPEAKER_NAME = "Runa";
+const SPEAKER_TAB_MIN_W = 86;
+const SPEAKER_TAB_PAD_X = 30;
+const SPEAKER_TAB_SIDE_PAD = 56;
 
 interface NarrationConfig {
   /** Vertical position of the caption. Defaults to 150; Winter Mountain
@@ -131,7 +134,14 @@ export class NarrationManager {
    *  drawing straight into the persistent graphics (framed mode). */
   private redrawCard(): void {
     if (!this.cardBg || !this.cardCorners) return;
-    const w = Math.max(120, this.text.width + CARD_PAD_X * 2);
+    const speakerTabW = this.speakerText?.visible
+      ? Math.max(SPEAKER_TAB_MIN_W, this.speakerText.width + SPEAKER_TAB_PAD_X)
+      : 0;
+    const w = Math.max(
+      120,
+      this.text.width + CARD_PAD_X * 2,
+      speakerTabW + SPEAKER_TAB_SIDE_PAD,
+    );
     const h = Math.max(56, this.text.height + CARD_PAD_Y * 2);
     this.cardBg.clear();
     this.cardBg.fillStyle(UI_HEX.parchment, 0.96);
@@ -149,8 +159,8 @@ export class NarrationManager {
     this.cardCorners.beginPath(); this.cardCorners.moveTo(x - size, y); this.cardCorners.lineTo(x, y); this.cardCorners.lineTo(x, y - size); this.cardCorners.strokePath();
 
     if (this.speakerBg && this.speakerText && this.speakerText.visible) {
-      const tabW = Math.max(86, this.speakerText.width + 30);
-      const tabH = 28;
+      const tabW = Math.max(SPEAKER_TAB_MIN_W, this.speakerText.width + SPEAKER_TAB_PAD_X);
+      const tabH = Math.max(28, this.speakerText.height + 10);
       const tabX = -w / 2 + 28;
       const tabY = -h / 2 - tabH / 2 + 5;
       this.speakerBg.clear();
@@ -170,8 +180,20 @@ export class NarrationManager {
       this.speakerText.setText("").setVisible(false);
       return;
     }
-    this.speakerText.setText(name).setVisible(true);
+    const label = this.formatSpeakerName(name);
+    this.speakerText
+      .setFontSize(label.includes("\n") ? 14 : 17)
+      .setText(label)
+      .setVisible(true);
     this.speakerBg.setVisible(true);
+  }
+
+  private formatSpeakerName(name: string): string {
+    if (name.length <= 12) return name;
+    if (name.includes("-")) return name.replace("-", "-\n");
+    const words = name.split(/\s+/);
+    if (words.length > 1) return `${words[0]}\n${words.slice(1).join(" ")}`;
+    return name;
   }
 
   /** Render a canonical Runa line by ID. Falls back to sayRaw() if the ID is

@@ -43,6 +43,7 @@ export class OpeningScene extends Phaser.Scene {
   private quietLordSprite: Phaser.GameObjects.Image | null = null;
   private runaActor: Phaser.GameObjects.Container | null = null;
   private siblingActor: Phaser.GameObjects.Container | null = null;
+  private siblingKeepsake: Phaser.GameObjects.Graphics | null = null;
   private studyTypingPulseTimes = new WeakMap<StudyResponsePoint, number>();
 
   // §5.5.2 — Wren is gender-selectable. Cached from saveState in init(); set
@@ -64,6 +65,7 @@ export class OpeningScene extends Phaser.Scene {
     this.quietLordSprite = null;
     this.runaActor = null;
     this.siblingActor = null;
+    this.siblingKeepsake = null;
     this.studyTypingPulseTimes = new WeakMap();
     // Honor an existing gender choice on revisit / New Game+; null on a
     // truly fresh save so Beat 2.5 will prompt.
@@ -120,6 +122,7 @@ export class OpeningScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
+      this.siblingKeepsake = null;
     });
 
     // ── Beat sequence ────────────────────────────────────────────────────────
@@ -352,6 +355,7 @@ export class OpeningScene extends Phaser.Scene {
         : "At the doorway, the joke finally leaves his face. ‘Wren. I’ll be here. Don’t take long.’",
       isBoy ? "Saga" : "Magnus",
     );
+    this.playSiblingFarewell();
     this.time.delayedCall(2400, () => this.beat10());
   }
 
@@ -393,7 +397,33 @@ export class OpeningScene extends Phaser.Scene {
       playActorAttention(this, this.runaActor, { scale: 1.015, durationMs: 190 });
     } else if (speakerName === "Saga" || speakerName === "Magnus") {
       playActorAttention(this, this.siblingActor, { scale: 1.025, durationMs: 190 });
+      if (speakerName === "Saga") this.pulseSiblingKeepsake();
     }
+  }
+
+  private playSiblingFarewell(): void {
+    playActorAttention(this, this.siblingActor, {
+      scale: 1.03,
+      durationMs: 260,
+    });
+    this.pulseSiblingKeepsake();
+  }
+
+  private pulseSiblingKeepsake(): void {
+    const prop = this.siblingKeepsake;
+    if (!prop?.scene) return;
+    const baseScaleX = prop.scaleX;
+    const baseScaleY = prop.scaleY;
+    prop.setScale(baseScaleX * 1.12, baseScaleY * 1.12);
+    prop.setAlpha(Math.min(1, prop.alpha + 0.16));
+    this.tweens.add({
+      targets: prop,
+      scaleX: baseScaleX,
+      scaleY: baseScaleY,
+      alpha: 0.92,
+      duration: 260,
+      ease: "Sine.easeOut",
+    });
   }
 
   private playStudyClaimPulse(point: StudyResponsePoint): void {
@@ -523,9 +553,17 @@ export class OpeningScene extends Phaser.Scene {
    */
   private drawSibling(): void {
     const isBoy = this.wrenGender === "boy";
-    const actor = this.add.container(1240, 950).setAlpha(0).setDepth(-1);
+    const actor = this.add.container(isBoy ? 1240 : 1260, 950).setAlpha(0).setDepth(-1);
     this.siblingActor = actor;
-    actor.add(addLocalGroundShadow(this, isBoy ? 110 : 130, 22, { y: 7, alpha: 0.28 }));
+
+    const doorway = this.add.graphics().setPosition(isBoy ? 10 : -4, -142);
+    doorway.fillStyle(isBoy ? 0xeedec0 : 0x8fa4bc, isBoy ? 0.07 : 0.1);
+    doorway.fillEllipse(0, 0, isBoy ? 128 : 154, isBoy ? 248 : 290);
+    doorway.lineStyle(2, isBoy ? 0xc9a14a : 0x8fa4bc, isBoy ? 0.12 : 0.16);
+    doorway.strokeEllipse(0, 0, isBoy ? 104 : 126, isBoy ? 220 : 252);
+    actor.add(doorway);
+
+    actor.add(addLocalGroundShadow(this, isBoy ? 110 : 136, 22, { y: 7, alpha: 0.28 }));
     const img = this.add
       .image(0, 0, "sibling-sprite")
       .setOrigin(0.5, 1);
@@ -537,9 +575,30 @@ export class OpeningScene extends Phaser.Scene {
     // Magnus gets a cool blue-gray (reads as older + a beat more distant).
     img.setTint(isBoy ? 0xbfb0a0 : 0xa0aebf);
     actor.add(img);
+
+    if (isBoy) {
+      const drawing = this.add.graphics().setPosition(24, -116).setAlpha(0.92);
+      drawing.fillStyle(0xf0dfbd, 0.92);
+      drawing.fillRoundedRect(-22, -24, 44, 36, 4);
+      drawing.lineStyle(2, 0xb98f49, 0.72);
+      drawing.strokeRoundedRect(-22, -24, 44, 36, 4);
+      drawing.lineStyle(1, 0x7b623d, 0.44);
+      drawing.lineBetween(-14, -5, -3, -14);
+      drawing.lineBetween(-3, -14, 10, 3);
+      drawing.lineBetween(-10, 6, 14, 6);
+      actor.add(drawing);
+      this.siblingKeepsake = drawing;
+    } else {
+      const doorShadow = this.add.graphics().setPosition(-18, -130).setAlpha(0.68);
+      doorShadow.fillStyle(0x273241, 0.32);
+      doorShadow.fillRoundedRect(-42, -138, 84, 260, 34);
+      actor.addAt(doorShadow, 0);
+      this.siblingKeepsake = null;
+    }
+
     this.tweens.add({
       targets: actor,
-      x: 1180,
+      x: isBoy ? 1180 : 1198,
       alpha: 1,
       duration: 760,
       ease: "Sine.easeOut",

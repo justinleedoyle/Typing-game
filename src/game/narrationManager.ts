@@ -195,6 +195,10 @@ export class NarrationManager {
   /** Render an inline caption. Use for transitional/inline copy that isn't
    *  in runaLines.ts yet. Migrate to say(lineId) over time. */
   sayRaw(text: string, opts: NarrationOptions = {}): void {
+    if (text.trim().length === 0) {
+      this.clear();
+      return;
+    }
     const speakerName = opts.speakerName === undefined
       ? this.defaultSpeakerName
       : opts.speakerName;
@@ -214,8 +218,15 @@ export class NarrationManager {
 
   /** Clear the caption immediately (no fade). */
   clear(): void {
+    const root = this.container ?? this.text;
+    this.scene.tweens.killTweensOf(root);
     this.text.setText("");
-    (this.container ?? this.text).setAlpha(0);
+    if (this.framed) {
+      this.setSpeaker(null);
+      this.cardBg?.clear();
+      this.cardCorners?.clear();
+    }
+    root.setAlpha(0);
   }
 
   /** Current visible caption — used by scenes that gate logic on "is the

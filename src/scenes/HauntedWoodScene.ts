@@ -46,6 +46,7 @@ import {
   dismissCompanionCameo,
   addIdleBreath,
   addLocalGroundShadow,
+  addLivingLight,
   playActorAttention,
   playBodyImpact,
   playBodyTypePulse,
@@ -242,6 +243,40 @@ export class HauntedWoodScene extends Phaser.Scene {
       driftY: -30,
       minDurationMs: 9000,
       maxDurationMs: 17000,
+    });
+    addLivingLight(this, {
+      x: 960,
+      y: 770,
+      width: 500,
+      height: 270,
+      color: 0xa7d8a2,
+      alpha: 0.045,
+      depth: -5,
+      durationMs: 3600,
+    });
+    addLivingLight(this, {
+      x: 470,
+      y: 520,
+      width: 360,
+      height: 230,
+      color: 0x9271c9,
+      alpha: 0.035,
+      depth: -6,
+      durationMs: 4700,
+      delayMs: 900,
+      scale: 1.04,
+    });
+    addLivingLight(this, {
+      x: 1460,
+      y: 520,
+      width: 360,
+      height: 230,
+      color: 0x7fbf88,
+      alpha: 0.035,
+      depth: -6,
+      durationMs: 4300,
+      delayMs: 1300,
+      scale: 1.04,
     });
     this.drawShrine();
     this.wrenContainer = this.drawWren(WREN_X, WREN_Y);

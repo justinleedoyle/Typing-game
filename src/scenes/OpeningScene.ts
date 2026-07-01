@@ -12,6 +12,7 @@ import {
   addBackdropDrift,
   addIdleBreath,
   addLocalGroundShadow,
+  addLivingLight,
   attachWordBodyAnchor,
   playActorAttention,
   playClaimLine,
@@ -116,6 +117,26 @@ export class OpeningScene extends Phaser.Scene {
       driftY: -75,
       minDurationMs: 8500,
       maxDurationMs: 15000,
+    });
+    addLivingLight(this, {
+      x: 790,
+      y: 740,
+      width: 250,
+      height: 160,
+      color: 0xf0ad58,
+      alpha: 0.09,
+      durationMs: 2200,
+    });
+    addLivingLight(this, {
+      x: 1510,
+      y: 610,
+      width: 300,
+      height: 380,
+      color: 0x9fd7ff,
+      alpha: 0.065,
+      durationMs: 3200,
+      delayMs: 600,
+      scale: 1.045,
     });
 
     // ── Narrator text ────────────────────────────────────────────────────────

@@ -33,6 +33,7 @@ import {
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
+  addLivingLight,
   attachWordBodyAnchor,
   playBodyImpact,
   playBodyTypePulse,
@@ -249,6 +250,39 @@ export class SunkenBellScene extends Phaser.Scene {
       driftY: -360,
       minDurationMs: 6500,
       maxDurationMs: 13000,
+    });
+    addLivingLight(this, {
+      x: 410,
+      y: 650,
+      width: 360,
+      height: 250,
+      color: 0x4ab8d6,
+      alpha: 0.045,
+      depth: -5,
+      durationMs: 3300,
+    });
+    addLivingLight(this, {
+      x: 1000,
+      y: 540,
+      width: 560,
+      height: 280,
+      color: 0x77d6c9,
+      alpha: 0.04,
+      depth: -5,
+      durationMs: 3900,
+      delayMs: 700,
+      scale: 1.04,
+    });
+    addLivingLight(this, {
+      x: 1515,
+      y: 740,
+      width: 300,
+      height: 210,
+      color: 0x9fe4ff,
+      alpha: 0.045,
+      depth: -5,
+      durationMs: 3000,
+      delayMs: 1200,
     });
     this.wrenContainer = this.drawWren(WREN_X, WREN_Y);
 

@@ -3,7 +3,7 @@ import { playClack } from "../audio/clack";
 import { setAudioLevel } from "../audio/context";
 import { applyDevUnlock, parseDevTarget } from "../game/devUnlock";
 import { SERIF } from "../game/palette";
-import { addAmbientDrift, addBackdropDrift } from "../game/livingScene";
+import { addAmbientDrift, addBackdropDrift, addLivingLight } from "../game/livingScene";
 import { cornerTicks, UI_CSS, UI_HEX } from "../game/ui/uiTheme";
 import {
   SaveStore,
@@ -55,6 +55,26 @@ export class TitleScene extends Phaser.Scene {
       driftY: -80,
       minDurationMs: 8500,
       maxDurationMs: 15000,
+    });
+    addLivingLight(this, {
+      x: 790,
+      y: 740,
+      width: 240,
+      height: 150,
+      color: 0xf0ad58,
+      alpha: 0.08,
+      durationMs: 2200,
+    });
+    addLivingLight(this, {
+      x: 1510,
+      y: 610,
+      width: 260,
+      height: 360,
+      color: 0x9fd7ff,
+      alpha: 0.06,
+      durationMs: 3200,
+      delayMs: 600,
+      scale: 1.045,
     });
 
     this.drawTitlePlate(width / 2, height / 2 - 54);

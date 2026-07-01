@@ -46,6 +46,7 @@ import {
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
+  addLivingLight,
   playBodyImpact,
   playBodyTypePulse,
   playClaimLine,
@@ -314,6 +315,39 @@ export class SkyIslandScene extends Phaser.Scene {
       driftY: -170,
       minDurationMs: 6200,
       maxDurationMs: 13000,
+    });
+    addLivingLight(this, {
+      x: 960,
+      y: 322,
+      width: 480,
+      height: 190,
+      color: 0xf2cc65,
+      alpha: 0.055,
+      depth: -5,
+      durationMs: 3100,
+    });
+    addLivingLight(this, {
+      x: 1450,
+      y: 435,
+      width: 420,
+      height: 190,
+      color: 0xe9b44e,
+      alpha: 0.045,
+      depth: -5,
+      durationMs: 3500,
+      delayMs: 850,
+    });
+    addLivingLight(this, {
+      x: 960,
+      y: 650,
+      width: 780,
+      height: 300,
+      color: 0x9ad8ff,
+      alpha: 0.035,
+      depth: -6,
+      durationMs: 4300,
+      delayMs: 500,
+      scale: 1.035,
     });
     this.drawTempleStones();
     this.drawAmbientLanterns();

@@ -38,6 +38,7 @@ import {
   addContainerWake,
   addIdleBreath,
   addLocalGroundShadow,
+  addLivingLight,
   dismissCompanionCameo,
   playBodyImpact,
   playBodyTypePulse,
@@ -554,6 +555,40 @@ export class GreatBattleScene extends Phaser.Scene {
       driftY: -220,
       minDurationMs: 5200,
       maxDurationMs: 12500,
+    });
+    addLivingLight(this, {
+      x: 1210,
+      y: 640,
+      width: 900,
+      height: 360,
+      color: 0xd6754a,
+      alpha: 0.045,
+      depth: -5,
+      durationMs: 3800,
+      scale: 1.035,
+    });
+    addLivingLight(this, {
+      x: 1540,
+      y: 510,
+      width: 320,
+      height: 190,
+      color: 0xf0ad58,
+      alpha: 0.05,
+      depth: -5,
+      durationMs: 2600,
+      delayMs: 700,
+    });
+    addLivingLight(this, {
+      x: 420,
+      y: 650,
+      width: 520,
+      height: 240,
+      color: 0xb34b45,
+      alpha: 0.035,
+      depth: -6,
+      durationMs: 4300,
+      delayMs: 1100,
+      scale: 1.04,
     });
 
     // UI cohesion — the console band. The finale has no heart/soul HUD; its candle

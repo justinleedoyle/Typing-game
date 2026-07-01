@@ -43,6 +43,7 @@ import {
   dismissCompanionCameo,
   fadeOutStagedSprite,
   addLocalGroundShadow,
+  addLivingLight,
   playBodyImpact,
   playBodyTypePulse,
   playClaimLine,
@@ -272,6 +273,20 @@ export class ClockworkForgeScene extends Phaser.Scene {
       minDurationMs: 3600,
       maxDurationMs: 8200,
     });
+    for (const gx of [380, 960, 1540]) {
+      addLivingLight(this, {
+        x: gx,
+        y: FLOOR_Y + 12,
+        width: 430,
+        height: 170,
+        color: PALETTE_HEX.ember,
+        alpha: 0.07,
+        depth: -5,
+        durationMs: 1900 + gx / 4,
+        delayMs: gx / 3,
+        scale: 1.035,
+      });
+    }
     this.drawForgeGlow();
     this.drawCatwalk();
     this.drawWren(this.scale.width / 2, CATWALK_Y + 20);

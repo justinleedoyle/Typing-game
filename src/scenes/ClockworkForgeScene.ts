@@ -163,6 +163,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private bossWordAnchors: WordBodyAnchorHandle[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
+  private catwalkCue: Phaser.GameObjects.Container | null = null;
   /** Smith Forn's standing portrait — only on screen during the Fork 1 beat. */
   private fornSprite?: Phaser.GameObjects.Image;
 
@@ -210,6 +211,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.golems = [];
     this.activeTargets = [];
     this.bossWordAnchors = [];
+    this.catwalkCue = null;
     this.oneShotInvoker = null;
     this.shiftHeld = false;
     this.waveActive = false;
@@ -340,6 +342,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.input.keyboard?.off("keyup", this.onKeyUp, this);
       this.ambientHandle?.stop();
+      this.catwalkCue?.destroy();
+      this.catwalkCue = null;
       this.fornSprite?.destroy();
       this.fornSprite = undefined;
     });
@@ -418,19 +422,28 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private startCatwalkBeats(idx: number): void {
     if (idx >= CATWALK_WORDS.length) {
+      this.dismissCatwalkCue();
       this.time.delayedCall(1000, () => this.startGregorConversation());
       return;
     }
     const word = CATWALK_WORDS[idx];
     const narration = CATWALK_NARRATIONS[idx];
     const x = this.scale.width / 2 + (idx - 1) * 300;
+    this.showCatwalkCue(idx, x);
     const target = this.makeWord({
       scene: this,
       word,
       x,
       y: CATWALK_Y - 70,
+      depth: 40,
       fontSize: 34,
+      onClaim: () => {
+        playWrenFocus(this.wrenSprite, { faceLeft: x < this.wrenContainer.x });
+        this.pulseCatwalkCue(false);
+      },
       onComplete: () => {
+        playWrenAction(this.wrenSprite, { faceLeft: x < this.wrenContainer.x });
+        this.pulseCatwalkCue(true);
         this.setNarrator(narration);
         this.time.delayedCall(1400, () => this.startCatwalkBeats(idx + 1));
       },
@@ -1614,6 +1627,147 @@ export class ClockworkForgeScene extends Phaser.Scene {
     advance();
   }
 
+  private showCatwalkCue(idx: number, x: number): void {
+    this.dismissCatwalkCue(false);
+    const cue =
+      idx === 0
+        ? this.drawLooseGrateCue(x)
+        : idx === 1
+          ? this.drawSteamPipeCue(x)
+          : this.drawRailGripCue(x);
+    this.catwalkCue = cue;
+    this.tweens.add({
+      targets: cue,
+      alpha: 0.86,
+      y: cue.y - 5,
+      duration: 320,
+      ease: "Sine.easeOut",
+    });
+  }
+
+  private drawLooseGrateCue(x: number): Phaser.GameObjects.Container {
+    const c = this.add.container(x, CATWALK_Y + 13).setDepth(-2).setAlpha(0);
+    const g = this.add.graphics();
+    g.fillStyle(0x120e0b, 0.34);
+    g.fillEllipse(0, 18, 136, 20);
+    g.fillStyle(0x211813, 0.94);
+    g.fillRoundedRect(-66, -12, 132, 26, 4);
+    g.lineStyle(2, 0x5a4632, 0.62);
+    g.strokeRoundedRect(-66, -12, 132, 26, 4);
+    g.lineStyle(3, 0x3a2e24, 0.9);
+    for (const gx of [-44, -22, 0, 22, 44]) {
+      g.lineBetween(gx, -10, gx + 10, 12);
+    }
+    g.lineStyle(2, PALETTE_HEX.ember, 0.42);
+    g.lineBetween(-56, 13, 58, 13);
+    c.add(g);
+    this.tweens.add({
+      targets: c,
+      rotation: { from: -0.01, to: 0.012 },
+      duration: 540,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    return c;
+  }
+
+  private drawSteamPipeCue(x: number): Phaser.GameObjects.Container {
+    const c = this.add.container(x, CATWALK_Y - 32).setDepth(-2).setAlpha(0);
+    const pipe = this.add.graphics();
+    pipe.lineStyle(10, 0x1a1411, 0.94);
+    pipe.lineBetween(-92, -78, 92, -78);
+    pipe.lineStyle(4, 0x584331, 0.58);
+    pipe.lineBetween(-88, -84, 88, -84);
+    pipe.fillStyle(0x2a211b, 1);
+    pipe.fillRoundedRect(-20, -88, 40, 24, 6);
+    c.add(pipe);
+    const steam = this.add.graphics();
+    steam.fillStyle(0xd7c3a1, 0.14);
+    steam.fillEllipse(0, -36, 54, 96);
+    steam.fillEllipse(-18, -10, 32, 58);
+    steam.fillEllipse(24, 6, 38, 72);
+    c.add(steam);
+    this.tweens.add({
+      targets: steam,
+      y: -10,
+      scaleY: 1.12,
+      alpha: 0.58,
+      duration: 760,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    return c;
+  }
+
+  private drawRailGripCue(x: number): Phaser.GameObjects.Container {
+    const c = this.add.container(x, CATWALK_Y - 2).setDepth(-2).setAlpha(0);
+    const g = this.add.graphics();
+    g.fillStyle(0x120e0b, 0.3);
+    g.fillEllipse(0, 40, 150, 22);
+    g.lineStyle(7, 0x201711, 0.95);
+    g.lineBetween(-82, -48, -82, 28);
+    g.lineBetween(82, -48, 82, 28);
+    g.lineStyle(6, 0x33261c, 0.9);
+    g.lineBetween(-92, -46, 92, -38);
+    g.lineStyle(3, 0x6a5038, 0.54);
+    g.lineBetween(-84, -52, 82, -44);
+    g.fillStyle(PALETTE_HEX.ember, 0.16);
+    g.fillEllipse(68, -40, 42, 16);
+    c.add(g);
+    this.tweens.add({
+      targets: c,
+      x: x + 5,
+      duration: 120,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    return c;
+  }
+
+  private pulseCatwalkCue(completion: boolean): void {
+    if (!this.catwalkCue?.scene) return;
+    playActorAttention(this, this.catwalkCue, {
+      scale: completion ? 1.035 : 1.018,
+      durationMs: completion ? 250 : 170,
+      tint: PALETTE_HEX.ember,
+    });
+    playBodyImpact(this, this.catwalkCue, {
+      kind: "ember",
+      color: PALETTE_HEX.ember,
+      offsetY: completion ? -28 : -20,
+      depth: 16,
+      ringRadius: completion ? 42 : 26,
+      count: completion ? 8 : 5,
+      durationMs: completion ? 420 : 250,
+    });
+  }
+
+  private dismissCatwalkCue(animate = true): void {
+    const cue = this.catwalkCue;
+    if (!cue?.scene) {
+      this.catwalkCue = null;
+      return;
+    }
+    this.catwalkCue = null;
+    this.tweens.killTweensOf(cue);
+    for (const child of cue.list) this.tweens.killTweensOf(child);
+    if (!animate) {
+      cue.destroy();
+      return;
+    }
+    this.tweens.add({
+      targets: cue,
+      alpha: 0,
+      y: cue.y - 18,
+      duration: 240,
+      ease: "Sine.easeIn",
+      onComplete: () => cue.destroy(),
+    });
+  }
+
   // ─── Input ────────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
@@ -1991,7 +2145,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // visible supports so Wren reads as standing on a structure, not floating —
     // but without the old bright brass railing + grating dashes that read as a UI
     // overlay across the painting.
-    const g = this.add.graphics();
+    const g = this.add.graphics().setDepth(-4);
     const w = this.scale.width;
     const top = CATWALK_Y;
     // Support trusses descending toward the foundry floor (drawn first, so the

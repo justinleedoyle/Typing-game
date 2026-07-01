@@ -22,6 +22,9 @@ import {
   addGroundShadow,
   addIdleBreath,
   addLocalGroundShadow,
+  attachWordBodyAnchor,
+  playClaimLine,
+  type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import { preloadSatchelIcons, satchelIconFor } from "../game/ui/satchelIcons";
 import { cornerTicks, UI_HEX } from "../game/ui/uiTheme";
@@ -142,9 +145,11 @@ export class PortalChamberScene extends Phaser.Scene {
   private wrenSprite!: Phaser.GameObjects.Image;
   private runaSprite?: Phaser.GameObjects.Image;
   private zoneTargets: TextWordTarget[] = [];
+  private portalWordAnchors: WordBodyAnchorHandle[] = [];
   private stationTypingPulseTimes = new WeakMap<StationSpec, number>();
   private portalTypingPulseTimes = new Map<string, number>();
   private ambientHandle?: AmbientHandle;
+  private showPortalRevisits = false;
 
   constructor() {
     super("PortalChamberScene");
@@ -156,8 +161,10 @@ export class PortalChamberScene extends Phaser.Scene {
     this.archGlows = new Map();
     this.archSprites = new Map();
     this.zoneTargets = [];
+    this.portalWordAnchors = [];
     this.stationTypingPulseTimes = new WeakMap();
     this.portalTypingPulseTimes = new Map();
+    this.showPortalRevisits = false;
   }
 
   preload(): void {
@@ -277,6 +284,10 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private clearZoneTargets(): void {
+    for (const anchor of this.portalWordAnchors) {
+      anchor.destroy();
+    }
+    this.portalWordAnchors = [];
     for (const t of this.zoneTargets) {
       this.typingInput.unregister(t);
       t.destroy();
@@ -321,19 +332,9 @@ export class PortalChamberScene extends Phaser.Scene {
     if (nextAvailableIdx < REALM_SEQUENCE.length) {
       // Primary portal target — next uncompleted realm.
       const arch = ARCHES[nextAvailableIdx];
-      const primary = new TextWordTarget({
-        scene: this,
-        word: arch.label,
-        x: arch.x,
-        y: archTargetY(nextAvailableIdx),
+      this.registerRealmPortalTarget(arch, nextAvailableIdx, false, {
         fontSize: 30,
-        outline: true,
-        onClaim: () => this.focusPortalForScene(arch.sceneKey),
-        onAdvance: () => this.pulsePortalTyping(arch.sceneKey),
-        onComplete: () => this.onEnterPortal(arch.sceneKey, false),
       });
-      this.typingInput.register(primary);
-      this.zoneTargets.push(primary);
       this.setHint("type the glowing arch's name to step through  ·  backspace to cancel");
       // First-arrival narration — only while nothing is cleared yet (the
       // "you're new here" state). On returns the desk reflections carry Runa.
@@ -396,22 +397,29 @@ export class PortalChamberScene extends Phaser.Scene {
     }
 
     // Secondary targets — all cleared realms are revisitable at lower priority.
-    for (let i = 0; i < nextAvailableIdx; i++) {
-      const arch = ARCHES[i];
-      const revisit = new TextWordTarget({
-        scene: this,
-        word: arch.label,
-        x: arch.x,
-        y: archTargetY(i),
-        fontSize: 22,
-        priority: -1,
-        outline: true,
-        onClaim: () => this.focusPortalForScene(arch.sceneKey),
-        onAdvance: () => this.pulsePortalTyping(arch.sceneKey),
-        onComplete: () => this.onEnterPortal(arch.sceneKey, true),
-      });
-      this.typingInput.register(revisit);
-      this.zoneTargets.push(revisit);
+    const allRealmsCleared = nextAvailableIdx >= REALM_SEQUENCE.length;
+    if (!allRealmsCleared || this.showPortalRevisits) {
+      for (let i = 0; i < nextAvailableIdx; i++) {
+        this.registerRealmPortalTarget(ARCHES[i], i, true, {
+          fontSize: 22,
+          priority: -1,
+        });
+      }
+    } else {
+      this.registerNavTarget(
+        "old paths",
+        this.scale.width / 2,
+        552,
+        () => {
+          this.showPortalRevisits = true;
+          this.enterZone("portals", false);
+        },
+        {
+          fontSize: 21,
+          priority: -1,
+          stationPulse: HUB_STATIONS.portalFloor,
+        },
+      );
     }
 
     // Zone navigation (away from portals).
@@ -431,6 +439,79 @@ export class PortalChamberScene extends Phaser.Scene {
       {
         fontSize: 19,
         stationPulse: HUB_STATIONS.account,
+      },
+    );
+  }
+
+  private registerRealmPortalTarget(
+    arch: ArchSpec,
+    archIndex: number,
+    revisit: boolean,
+    opts: { fontSize: number; priority?: number },
+  ): void {
+    let releaseAnchor = (): void => {};
+    const target = new TextWordTarget({
+      scene: this,
+      word: arch.label,
+      x: arch.x,
+      y: archTargetY(archIndex),
+      fontSize: opts.fontSize,
+      priority: opts.priority,
+      outline: true,
+      onClaim: () => {
+        this.playPortalClaimLine(arch);
+        this.focusPortalForScene(arch.sceneKey);
+      },
+      onAdvance: () => this.pulsePortalTyping(arch.sceneKey),
+      onComplete: () => {
+        releaseAnchor();
+        this.onEnterPortal(arch.sceneKey, revisit);
+      },
+    });
+    releaseAnchor = this.attachPortalWordAnchor(target, arch);
+    this.typingInput.register(target);
+    this.zoneTargets.push(target);
+  }
+
+  private attachPortalWordAnchor(
+    target: TextWordTarget,
+    arch: ArchSpec,
+  ): () => void {
+    const sprite = this.archSprites.get(arch.id);
+    if (!sprite) return () => {};
+
+    const handle = attachWordBodyAnchor(
+      this,
+      sprite,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: UI_HEX.brass,
+        alpha: 0.16,
+        depth: -0.4,
+        sourceOffsetY: -(arch.height / 2 - 34),
+        targetOffsetY: 24,
+      },
+    );
+    this.portalWordAnchors.push(handle);
+
+    return () => {
+      handle.destroy();
+      const idx = this.portalWordAnchors.indexOf(handle);
+      if (idx >= 0) this.portalWordAnchors.splice(idx, 1);
+    };
+  }
+
+  private playPortalClaimLine(arch: ArchSpec): void {
+    playClaimLine(
+      this,
+      this.wrenContainer.x,
+      this.wrenContainer.y - 108,
+      arch.x,
+      arch.baseY - arch.height / 2 + 34,
+      {
+        color: UI_HEX.brass,
+        depth: 8,
+        durationMs: 300,
       },
     );
   }

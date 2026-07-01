@@ -97,6 +97,9 @@ interface StaticGolem {
   sprite: Phaser.GameObjects.Image;
 }
 
+type ForgePassageOwner = "forn" | "apprentices" | "peaceful-order" | "none";
+type ForgeChoiceCueKey = "apprentice" | "standDown" | "fight";
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CATWALK_Y = 440;
@@ -163,9 +166,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private bossWordAnchors: WordBodyAnchorHandle[] = [];
   private tutorialWordAnchors: WordBodyAnchorHandle[] = [];
   private fornWordAnchors: WordBodyAnchorHandle[] = [];
+  private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   private catwalkCue: Phaser.GameObjects.Container | null = null;
+  private apprenticeCue: Phaser.GameObjects.Container | null = null;
+  private standDownCue: Phaser.GameObjects.Container | null = null;
+  private fightCue: Phaser.GameObjects.Container | null = null;
   /** Smith Forn's standing portrait — only on screen during the Fork 1 beat. */
   private fornSprite?: Phaser.GameObjects.Image;
 
@@ -216,7 +223,11 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.bossWordAnchors = [];
     this.tutorialWordAnchors = [];
     this.fornWordAnchors = [];
+    this.forkChoiceWordAnchors = [];
     this.catwalkCue = null;
+    this.apprenticeCue = null;
+    this.standDownCue = null;
+    this.fightCue = null;
     this.oneShotInvoker = null;
     this.shiftHeld = false;
     this.waveActive = false;
@@ -351,6 +362,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.catwalkCue?.destroy();
       this.catwalkCue = null;
       this.clearFornWordAnchors();
+      this.clearForkChoiceWordAnchors();
+      this.clearForgeChoiceCues(false);
       this.fornSprite?.destroy();
       this.fornSprite = undefined;
     });
@@ -765,6 +778,230 @@ export class ClockworkForgeScene extends Phaser.Scene {
     });
   }
 
+  private showFork1ChoiceCues(): void {
+    if (!this.apprenticeCue?.scene) {
+      this.apprenticeCue = this.drawApprenticeCue(1280, FLOOR_Y + 4);
+    }
+  }
+
+  private showFork2ChoiceCues(): void {
+    if (!this.standDownCue?.scene) {
+      this.standDownCue = this.drawStandDownCue(690, FLOOR_Y + 8);
+    }
+    if (!this.fightCue?.scene) {
+      this.fightCue = this.drawFightCue(1260, FLOOR_Y + 8);
+    }
+  }
+
+  private drawApprenticeCue(x: number, y: number): Phaser.GameObjects.Container {
+    const c = this.add.container(x, y).setDepth(39);
+    c.add(addLocalGroundShadow(this, 148, 24, { y: 10, alpha: 0.28 }));
+
+    const g = this.add.graphics();
+    g.lineStyle(8, 0x1a120d, 0.98);
+    g.lineBetween(-76, -96, -76, 0);
+    g.lineBetween(56, -82, 56, 0);
+    g.lineStyle(3, 0x5a4632, 0.62);
+    g.lineBetween(-76, -94, 56, -82);
+    g.fillStyle(0x251711, 0.98);
+    g.fillRoundedRect(-108, -34, 216, 44, 9);
+    g.lineStyle(2, PALETTE_HEX.brass, 0.38);
+    g.strokeRoundedRect(-108, -34, 216, 44, 9);
+    g.fillStyle(0x120d0a, 0.98);
+    g.fillCircle(-28, -44, 34);
+    g.lineStyle(4, PALETTE_HEX.ember, 0.5);
+    g.strokeCircle(-28, -44, 25);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      g.lineBetween(
+        -28,
+        -44,
+        -28 + Math.cos(a) * 24,
+        -44 + Math.sin(a) * 24,
+      );
+    }
+    g.lineStyle(7, 0x483322, 0.95);
+    g.lineBetween(20, -28, 92, -80);
+    g.lineStyle(3, PALETTE_HEX.brass, 0.7);
+    g.lineBetween(22, -30, 88, -78);
+    g.fillStyle(PALETTE_HEX.ember, 0.28);
+    g.fillCircle(74, -70, 8);
+    g.fillCircle(-64, -22, 6);
+    c.add(g);
+
+    addContainerWake(this, c, {
+      kind: "ember",
+      intervalMs: 170,
+      spreadX: 44,
+      spreadY: 20,
+      offsetY: -46,
+      alpha: 0.34,
+      size: 3,
+      depth: 38,
+      driftY: -60,
+    });
+    stageContainerEntrance(this, c, {
+      entranceOffsetY: 16,
+      entranceMs: 620,
+      breathDy: -3,
+      breathMs: 2100,
+    });
+    return c;
+  }
+
+  private drawStandDownCue(x: number, y: number): Phaser.GameObjects.Container {
+    const c = this.add.container(x, y).setDepth(39);
+    c.add(addLocalGroundShadow(this, 140, 22, { y: 10, alpha: 0.24 }));
+
+    const g = this.add.graphics();
+    g.fillStyle(0x1d1712, 0.96);
+    g.fillRoundedRect(-80, -38, 160, 48, 10);
+    g.lineStyle(2, PALETTE_HEX.brass, 0.55);
+    g.strokeRoundedRect(-80, -38, 160, 48, 10);
+    g.lineStyle(5, 0x5a4632, 0.82);
+    g.lineBetween(-54, -94, -22, -56);
+    g.lineBetween(54, -94, 22, -56);
+    g.lineStyle(4, PALETTE_HEX.brass, 0.5);
+    g.strokeCircle(0, -56, 38);
+    g.lineStyle(2, PALETTE_HEX.brass, 0.35);
+    g.strokeCircle(0, -56, 24);
+    g.fillStyle(PALETTE_HEX.brass, 0.18);
+    g.fillCircle(0, -56, 30);
+    g.fillStyle(0x0f0c09, 0.96);
+    g.fillRoundedRect(-38, -72, 76, 28, 6);
+    g.lineStyle(3, PALETTE_HEX.brass, 0.62);
+    g.lineBetween(-24, -58, 24, -58);
+    c.add(g);
+
+    addContainerWake(this, c, {
+      kind: "mote",
+      intervalMs: 230,
+      spreadX: 34,
+      spreadY: 16,
+      offsetY: -52,
+      color: PALETTE_HEX.brass,
+      alpha: 0.28,
+      size: 2.5,
+      depth: 38,
+      driftY: -44,
+    });
+    stageContainerEntrance(this, c, {
+      entranceOffsetY: 14,
+      entranceMs: 620,
+      breathDy: -2,
+      breathMs: 2200,
+    });
+    return c;
+  }
+
+  private drawFightCue(x: number, y: number): Phaser.GameObjects.Container {
+    const c = this.add.container(x, y).setDepth(39);
+    c.add(addLocalGroundShadow(this, 148, 24, { y: 10, alpha: 0.28 }));
+
+    const g = this.add.graphics();
+    g.fillStyle(0x1a110d, 0.98);
+    g.fillRoundedRect(-88, -34, 176, 44, 9);
+    g.lineStyle(2, PALETTE_HEX.ember, 0.46);
+    g.strokeRoundedRect(-88, -34, 176, 44, 9);
+    g.fillStyle(0x4b3825, 0.96);
+    g.fillRoundedRect(-48, -68, 96, 32, 7);
+    g.lineStyle(5, 0x120c08, 0.96);
+    g.lineBetween(-74, -18, -18, -94);
+    g.lineBetween(20, -94, 78, -18);
+    g.lineStyle(3, PALETTE_HEX.brass, 0.58);
+    g.lineBetween(-70, -20, -20, -90);
+    g.lineBetween(24, -90, 74, -20);
+    g.fillStyle(PALETTE_HEX.ember, 0.35);
+    g.fillCircle(-8, -86, 7);
+    g.fillCircle(52, -32, 6);
+    g.fillCircle(-62, -30, 5);
+    c.add(g);
+
+    addContainerWake(this, c, {
+      kind: "ember",
+      intervalMs: 135,
+      spreadX: 48,
+      spreadY: 22,
+      offsetY: -46,
+      alpha: 0.42,
+      size: 3.2,
+      depth: 38,
+      driftY: -72,
+    });
+    stageContainerEntrance(this, c, {
+      entranceOffsetY: 14,
+      entranceMs: 620,
+      breathDy: -3,
+      breathMs: 1900,
+    });
+    return c;
+  }
+
+  private pulseForgeChoiceCue(
+    cue: Phaser.GameObjects.Container | null | undefined,
+    color: number = PALETTE_HEX.ember,
+  ): void {
+    if (!cue?.scene) return;
+    playActorAttention(this, cue, {
+      scale: 1.035,
+      durationMs: 220,
+      tint: color,
+    });
+    playBodyImpact(this, cue, {
+      kind: "ember",
+      color,
+      offsetY: -54,
+      depth: 58,
+      ringRadius: 46,
+      count: 9,
+      durationMs: 420,
+    });
+  }
+
+  private getForgeChoiceCue(kind: ForgeChoiceCueKey): Phaser.GameObjects.Container | null {
+    if (kind === "apprentice") return this.apprenticeCue;
+    if (kind === "standDown") return this.standDownCue;
+    return this.fightCue;
+  }
+
+  private setForgeChoiceCue(kind: ForgeChoiceCueKey, cue: Phaser.GameObjects.Container | null): void {
+    if (kind === "apprentice") {
+      this.apprenticeCue = cue;
+    } else if (kind === "standDown") {
+      this.standDownCue = cue;
+    } else {
+      this.fightCue = cue;
+    }
+  }
+
+  private dismissForgeChoiceCue(kind: ForgeChoiceCueKey, animate = true): void {
+    const cue = this.getForgeChoiceCue(kind);
+    this.setForgeChoiceCue(kind, null);
+    if (!cue?.scene) return;
+    this.tweens.killTweensOf(cue);
+    for (const child of cue.list) this.tweens.killTweensOf(child);
+    if (!animate) {
+      cue.destroy();
+      return;
+    }
+    this.tweens.add({
+      targets: cue,
+      alpha: 0,
+      y: cue.y + 18,
+      duration: 460,
+      ease: "Sine.easeIn",
+      onComplete: () => {
+        if (cue.scene) cue.destroy();
+      },
+    });
+  }
+
+  private clearForgeChoiceCues(animate = true): void {
+    this.dismissForgeChoiceCue("apprentice", animate);
+    this.dismissForgeChoiceCue("standDown", animate);
+    this.dismissForgeChoiceCue("fight", animate);
+  }
+
   private startFork1(): void {
     this.clearActiveTargets();
     this.golems = [];
@@ -772,25 +1009,30 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.narration.say("forge_fork1_intro");
     this.band.setObjective("Choose Forn or the apprentices.");
     this.showFornSprite();
+    this.showFork1ChoiceCues();
 
-    const helpForn = this.makeWord({
+    const helpForn = this.makeFornWord({
       scene: this,
       word: "help smith forn",
-      x: this.scale.width / 2 - 420,
+      x: 540,
       y: this.scale.height - 320,
       fontSize: 32,
       frame: "banner",
       onComplete: () => this.startFornBranch(),
     });
-    const joinCabal = this.makeWord({
-      scene: this,
-      word: "join the apprentices",
-      x: this.scale.width / 2 + 420,
-      y: this.scale.height - 320,
-      fontSize: 32,
-      frame: "banner",
-      onComplete: () => this.startCabalBranch(),
-    });
+    const joinCabal = this.makeForgeChoiceWord(
+      this.apprenticeCue,
+      {
+        scene: this,
+        word: "join the apprentices",
+        x: 1360,
+        y: this.scale.height - 320,
+        fontSize: 32,
+        frame: "banner",
+        onComplete: () => this.startCabalBranch(),
+      },
+      { sourceOffsetY: -68 },
+    );
     this.typingInput.register(helpForn);
     this.typingInput.register(joinCabal);
     this.activeTargets.push(helpForn, joinCabal);
@@ -799,6 +1041,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private startFornBranch(): void {
     this.fork1Choice = "forn";
     this.clearActiveTargets();
+    this.dismissForgeChoiceCue("apprentice");
     this.setNarrator(
       "Aye. I could use steady hands.",
       "Forn",
@@ -813,6 +1056,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
           "A deep breath moves through the entire foundry.",
         ],
         () => this.afterFork1("forn", "bellows-hammer"),
+        "forn",
       );
     });
   }
@@ -820,6 +1064,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private startCabalBranch(): void {
     this.fork1Choice = "cabal";
     this.clearActiveTargets();
+    this.hideFornSprite();
+    this.pulseForgeChoiceCue(this.apprenticeCue);
     this.setNarrator(
       "About time someone helped us.",
       "Apprentice",
@@ -834,6 +1080,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
           "The foundry slows. A chill spreads through the brass pipes.",
         ],
         () => this.afterFork1("cabal", "sabotage-wrench"),
+        "apprentices",
       );
     });
   }
@@ -841,6 +1088,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private afterFork1(choice: "forn" | "cabal", relicId: string): void {
     // The fork is resolved — the realm moves on to the boss; Forn leaves.
     this.hideFornSprite();
+    this.dismissForgeChoiceCue("apprentice");
     // Almanac lore page 3 — Forn's hammer song OR the Apprentices' manifesto.
     // Mutually exclusive per fork branch.
     const lorePageId =
@@ -1072,35 +1320,44 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private startFork2(): void {
     this.clearActiveTargets();
+    this.showFork2ChoiceCues();
     this.setNarrator(
       "The Command-Golem lies still. What now? Type a choice.",
     );
     this.band.setObjective("Choose the final order for the forge.");
 
-    const peaceful = this.makeWord({
-      scene: this,
-      word: "give the peaceful order",
-      x: this.scale.width / 2 - 400,
-      y: this.scale.height - 320,
-      fontSize: 32,
-      frame: "banner",
-      onComplete: () => {
-        this.fork2Choice = "peaceful";
-        this.startFork2PeacefulBranch();
+    const peaceful = this.makeForgeChoiceWord(
+      this.standDownCue,
+      {
+        scene: this,
+        word: "give the peaceful order",
+        x: 620,
+        y: this.scale.height - 320,
+        fontSize: 32,
+        frame: "banner",
+        onComplete: () => {
+          this.fork2Choice = "peaceful";
+          this.startFork2PeacefulBranch();
+        },
       },
-    });
-    const fight = this.makeWord({
-      scene: this,
-      word: "fight to the end",
-      x: this.scale.width / 2 + 400,
-      y: this.scale.height - 320,
-      fontSize: 32,
-      frame: "banner",
-      onComplete: () => {
-        this.fork2Choice = "fought";
-        this.startFork2FightBranch();
+      { color: PALETTE_HEX.brass, sourceOffsetY: -54 },
+    );
+    const fight = this.makeForgeChoiceWord(
+      this.fightCue,
+      {
+        scene: this,
+        word: "fight to the end",
+        x: 1320,
+        y: this.scale.height - 320,
+        fontSize: 32,
+        frame: "banner",
+        onComplete: () => {
+          this.fork2Choice = "fought";
+          this.startFork2FightBranch();
+        },
       },
-    });
+      { sourceOffsetY: -58 },
+    );
     this.typingInput.register(peaceful);
     this.typingInput.register(fight);
     this.activeTargets.push(peaceful, fight);
@@ -1108,36 +1365,44 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private startFork2PeacefulBranch(): void {
     this.clearActiveTargets();
+    this.dismissForgeChoiceCue("fight");
+    this.pulseForgeChoiceCue(this.standDownCue);
     this.setNarrator(
       "You raise the typewriter keys and give the final command.",
     );
     this.band.setObjective("Type STAND DOWN with capitals.");
 
     // Type "STAND DOWN" (capitalized, spell mode preferred)
-    const standDown = this.makeWord({
-      scene: this,
-      word: "STAND DOWN",
-      x: this.scale.width / 2,
-      y: this.scale.height - 340,
-      fontSize: 40,
-      // The peaceful-branch finale demands the full capitalized order.
-      caseSensitive: true,
-      onComplete: () => {
-        this.setNarrator("The last golems lower their arms. The forge grows quiet.");
-        this.time.delayedCall(1800, () => this.afterFork2("peaceful", "master-key"));
+    const standDown = this.makeForgeChoiceWord(
+      this.standDownCue,
+      {
+        scene: this,
+        word: "STAND DOWN",
+        x: 720,
+        y: this.scale.height - 340,
+        fontSize: 40,
+        // The peaceful-branch finale demands the full capitalized order.
+        caseSensitive: true,
+        onComplete: () => {
+          this.setNarrator("The last golems lower their arms. The forge grows quiet.");
+          this.time.delayedCall(1800, () => this.afterFork2("peaceful", "master-key"));
+        },
+        onSpellComplete: () => {
+          this.cameras.main.flash(350, 200, 180, 40);
+          this.setNarrator("The command rings out. Every golem in the forge stills at once.");
+          this.time.delayedCall(2000, () => this.afterFork2("peaceful", "master-key"));
+        },
       },
-      onSpellComplete: () => {
-        this.cameras.main.flash(350, 200, 180, 40);
-        this.setNarrator("The command rings out. Every golem in the forge stills at once.");
-        this.time.delayedCall(2000, () => this.afterFork2("peaceful", "master-key"));
-      },
-    });
+      { color: PALETTE_HEX.brass, sourceOffsetY: -54 },
+    );
     this.typingInput.register(standDown);
     this.activeTargets.push(standDown);
   }
 
   private startFork2FightBranch(): void {
     this.clearActiveTargets();
+    this.dismissForgeChoiceCue("standDown");
+    this.pulseForgeChoiceCue(this.fightCue);
     this.setNarrator(
       "Two more golems rise from the slag. You're not done yet.",
     );
@@ -1168,6 +1433,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     }
 
     this.beginCombatWave();
+    this.time.delayedCall(650, () => this.dismissForgeChoiceCue("fight"));
     this.watchForWaveClear(() => {
       this.waveActive = false;
       this.golems = [];
@@ -1179,6 +1445,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private afterFork2(choice: "peaceful" | "fought", relicId: string): void {
+    this.clearForgeChoiceCues();
     this.store.update((s) => {
       const realm = s.realms["clockwork-forge"] ?? {
         cleared: false,
@@ -1593,6 +1860,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     passages: string[],
     narratorLines: string[],
     onDone: () => void,
+    owner: ForgePassageOwner = "forn",
   ): void {
     let step = 0;
 
@@ -1608,7 +1876,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         advance();
         return;
       }
-      const target = this.makeFornWord({
+      const opts: TextWordTargetOptions = {
         scene: this,
         word,
         x: this.scale.width / 2,
@@ -1633,7 +1901,20 @@ export class ClockworkForgeScene extends Phaser.Scene {
           if (line) this.setNarrator(line);
           this.time.delayedCall(line ? 1400 : 400, advance);
         },
-      });
+      };
+      const target =
+        owner === "apprentices"
+          ? this.makeForgeChoiceWord(this.apprenticeCue, opts, {
+              sourceOffsetY: -68,
+            })
+          : owner === "peaceful-order"
+            ? this.makeForgeChoiceWord(this.standDownCue, opts, {
+                color: PALETTE_HEX.brass,
+                sourceOffsetY: -54,
+              })
+            : owner === "none"
+              ? this.makeWord(opts)
+              : this.makeFornWord(opts);
       this.typingInput.register(target);
       this.activeTargets.push(target);
     };
@@ -2281,6 +2562,83 @@ export class ClockworkForgeScene extends Phaser.Scene {
     return target;
   }
 
+  private makeForgeChoiceWord(
+    body: Phaser.GameObjects.Container | null | undefined,
+    opts: TextWordTargetOptions,
+    cueOpts: { color?: number; sourceOffsetY?: number } = {},
+  ): TextWordTarget {
+    if (!body?.scene) return this.makeWord(opts);
+
+    const color = cueOpts.color ?? PALETTE_HEX.ember;
+    const sourceOffsetY = cueOpts.sourceOffsetY ?? -56;
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.forkChoiceWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.forkChoiceWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? color,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y + sourceOffsetY,
+          { color, depth: 58 },
+        );
+        this.pulseForgeChoiceCue(body, color);
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "ember",
+          color,
+          offsetY: sourceOffsetY,
+          depth: 58,
+          ringRadius: 25,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "ember",
+          color,
+          offsetY: sourceOffsetY,
+          depth: 58,
+          ringRadius: 48,
+          count: 10,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY,
+        targetOffsetY: 24,
+      },
+    );
+    this.forkChoiceWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
   private makeSongbirdWord(opts: TextWordTargetOptions): TextWordTarget {
     const body = this.songbirdCompanion;
     if (!body?.scene) return this.makeWord(opts);
@@ -2368,6 +2726,11 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.fornWordAnchors = [];
   }
 
+  private clearForkChoiceWordAnchors(): void {
+    for (const anchor of this.forkChoiceWordAnchors) anchor.destroy();
+    this.forkChoiceWordAnchors = [];
+  }
+
   private clearSongbirdWordAnchors(): void {
     for (const anchor of this.songbirdWordAnchors) anchor.destroy();
     this.songbirdWordAnchors = [];
@@ -2377,6 +2740,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.clearBossWordAnchors();
     this.clearTutorialWordAnchors();
     this.clearFornWordAnchors();
+    this.clearForkChoiceWordAnchors();
     this.clearSongbirdWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);

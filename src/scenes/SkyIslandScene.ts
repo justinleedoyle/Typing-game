@@ -209,6 +209,7 @@ export class SkyIslandScene extends Phaser.Scene {
    *  Faded in when her encounter begins, faded/destroyed out when it resolves;
    *  also cleaned up on SHUTDOWN as a safety net. */
   private ettaSprite: Phaser.GameObjects.Image | null = null;
+  private ettaWordAnchors: WordBodyAnchorHandle[] = [];
   private companionChoice: "take" | "let-go" | null = null;
   private lanternMothCompanion: Phaser.GameObjects.Container | null = null;
 
@@ -258,6 +259,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.fork2Choice = null;
     this.ettaDone = false;
     this.ettaSprite = null;
+    this.ettaWordAnchors = [];
     this.companionChoice = null;
     this.lanternMothCompanion = null;
     this.bossContainer = null;
@@ -379,6 +381,7 @@ export class SkyIslandScene extends Phaser.Scene {
       this.ambientHandle?.stop();
       this.templeLanterns.forEach((g) => g.destroy());
       this.templeLanterns = [];
+      this.clearEttaWordAnchors();
       this.ettaSprite?.destroy();
       this.ettaSprite = null;
     });
@@ -1078,7 +1081,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.time.delayedCall(2000, () => {
       this.setNarrator(ETTA_LINE, "Etta");
       this.time.delayedCall(600, () => {
-        const helpTarget = this.makeWord({
+        const helpTarget = this.makeEttaWord({
           scene: this,
           word: ETTA_HELP_TRIGGER,
           x: this.scale.width / 2 - 300,
@@ -1095,7 +1098,7 @@ export class SkyIslandScene extends Phaser.Scene {
         });
         // Any other typed word (typing something that doesn't start with 'h')
         // will just fail to claim — but we also offer a "skip" word
-        const skipTarget = this.makeWord({
+        const skipTarget = this.makeEttaWord({
           scene: this,
           word: "keep moving",
           x: this.scale.width / 2 + 300,
@@ -1122,7 +1125,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private startEttaHelp(nextTempleIdx: number): void {
     this.setNarrator("You approach the book. Scholar Etta holds her breath.");
     this.time.delayedCall(1200, () => {
-      const liftTarget = this.makeWord({
+      const liftTarget = this.makeEttaWord({
         scene: this,
         word: ETTA_CHAIN_1,
         x: this.scale.width / 2,
@@ -1136,7 +1139,7 @@ export class SkyIslandScene extends Phaser.Scene {
           this.clearActiveTargets();
           this.setNarrator("The book is heavier than it looks. Old paper, dense with writing.");
           this.time.delayedCall(1400, () => {
-            const placeTarget = this.makeWord({
+            const placeTarget = this.makeEttaWord({
               scene: this,
               word: ETTA_CHAIN_2,
               x: this.scale.width / 2,
@@ -1200,6 +1203,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private hideEtta(): void {
     const sprite = this.ettaSprite;
     if (!sprite) return;
+    this.clearEttaWordAnchors();
     this.ettaSprite = null;
     fadeOutStagedSprite(this, sprite, {
       durationMs: 620,
@@ -2005,7 +2009,7 @@ export class SkyIslandScene extends Phaser.Scene {
         this.time.delayedCall(1400, onDone);
         return;
       }
-      const target = this.makeWord({
+      const target = this.makeEttaWord({
         scene: this,
         word: passages[step] ?? "",
         x: this.scale.width / 2,
@@ -2219,6 +2223,82 @@ export class SkyIslandScene extends Phaser.Scene {
     return target;
   }
 
+  private makeEttaWord(opts: TextWordTargetOptions): TextWordTarget {
+    const etta = this.ettaSprite;
+    if (!etta?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.ettaWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.ettaWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.brass,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          etta.x,
+          etta.y - 120,
+          { color: PALETTE_HEX.brass, depth: 58 },
+        );
+        playActorAttention(this, etta, {
+          tint: PALETTE_HEX.brass,
+          scale: 1.02,
+          durationMs: 180,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, etta, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: -120,
+          depth: 58,
+          ringRadius: 28,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, etta, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: -120,
+          depth: 58,
+          ringRadius: 52,
+          count: 12,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      etta,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.brass,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -120,
+        targetOffsetY: 24,
+      },
+    );
+    this.ettaWordAnchors.push(anchor);
+    etta.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
   private playWrenTypingPulse(): void {
     playBodyTypePulse(this, this.wrenContainer, {
       kind: "mote",
@@ -2308,9 +2388,15 @@ export class SkyIslandScene extends Phaser.Scene {
     this.pathWordAnchors = [];
   }
 
+  private clearEttaWordAnchors(): void {
+    for (const anchor of this.ettaWordAnchors) anchor.destroy();
+    this.ettaWordAnchors = [];
+  }
+
   private clearActiveTargets(): void {
     this.clearBossWordAnchors();
     this.clearPathWordAnchors();
+    this.clearEttaWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

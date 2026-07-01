@@ -583,10 +583,11 @@ export class SunkenBellScene extends Phaser.Scene {
       onDone();
       return;
     }
-    this.setNarrator(
+    this.band.showNotice(
       lines.length === 1
         ? lines[0]!
         : "Your satchel stirs; its relics answer here.",
+      { label: "satchel" },
     );
     this.time.delayedCall(1900, onDone);
   }

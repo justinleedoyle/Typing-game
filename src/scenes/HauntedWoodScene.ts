@@ -311,7 +311,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       applyEffect: (effect, targets) => this.applyOneShot(effect, targets),
       isActive: () =>
         this.ghosts.length > 0 && this.ghosts.some((g) => !g.isDefeated()),
-      announce: (text) => this.setNarrator(text),
+      announce: (text) => this.band.showNotice(text, { label: "relic" }),
       slots: band.oneShotSlots,
       compact: true,
     });
@@ -2305,10 +2305,11 @@ export class HauntedWoodScene extends Phaser.Scene {
       onDone();
       return;
     }
-    this.setNarrator(
+    this.band.showNotice(
       lines.length === 1
         ? lines[0]!
         : "Your satchel stirs; its relics answer here.",
+      { label: "satchel" },
     );
     this.time.delayedCall(1900, onDone);
   }

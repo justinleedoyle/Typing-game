@@ -45,6 +45,13 @@ const OBJECTIVE_Y = BAND_H - 38;
 const OBJECTIVE_H = 38;
 const OBJECTIVE_LABEL_W = 68;
 
+export interface ConsoleBandNoticeOptions {
+  /** Small label at the left of the strip, e.g. "satchel" or "relic". */
+  label?: string;
+  /** How long the notice owns the strip before the task line returns. */
+  durationMs?: number;
+}
+
 export interface ConsoleBandOptions {
   /** Texture key for the speaker portrait shown in the nook (optional). */
   portraitKey?: string;
@@ -73,7 +80,11 @@ export class ConsoleBand {
   private readonly scene: Phaser.Scene;
   private readonly container: Phaser.GameObjects.Container;
   private objectiveContainer!: Phaser.GameObjects.Container;
+  private objectiveLabel!: Phaser.GameObjects.Text;
   private objectiveText!: Phaser.GameObjects.Text;
+  private objectiveValue = "";
+  private noticeActive = false;
+  private noticeTimer: Phaser.Time.TimerEvent | null = null;
   private portraitImage?: Phaser.GameObjects.Image;
   private portraitLabel?: Phaser.GameObjects.Text;
 
@@ -101,8 +112,8 @@ export class ConsoleBand {
       this.oneShotSlots.push({ x: ONESHOT_X0 + i * ONESHOT_DX, y: top + ONESHOT_Y });
     }
 
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.container.destroy());
-    scene.events.once(Phaser.Scenes.Events.DESTROY, () => this.container.destroy());
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroy());
+    scene.events.once(Phaser.Scenes.Events.DESTROY, () => this.destroy());
   }
 
   /** Small persistent "what now" line inside the console band. It keeps wave,
@@ -110,11 +121,45 @@ export class ConsoleBand {
    *  fast narration cards. */
   setObjective(text: string): void {
     const trimmed = text.trim();
+    this.objectiveValue = trimmed;
+    if (this.noticeActive) return;
+    this.renderObjective("task", trimmed);
+  }
+
+  /** Temporary system/readout line in the same bottom strip as the task. This is
+   *  for satchel/relic feedback that should not interrupt the narration card:
+   *  loadout wakeups, one-shot ready/spent cues, and similar game-state notices.
+   *  When it expires, the previous persistent task line is restored. */
+  showNotice(text: string, opts: ConsoleBandNoticeOptions = {}): void {
+    const trimmed = text.trim();
+    if (trimmed.length === 0) return;
+    this.noticeTimer?.remove(false);
+    this.noticeActive = true;
+    this.renderObjective(opts.label ?? "satchel", trimmed, {
+      labelColor: "#d7b965",
+      textColor: "#fff1c9",
+    });
+    this.noticeTimer = this.scene.time.delayedCall(opts.durationMs ?? 1900, () => {
+      this.noticeActive = false;
+      this.noticeTimer = null;
+      this.renderObjective("task", this.objectiveValue);
+    });
+  }
+
+  private renderObjective(
+    label: string,
+    text: string,
+    colors: { labelColor?: string; textColor?: string } = {},
+  ): void {
+    const trimmed = text.trim();
     if (trimmed.length === 0) {
       this.objectiveContainer.setVisible(false);
       return;
     }
+    this.objectiveLabel.setText(label);
+    this.objectiveLabel.setColor(colors.labelColor ?? "#a59b89");
     this.objectiveText.setText(trimmed);
+    this.objectiveText.setColor(colors.textColor ?? "#f3ead2");
     this.objectiveContainer.setVisible(true);
     this.scene.tweens.killTweensOf(this.objectiveContainer);
     this.objectiveContainer.setAlpha(0.78);
@@ -124,6 +169,12 @@ export class ConsoleBand {
       duration: 220,
       ease: "Sine.easeOut",
     });
+  }
+
+  private destroy(): void {
+    this.noticeTimer?.remove(false);
+    this.noticeTimer = null;
+    if (this.container.active) this.container.destroy();
   }
 
   /** Swap the speaker portrait in the left nook. Scenes call this from the
@@ -258,7 +309,7 @@ export class ConsoleBand {
     bg.strokeRoundedRect(0, -OBJECTIVE_H / 2, width, OBJECTIVE_H, 7);
     this.objectiveContainer.add(bg);
 
-    const label = scene.add
+    this.objectiveLabel = scene.add
       .text(16, 0, "task", {
         fontFamily: SERIF,
         fontSize: "13px",
@@ -266,7 +317,7 @@ export class ConsoleBand {
         color: "#a59b89",
       })
       .setOrigin(0, 0.5);
-    this.objectiveContainer.add(label);
+    this.objectiveContainer.add(this.objectiveLabel);
 
     this.objectiveText = scene.add
       .text(OBJECTIVE_LABEL_W, 0, "", {

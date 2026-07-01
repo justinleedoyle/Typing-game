@@ -46,6 +46,9 @@ const OBJECTIVE_X = SATCHEL_X;
 const OBJECTIVE_Y = BAND_H - 38;
 const OBJECTIVE_H = 38;
 const OBJECTIVE_LABEL_W = 68;
+const OBJECTIVE_FONT_SIZE = 17;
+const OBJECTIVE_MIN_FONT_SIZE = 13;
+const OBJECTIVE_MAX_TEXT_H = 24;
 
 export interface ConsoleBandNoticeOptions {
   /** Small label at the left of the strip, e.g. "satchel" or "relic". */
@@ -84,6 +87,7 @@ export class ConsoleBand {
   private objectiveContainer!: Phaser.GameObjects.Container;
   private objectiveLabel!: Phaser.GameObjects.Text;
   private objectiveText!: Phaser.GameObjects.Text;
+  private objectiveTextMaxWidth = 0;
   private objectiveValue = "";
   private noticeActive = false;
   private noticeTimer: Phaser.Time.TimerEvent | null = null;
@@ -161,8 +165,8 @@ export class ConsoleBand {
     }
     this.objectiveLabel.setText(label);
     this.objectiveLabel.setColor(colors.labelColor ?? "#a59b89");
-    this.objectiveText.setText(trimmed);
     this.objectiveText.setColor(colors.textColor ?? "#f3ead2");
+    this.fitObjectiveText(trimmed);
     this.objectiveContainer.setVisible(true);
     this.scene.tweens.killTweensOf(this.objectiveContainer);
     this.objectiveContainer.setAlpha(0.78);
@@ -172,6 +176,36 @@ export class ConsoleBand {
       duration: 220,
       ease: "Sine.easeOut",
     });
+  }
+
+  private fitObjectiveText(text: string): void {
+    this.objectiveText.setFontSize(OBJECTIVE_FONT_SIZE);
+    this.objectiveText.setText(text);
+    for (
+      let fontSize = OBJECTIVE_FONT_SIZE;
+      fontSize > OBJECTIVE_MIN_FONT_SIZE && !this.objectiveTextFits();
+      fontSize -= 1
+    ) {
+      this.objectiveText.setFontSize(fontSize - 1);
+    }
+    if (this.objectiveTextFits()) return;
+
+    let lo = 0;
+    let hi = text.length;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      this.objectiveText.setText(`${text.slice(0, mid).trimEnd()}...`);
+      if (this.objectiveTextFits()) lo = mid;
+      else hi = mid - 1;
+    }
+    this.objectiveText.setText(`${text.slice(0, lo).trimEnd()}...`);
+  }
+
+  private objectiveTextFits(): boolean {
+    return (
+      this.objectiveText.height <= OBJECTIVE_MAX_TEXT_H &&
+      this.objectiveText.width <= this.objectiveTextMaxWidth
+    );
   }
 
   private destroy(): void {
@@ -340,6 +374,7 @@ export class ConsoleBand {
 
   private drawObjectiveReadout(scene: Phaser.Scene, W: number): void {
     const width = Math.max(620, W - OBJECTIVE_X - 34);
+    this.objectiveTextMaxWidth = width - OBJECTIVE_LABEL_W - 18;
     this.objectiveContainer = scene.add
       .container(OBJECTIVE_X, OBJECTIVE_Y)
       .setVisible(false);
@@ -364,9 +399,9 @@ export class ConsoleBand {
     this.objectiveText = scene.add
       .text(OBJECTIVE_LABEL_W, 0, "", {
         fontFamily: SERIF,
-        fontSize: "17px",
+        fontSize: `${OBJECTIVE_FONT_SIZE}px`,
         color: "#f3ead2",
-        wordWrap: { width: width - OBJECTIVE_LABEL_W - 18 },
+        wordWrap: { width: this.objectiveTextMaxWidth },
       })
       .setOrigin(0, 0.5);
     this.objectiveContainer.add(this.objectiveText);

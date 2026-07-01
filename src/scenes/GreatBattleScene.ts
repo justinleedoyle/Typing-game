@@ -4,6 +4,7 @@ import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playDamageThud } from "../audio/damageThud";
 import { playPeriodSnapSting } from "../audio/quietLordSting";
+import { getRunaLine } from "../audio/runaLines";
 import { NarrationManager } from "../game/narrationManager";
 import { ConsoleBand } from "../game/ui/consoleBand";
 import { UI_HEX } from "../game/ui/uiTheme";
@@ -665,6 +666,10 @@ export class GreatBattleScene extends Phaser.Scene {
     this.narration.sayRaw(text, { speakerName: null });
   }
 
+  private showRelicNotice(id: string, label = "relic", durationMs = 2200): void {
+    this.band.showNotice(getRunaLine(id)?.text ?? id, { label, durationMs });
+  }
+
   /** UI-cohesion: every finale word target gets the legibility outline (TTT-style). */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
     return new TextWordTarget({ outline: true, depth: 6, ...opts });
@@ -966,7 +971,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // §5.5.11 — Untethered Wind narration cue
     if (state.satchel.includes("untethered-wind")) {
       this.time.delayedCall(400, () => {
-        this.narration.say("finale_ally_untethered_wind");
+        this.showRelicNotice("finale_ally_untethered_wind", "wind");
       });
     }
 
@@ -1076,7 +1081,7 @@ export class GreatBattleScene extends Phaser.Scene {
     const easiest = waveEnemies.reduce((a, b) =>
       a.word.length <= b.word.length ? a : b,
     );
-    this.narration.say("finale_ally_etta_ledger");
+    this.showRelicNotice("finale_ally_etta_ledger", "ledger");
     this.defeatEnemy(easiest);
   }
 
@@ -1087,7 +1092,7 @@ export class GreatBattleScene extends Phaser.Scene {
     );
     if (waveEnemies.length === 0) return;
     const victim = waveEnemies[Math.floor(Math.random() * waveEnemies.length)]!;
-    this.narration.say("finale_ally_ghost_king");
+    this.showRelicNotice("finale_ally_ghost_king", "ally");
     this.defeatEnemy(victim);
   }
 
@@ -1292,7 +1297,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
     if (satchel.includes(waveDef.companionId)) {
       this.showCompanionCameo(waveDef);
-      this.setNarrator(waveDef.companionLine);
+      this.band.showNotice(waveDef.companionLine, { label: "ally", durationMs: 2400 });
       this.time.delayedCall(2600, () => this.runNextWave());
     } else {
       // Brief pause, no cameo
@@ -2067,7 +2072,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // §5.5.11 — bells-tongue: one-shot massive hit — ends Phase 2a early
     if (this.bellsTongueSuperHitAvailable) {
       this.bellsTongueSuperHitAvailable = false; // consumed
-      this.narration.say("finale_relic_bells_tongue");
+      this.showRelicNotice("finale_relic_bells_tongue");
       this.band.setObjective("Bell's Tongue strikes; brace for the next counter.");
       this.time.delayedCall(1800, () => {
         // Camera flash to signal the super-hit
@@ -2095,7 +2100,7 @@ export class GreatBattleScene extends Phaser.Scene {
       : ["unmake", "unsay", "unfound"];
 
     if (satchel.includes("sabotage-wrench")) {
-      this.narration.say("finale_relic_sabotage_wrench");
+      this.showRelicNotice("finale_relic_sabotage_wrench");
     } else {
       this.narration.say("finale_phase2_unmake");
     }
@@ -2150,7 +2155,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // §5.5.11 — tether-cord: bind the Lord for one beat — spawn an extra free phrase first
     if (satchel.includes("tether-cord") && !this.tetherCordBindUsed) {
       this.tetherCordBindUsed = true;
-      this.narration.say("finale_relic_tether_cord");
+      this.showRelicNotice("finale_relic_tether_cord");
       this.band.setObjective("Type bound while the tether-cord holds him.");
       const bindTarget = this.makeLordWord({
         scene: this,
@@ -2178,7 +2183,7 @@ export class GreatBattleScene extends Phaser.Scene {
     const satchel = this.store.get().satchel;
     if (satchel.includes("master-key") && !this.masterKeyFlankUsed) {
       this.masterKeyFlankUsed = true;
-      this.narration.say("finale_relic_master_key");
+      this.showRelicNotice("finale_relic_master_key");
       this.band.setObjective("Type flank through the Master-Key opening.");
       const flankTarget = this.makeLordWord({
         scene: this,
@@ -2281,7 +2286,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   // §5.5.9 — glass-fish: brief flash + bonus hit window word
   private applyGlassFishHitWindow(onDone: () => void): void {
-    this.narration.say("finale_companion_glass_fish");
+    this.showRelicNotice("finale_companion_glass_fish", "ally");
     this.band.setObjective("Type light while the glass-fish opens the corridor.");
     const companion = this.showFinaleCompanionAction("glass-fish");
     // Flash the screen briefly (light corridor effect)
@@ -2319,7 +2324,7 @@ export class GreatBattleScene extends Phaser.Scene {
   private applyLanternMothHitWindow(): void {
     // Only fires if there are still live targets in play (avoid double-clear)
     if (this.activeTargets.length === 0) return;
-    this.narration.say("finale_companion_lantern_moth");
+    this.showRelicNotice("finale_companion_lantern_moth", "ally");
     this.band.setObjective("Type throne before the lantern-moth's light fades.");
     const companion = this.showFinaleCompanionAction("lantern-moth");
     // Warm light overlay
@@ -2375,7 +2380,7 @@ export class GreatBattleScene extends Phaser.Scene {
     if (this.whirlwindCanceled) {
       if (!this.whirlwindCancelAnnounced) {
         this.whirlwindCancelAnnounced = true;
-        this.narration.say("finale_relic_windphrase_chant");
+        this.showRelicNotice("finale_relic_windphrase_chant");
         this.band.setObjective("Wind-Phrase and Quiet-Chant cancel the whirlwind.");
         const pulse = this.add.graphics().setDepth(3).setAlpha(0);
         pulse.fillStyle(PALETTE_HEX.frost, 0.22);
@@ -2453,7 +2458,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   // §5.5.9 — wisp-cat: extra phrase target spawns mid-phase (flank)
   private applyWispCatFlank(onDone: () => void): void {
-    this.narration.say("finale_companion_wisp_cat");
+    this.showRelicNotice("finale_companion_wisp_cat", "ally");
     this.band.setObjective("Type flank through the wisp-cat opening.");
     const companion = this.showFinaleCompanionAction("wisp-cat");
     const flankTarget = this.makeLordWord({
@@ -2810,8 +2815,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   // §5.5.9 — brass-songbird: auto-fill the next 3 characters of the stalled word
   private applyBrassSongbirdHint(_target: TextWordTarget, word: string): void {
-    // Show a narrator cue
-    this.narration.say("finale_companion_songbird");
+    this.showRelicNotice("finale_companion_songbird", "ally");
     const companion = this.showFinaleCompanionAction("brass-songbird");
     playActorAttention(this, companion, { scale: 1.05, durationMs: 220 });
     this.time.delayedCall(1350, () => {

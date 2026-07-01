@@ -163,6 +163,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private mistTimer: Phaser.Time.TimerEvent | null = null;
   private shrineFigure: Phaser.GameObjects.Container | null = null;
+  private pathCue: Phaser.GameObjects.Container | null = null;
   private ingaFigure: Phaser.GameObjects.Container | null = null;
   private ghostKingBody: Phaser.GameObjects.Image | null = null;
   private bossWordAnchors: WordBodyAnchorHandle[] = [];
@@ -190,6 +191,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.companionChoice = null;
     this.mistTimer = null;
     this.shrineFigure = null;
+    this.pathCue = null;
     this.ingaFigure = null;
     this.ghostKingBody = null;
     this.bossWordAnchors = [];
@@ -311,6 +313,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.compassGlyphs.forEach((g) => g.destroy());
       this.compassGlyphs = [];
       this.shrineFigure = null;
+      this.pathCue = null;
       this.ingaFigure = null;
       this.ghostKingBody = null;
       this.wispCatCompanion = null;
@@ -399,18 +402,26 @@ export class HauntedWoodScene extends Phaser.Scene {
     let i = 0;
     const advance = (): void => {
       if (i >= beats.length) {
+        this.dismissPathCue();
         this.time.delayedCall(800, () => this.startIngaNPC());
         return;
       }
       const beat = beats[i];
       if (!beat) return;
+      this.showPathCue(i);
       const target = this.makeWord({
         scene: this,
         word: beat.word,
         x: this.scale.width / 2,
         y: this.scale.height / 2,
         fontSize: 40,
+        onClaim: () => {
+          playWrenFocus(this.wrenSprite);
+          this.pulsePathCue(false);
+        },
         onComplete: () => {
+          playWrenAction(this.wrenSprite);
+          this.pulsePathCue(true);
           playChime();
           this.clearActiveTargets();
           this.setNarrator(beat.narrator);
@@ -422,6 +433,159 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.activeTargets.push(target);
     };
     advance();
+  }
+
+  private showPathCue(idx: number): void {
+    this.dismissPathCue(false);
+    const cue =
+      idx === 0
+        ? this.drawRootPathCue()
+        : idx === 1
+          ? this.drawCanopyPathCue()
+          : this.drawLanternPostCue();
+    this.pathCue = cue;
+    this.tweens.add({
+      targets: cue,
+      alpha: 0.82,
+      y: cue.y - 7,
+      duration: 400,
+      ease: "Sine.easeOut",
+      onComplete: () => addIdleBreath(this, cue, { dy: -3, durationMs: 3100 }),
+    });
+  }
+
+  private drawRootPathCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(this.scale.width / 2 - 72, 820).setDepth(-1).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 230, 20, { y: 14, alpha: 0.14 }));
+    const roots = this.add.graphics();
+    roots.lineStyle(9, 0x1f241b, 0.86);
+    roots.beginPath();
+    roots.moveTo(-120, 12);
+    roots.lineTo(-88, -2);
+    roots.lineTo(-52, -16);
+    roots.lineTo(-12, 2);
+    roots.lineTo(34, 24);
+    roots.lineTo(78, 22);
+    roots.lineTo(128, 2);
+    roots.strokePath();
+    roots.lineStyle(5, 0x344030, 0.74);
+    roots.beginPath();
+    roots.moveTo(-86, 6);
+    roots.lineTo(-38, 16);
+    roots.lineTo(6, 0);
+    roots.lineTo(22, -18);
+    roots.strokePath();
+    roots.beginPath();
+    roots.moveTo(12, 8);
+    roots.lineTo(48, -8);
+    roots.lineTo(92, 18);
+    roots.strokePath();
+    roots.fillStyle(0xd7ded8, 0.16);
+    roots.fillEllipse(-28, -6, 66, 13);
+    roots.fillEllipse(64, 8, 70, 14);
+    c.add(roots);
+    return c;
+  }
+
+  private drawCanopyPathCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(this.scale.width / 2 + 36, 690).setDepth(-1).setAlpha(0);
+    const mist = this.add.graphics();
+    mist.fillStyle(0xd7ded8, 0.12);
+    mist.fillEllipse(0, 32, 190, 48);
+    mist.fillEllipse(-44, 8, 118, 30);
+    mist.fillEllipse(50, -4, 132, 32);
+    c.add(mist);
+    const leaves = this.add.graphics();
+    leaves.fillStyle(0x233020, 0.82);
+    leaves.fillEllipse(-80, -20, 92, 38);
+    leaves.fillEllipse(-18, -34, 110, 44);
+    leaves.fillEllipse(62, -24, 96, 40);
+    leaves.lineStyle(2, 0x5d7452, 0.22);
+    leaves.lineBetween(-98, -14, -54, -24);
+    leaves.lineBetween(-12, -28, 28, -42);
+    leaves.lineBetween(48, -18, 88, -34);
+    c.add(leaves);
+    this.tweens.add({
+      targets: mist,
+      scaleX: 1.08,
+      alpha: 0.2,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    return c;
+  }
+
+  private drawLanternPostCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(this.scale.width / 2 + 96, 806).setDepth(-1).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 90, 18, { y: 18, alpha: 0.16 }));
+    const post = this.add.graphics();
+    post.lineStyle(4, 0x2f2a23, 0.9);
+    post.lineBetween(0, -104, 0, 24);
+    post.lineStyle(2, 0x504535, 0.76);
+    post.lineBetween(0, -86, 36, -98);
+    post.fillStyle(0x1a1711, 0.92);
+    post.fillRoundedRect(26, -100, 32, 46, 7);
+    post.fillStyle(0xd4a040, 0.52);
+    post.fillEllipse(42, -76, 24, 30);
+    post.fillStyle(0xf6e5a8, 0.82);
+    post.fillEllipse(42, -78, 10, 16);
+    c.add(post);
+    const glow = this.add.graphics().setPosition(42, -78);
+    glow.fillStyle(0xd4a040, 0.12);
+    glow.fillEllipse(0, 0, 82, 70);
+    c.addAt(glow, 0);
+    this.tweens.add({
+      targets: glow,
+      scaleX: 1.12,
+      scaleY: 1.18,
+      alpha: 0.72,
+      duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    return c;
+  }
+
+  private pulsePathCue(completion: boolean): void {
+    if (!this.pathCue?.scene) return;
+    playActorAttention(this, this.pathCue, {
+      scale: completion ? 1.035 : 1.018,
+      durationMs: completion ? 260 : 180,
+    });
+    playBodyImpact(this, this.pathCue, {
+      kind: "mist",
+      color: 0xd7ded8,
+      offsetY: -20,
+      depth: 12,
+      ringRadius: completion ? 44 : 28,
+      count: completion ? 9 : 5,
+      durationMs: completion ? 460 : 260,
+    });
+  }
+
+  private dismissPathCue(animate = true): void {
+    const cue = this.pathCue;
+    if (!cue?.scene) {
+      this.pathCue = null;
+      return;
+    }
+    this.pathCue = null;
+    this.tweens.killTweensOf(cue);
+    if (!animate) {
+      cue.destroy();
+      return;
+    }
+    this.tweens.add({
+      targets: cue,
+      alpha: 0,
+      y: cue.y - 20,
+      duration: 260,
+      ease: "Sine.easeIn",
+      onComplete: () => cue.destroy(),
+    });
   }
 
   // ─── Act 1 — Inga NPC ────────────────────────────────────────────────────

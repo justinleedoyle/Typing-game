@@ -162,6 +162,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private oneShotInvoker: OneShotInvoker<MovingWordEnemy> | null = null;
 
   private mistTimer: Phaser.Time.TimerEvent | null = null;
+  private shrineFigure: Phaser.GameObjects.Container | null = null;
   private ingaFigure: Phaser.GameObjects.Container | null = null;
   private ghostKingBody: Phaser.GameObjects.Image | null = null;
   private bossWordAnchors: WordBodyAnchorHandle[] = [];
@@ -188,6 +189,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.fork2Choice = null;
     this.companionChoice = null;
     this.mistTimer = null;
+    this.shrineFigure = null;
     this.ingaFigure = null;
     this.ghostKingBody = null;
     this.bossWordAnchors = [];
@@ -308,6 +310,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.mistTimer?.remove();
       this.compassGlyphs.forEach((g) => g.destroy());
       this.compassGlyphs = [];
+      this.shrineFigure = null;
       this.ingaFigure = null;
       this.ghostKingBody = null;
       this.wispCatCompanion = null;
@@ -449,6 +452,7 @@ export class HauntedWoodScene extends Phaser.Scene {
             "the shrine knows. the shrine keeper might tell you.",
             "Inga",
           );
+          this.pulseShrine();
           this.time.delayedCall(2400, () => this.startAct2());
         },
       });
@@ -616,6 +620,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       y: this.scale.height - 340,
       fontSize: 30,
       frame: "banner",
+      onClaim: () => this.pulseShrine(),
       onComplete: () => {
         this.clearActiveTargets();
         this.fork1Choice = "offering";
@@ -629,6 +634,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       y: this.scale.height - 340,
       fontSize: 30,
       frame: "banner",
+      onClaim: () => this.pulseShrine(),
       onComplete: () => {
         this.clearActiveTargets();
         this.fork1Choice = "bone-flute";
@@ -654,6 +660,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         ],
         () => {
           // Shrine glows — award ally + relic
+          this.pulseShrine();
           this.store.update((s) => {
             if (!s.satchel.includes("shrine-token")) {
               s.satchel.push("shrine-token");
@@ -1586,6 +1593,23 @@ export class HauntedWoodScene extends Phaser.Scene {
     });
   }
 
+  private pulseShrine(): void {
+    if (!this.shrineFigure?.scene) return;
+    playActorAttention(this, this.shrineFigure, {
+      scale: 1.018,
+      durationMs: 280,
+    });
+    playBodyImpact(this, this.shrineFigure, {
+      kind: "mist",
+      color: 0xd7ded8,
+      offsetY: -78,
+      depth: 8,
+      ringRadius: 42,
+      count: 8,
+      durationMs: 500,
+    });
+  }
+
   private fadeGhostKingBody(): void {
     const body = this.ghostKingBody;
     if (!body?.scene) return;
@@ -1755,26 +1779,104 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Drawing ──────────────────────────────────────────────────────────────
 
   private drawShrine(): void {
-    // Stone rectangle with a candle glow on top
     const sx = 960;
     const sy = 810;
-    const g = this.add.graphics();
+    const c = this.add.container(sx, sy).setDepth(-1);
+    this.shrineFigure = c;
 
-    // Stone base
-    g.fillStyle(0x303830, 1);
-    g.fillRect(sx - 40, sy - 60, 80, 60);
-    // Stone top slab
-    g.fillStyle(0x3c443c, 1);
-    g.fillRect(sx - 50, sy - 66, 100, 10);
-    // Candle glow — amber circle
-    g.fillStyle(0xd4a040, 0.85);
-    g.fillCircle(sx, sy - 74, 8);
-    // Soft outer glow
-    g.fillStyle(0xeec870, 0.2);
-    g.fillCircle(sx, sy - 74, 18);
-    // Faint step at base
-    g.fillStyle(0x252c25, 1);
-    g.fillRect(sx - 56, sy, 112, 10);
+    c.add(addLocalGroundShadow(this, 150, 18, { y: 14, alpha: 0.18 }));
+
+    const glow = this.add.graphics().setPosition(0, -78);
+    glow.fillStyle(0xe8e5c6, 0.14);
+    glow.fillEllipse(0, 0, 92, 56);
+    glow.fillStyle(0xa7d8a2, 0.09);
+    glow.fillEllipse(0, 14, 138, 44);
+    c.add(glow);
+
+    const stone = this.add.graphics();
+    stone.fillStyle(0x171f18, 0.36);
+    stone.fillRoundedRect(-72, -4, 144, 18, 6);
+    stone.fillStyle(0x263028, 1);
+    stone.fillRoundedRect(-44, -58, 88, 58, 6);
+    stone.fillStyle(0x303a31, 1);
+    stone.fillRoundedRect(-56, -68, 112, 14, 5);
+    stone.fillStyle(0x202820, 1);
+    stone.fillRoundedRect(-60, 0, 120, 12, 5);
+    stone.fillStyle(0x495248, 0.8);
+    stone.fillRoundedRect(-38, -54, 32, 12, 4);
+    stone.fillRoundedRect(8, -50, 28, 14, 4);
+    stone.fillStyle(0x394238, 0.86);
+    stone.fillRoundedRect(-30, -34, 60, 20, 5);
+    stone.lineStyle(2, 0x6f725c, 0.22);
+    stone.lineBetween(-26, -54, -38, -8);
+    stone.lineBetween(18, -50, 34, -12);
+    stone.lineBetween(-56, -68, 56, -68);
+    c.add(stone);
+
+    const bowl = this.add.graphics().setPosition(0, -70);
+    bowl.fillStyle(0x181510, 0.9);
+    bowl.fillEllipse(0, 9, 56, 18);
+    bowl.fillStyle(0x4c3e2c, 0.9);
+    bowl.fillEllipse(0, 4, 46, 14);
+    bowl.fillStyle(0xeec870, 0.26);
+    bowl.fillEllipse(0, 2, 30, 8);
+    c.add(bowl);
+
+    const flame = this.add.graphics().setPosition(0, -82);
+    flame.fillStyle(0xd4a040, 0.55);
+    flame.fillEllipse(0, 4, 22, 28);
+    flame.fillStyle(0xf6e5a8, 0.92);
+    flame.fillEllipse(0, 0, 10, 18);
+    c.add(flame);
+
+    const wick = this.add.graphics().setPosition(0, -72);
+    wick.lineStyle(1.5, 0x17100a, 0.65);
+    wick.lineBetween(0, 0, 0, 10);
+    c.add(wick);
+
+    const wispOffsets = [-46, 44];
+    for (let i = 0; i < wispOffsets.length; i += 1) {
+      const offsetX = wispOffsets[i] ?? 0;
+      const wisp = this.add
+        .graphics()
+        .setPosition(offsetX, -38 + i * 8)
+        .setAlpha(0.16);
+      wisp.fillStyle(0xd7ded8, 0.42);
+      wisp.fillEllipse(0, 0, 72, 14);
+      c.add(wisp);
+      this.tweens.add({
+        targets: wisp,
+        x: offsetX + (i === 0 ? -18 : 18),
+        y: wisp.y - 22,
+        alpha: 0,
+        duration: 2600 + i * 360,
+        delay: 500 + i * 780,
+        repeat: -1,
+        ease: "Sine.easeInOut",
+      });
+    }
+
+    this.tweens.add({
+      targets: glow,
+      scaleX: 1.08,
+      scaleY: 1.16,
+      alpha: 0.82,
+      duration: 1700,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    this.tweens.add({
+      targets: flame,
+      scaleX: 1.12,
+      scaleY: 1.24,
+      y: -86,
+      duration: 740,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    addIdleBreath(this, c, { dy: -2, durationMs: 4200 });
   }
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {

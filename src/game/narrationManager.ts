@@ -226,6 +226,7 @@ export class NarrationManager {
       this.cardBg?.clear();
       this.cardCorners?.clear();
     }
+    this.onSpeak?.(null, "");
     root.setAlpha(0);
   }
 

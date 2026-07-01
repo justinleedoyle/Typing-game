@@ -98,6 +98,11 @@ export function maskSuffix(text: string): string {
   return text.replace(/[^ ]/g, SUFFIX_EAT_PLACEHOLDER);
 }
 
+const BANNER_TEXT_MAX_W = 520;
+const BANNER_MIN_FONT_SIZE = 34;
+const BANNER_PAD_X = 44;
+const BANNER_PAD_Y = 22;
+
 /** State for the Tier 4 forgive-reset (unseal) machine. `tokens` = pardons
  *  left; `pending` collapses the TWO resetCursor() calls a single miss triggers
  *  (the target's resetOnMiss path + the controller's difficulty path) into ONE
@@ -185,8 +190,10 @@ export class TextWordTarget implements WordTarget {
     // pickable banner. Sized to the full word (measured at construction) and
     // inserted behind the glyphs so the cream text reads on the dark plate.
     if (opts.frame === "banner") {
-      const w = this.remainingText.width + 44;
-      const h = this.remainingText.height + 22;
+      this.fitBannerText(fontSize);
+      this.container.setSize(this.remainingText.width, this.remainingText.height);
+      const w = this.remainingText.width + BANNER_PAD_X;
+      const h = this.remainingText.height + BANNER_PAD_Y;
       const plate = opts.scene.add.graphics();
       plate.fillStyle(UI_HEX.panel, 0.85);
       plate.fillRoundedRect(-w / 2, -h / 2, w, h, 9);
@@ -196,6 +203,18 @@ export class TextWordTarget implements WordTarget {
     }
 
     this.relayout();
+  }
+
+  private fitBannerText(initialFontSize: number): void {
+    for (
+      let size = initialFontSize;
+      size > BANNER_MIN_FONT_SIZE && this.remainingText.width > BANNER_TEXT_MAX_W;
+      size -= 1
+    ) {
+      const nextSize = size - 1;
+      this.typedText.setFontSize(nextSize);
+      this.remainingText.setFontSize(nextSize);
+    }
   }
 
   remaining(): string {

@@ -1116,6 +1116,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startBossFight(): void {
     this.setNarrator("Then prove it.", "Ghost-King");
+    this.playGhostKingStagePulse();
     this.band.setObjective("Survive the Ghost-King's warded waves.");
     this.ghosts = [];
     this.time.delayedCall(800, () => this.spawnBossWaveA());
@@ -1167,6 +1168,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startBossCapstone(): void {
     this.band.setObjective("Type every punctuation mark in his final words.");
+    this.playGhostKingStagePulse(true);
     const dimOverlay = this.add.graphics().setDepth(40).fillStyle(0x000000, 0.4);
     dimOverlay.fillRect(0, 0, this.scale.width, this.scale.height);
     dimOverlay.setAlpha(0);
@@ -2698,7 +2700,23 @@ export class HauntedWoodScene extends Phaser.Scene {
       alpha: 1,
       duration: 1200,
       ease: "Sine.easeIn",
-      onComplete: () => addIdleBreath(this, sprite, { dy: -4, durationMs: 2600 }),
+      onComplete: () => {
+        addIdleBreath(this, sprite, { dy: -4, durationMs: 2600 });
+        this.playGhostKingStagePulse();
+      },
+    });
+  }
+
+  private playGhostKingStagePulse(intense = false): void {
+    if (!this.ghostKingBody) return;
+    playBodyImpact(this, this.ghostKingBody, {
+      kind: "mist",
+      color: intense ? PALETTE_HEX.brass : PALETTE_HEX.moss,
+      offsetY: -40,
+      depth: 58,
+      ringRadius: intense ? 88 : 68,
+      count: intense ? 18 : 14,
+      durationMs: intense ? 620 : 520,
     });
   }
 }

@@ -1416,6 +1416,7 @@ export class SkyIslandScene extends Phaser.Scene {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
     this.pulseSkyWave({ y: 560, ringWidth: 820, ringHeight: 190, count: 14 });
+    this.playScholarStagePulse();
     this.setNarrator(RIDDLE_1_DISPLAY, "Scholar-Spirit");
     this.band.setObjective("Answer the Scholar-Spirit's riddle.");
     this.time.delayedCall(1200, () => {
@@ -1442,6 +1443,7 @@ export class SkyIslandScene extends Phaser.Scene {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
     this.pulseSkyWave({ y: 560, ringWidth: 820, ringHeight: 190, count: 14 });
+    this.playScholarStagePulse(true);
     this.setNarrator(RIDDLE_2_DISPLAY, "Scholar-Spirit");
     this.band.setObjective("Answer the second riddle.");
     this.time.delayedCall(1200, () => {
@@ -1478,6 +1480,7 @@ export class SkyIslandScene extends Phaser.Scene {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
     this.pulseSkyWave({ y: 560, ringWidth: 820, ringHeight: 190, count: 14 });
+    this.playScholarStagePulse(true);
     this.setNarrator(RIDDLE_3_DISPLAY, "Scholar-Spirit");
     this.band.setObjective("Type the final answer before the spirit fades.");
     this.time.delayedCall(1400, () => {
@@ -3045,6 +3048,8 @@ export class SkyIslandScene extends Phaser.Scene {
     const bx = this.scale.width / 2;
     const by = 400;
     const c = this.add.container(bx, by);
+    c.setAlpha(0);
+    c.y = by - 24;
 
     // Painted Scholar-Spirit body, scaled to the old ~160px silhouette height
     // (head + torso). Replaces the concentric-ellipse figure, orbiting dot
@@ -3065,7 +3070,29 @@ export class SkyIslandScene extends Phaser.Scene {
       ease: "Sine.easeInOut",
     });
 
+    this.tweens.add({
+      targets: c,
+      alpha: 1,
+      y: by,
+      duration: 900,
+      ease: "Sine.easeOut",
+      onComplete: () => this.playScholarStagePulse(),
+    });
+
     return c;
+  }
+
+  private playScholarStagePulse(intense = false): void {
+    if (!this.bossContainer) return;
+    playBodyImpact(this, this.bossContainer, {
+      kind: "mote",
+      color: intense ? 0x8ab4f5 : PALETTE_HEX.brass,
+      offsetY: 0,
+      depth: 58,
+      ringRadius: intense ? 74 : 60,
+      count: intense ? 18 : 14,
+      durationMs: intense ? 560 : 480,
+    });
   }
 
   /** "The spirit's eyes shift colour" — a brief tint flash on the boss body,

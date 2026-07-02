@@ -365,6 +365,20 @@ export class SkyIslandScene extends Phaser.Scene {
     this.drawTempleStones();
     this.drawAmbientLanterns();
     this.wrenContainer = this.drawWren(this.scale.width / 2, 900);
+    playSceneEventPulse(this, {
+      kind: "mote",
+      color: 0xf2cc65,
+      x: this.wrenContainer.x,
+      y: this.wrenContainer.y - 90,
+      depth: -0.25,
+      durationMs: 720,
+      ringWidth: 270,
+      ringHeight: 92,
+      count: 8,
+      alpha: 0.1,
+      spreadX: 126,
+      spreadY: 38,
+    });
 
     // Tier 4 — a revisit is a free-passage replay (no combat) → neutral loadout.
     // Resolved before the band so the passive relic icons can populate it.

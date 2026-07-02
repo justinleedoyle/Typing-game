@@ -303,6 +303,20 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.drawForgeGlow();
     this.drawCatwalk();
     this.drawWren(this.scale.width / 2, CATWALK_Y + 20);
+    playSceneEventPulse(this, {
+      kind: "ember",
+      color: PALETTE_HEX.ember,
+      x: this.wrenContainer.x,
+      y: this.wrenContainer.y - 78,
+      depth: -0.25,
+      durationMs: 620,
+      ringWidth: 245,
+      ringHeight: 74,
+      count: 8,
+      alpha: 0.12,
+      spreadX: 118,
+      spreadY: 30,
+    });
 
     this.narration = new NarrationManager(this, {
       y: 150,

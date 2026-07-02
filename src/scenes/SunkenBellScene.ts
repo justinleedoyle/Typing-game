@@ -298,6 +298,20 @@ export class SunkenBellScene extends Phaser.Scene {
       maxDurationMs: 11800,
     });
     this.wrenContainer = this.drawWren(WREN_X, WREN_Y);
+    playSceneEventPulse(this, {
+      kind: "bubble",
+      color: BELL_BURST_COLOR,
+      x: this.wrenContainer.x,
+      y: this.wrenContainer.y - 86,
+      depth: -0.25,
+      durationMs: 760,
+      ringWidth: 250,
+      ringHeight: 92,
+      count: 8,
+      alpha: 0.1,
+      spreadX: 112,
+      spreadY: 36,
+    });
 
     this.typingInput = new TypingInputController(this.store);
 

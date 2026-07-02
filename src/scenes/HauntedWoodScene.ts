@@ -293,6 +293,20 @@ export class HauntedWoodScene extends Phaser.Scene {
     });
     this.drawShrine();
     this.wrenContainer = this.drawWren(WREN_X, WREN_Y);
+    playSceneEventPulse(this, {
+      kind: "mist",
+      color: 0xa7d8a2,
+      x: this.wrenContainer.x,
+      y: this.wrenContainer.y - 86,
+      depth: -0.25,
+      durationMs: 780,
+      ringWidth: 260,
+      ringHeight: 86,
+      count: 8,
+      alpha: 0.09,
+      spreadX: 122,
+      spreadY: 34,
+    });
 
     // Tier 4 — a revisit is a free-passage replay (no combat) → neutral loadout.
     // Resolved here (before the band) so the console band can show the passive

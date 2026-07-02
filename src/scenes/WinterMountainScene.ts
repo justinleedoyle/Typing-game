@@ -398,6 +398,20 @@ export class WinterMountainScene extends Phaser.Scene {
       maxDurationMs: 9000,
     });
     this.wrenContainer = this.drawWren(this.scale.width / 2, 880);
+    playSceneEventPulse(this, {
+      kind: "snow",
+      color: PALETTE_HEX.frost,
+      x: this.wrenContainer.x,
+      y: this.wrenContainer.y - 86,
+      depth: -0.25,
+      durationMs: 720,
+      ringWidth: 260,
+      ringHeight: 86,
+      count: 8,
+      alpha: 0.11,
+      spreadX: 120,
+      spreadY: 34,
+    });
 
     // UI cohesion — the console band houses the meters + Winter's candle/thunder
     // status. Realm 1 has no satchel, so those dock in the satchel zone.

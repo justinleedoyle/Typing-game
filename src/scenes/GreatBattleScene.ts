@@ -1942,9 +1942,11 @@ export class GreatBattleScene extends Phaser.Scene {
       });
     };
 
+    let target!: TextWordTarget;
     const timer = this.time.delayedCall(FACET_CHALLENGE_MS, () => {
       if (resolved) return;
       resolved = true;
+      this.clearTargetAnchor(target);
       this.clearActiveTargets();
       this.playFacetImpact(facet, "landed");
       this.clearFacetSigil();
@@ -1957,7 +1959,7 @@ export class GreatBattleScene extends Phaser.Scene {
       finish(); // no-op if loseCandle emptied the pool (runOver guards it)
     });
 
-    const target = this.makeWord({
+    target = this.makeWord({
       scene: this,
       word: facet.defenseWord,
       x: this.scale.width / 2,
@@ -1986,6 +1988,7 @@ export class GreatBattleScene extends Phaser.Scene {
         if (resolved) return;
         resolved = true;
         timer.remove();
+        this.clearTargetAnchor(target);
         playChime();
         this.clearActiveTargets();
         this.playFacetImpact(facet, "held");
@@ -1994,6 +1997,23 @@ export class GreatBattleScene extends Phaser.Scene {
         finish();
       },
     });
+    if (this.facetSigil) {
+      this.trackTargetAnchor(
+        target,
+        attachWordBodyAnchor(
+          this,
+          this.facetSigil,
+          () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+          {
+            color: UI_HEX.brass,
+            alpha: 0.15,
+            depth: 6,
+            sourceOffsetY: 0,
+            targetOffsetY: 24,
+          },
+        ),
+      );
+    }
     this.typingInput.register(target);
     this.activeTargets.push(target);
   }

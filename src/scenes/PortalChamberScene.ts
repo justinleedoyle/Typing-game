@@ -1577,6 +1577,7 @@ export class PortalChamberScene extends Phaser.Scene {
       station.x,
       station === HUB_STATIONS.desk || station === HUB_STATIONS.almanac,
     );
+    this.playStationClaimLine(station);
     const focus = this.add
       .container(station.x, station.y)
       .setDepth(8)
@@ -1601,6 +1602,23 @@ export class PortalChamberScene extends Phaser.Scene {
       ease: "Sine.easeOut",
       onComplete: () => focus.destroy(),
     });
+  }
+
+  private playStationClaimLine(station: StationSpec): void {
+    if (!this.wrenContainer?.active || station === HUB_STATIONS.account) return;
+
+    playClaimLine(
+      this,
+      this.wrenContainer.x,
+      this.wrenContainer.y - 112,
+      station.x,
+      station.y - Math.min(18, station.height * 0.34),
+      {
+        color: UI_HEX.brass,
+        depth: 7,
+        durationMs: 250,
+      },
+    );
   }
 
   private playHubActorFocus(targetX: number, includeRuna = false): void {

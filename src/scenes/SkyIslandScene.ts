@@ -559,11 +559,12 @@ export class SkyIslandScene extends Phaser.Scene {
     ];
     this.showPathCue(beat);
     this.setNarrator(narrations[idx] ?? "");
+    const wordPos = this.pathWordPosition(beat);
     const target = this.makePathWord({
       scene: this,
       word: beat,
-      x: this.scale.width / 2,
-      y: this.scale.height / 2,
+      x: wordPos.x,
+      y: wordPos.y,
       fontSize: 44,
       onClaim: () => {
         playWrenFocus(this.wrenSprite);
@@ -597,6 +598,20 @@ export class SkyIslandScene extends Phaser.Scene {
       ease: "Sine.easeOut",
       onComplete: () => addIdleBreath(this, cue, { dy: -3, durationMs: 2700 }),
     });
+  }
+
+  private pathWordPosition(beat: (typeof PATH_BEATS)[number]): { x: number; y: number } {
+    const cue = this.pathCue;
+    if (!cue?.scene) return { x: this.scale.width / 2, y: this.scale.height / 2 };
+
+    switch (beat) {
+      case "balance":
+        return { x: cue.x, y: cue.y - 112 };
+      case "lantern":
+        return { x: cue.x, y: cue.y - 150 };
+      case "stepping":
+        return { x: cue.x, y: cue.y - 118 };
+    }
   }
 
   private drawBalanceBridgeCue(): Phaser.GameObjects.Container {

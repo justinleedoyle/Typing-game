@@ -158,6 +158,8 @@ export class PortalChamberScene extends Phaser.Scene {
   private runaSprite?: Phaser.GameObjects.Image;
   private zoneTargets: TextWordTarget[] = [];
   private portalWordAnchors: WordBodyAnchorHandle[] = [];
+  private stationWordAnchorReleases: Array<() => void> = [];
+  private portalFloorCallGlow?: Phaser.GameObjects.Container;
   private stationTypingPulseTimes = new WeakMap<StationSpec, number>();
   private portalTypingPulseTimes = new Map<string, number>();
   private ambientHandle?: AmbientHandle;
@@ -176,6 +178,8 @@ export class PortalChamberScene extends Phaser.Scene {
     this.archSprites = new Map();
     this.zoneTargets = [];
     this.portalWordAnchors = [];
+    this.stationWordAnchorReleases = [];
+    this.portalFloorCallGlow = undefined;
     this.stationTypingPulseTimes = new WeakMap();
     this.portalTypingPulseTimes = new Map();
     this.showPortalRevisits = false;
@@ -303,6 +307,12 @@ export class PortalChamberScene extends Phaser.Scene {
       anchor.destroy();
     }
     this.portalWordAnchors = [];
+    for (const release of [...this.stationWordAnchorReleases]) {
+      release();
+    }
+    this.stationWordAnchorReleases = [];
+    this.portalFloorCallGlow?.destroy();
+    this.portalFloorCallGlow = undefined;
     for (const t of this.zoneTargets) {
       this.typingInput.unregister(t);
       t.destroy();
@@ -363,6 +373,7 @@ export class PortalChamberScene extends Phaser.Scene {
 
       if (!battleCleared) {
         // All five realms cleared — show the final battle target.
+        let releaseAnchor = (): void => {};
         const battleTarget = new TextWordTarget({
           scene: this,
           word: "defend hearthward",
@@ -374,6 +385,9 @@ export class PortalChamberScene extends Phaser.Scene {
           onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),
           onAdvance: () => this.pulseStationTyping(HUB_STATIONS.portalFloor),
           onComplete: () => {
+            releaseAnchor();
+            this.portalFloorCallGlow?.destroy();
+            this.portalFloorCallGlow = undefined;
             this.playHubActorAction(HUB_STATIONS.portalFloor.x);
             this.pulseStation(HUB_STATIONS.portalFloor);
             this.cameras.main.fadeOut(600, 10, 8, 15);
@@ -382,12 +396,15 @@ export class PortalChamberScene extends Phaser.Scene {
             });
           },
         });
+        releaseAnchor = this.attachPortalFloorCallAnchor(battleTarget, 0x8b6ad8);
+        this.showPortalFloorCallGlow(0x8b6ad8);
         this.typingInput.register(battleTarget);
         this.zoneTargets.push(battleTarget);
         this.narration.say("hub_all_cleared");
         this.setHint("");
       } else {
         // Battle cleared — show begin again target (New Game+).
+        let releaseAnchor = (): void => {};
         const ngPlusTarget = new TextWordTarget({
           scene: this,
           word: "begin again",
@@ -399,11 +416,16 @@ export class PortalChamberScene extends Phaser.Scene {
           onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),
           onAdvance: () => this.pulseStationTyping(HUB_STATIONS.portalFloor),
           onComplete: () => {
+            releaseAnchor();
+            this.portalFloorCallGlow?.destroy();
+            this.portalFloorCallGlow = undefined;
             this.playHubActorAction(HUB_STATIONS.portalFloor.x);
             this.pulseStation(HUB_STATIONS.portalFloor);
             this.startNewGame();
           },
         });
+        releaseAnchor = this.attachPortalFloorCallAnchor(ngPlusTarget, UI_HEX.brass);
+        this.showPortalFloorCallGlow(UI_HEX.brass);
         this.typingInput.register(ngPlusTarget);
         this.zoneTargets.push(ngPlusTarget);
         this.narration.say("hub_post_battle");
@@ -529,6 +551,69 @@ export class PortalChamberScene extends Phaser.Scene {
         durationMs: 300,
       },
     );
+  }
+
+  private attachPortalFloorCallAnchor(
+    target: TextWordTarget,
+    color: number,
+  ): () => void {
+    const source = this.add.zone(
+      HUB_STATIONS.portalFloor.x,
+      HUB_STATIONS.portalFloor.y - 268,
+      1,
+      1,
+    );
+    const handle = attachWordBodyAnchor(
+      this,
+      source,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color,
+        alpha: 0.13,
+        depth: -0.45,
+        targetOffsetY: 30,
+      },
+    );
+
+    let released = false;
+    const release = (): void => {
+      if (released) return;
+      released = true;
+      handle.destroy();
+      source.destroy();
+      const idx = this.stationWordAnchorReleases.indexOf(release);
+      if (idx >= 0) this.stationWordAnchorReleases.splice(idx, 1);
+    };
+    this.stationWordAnchorReleases.push(release);
+    return release;
+  }
+
+  private showPortalFloorCallGlow(color: number): void {
+    this.portalFloorCallGlow?.destroy();
+    const glow = this.add
+      .container(HUB_STATIONS.portalFloor.x, HUB_STATIONS.portalFloor.y - 268)
+      .setDepth(-4.5)
+      .setAlpha(0.62);
+    const g = this.add.graphics();
+    g.fillStyle(color, 0.08);
+    g.fillEllipse(0, 0, 320, 108);
+    g.lineStyle(2, color, 0.28);
+    g.strokeEllipse(0, 0, 360, 132);
+    g.lineStyle(1, UI_HEX.brass, 0.24);
+    g.strokeEllipse(0, 0, 230, 72);
+    glow.add(g);
+
+    this.tweens.add({
+      targets: glow,
+      alpha: { from: 0.42, to: 0.72 },
+      scaleX: { from: 0.98, to: 1.04 },
+      scaleY: { from: 0.98, to: 1.06 },
+      duration: 1850,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    this.portalFloorCallGlow = glow;
   }
 
   private enterSettings(): void {

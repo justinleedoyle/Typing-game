@@ -13,7 +13,12 @@ import { RELICS } from "../game/relics";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
-import { addAmbientDrift, addLivingLight } from "../game/livingScene";
+import {
+  addAmbientDrift,
+  addLivingLight,
+  attachWordBodyAnchor,
+  type WordBodyAnchorHandle,
+} from "../game/livingScene";
 
 /** Page-stack entry. The Almanac walks: overview → for each cleared realm,
  *  the realm summary page then each of that realm's stamped lore pages, in
@@ -108,6 +113,7 @@ export class AlmanacScene extends Phaser.Scene {
   private nextTarget?: TextWordTarget;
   private prevTarget?: TextWordTarget;
   private closeTarget?: TextWordTarget;
+  private navAnchorReleases: Array<() => void> = [];
   private navTypingPulseTimes = new Map<string, number>();
 
   constructor() {
@@ -119,6 +125,7 @@ export class AlmanacScene extends Phaser.Scene {
     this.currentPage = 0;
     this.pageTexts = [];
     this.pageStack = [];
+    this.navAnchorReleases = [];
     this.navTypingPulseTimes.clear();
   }
 
@@ -683,6 +690,7 @@ export class AlmanacScene extends Phaser.Scene {
         onAdvance: () => this.playPageTypingPulse(-1),
         onComplete: () => this.turnPage(-1),
       });
+      this.attachNavigationAnchor(this.prevTarget, -1);
       this.typingInput.register(this.prevTarget);
     }
 
@@ -699,6 +707,7 @@ export class AlmanacScene extends Phaser.Scene {
         onAdvance: () => this.playPageTypingPulse(1),
         onComplete: () => this.turnPage(1),
       });
+      this.attachNavigationAnchor(this.nextTarget, 1);
       this.typingInput.register(this.nextTarget);
     }
 
@@ -714,7 +723,48 @@ export class AlmanacScene extends Phaser.Scene {
       onAdvance: () => this.playCloseTypingPulse(),
       onComplete: () => this.closeBook(),
     });
+    this.attachNavigationAnchor(this.closeTarget, 0);
     this.typingInput.register(this.closeTarget);
+  }
+
+  private attachNavigationAnchor(
+    target: TextWordTarget,
+    kind: -1 | 0 | 1,
+  ): void {
+    const source =
+      kind === 0
+        ? {
+            x: BOOK_X + BOOK_WIDTH / 2,
+            y: BOOK_Y + BOOK_HEIGHT - 46,
+          }
+        : {
+            x: kind > 0 ? BOOK_X + BOOK_WIDTH - 58 : BOOK_X + 58,
+            y: BOOK_Y + BOOK_HEIGHT - 84,
+          };
+    const body = this.add.zone(source.x, source.y, 1, 1);
+    const handle: WordBodyAnchorHandle = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: UI_HEX.brass,
+        alpha: 0.12,
+        depth: 24,
+        sourceOffsetY: 0,
+        targetOffsetY: kind === 0 ? -24 : -18,
+      },
+    );
+
+    let released = false;
+    const release = (): void => {
+      if (released) return;
+      released = true;
+      handle.destroy();
+      body.destroy();
+      const idx = this.navAnchorReleases.indexOf(release);
+      if (idx >= 0) this.navAnchorReleases.splice(idx, 1);
+    };
+    this.navAnchorReleases.push(release);
   }
 
   private turnPage(delta: -1 | 1): void {
@@ -863,6 +913,10 @@ export class AlmanacScene extends Phaser.Scene {
   }
 
   private clearNavigationTargets(): void {
+    for (const release of [...this.navAnchorReleases]) {
+      release();
+    }
+    this.navAnchorReleases = [];
     for (const t of [this.prevTarget, this.nextTarget, this.closeTarget]) {
       if (t) {
         this.typingInput.unregister(t);

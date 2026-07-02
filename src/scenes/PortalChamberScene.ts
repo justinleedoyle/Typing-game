@@ -159,6 +159,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private zoneTargets: TextWordTarget[] = [];
   private portalWordAnchors: WordBodyAnchorHandle[] = [];
   private stationWordAnchorReleases: Array<() => void> = [];
+  private persistentStationWordAnchorReleases: Array<() => void> = [];
   private portalFloorCallGlow?: Phaser.GameObjects.Container;
   private stationTypingPulseTimes = new WeakMap<StationSpec, number>();
   private portalTypingPulseTimes = new Map<string, number>();
@@ -179,6 +180,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.zoneTargets = [];
     this.portalWordAnchors = [];
     this.stationWordAnchorReleases = [];
+    this.persistentStationWordAnchorReleases = [];
     this.portalFloorCallGlow = undefined;
     this.stationTypingPulseTimes = new WeakMap();
     this.portalTypingPulseTimes = new Map();
@@ -268,6 +270,7 @@ export class PortalChamberScene extends Phaser.Scene {
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
+      this.clearPersistentStationWordAnchors();
     });
 
     this.ambientHandle = playAmbientHub();
@@ -777,6 +780,7 @@ export class PortalChamberScene extends Phaser.Scene {
     onComplete: () => void,
     opts: { fontSize?: number; priority?: number; stationPulse?: StationSpec } = {},
   ): void {
+    let releaseAnchor = (): void => {};
     const t = new TextWordTarget({
       scene: this,
       word,
@@ -793,12 +797,63 @@ export class PortalChamberScene extends Phaser.Scene {
         if (opts.stationPulse) this.pulseStationTyping(opts.stationPulse);
       },
       onComplete: () => {
+        releaseAnchor();
         if (opts.stationPulse) this.pulseStation(opts.stationPulse);
         onComplete();
       },
     });
+    if (opts.stationPulse) {
+      releaseAnchor = this.attachStationWordAnchor(t, opts.stationPulse);
+    }
     this.typingInput.register(t);
     this.zoneTargets.push(t);
+  }
+
+  private attachStationWordAnchor(
+    target: TextWordTarget,
+    station: StationSpec,
+    opts: { persistent?: boolean; alpha?: number } = {},
+  ): () => void {
+    const source = this.add.zone(
+      station.x,
+      station.y - Math.min(20, station.height * 0.38),
+      1,
+      1,
+    );
+    const handle = attachWordBodyAnchor(
+      this,
+      source,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: UI_HEX.brass,
+        alpha: opts.alpha ?? 0.12,
+        depth: -0.45,
+        sourceOffsetY: 0,
+        targetOffsetY: 20,
+      },
+    );
+
+    let released = false;
+    const bucket = opts.persistent
+      ? this.persistentStationWordAnchorReleases
+      : this.stationWordAnchorReleases;
+    const release = (): void => {
+      if (released) return;
+      released = true;
+      handle.destroy();
+      source.destroy();
+      const idx = bucket.indexOf(release);
+      if (idx >= 0) bucket.splice(idx, 1);
+    };
+    bucket.push(release);
+    return release;
+  }
+
+  private clearPersistentStationWordAnchors(): void {
+    for (const release of [...this.persistentStationWordAnchorReleases]) {
+      release();
+    }
+    this.persistentStationWordAnchorReleases = [];
   }
 
   // ─── Portal entry ─────────────────────────────────────────────────────────
@@ -929,6 +984,7 @@ export class PortalChamberScene extends Phaser.Scene {
   // ─── Persistent targets ───────────────────────────────────────────────────
 
   private addAlmanacTarget(): void {
+    let releaseAnchor = (): void => {};
     const target = new TextWordTarget({
       scene: this,
       word: "almanac",
@@ -941,10 +997,14 @@ export class PortalChamberScene extends Phaser.Scene {
       onClaim: () => this.focusStation(HUB_STATIONS.almanac),
       onAdvance: () => this.pulseStationTyping(HUB_STATIONS.almanac),
       onComplete: () => {
+        releaseAnchor();
         this.playHubActorAction(HUB_STATIONS.almanac.x, true);
         this.pulseStation(HUB_STATIONS.almanac);
         this.openAlmanac();
       },
+    });
+    releaseAnchor = this.attachStationWordAnchor(target, HUB_STATIONS.almanac, {
+      persistent: true,
     });
     this.typingInput.register(target);
   }
@@ -963,6 +1023,7 @@ export class PortalChamberScene extends Phaser.Scene {
         })
         .setOrigin(0.5)
         .setDepth(1);
+      let releaseAnchor = (): void => {};
       const target = new TextWordTarget({
         scene: this,
         word: "sign out",
@@ -975,10 +1036,15 @@ export class PortalChamberScene extends Phaser.Scene {
         onClaim: () => this.focusStation(HUB_STATIONS.account),
         onAdvance: () => this.pulseStationTyping(HUB_STATIONS.account),
         onComplete: () => {
+          releaseAnchor();
           this.playHubActorAction(HUB_STATIONS.account.x);
           this.pulseStation(HUB_STATIONS.account);
           void signOut();
         },
+      });
+      releaseAnchor = this.attachStationWordAnchor(target, HUB_STATIONS.account, {
+        persistent: true,
+        alpha: 0.1,
       });
       this.typingInput.register(target);
     } else {
@@ -993,6 +1059,7 @@ export class PortalChamberScene extends Phaser.Scene {
         })
         .setOrigin(0.5)
         .setDepth(1);
+      let releaseAnchor = (): void => {};
       const target = new TextWordTarget({
         scene: this,
         word: "sign in",
@@ -1005,10 +1072,15 @@ export class PortalChamberScene extends Phaser.Scene {
         onClaim: () => this.focusStation(HUB_STATIONS.account),
         onAdvance: () => this.pulseStationTyping(HUB_STATIONS.account),
         onComplete: () => {
+          releaseAnchor();
           this.playHubActorAction(HUB_STATIONS.account.x);
           this.pulseStation(HUB_STATIONS.account);
           void signInWithGoogle(window.location.href);
         },
+      });
+      releaseAnchor = this.attachStationWordAnchor(target, HUB_STATIONS.account, {
+        persistent: true,
+        alpha: 0.1,
       });
       this.typingInput.register(target);
     }

@@ -109,6 +109,9 @@ export interface CompanionCameoOptions {
   breathDy?: number;
   breathMs?: number;
   wake?: ContainerWakeOptions;
+  /** Small material pulse when the companion finishes entering. Defaults to a
+   *  restrained pulse using the cameo's wake kind/color; pass false to suppress. */
+  arrivalImpact?: false | BodyImpactOptions;
 }
 
 export interface DismissCompanionCameoOptions {
@@ -501,6 +504,18 @@ export function stageCompanionCameo(
     ease: "Sine.easeOut",
     onComplete: () => {
       if (!c.scene) return;
+      if (opts.arrivalImpact !== false) {
+        playBodyImpact(scene, c, {
+          kind: opts.wake?.kind ?? "mote",
+          color: opts.wake?.color,
+          offsetY: -Math.min(90, opts.height * 0.45),
+          depth: (opts.depth ?? 44) + 1,
+          ringRadius: Math.max(28, Math.min(56, opts.height * 0.32)),
+          count: 8,
+          durationMs: 360,
+          ...(opts.arrivalImpact ?? {}),
+        });
+      }
       addIdleBreath(scene, c, {
         dy: opts.breathDy ?? -5,
         durationMs: opts.breathMs ?? 2100,

@@ -37,6 +37,11 @@ const STUDY_RESPONSE = {
   portal: { x: 1510, y: 610, color: PALETTE_HEX.frost },
 } as const;
 type StudyResponsePoint = (typeof STUDY_RESPONSE)[keyof typeof STUDY_RESPONSE];
+interface PortalFleckPoint {
+  x: number;
+  y: number;
+  color: number;
+}
 
 interface StudyTargetOptions {
   word: string;
@@ -397,14 +402,113 @@ export class OpeningScene extends Phaser.Scene {
       this.store.update((s) => {
         s.typewriterAwakened = true;
       });
-      this.cameras.main.fadeOut(700, 11, 10, 15);
-      this.cameras.main.once(
-        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-        () => {
-          this.scene.start("PortalChamberScene", { store: this.store });
-        },
-      );
+      this.playOpeningPortalTravel();
+      this.time.delayedCall(260, () => {
+        this.cameras.main.fadeOut(700, 11, 10, 15);
+        this.cameras.main.once(
+          Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+          () => {
+            this.scene.start("PortalChamberScene", { store: this.store });
+          },
+        );
+      });
     });
+  }
+
+  private playOpeningPortalTravel(): void {
+    const portal = STUDY_RESPONSE.portal;
+    this.playStudyPulse(portal, {
+      scale: 1.62,
+      durationMs: 700,
+      alpha: 0.5,
+      flecks: 7,
+    });
+    playActorAttention(this, this.runaActor, { scale: 1.018, durationMs: 260 });
+    playActorAttention(this, this.siblingActor, { scale: 1.035, durationMs: 300 });
+    this.pulseSiblingKeepsake();
+
+    const wash = this.add.graphics().setDepth(-0.5).setAlpha(0);
+    wash.fillStyle(0x0b0a0f, 0.18);
+    wash.fillRect(0, 0, this.scale.width, this.scale.height);
+    this.tweens.add({
+      targets: wash,
+      alpha: 0.16,
+      duration: 110,
+      hold: 160,
+      yoyo: true,
+      ease: "Sine.easeInOut",
+      onComplete: () => wash.destroy(),
+    });
+
+    for (let i = 0; i < 3; i++) {
+      const ring = this.add
+        .graphics()
+        .setPosition(portal.x, portal.y)
+        .setDepth(0)
+        .setAlpha(0.64 - i * 0.11);
+      ring.lineStyle(2, i === 1 ? PALETTE_HEX.brass : portal.color, 0.62 - i * 0.08);
+      ring.strokeEllipse(0, 0, 150 + i * 52, 230 + i * 72);
+      ring.fillStyle(portal.color, 0.026);
+      ring.fillEllipse(0, 0, 170 + i * 50, 250 + i * 72);
+      ring.setScale(0.74 + i * 0.08);
+
+      this.tweens.add({
+        targets: ring,
+        alpha: 0,
+        scaleX: 1.22 + i * 0.08,
+        scaleY: 1.14 + i * 0.06,
+        duration: 520,
+        delay: i * 56,
+        ease: "Sine.easeOut",
+        onComplete: () => ring.destroy(),
+      });
+    }
+
+    this.playOpeningPortalFlecks(STUDY_RESPONSE.name, portal, 5, 0);
+    this.playOpeningPortalFlecks(STUDY_RESPONSE.typewriter, portal, 7, 90);
+    if (this.siblingActor?.active) {
+      this.playOpeningPortalFlecks(
+        { x: this.siblingActor.x, y: this.siblingActor.y - 150, color: PALETTE_HEX.brass },
+        portal,
+        6,
+        40,
+      );
+    }
+  }
+
+  private playOpeningPortalFlecks(
+    from: PortalFleckPoint,
+    to: PortalFleckPoint,
+    count: number,
+    delayMs: number,
+  ): void {
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const startX = from.x + Math.cos(angle) * Phaser.Math.Between(10, 34);
+      const startY = from.y + Math.sin(angle) * Phaser.Math.Between(8, 24);
+      const targetX = to.x + Math.cos(angle + 0.7) * Phaser.Math.Between(28, 70);
+      const targetY = to.y + Math.sin(angle + 0.7) * Phaser.Math.Between(36, 92);
+      const fleck = this.add
+        .graphics()
+        .setPosition(startX, startY)
+        .setDepth(0.5)
+        .setAlpha(0.72);
+      fleck.fillStyle(i % 2 === 0 ? from.color : to.color, 0.8);
+      fleck.fillCircle(0, 0, Phaser.Math.FloatBetween(2.2, 4.2));
+
+      this.tweens.add({
+        targets: fleck,
+        x: targetX,
+        y: targetY,
+        alpha: 0,
+        scaleX: 0.28,
+        scaleY: 0.28,
+        duration: 340 + i * 24,
+        delay: delayMs + i * 18,
+        ease: "Sine.easeIn",
+        onComplete: () => fleck.destroy(),
+      });
+    }
   }
 
   // ── Input ──────────────────────────────────────────────────────────────────

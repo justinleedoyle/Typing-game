@@ -455,7 +455,7 @@ export class PortalChamberScene extends Phaser.Scene {
           this.enterZone("portals", false);
         },
         {
-          fontSize: 21,
+          fontSize: 20,
           priority: -1,
           stationPulse: HUB_STATIONS.portalFloor,
         },
@@ -464,9 +464,11 @@ export class PortalChamberScene extends Phaser.Scene {
 
     // Zone navigation (away from portals).
     this.registerNavTarget("runa", 420, 908, () => this.enterZone("desk"), {
+      fontSize: 23,
       stationPulse: HUB_STATIONS.desk,
     });
     this.registerNavTarget("shelf", 1740, 930, () => this.enterZone("shelf"), {
+      fontSize: 23,
       stationPulse: HUB_STATIONS.shelf,
     });
     // Settings lives in the account plaque, separated from sign-in/out so the
@@ -477,7 +479,7 @@ export class PortalChamberScene extends Phaser.Scene {
       ACCOUNT_PANEL.settingsY,
       () => this.enterSettings(),
       {
-        fontSize: 19,
+        fontSize: 18,
         stationPulse: HUB_STATIONS.account,
       },
     );
@@ -644,7 +646,7 @@ export class PortalChamberScene extends Phaser.Scene {
       640,
       908,
       () => this.enterZone("portals"),
-      { stationPulse: HUB_STATIONS.portalFloor },
+      { fontSize: 22, stationPulse: HUB_STATIONS.portalFloor },
     );
   }
 
@@ -670,7 +672,7 @@ export class PortalChamberScene extends Phaser.Scene {
       1520,
       930,
       () => this.enterZone("portals"),
-      { stationPulse: HUB_STATIONS.portalFloor },
+      { fontSize: 22, stationPulse: HUB_STATIONS.portalFloor },
     );
   }
 
@@ -789,7 +791,6 @@ export class PortalChamberScene extends Phaser.Scene {
       fontSize: opts.fontSize ?? 26,
       priority: opts.priority ?? -2,
       outline: true,
-      frame: "banner",
       onClaim: () => {
         if (opts.stationPulse) this.focusStation(opts.stationPulse);
       },
@@ -990,10 +991,9 @@ export class PortalChamberScene extends Phaser.Scene {
       word: "almanac",
       x: 230,
       y: 1030,
-      fontSize: 24,
+      fontSize: 22,
       priority: -1,
       outline: true,
-      frame: "banner",
       onClaim: () => this.focusStation(HUB_STATIONS.almanac),
       onAdvance: () => this.pulseStationTyping(HUB_STATIONS.almanac),
       onComplete: () => {
@@ -1029,10 +1029,9 @@ export class PortalChamberScene extends Phaser.Scene {
         word: "sign out",
         x: ACCOUNT_PANEL.x,
         y: ACCOUNT_PANEL.authY,
-        fontSize: 20,
+        fontSize: 18,
         priority: -1,
         outline: true,
-        frame: "banner",
         onClaim: () => this.focusStation(HUB_STATIONS.account),
         onAdvance: () => this.pulseStationTyping(HUB_STATIONS.account),
         onComplete: () => {
@@ -1065,10 +1064,9 @@ export class PortalChamberScene extends Phaser.Scene {
         word: "sign in",
         x: ACCOUNT_PANEL.x,
         y: ACCOUNT_PANEL.authY,
-        fontSize: 20,
+        fontSize: 18,
         priority: -1,
         outline: true,
-        frame: "banner",
         onClaim: () => this.focusStation(HUB_STATIONS.account),
         onAdvance: () => this.pulseStationTyping(HUB_STATIONS.account),
         onComplete: () => {

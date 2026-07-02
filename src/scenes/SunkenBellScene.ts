@@ -131,6 +131,8 @@ export class SunkenBellScene extends Phaser.Scene {
   private glassFishWordAnchors: WordBodyAnchorHandle[] = [];
   private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
   private descentLanternWordAnchors: WordBodyAnchorHandle[] = [];
+  private revisitMemoryCue: Phaser.GameObjects.Container | null = null;
+  private revisitMemoryWordAnchor: WordBodyAnchorHandle | null = null;
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   /** King Aurland's painted sprite — fades in when he's freed at fork 2 and is
@@ -204,6 +206,8 @@ export class SunkenBellScene extends Phaser.Scene {
     this.glassFishWordAnchors = [];
     this.forkChoiceWordAnchors = [];
     this.descentLanternWordAnchors = [];
+    this.revisitMemoryCue = null;
+    this.revisitMemoryWordAnchor = null;
     this.beatPhase = "on";
     this.beatLocked = false;
     this.breath.reset();
@@ -411,6 +415,7 @@ export class SunkenBellScene extends Phaser.Scene {
       this.ambientHandle?.stop();
       this.clearBellForkCues();
       this.clearAurlandWordAnchors();
+      this.dismissRevisitMemoryCue(false);
       this.olinImage?.destroy();
       this.olinImage = undefined;
       this.aurlandImage?.destroy();
@@ -470,24 +475,151 @@ export class SunkenBellScene extends Phaser.Scene {
       }
       const word = words[idx];
       if (word === undefined) return;
+      this.showRevisitMemoryCue(idx, words.length);
+      const wordPos = this.revisitMemoryWordPosition(idx, words.length);
       const target = this.makeWord({
         scene: this,
         word,
-        x: this.scale.width / 2,
-        y: this.scale.height / 2,
-        fontSize: 44,
-        onClaim: () => playWrenFocus(this.wrenSprite),
+        x: wordPos.x,
+        y: wordPos.y,
+        fontSize: 40,
+        onClaim: () => {
+          playWrenFocus(this.wrenSprite);
+          this.pulseRevisitMemoryCue(false);
+        },
         onComplete: () => {
           playWrenAction(this.wrenSprite);
+          this.pulseRevisitMemoryCue(true);
           playChime();
           idx += 1;
           this.typingInput.unregister(target);
-          this.time.delayedCall(200, advance);
+          const activeIdx = this.activeTargets.indexOf(target);
+          if (activeIdx >= 0) this.activeTargets.splice(activeIdx, 1);
+          this.time.delayedCall(260, () => {
+            this.dismissRevisitMemoryCue();
+            this.time.delayedCall(120, advance);
+          });
         },
       });
+      this.attachRevisitMemoryWordAnchor(target);
       this.typingInput.register(target);
+      this.activeTargets.push(target);
     };
     advance();
+  }
+
+  private showRevisitMemoryCue(idx: number, total: number): void {
+    this.dismissRevisitMemoryCue(false);
+    const pos = this.revisitMemoryCuePosition(idx, total);
+    const cue = this.add.container(pos.x, pos.y).setDepth(-1).setAlpha(0);
+    this.revisitMemoryCue = cue;
+
+    cue.add(addLocalGroundShadow(this, 126, 18, { y: 11, alpha: 0.16 }));
+
+    const echo = this.add.graphics();
+    echo.fillStyle(BELL_BURST_COLOR, 0.1);
+    echo.fillEllipse(0, 0, 120, 38);
+    echo.lineStyle(2, BELL_BURST_COLOR, 0.32);
+    echo.strokeEllipse(0, 0, 106, 30);
+    echo.lineStyle(1.5, 0xd7fbff, 0.36);
+    echo.beginPath();
+    echo.arc(0, -7, 26, Math.PI * 0.1, Math.PI * 0.9);
+    echo.strokePath();
+    echo.lineStyle(1, 0xd7fbff, 0.32);
+    echo.lineBetween(-26, -7, -20, 13);
+    echo.lineBetween(26, -7, 20, 13);
+    echo.lineBetween(-20, 13, 20, 13);
+    echo.fillStyle(0xd7fbff, 0.42);
+    echo.fillCircle(0, 16, 3.4);
+    echo.fillCircle(-40, 1, 2.6);
+    echo.fillCircle(40, 1, 2.6);
+    cue.add(echo);
+
+    this.tweens.add({
+      targets: cue,
+      alpha: 0.8,
+      y: pos.y - 5,
+      duration: 320,
+      ease: "Sine.easeOut",
+      onComplete: () => addIdleBreath(this, cue, { dy: -2, durationMs: 2700 }),
+    });
+  }
+
+  private revisitMemoryCuePosition(idx: number, total: number): { x: number; y: number } {
+    const spacing = total <= 4 ? 190 : 165;
+    const startX = this.scale.width / 2 - ((total - 1) * spacing) / 2;
+    return {
+      x: startX + idx * spacing,
+      y: idx % 2 === 0 ? 800 : 760,
+    };
+  }
+
+  private revisitMemoryWordPosition(idx: number, total: number): { x: number; y: number } {
+    const cue = this.revisitMemoryCuePosition(idx, total);
+    return { x: cue.x, y: cue.y - 108 };
+  }
+
+  private attachRevisitMemoryWordAnchor(target: TextWordTarget): void {
+    const cue = this.revisitMemoryCue;
+    if (!cue?.scene) return;
+    this.releaseRevisitMemoryWordAnchor();
+    this.revisitMemoryWordAnchor = attachWordBodyAnchor(
+      this,
+      cue,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: BELL_BURST_COLOR,
+        alpha: 0.12,
+        depth: 7,
+        sourceOffsetY: -18,
+        targetOffsetY: 24,
+      },
+    );
+  }
+
+  private releaseRevisitMemoryWordAnchor(): void {
+    this.revisitMemoryWordAnchor?.destroy();
+    this.revisitMemoryWordAnchor = null;
+  }
+
+  private pulseRevisitMemoryCue(completion: boolean): void {
+    if (!this.revisitMemoryCue?.scene) return;
+    playActorAttention(this, this.revisitMemoryCue, {
+      scale: completion ? 1.04 : 1.018,
+      durationMs: completion ? 260 : 170,
+    });
+    playBodyImpact(this, this.revisitMemoryCue, {
+      kind: "mote",
+      color: BELL_BURST_COLOR,
+      offsetY: -16,
+      depth: 10,
+      ringRadius: completion ? 42 : 26,
+      count: completion ? 8 : 5,
+      durationMs: completion ? 430 : 240,
+    });
+  }
+
+  private dismissRevisitMemoryCue(animate = true): void {
+    this.releaseRevisitMemoryWordAnchor();
+    const cue = this.revisitMemoryCue;
+    if (!cue?.scene) {
+      this.revisitMemoryCue = null;
+      return;
+    }
+    this.revisitMemoryCue = null;
+    this.tweens.killTweensOf(cue);
+    if (!animate) {
+      cue.destroy();
+      return;
+    }
+    this.tweens.add({
+      targets: cue,
+      alpha: 0,
+      y: cue.y + 14,
+      duration: 220,
+      ease: "Sine.easeIn",
+      onComplete: () => cue.destroy(),
+    });
   }
 
   // ─── Beat mechanic ────────────────────────────────────────────────────────
@@ -2810,6 +2942,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.clearGlassFishWordAnchors();
     this.clearForkChoiceWordAnchors();
     this.clearDescentLanternWordAnchors();
+    this.dismissRevisitMemoryCue(false);
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

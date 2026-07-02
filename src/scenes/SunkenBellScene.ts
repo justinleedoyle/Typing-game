@@ -1389,7 +1389,23 @@ export class SunkenBellScene extends Phaser.Scene {
   private drawWarden(): Phaser.GameObjects.Image {
     const sprite = this.add.image(WARDEN_X, WARDEN_Y, "bell-warden");
     sprite.setScale(WARDEN_SPRITE_HEIGHT / sprite.height);
+    addIdleBreath(this, sprite, { dy: -3, durationMs: 2800 });
     return sprite;
+  }
+
+  private playWardenStagePulse(
+    wardenSprite: Phaser.GameObjects.Image,
+    intense = false,
+  ): void {
+    playBodyImpact(this, wardenSprite, {
+      kind: "bubble",
+      color: intense ? 0x8de8ff : BELL_BURST_COLOR,
+      offsetY: -62,
+      depth: 58,
+      ringRadius: intense ? 74 : 62,
+      count: intense ? 18 : 14,
+      durationMs: intense ? 560 : 480,
+    });
   }
 
   private startAct3(): void {
@@ -1398,6 +1414,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.pulseBellWave({ y: 640, ringWidth: 900, ringHeight: 180, count: 14 });
     this.ghosts = [];
     const wardenSprite = this.drawWarden();
+    this.playWardenStagePulse(wardenSprite);
     // Phase 1
     this.narration.say("sunken_warden_rise");
     this.time.delayedCall(1200, () => {
@@ -1456,6 +1473,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.beatLocked = true;
 
     this.narration.say("sunken_warden_phase2");
+    this.playWardenStagePulse(wardenSprite, true);
 
     const phrases = ["tide-and-toll", "deep-and-dark", "still-and-stir"];
     let remaining = phrases.length;
@@ -1505,6 +1523,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startWardenPhase3(wardenSprite: Phaser.GameObjects.Image): void {
     this.setNarrator("The bell sings. Type each word on the toll.");
+    this.playWardenStagePulse(wardenSprite, true);
 
     const passage = "i am the bell. i drink the sea.";
     const words = passage.split(" ");

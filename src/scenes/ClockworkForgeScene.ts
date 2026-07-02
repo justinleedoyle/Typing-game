@@ -1192,8 +1192,21 @@ export class ClockworkForgeScene extends Phaser.Scene {
       alpha: 1,
       duration: 900,
       ease: "Sine.easeOut",
+      onComplete: () => this.playCommandGolemStagePulse(),
     });
     this.idleBob(this.bossContainer);
+  }
+
+  private playCommandGolemStagePulse(intense = false): void {
+    playBodyImpact(this, this.bossContainer, {
+      kind: "ember",
+      color: intense ? PALETTE_HEX.brass : PALETTE_HEX.ember,
+      offsetY: -150,
+      depth: 58,
+      ringRadius: intense ? 78 : 64,
+      count: intense ? 18 : 14,
+      durationMs: intense ? 560 : 480,
+    });
   }
 
   private startBossPhase1(): void {
@@ -1236,7 +1249,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.typingInput.register(target);
       this.activeTargets.push(target);
     };
-    nextWord();
+    this.time.delayedCall(1040, nextWord);
   }
 
   private startBossPhase2(): void {
@@ -1244,6 +1257,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // The Command-Golem is now under command — it glows brass for the rest of
     // the fight (persisted tint, no clear).
     this.flashGolemCommanded(this.bossSprite, true);
+    this.playCommandGolemStagePulse(true);
 
     this.narration.say("forge_command_golem_phase2");
     this.band.setObjective("Hold Shift through each all-caps command.");
@@ -1295,6 +1309,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private startBossPhase3(): void {
     this.clearActiveTargets();
+    this.playCommandGolemStagePulse(true);
     this.setNarrator(
       "Its true name is a command turned on itself — half-spoken, half-SHOUTED. Type it as it reads.",
     );

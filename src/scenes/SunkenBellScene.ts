@@ -130,6 +130,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private aurlandWordAnchors: WordBodyAnchorHandle[] = [];
   private glassFishWordAnchors: WordBodyAnchorHandle[] = [];
   private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
+  private descentLanternWordAnchors: WordBodyAnchorHandle[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   /** King Aurland's painted sprite — fades in when he's freed at fork 2 and is
@@ -202,6 +203,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.aurlandWordAnchors = [];
     this.glassFishWordAnchors = [];
     this.forkChoiceWordAnchors = [];
+    this.descentLanternWordAnchors = [];
     this.beatPhase = "on";
     this.beatLocked = false;
     this.breath.reset();
@@ -801,6 +803,12 @@ export class SunkenBellScene extends Phaser.Scene {
       if (!pos) return;
 
       const lantern = this.drawDescentLantern(pos.x, pos.y, i);
+      let lanternAnchor: WordBodyAnchorHandle | null = null;
+      const releaseLanternAnchor = (): void => {
+        if (!lanternAnchor) return;
+        this.releaseDescentLanternWordAnchor(lanternAnchor);
+        lanternAnchor = null;
+      };
 
       const target = this.makeWord({
         scene: this,
@@ -814,6 +822,7 @@ export class SunkenBellScene extends Phaser.Scene {
         },
         onComplete: () => {
           playWrenAction(this.wrenSprite);
+          releaseLanternAnchor();
           this.lightDescentLantern(lantern);
           lit += 1;
           if (lit >= lanternWords.length) {
@@ -821,6 +830,7 @@ export class SunkenBellScene extends Phaser.Scene {
           }
         },
       });
+      lanternAnchor = this.attachDescentLanternWordAnchor(lantern, target);
       this.typingInput.register(target);
       this.activeTargets.push(target);
     });
@@ -937,6 +947,37 @@ export class SunkenBellScene extends Phaser.Scene {
       count: completion ? 9 : 5,
       durationMs: completion ? 460 : 260,
     });
+  }
+
+  private attachDescentLanternWordAnchor(
+    lantern: DescentLantern,
+    target: TextWordTarget,
+  ): WordBodyAnchorHandle {
+    const anchor = attachWordBodyAnchor(
+      this,
+      lantern.container,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: BELL_BURST_COLOR,
+        alpha: 0.14,
+        depth: 7,
+        sourceOffsetY: -22,
+        targetOffsetY: 24,
+      },
+    );
+    this.descentLanternWordAnchors.push(anchor);
+    return anchor;
+  }
+
+  private releaseDescentLanternWordAnchor(anchor: WordBodyAnchorHandle): void {
+    anchor.destroy();
+    const idx = this.descentLanternWordAnchors.indexOf(anchor);
+    if (idx >= 0) this.descentLanternWordAnchors.splice(idx, 1);
+  }
+
+  private clearDescentLanternWordAnchors(): void {
+    for (const anchor of this.descentLanternWordAnchors) anchor.destroy();
+    this.descentLanternWordAnchors = [];
   }
 
   // ─── Act 1: Old Olin NPC ──────────────────────────────────────────────────
@@ -2749,6 +2790,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.clearAurlandWordAnchors();
     this.clearGlassFishWordAnchors();
     this.clearForkChoiceWordAnchors();
+    this.clearDescentLanternWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

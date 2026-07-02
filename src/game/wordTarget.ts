@@ -16,6 +16,8 @@ export interface TextWordTargetOptions {
   word: string;
   x: number;
   y: number;
+  /** Optional render depth for scenes where the word must sit above an actor/body. */
+  depth?: number;
   fontSize?: number;
   /** Higher wins on first-letter ties. Default 0. */
   priority?: number;
@@ -65,6 +67,9 @@ export interface TextWordTargetOptions {
   /** Called when a mid-claim target is released without completing — e.g. the
    *  player backspaced out of it. */
   onRelease?: () => void;
+  /** Called after each correct character advances this target. Combat owners
+   *  use this to make the body/banner react while typing is in progress. */
+  onAdvance?: (cursor: number, wordLength: number) => void;
   /** Optional anchor sprite to flash/shake when the player misses. */
   anchor?: Phaser.GameObjects.GameObject & {
     setTint?: (tint: number) => void;
@@ -92,6 +97,11 @@ const SUFFIX_EAT_PLACEHOLDER = "·";
 export function maskSuffix(text: string): string {
   return text.replace(/[^ ]/g, SUFFIX_EAT_PLACEHOLDER);
 }
+
+const BANNER_TEXT_MAX_W = 520;
+const BANNER_MIN_FONT_SIZE = 34;
+const BANNER_PAD_X = 44;
+const BANNER_PAD_Y = 22;
 
 /** State for the Tier 4 forgive-reset (unseal) machine. `tokens` = pardons
  *  left; `pending` collapses the TWO resetCursor() calls a single miss triggers
@@ -169,6 +179,7 @@ export class TextWordTarget implements WordTarget {
     this.container = opts.scene.add
       .container(opts.x, opts.y, [this.typedText, this.remainingText])
       .setSize(this.remainingText.width, this.remainingText.height);
+    if (opts.depth !== undefined) this.container.setDepth(opts.depth);
 
     // UI-cohesion: a dark stroke makes the word legible on busy painted art.
     if (opts.outline) {
@@ -179,8 +190,10 @@ export class TextWordTarget implements WordTarget {
     // pickable banner. Sized to the full word (measured at construction) and
     // inserted behind the glyphs so the cream text reads on the dark plate.
     if (opts.frame === "banner") {
-      const w = this.remainingText.width + 44;
-      const h = this.remainingText.height + 22;
+      this.fitBannerText(fontSize);
+      this.container.setSize(this.remainingText.width, this.remainingText.height);
+      const w = this.remainingText.width + BANNER_PAD_X;
+      const h = this.remainingText.height + BANNER_PAD_Y;
       const plate = opts.scene.add.graphics();
       plate.fillStyle(UI_HEX.panel, 0.85);
       plate.fillRoundedRect(-w / 2, -h / 2, w, h, 9);
@@ -190,6 +203,18 @@ export class TextWordTarget implements WordTarget {
     }
 
     this.relayout();
+  }
+
+  private fitBannerText(initialFontSize: number): void {
+    for (
+      let size = initialFontSize;
+      size > BANNER_MIN_FONT_SIZE && this.remainingText.width > BANNER_TEXT_MAX_W;
+      size -= 1
+    ) {
+      const nextSize = size - 1;
+      this.typedText.setFontSize(nextSize);
+      this.remainingText.setFontSize(nextSize);
+    }
   }
 
   remaining(): string {
@@ -216,6 +241,7 @@ export class TextWordTarget implements WordTarget {
       this.complete = true;
     }
     this.relayout();
+    this.opts.onAdvance?.(this.cursor, this.word.length);
   }
 
   /**
@@ -315,6 +341,7 @@ export class TextWordTarget implements WordTarget {
     this.dimmed = false;
     this.spellClaimed = mods.spell;
     this.altClaimed = mods.alt;
+    this.playClaimPulse();
     if (mods.alt) {
       // Alt = wild — brass tint reads as electric, distinct from ember spell.
       this.typedText.setColor(PALETTE.brass);
@@ -329,6 +356,7 @@ export class TextWordTarget implements WordTarget {
 
   onRelease(): void {
     if (this.complete) return;
+    this.container.setScale(1);
     this.cursor = 0;
     this.spellClaimed = false;
     this.altClaimed = false;
@@ -416,8 +444,27 @@ export class TextWordTarget implements WordTarget {
     this.container.y = y;
   }
 
+  getAnchorX(): number {
+    return this.container.x;
+  }
+
+  getAnchorY(): number {
+    return this.container.y;
+  }
+
   destroy(): void {
     this.container.destroy();
+  }
+
+  private playClaimPulse(): void {
+    this.container.setScale(1.055);
+    this.opts.scene.tweens.add({
+      targets: this.container,
+      scaleX: 1,
+      scaleY: 1,
+      duration: 180,
+      ease: "Back.easeOut",
+    });
   }
 
   private relayout(): void {

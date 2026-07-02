@@ -9,9 +9,10 @@ import { playWaveSting } from "../audio/waveSting";
 import { flashDamageVignette } from "../game/vfx";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
+import { showAlmanacStampCard } from "../game/ui/almanacStamp";
 import { ConsoleBand } from "../game/ui/consoleBand";
 import runaPortrait from "../../art/runa/runa-front.png";
-import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
+import { PALETTE_HEX, SERIF } from "../game/palette";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import type { SaveStore } from "../game/saveState";
@@ -25,6 +26,28 @@ import {
   circlerY,
 } from "../game/winterMechanics";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
+import {
+  addAmbientDrift,
+  addBackdropDrift,
+  addContainerWake,
+  attachWordBodyAnchor,
+  dismissCompanionCameo,
+  fadeOutStagedSprite,
+  addIdleBreath,
+  addLocalGroundShadow,
+  addLivingLight,
+  playBodyImpact,
+  playBodyTypePulse,
+  playClaimLine,
+  playActorAttention,
+  pulseUiObject,
+  playRealmClearResonance,
+  playSceneEventPulse,
+  stageContainerEntrance,
+  stageAnchoredSprite,
+  stageCompanionCameo,
+  type WordBodyAnchorHandle,
+} from "../game/livingScene";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import {
@@ -33,8 +56,19 @@ import {
   preloadWinterNpcs,
 } from "../game/winterNpcs";
 import { makeWolfSprite, preloadWolves } from "../game/wolf";
-import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
+import {
+  bobWrenSprite,
+  flashWrenMiss,
+  isWrenHurtPlaying,
+  makeWrenSprite,
+  playWrenAction,
+  playWrenFocus,
+  playWrenHurt,
+  preloadWren,
+  setWrenPose,
+} from "../game/wren";
 import winterBackdrop from "../../art/references/winter-mountain-clean.png";
+import snowFoxSprite from "../../art/companions/snow-fox.png";
 
 // Danger ramps in over the LAST 60% of a wolf's advance — earlier portion
 // stays cream so players can read the word, then it shifts red as the wolf
@@ -181,6 +215,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private typingInput!: TypingInputController;
   private director!: WaveDirector;
   private narration!: NarrationManager;
+  private band!: ConsoleBand;
   private wolves: MovingWordEnemy[] = [];
   /** The Pack-Leader, also a wolf in `this.wolves`; held separately for the
    *  pack-cleared ward gate and the body-sprite tint on release. */
@@ -191,12 +226,20 @@ export class WinterMountainScene extends Phaser.Scene {
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenGlow!: Phaser.GameObjects.Graphics;
   private wrenSprite!: Phaser.GameObjects.Image;
-  private hurtPoseTimer: Phaser.Time.TimerEvent | null = null;
   private heldurSprite: Phaser.GameObjects.Image | null = null;
-  private heldurDialogText: Phaser.GameObjects.Text | null = null;
+  private heldurWordAnchors: WordBodyAnchorHandle[] = [];
   private huntressSprite: Phaser.GameObjects.Image | null = null;
+  private riverCue: Phaser.GameObjects.Container | null = null;
+  private fireflyCue: Phaser.GameObjects.Container | null = null;
+  private cairnCue: Phaser.GameObjects.Container | null = null;
+  private peltCue: Phaser.GameObjects.Container | null = null;
+  private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
+  private foxCompanion: Phaser.GameObjects.Container | null = null;
+  private foxWordAnchors: WordBodyAnchorHandle[] = [];
   private candleGroup!: Phaser.GameObjects.Container;
   private chargeGroup!: Phaser.GameObjects.Container;
+  private drawnCandles: number | null = null;
+  private drawnThunderCharges: number | null = null;
 
   private candles = WAVE_CANDLES;
   // How many thunderclaps the current Soul can afford — derived from Soul
@@ -237,8 +280,15 @@ export class WinterMountainScene extends Phaser.Scene {
     // Stale sprite references from a previous visit point at destroyed
     // GameObjects; clear them so fadeInHeldur/fadeInHuntress create fresh ones.
     this.heldurSprite = null;
-    this.heldurDialogText = null;
+    this.heldurWordAnchors = [];
     this.huntressSprite = null;
+    this.riverCue = null;
+    this.fireflyCue = null;
+    this.cairnCue = null;
+    this.peltCue = null;
+    this.forkChoiceWordAnchors = [];
+    this.foxCompanion = null;
+    this.foxWordAnchors = [];
     this.wolves = [];
     this.boss = null;
     this.bossBodySprite = null;
@@ -265,27 +315,119 @@ export class WinterMountainScene extends Phaser.Scene {
     preloadWren(this);
     preloadWolves(this);
     preloadWinterNpcs(this);
+    this.load.image("winter-companion-snow-fox", snowFoxSprite);
   }
 
   create(): void {
     this.cameras.main.fadeIn(500, 11, 10, 15);
-    this.add
+    const backdrop = this.add
       .image(0, 0, "winter-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addBackdropDrift(this, backdrop, { durationMs: 17000, driftX: -6, driftY: -4 });
+    addAmbientDrift(this, {
+      kind: "snow",
+      count: 70,
+      depth: -2,
+      area: { x: 0, y: 0, width: this.scale.width, height: 840 },
+      alpha: 0.5,
+      minSize: 2,
+      maxSize: 6,
+      driftX: -260,
+      driftY: 620,
+      minDurationMs: 5200,
+      maxDurationMs: 10500,
+    });
+    addLivingLight(this, {
+      x: 1100,
+      y: 235,
+      width: 650,
+      height: 150,
+      color: 0x8b7cff,
+      alpha: 0.08,
+      depth: -5,
+      durationMs: 3600,
+      scale: 1.045,
+    });
+    addLivingLight(this, {
+      x: 1540,
+      y: 245,
+      width: 520,
+      height: 120,
+      color: 0x5cb7e8,
+      alpha: 0.055,
+      depth: -5,
+      durationMs: 4100,
+      delayMs: 900,
+      scale: 1.05,
+    });
+    addLivingLight(this, {
+      x: 258,
+      y: 498,
+      width: 180,
+      height: 220,
+      color: 0xbfd9ff,
+      alpha: 0.06,
+      depth: -4,
+      durationMs: 3000,
+      delayMs: 380,
+    });
+    addLivingLight(this, {
+      x: 1818,
+      y: 782,
+      width: 120,
+      height: 150,
+      color: 0xf0ad58,
+      alpha: 0.08,
+      depth: -4,
+      durationMs: 1800,
+      delayMs: 700,
+    });
+    addAmbientDrift(this, {
+      kind: "snow",
+      count: 18,
+      depth: -1.45,
+      area: { x: -80, y: 240, width: this.scale.width + 160, height: 620 },
+      alpha: 0.22,
+      minSize: 5,
+      maxSize: 11,
+      driftX: -300,
+      driftY: 560,
+      minDurationMs: 4600,
+      maxDurationMs: 9000,
+    });
     this.wrenContainer = this.drawWren(this.scale.width / 2, 880);
+    playSceneEventPulse(this, {
+      kind: "snow",
+      color: PALETTE_HEX.frost,
+      x: this.wrenContainer.x,
+      y: this.wrenContainer.y - 86,
+      depth: -0.25,
+      durationMs: 720,
+      ringWidth: 260,
+      ringHeight: 86,
+      count: 8,
+      alpha: 0.11,
+      spreadX: 120,
+      spreadY: 34,
+    });
 
     // UI cohesion — the console band houses the meters + Winter's candle/thunder
     // status. Realm 1 has no satchel, so those dock in the satchel zone.
-    const band = new ConsoleBand(this, {
+    this.band = new ConsoleBand(this, {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: [],
       satchelLabel: "",
     });
+    const band = this.band;
 
-    this.narration = new NarrationManager(this, { y: 160, framed: true });
+    this.narration = new NarrationManager(this, {
+      y: 160,
+      framed: true,
+      onSpeak: (speakerName) => this.attendSpeaker(speakerName),
+    });
 
     // Candle + thunder meters dock into the band's satchel zone (above the band
     // surface, so depth > the band's DEPTH).
@@ -334,7 +476,11 @@ export class WinterMountainScene extends Phaser.Scene {
       getSoul: () => this.typingInput.getStats().getSoul(),
       getCombo: () => this.typingInput.getStats().getCombo(),
       getCastReady: () => this.typingInput.getStats().canCast(SPELL_COST),
-      onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
+      onSustainedLowHeart: () =>
+        this.band.showNotice(pickLowHeartLine().text, {
+          label: "heart",
+          durationMs: 2400,
+        }),
       anchor: band.metersAnchor,
       plate: false,
     });
@@ -343,6 +489,8 @@ export class WinterMountainScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
       this.coldDecayTimer?.remove();
+      this.riverCue = null;
+      this.clearWinterForkCues();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.input.keyboard?.off("keyup", this.onKeyUp, this);
       this.ambientHandle?.stop();
@@ -378,6 +526,7 @@ export class WinterMountainScene extends Phaser.Scene {
     }
 
     this.setNarrator(narratorLine);
+    this.band.setObjective("Type the mountain memory to return to the Almanac.");
     this.time.delayedCall(2400, () => this.deliverRevisitPassage(words));
   }
 
@@ -389,7 +538,10 @@ export class WinterMountainScene extends Phaser.Scene {
           this.cameras.main.fadeOut(700, 11, 10, 15);
           this.cameras.main.once(
             Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-            () => this.scene.start("PortalChamberScene", { store: this.store }),
+            () => this.scene.start("PortalChamberScene", {
+              store: this.store,
+              arrival: "winter-mountain",
+            }),
           );
         });
         return;
@@ -402,7 +554,9 @@ export class WinterMountainScene extends Phaser.Scene {
         x: this.scale.width / 2,
         y: this.scale.height / 2,
         fontSize: 44,
+        onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
+          this.playWrenTrailAction();
           playChime();
           idx += 1;
           this.typingInput.unregister(target);
@@ -420,12 +574,14 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private startAct1(): void {
     this.narration.say("winter_intro_arrival");
+    this.band.setObjective("Type each trail word to move through the pass.");
     this.time.delayedCall(2600, () => this.runRiverBeats(0));
   }
 
   /** Three short exploration beats: lift / step / duck */
   private runRiverBeats(idx: number): void {
     if (idx >= RIVER_BEATS.length) {
+      this.dismissRiverCue();
       this.time.delayedCall(800, () => this.startHeldur());
       return;
     }
@@ -435,6 +591,7 @@ export class WinterMountainScene extends Phaser.Scene {
       "The ice looks thin here. Place your feet carefully.",
       "A low branch catches the light. Duck under it.",
     ];
+    this.showRiverCue(beat);
     this.setNarrator(narrations[idx]);
     const target = this.makeWord({
       scene: this,
@@ -442,7 +599,13 @@ export class WinterMountainScene extends Phaser.Scene {
       x: this.scale.width / 2,
       y: this.scale.height / 2,
       fontSize: 44,
+      onClaim: () => {
+        playWrenFocus(this.wrenSprite);
+        this.pulseRiverCue(false);
+      },
       onComplete: () => {
+        this.playWrenTrailAction();
+        this.pulseRiverCue(true);
         playChime();
         this.time.delayedCall(700, () => this.runRiverBeats(idx + 1));
       },
@@ -451,9 +614,118 @@ export class WinterMountainScene extends Phaser.Scene {
     this.activeTargets.push(target);
   }
 
+  private showRiverCue(beat: (typeof RIVER_BEATS)[number]): void {
+    this.dismissRiverCue(false);
+    const pos =
+      beat === "lift"
+        ? { x: this.scale.width / 2 - 92, y: 846 }
+        : beat === "step"
+          ? { x: this.scale.width / 2 + 84, y: 858 }
+          : { x: this.scale.width / 2 + 18, y: 748 };
+    const cue = this.add.container(pos.x, pos.y).setDepth(-1).setAlpha(0);
+    this.riverCue = cue;
+
+    if (beat !== "duck") {
+      cue.add(addLocalGroundShadow(this, beat === "lift" ? 180 : 150, 20, {
+        y: 10,
+        alpha: 0.2,
+      }));
+    }
+
+    if (beat === "lift") {
+      const log = this.add.graphics().setAngle(-8);
+      log.fillStyle(0x33291f, 0.96);
+      log.fillRoundedRect(-88, -18, 176, 36, 18);
+      log.fillStyle(0x4b3929, 0.92);
+      log.fillRoundedRect(-82, -10, 164, 12, 8);
+      log.lineStyle(2, 0x8e785c, 0.32);
+      log.lineBetween(-64, -16, -48, 16);
+      log.lineBetween(10, -18, 30, 16);
+      log.lineBetween(66, -14, 78, 14);
+      cue.add(log);
+      const snowcap = this.add.graphics().setAngle(-8);
+      snowcap.fillStyle(0xe8f0f8, 0.78);
+      snowcap.fillRoundedRect(-70, -24, 118, 12, 8);
+      cue.add(snowcap);
+    } else if (beat === "step") {
+      const ice = this.add.graphics();
+      ice.fillStyle(0xaed6ee, 0.18);
+      ice.fillEllipse(0, 0, 166, 58);
+      ice.lineStyle(2, 0xd5ecff, 0.34);
+      ice.strokeEllipse(0, 0, 150, 48);
+      ice.lineStyle(1.5, 0xd5ecff, 0.42);
+      ice.lineBetween(-54, -4, -20, 8);
+      ice.lineBetween(-16, 6, 18, -8);
+      ice.lineBetween(20, -8, 52, 6);
+      cue.add(ice);
+    } else {
+      const branch = this.add.graphics().setAngle(7);
+      branch.lineStyle(8, 0x2a3426, 0.92);
+      branch.lineBetween(-138, 0, 138, 0);
+      branch.lineStyle(4, 0x445338, 0.88);
+      branch.lineBetween(-80, -4, -44, -38);
+      branch.lineBetween(-16, 0, 28, -34);
+      branch.lineBetween(60, 2, 94, 34);
+      branch.fillStyle(0xe8f0f8, 0.78);
+      branch.fillEllipse(-82, -8, 38, 12);
+      branch.fillEllipse(10, -8, 46, 13);
+      branch.fillEllipse(70, 10, 34, 11);
+      cue.add(branch);
+    }
+
+    this.tweens.add({
+      targets: cue,
+      alpha: 0.86,
+      y: pos.y - 6,
+      duration: 360,
+      ease: "Sine.easeOut",
+      onComplete: () => addIdleBreath(this, cue, { dy: -2, durationMs: 2600 }),
+    });
+  }
+
+  private pulseRiverCue(completion: boolean): void {
+    if (!this.riverCue?.scene) return;
+    playActorAttention(this, this.riverCue, {
+      scale: completion ? 1.035 : 1.018,
+      durationMs: completion ? 260 : 180,
+    });
+    playBodyImpact(this, this.riverCue, {
+      kind: "snow",
+      color: PALETTE_HEX.frost,
+      offsetY: -22,
+      depth: 10,
+      ringRadius: completion ? 44 : 28,
+      count: completion ? 9 : 5,
+      durationMs: completion ? 460 : 260,
+    });
+  }
+
+  private dismissRiverCue(animate = true): void {
+    const cue = this.riverCue;
+    if (!cue?.scene) {
+      this.riverCue = null;
+      return;
+    }
+    this.riverCue = null;
+    this.tweens.killTweensOf(cue);
+    if (!animate) {
+      cue.destroy();
+      return;
+    }
+    this.tweens.add({
+      targets: cue,
+      alpha: 0,
+      y: cue.y - 18,
+      duration: 240,
+      ease: "Sine.easeIn",
+      onComplete: () => cue.destroy(),
+    });
+  }
+
   /** The Wayshrine Knight — Heldur */
   private startHeldur(): void {
     this.narration.say("winter_wayshrine_intro");
+    this.band.setObjective("Ask Heldur the words that wake the wayshrine.");
     this.fadeInHeldur();
     this.time.delayedCall(1800, () => this.runHeldurExchange(0));
   }
@@ -464,72 +736,36 @@ export class WinterMountainScene extends Phaser.Scene {
   private runHeldurExchange(idx: number): void {
     if (idx >= HELDUR_QUESTIONS.length) {
       this.narration.say("winter_heldur_eyes_open");
+      this.band.setObjective("The wayshrine wakes; keep Wren's candles lit.");
       if (this.heldurSprite) {
         this.heldurSprite.setTintFill(0xffd277);
         this.time.delayedCall(180, () => this.heldurSprite?.clearTint());
       }
       this.time.delayedCall(1800, () => {
-        this.clearHeldurDialog();
         this.onHeldurSpoken();
       });
       return;
     }
 
     this.setNarrator(HELDUR_NARRATOR_PROMPTS[idx]);
-    this.clearHeldurDialog();
 
-    const target = this.makeWord({
+    const target = this.makeHeldurWord({
       scene: this,
       word: HELDUR_QUESTIONS[idx],
       x: this.scale.width / 2,
       y: this.scale.height / 2 + 40,
       fontSize: 44,
+      onClaim: () => playWrenFocus(this.wrenSprite),
       onComplete: () => {
+        this.playWrenTrailAction();
         playClack();
         this.clearActiveTargets();
-        this.setHeldurDialog(HELDUR_RESPONSES[idx]);
+        this.setNarrator(HELDUR_RESPONSES[idx], "Heldur");
         this.time.delayedCall(1800, () => this.runHeldurExchange(idx + 1));
       },
     });
     this.typingInput.register(target);
     this.activeTargets.push(target);
-  }
-
-  /** Heldur's spoken line floats over his head with quotes so it reads as
-   *  speech, not narration. Replaces any prior dialog cleanly. */
-  private setHeldurDialog(text: string): void {
-    if (!this.heldurSprite) return;
-    if (!this.heldurDialogText) {
-      this.heldurDialogText = this.add
-        .text(this.heldurSprite.x, 540, "", {
-          fontFamily: SERIF,
-          fontSize: "28px",
-          color: PALETTE.cream,
-          align: "center",
-          wordWrap: { width: 520 },
-        })
-        .setOrigin(0.5, 1);
-    }
-    this.heldurDialogText.setText(`"${text}"`).setAlpha(0);
-    this.tweens.add({
-      targets: this.heldurDialogText,
-      alpha: 1,
-      duration: 400,
-      ease: "Sine.easeOut",
-    });
-  }
-
-  private clearHeldurDialog(): void {
-    if (!this.heldurDialogText) return;
-    const t = this.heldurDialogText;
-    this.heldurDialogText = null;
-    this.tweens.add({
-      targets: t,
-      alpha: 0,
-      duration: 350,
-      ease: "Sine.easeIn",
-      onComplete: () => t.destroy(),
-    });
   }
 
   private onHeldurSpoken(): void {
@@ -551,34 +787,36 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private fadeInHeldur(): void {
     if (this.heldurSprite) return;
-    this.heldurSprite = makeHeldurSprite(this).setAlpha(0);
+    this.heldurSprite = makeHeldurSprite(this);
     // Place Heldur on the path to the left of where Wren stands, near the
     // ruined wayshrine arch in the painted backdrop.
     this.heldurSprite.setPosition(420, 920);
-    this.tweens.add({
-      targets: this.heldurSprite,
-      alpha: 1,
-      duration: 700,
-      ease: "Sine.easeOut",
+    stageAnchoredSprite(this, this.heldurSprite, {
+      shadowWidth: 132,
+      shadowHeight: 24,
+      shadowAlpha: 0.28,
+      entranceOffsetY: 20,
+      entranceMs: 760,
+      breathDy: -3,
+      breathMs: 2400,
     });
   }
 
   private fadeOutHeldur(): void {
     if (!this.heldurSprite) return;
+    this.clearHeldurWordAnchors();
     const sprite = this.heldurSprite;
     this.heldurSprite = null;
-    this.tweens.add({
-      targets: sprite,
-      alpha: 0,
-      duration: 600,
+    fadeOutStagedSprite(this, sprite, {
+      durationMs: 620,
       ease: "Sine.easeIn",
-      onComplete: () => sprite.destroy(),
     });
   }
 
   /** Edge of the Dark Wood — cold-decay candle mechanic begins */
   private startColdDecay(): void {
     this.narration.say("winter_cold_decay");
+    this.band.setObjective("Keep the candles lit as the cold presses in.");
     // Candles are visible from the start; now they start dimming
     this.startColdDecayTimer();
     // First `kindle` prompt — gives Aiden ~3s to read before timer fires
@@ -599,13 +837,16 @@ export class WinterMountainScene extends Phaser.Scene {
   private promptKindle(): void {
     if (this.combatCandlesActive) return;
     this.narration.say("winter_kindle_prompt");
+    this.band.setObjective("Type kindle before the cold takes a candle.");
     const target = this.makeWord({
       scene: this,
       word: "kindle",
       x: this.scale.width / 2,
       y: this.scale.height / 2,
       fontSize: 40,
+      onClaim: () => playWrenFocus(this.wrenSprite),
       onComplete: () => {
+        this.playWrenTrailAction();
         playChime();
         this.restoreCandles();
         this.narration.say("winter_kindle_steady");
@@ -647,11 +888,27 @@ export class WinterMountainScene extends Phaser.Scene {
     this.refreshThunderPips();
     const config = WAVES[idx];
     this.setNarrator(config.intro);
+    this.band.setObjective(
+      idx === 0
+        ? "Type the wolf word before it reaches Wren."
+        : idx === 1
+          ? "Track both wolves and keep the candles lit."
+          : "Clear the pack, then name the Pack-Leader.",
+    );
 
     // Wave-start bookend — audio sting + screen shake so each wave feels
     // like an event, not just "more text appears."
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    playSceneEventPulse(this, {
+      kind: "snow",
+      color: 0xb7dcff,
+      x: this.scale.width / 2,
+      y: 690,
+      ringWidth: 980,
+      ringHeight: 170,
+      count: 14,
+    });
 
     // Speed-axis director: a fast, accurate typist draws faster-closing wolves
     // and longer words on EVERY wave — the floor rises to meet them, all bounded
@@ -712,7 +969,279 @@ export class WinterMountainScene extends Phaser.Scene {
   /** UI-cohesion: every Winter word target gets the legibility outline by default
    *  (TTT-style). Fork choices pass frame: "banner". */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
-    return new TextWordTarget({ outline: true, ...opts });
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    return new TextWordTarget({
+      outline: true,
+      ...opts,
+      onClaim: (mods) => {
+        if (opts.frame === "banner") playWrenFocus(this.wrenSprite);
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        this.playWrenTypingPulse();
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        if (opts.frame === "banner") playWrenAction(this.wrenSprite);
+        onComplete();
+      },
+    });
+  }
+
+  private makeHeldurWord(opts: TextWordTargetOptions): TextWordTarget {
+    const body = this.heldurSprite;
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.heldurWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.heldurWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.frost,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y - 170,
+          { color: PALETTE_HEX.frost, depth: 58 },
+        );
+        playActorAttention(this, body, {
+          tint: PALETTE_HEX.frost,
+          scale: 1.018,
+          durationMs: 180,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "snow",
+          color: PALETTE_HEX.frost,
+          offsetY: -170,
+          depth: 58,
+          ringRadius: 30,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "snow",
+          color: PALETTE_HEX.frost,
+          offsetY: -170,
+          depth: 58,
+          ringRadius: 54,
+          count: 11,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.frost,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -170,
+        targetOffsetY: 24,
+      },
+    );
+    this.heldurWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
+  private makeFoxWord(opts: TextWordTargetOptions): TextWordTarget {
+    const body = this.foxCompanion;
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.foxWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.foxWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.frost,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y - 60,
+          { color: PALETTE_HEX.frost, depth: 58 },
+        );
+        this.pulseFoxCompanion();
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "snow",
+          color: PALETTE_HEX.frost,
+          offsetY: -60,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "snow",
+          color: PALETTE_HEX.frost,
+          offsetY: -60,
+          depth: 58,
+          ringRadius: 42,
+          count: 9,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.frost,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -60,
+        targetOffsetY: 24,
+      },
+    );
+    this.foxWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
+  private makeWinterForkWord(
+    body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined,
+    opts: TextWordTargetOptions,
+    vfx: { kind: "snow" | "mote"; color: number; sourceOffsetY: number },
+  ): TextWordTarget {
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.forkChoiceWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.forkChoiceWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? vfx.color,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y + vfx.sourceOffsetY,
+          { color: vfx.color, depth: 58 },
+        );
+        playBodyTypePulse(this, body, {
+          kind: vfx.kind,
+          color: vfx.color,
+          offsetY: vfx.sourceOffsetY,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: vfx.kind,
+          color: vfx.color,
+          offsetY: vfx.sourceOffsetY,
+          depth: 58,
+          ringRadius: 22,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: vfx.kind,
+          color: vfx.color,
+          offsetY: vfx.sourceOffsetY,
+          depth: 58,
+          ringRadius: 44,
+          count: 9,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: vfx.color,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: vfx.sourceOffsetY,
+        targetOffsetY: 24,
+      },
+    );
+    this.forkChoiceWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
+  private clearHeldurWordAnchors(): void {
+    for (const anchor of this.heldurWordAnchors) anchor.destroy();
+    this.heldurWordAnchors = [];
+  }
+
+  private clearForkChoiceWordAnchors(): void {
+    for (const anchor of this.forkChoiceWordAnchors) anchor.destroy();
+    this.forkChoiceWordAnchors = [];
+  }
+
+  private clearFoxWordAnchors(): void {
+    for (const anchor of this.foxWordAnchors) anchor.destroy();
+    this.foxWordAnchors = [];
+  }
+
+  private playWrenTypingPulse(): void {
+    playBodyTypePulse(this, this.wrenContainer, {
+      kind: "snow",
+      color: PALETTE_HEX.frost,
+      offsetY: -108,
+      depth: 58,
+      ringRadius: 22,
+    });
   }
 
   private spawnWolf(
@@ -727,6 +1256,19 @@ export class WinterMountainScene extends Phaser.Scene {
     const facingLeft = startX > this.scale.width / 2;
     const container = this.add.container(startX, targetY);
     this.drawWolfInto(container, facingLeft);
+    addContainerWake(this, container, {
+      kind: "snow",
+      intervalMs: circles ? 170 : 240,
+      spreadX: 54,
+      spreadY: 6,
+      offsetY: 4,
+      alpha: 0.34,
+      size: 5,
+      depth: -1,
+      driftX: 30,
+      driftY: -10,
+      durationMs: 820,
+    });
     container.setAlpha(0);
 
     const wolf = new MovingWordEnemy({
@@ -743,7 +1285,7 @@ export class WinterMountainScene extends Phaser.Scene {
       knockbackMs: 700,
       knockbackPauseMs: WOLF_KNOCKBACK_PAUSE_MS,
       dangerRampStart: DANGER_RAMP_START,
-      anchorOffsetY: -90,
+      anchorOffsetY: -118,
       idleBobDy: 6,
       idleBobMs: 900,
       defeatRiseY: -60,
@@ -751,6 +1293,15 @@ export class WinterMountainScene extends Phaser.Scene {
       fontSize: 32,
       // Frost burst on completion — wolves go "down in snow," not "down in brass."
       burstColor: PALETTE_HEX.frost,
+      defeatImpactKind: "snow",
+      defeatImpactColor: PALETTE_HEX.frost,
+      arrivalImpactKind: "snow",
+      arrivalImpactColor: PALETTE_HEX.frost,
+      claimLineFrom: () => ({
+        x: this.wrenContainer.x,
+        y: this.wrenContainer.y - 116,
+      }),
+      claimLineColor: PALETTE_HEX.frost,
       outline: true,
       // The circler (flanking) wolf weaves vertically as it closes.
       verticalOffset: circles ? circlerY : undefined,
@@ -783,6 +1334,19 @@ export class WinterMountainScene extends Phaser.Scene {
     const startX = -200;
     const container = this.add.container(startX, BOSS_SPAWN_Y);
     this.bossBodySprite = this.drawBossInto(container);
+    addContainerWake(this, container, {
+      kind: "snow",
+      intervalMs: 180,
+      spreadX: 78,
+      spreadY: 8,
+      offsetY: 8,
+      alpha: 0.4,
+      size: 7,
+      depth: -1,
+      driftX: 34,
+      driftY: -12,
+      durationMs: 900,
+    });
     container.setAlpha(0);
 
     const boss = new MovingWordEnemy({
@@ -801,13 +1365,22 @@ export class WinterMountainScene extends Phaser.Scene {
       knockbackMs: 700,
       knockbackPauseMs: WOLF_KNOCKBACK_PAUSE_MS,
       dangerRampStart: DANGER_RAMP_START,
-      anchorOffsetY: -90,
+      anchorOffsetY: -136,
       idleBobDy: 6,
       idleBobMs: 900,
       defeatRiseY: -60,
       defeatMs: 500,
       fontSize: 32,
       burstColor: PALETTE_HEX.frost,
+      defeatImpactKind: "snow",
+      defeatImpactColor: PALETTE_HEX.frost,
+      arrivalImpactKind: "snow",
+      arrivalImpactColor: PALETTE_HEX.frost,
+      claimLineFrom: () => ({
+        x: this.wrenContainer.x,
+        y: this.wrenContainer.y - 116,
+      }),
+      claimLineColor: PALETTE_HEX.frost,
       outline: true,
       // Warded: the boss advances mute until the pack falls; releaseBossWard()
       // attaches its true name then.
@@ -846,6 +1419,7 @@ export class WinterMountainScene extends Phaser.Scene {
         this.bossBodySprite.setTintFill(0xffd277);
         this.time.delayedCall(140, () => this.bossBodySprite?.clearTint());
       }
+      this.band.setObjective("Type the Pack-Leader's true name.");
       this.cameras.main.shake(180, 0.003);
       boss.attachWord();
     });
@@ -903,6 +1477,8 @@ export class WinterMountainScene extends Phaser.Scene {
       x: this.scale.width / 2,
       duration: 280,
       ease: "Sine.easeOut",
+      onComplete: () =>
+        addIdleBreath(this, this.wrenContainer, { dy: -4, durationMs: 2100 }),
     });
   }
 
@@ -974,6 +1550,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private startWoundedFox(nextWave: number): void {
     this.narration.say("winter_fox_intro");
+    this.band.setObjective("Choose how Wren answers the wounded fox.");
 
     const kindTarget = this.makeWord({
       scene: this,
@@ -991,6 +1568,7 @@ export class WinterMountainScene extends Phaser.Scene {
           }
         });
         this.narration.say("winter_fox_spared_ear");
+        this.band.setObjective("The fox watches from the trees; ready for the next wave.");
         this.time.delayedCall(2200, () => this.startWave(nextWave));
       },
     });
@@ -1006,6 +1584,7 @@ export class WinterMountainScene extends Phaser.Scene {
         this.clearActiveTargets();
         this.foxSpared = false;
         this.narration.say("winter_fox_dismissed");
+        this.band.setObjective("The trail quiets; ready for the next wave.");
         this.time.delayedCall(1800, () => this.startWave(nextWave));
       },
     });
@@ -1019,8 +1598,11 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private startFork1(nextWave: number): void {
     this.narration.say("winter_fork1_intro");
+    this.band.setObjective("Choose: save the huntress or follow the fireflies.");
+    this.fadeInHuntress();
+    const fireflies = this.showFireflyCue();
 
-    const huntress = this.makeWord({
+    const huntress = this.makeWinterForkWord(this.huntressSprite, {
       scene: this,
       word: "save the huntress",
       x: this.scale.width / 2 - 380,
@@ -1031,8 +1613,8 @@ export class WinterMountainScene extends Phaser.Scene {
         this.fork1Choice = "huntress";
         this.startHuntressBranch(nextWave);
       },
-    });
-    const firefly = this.makeWord({
+    }, { kind: "snow", color: PALETTE_HEX.frost, sourceOffsetY: -150 });
+    const firefly = this.makeWinterForkWord(fireflies, {
       scene: this,
       word: "follow the fireflies",
       x: this.scale.width / 2 + 380,
@@ -1043,7 +1625,7 @@ export class WinterMountainScene extends Phaser.Scene {
         this.fork1Choice = "firefly";
         this.startFireflyBranch(nextWave);
       },
-    });
+    }, { kind: "mote", color: PALETTE_HEX.brass, sourceOffsetY: -34 });
     this.typingInput.register(huntress);
     this.typingInput.register(firefly);
     this.activeTargets.push(huntress, firefly);
@@ -1051,7 +1633,9 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private startHuntressBranch(nextWave: number): void {
     this.clearActiveTargets();
+    this.dismissFireflyCue();
     this.narration.say("winter_huntress_intro");
+    this.band.setObjective("Type the passage words to free the huntress.");
     this.fadeInHuntress();
     this.store.update((s) => {
       if (!s.almanacLore.includes("the-huntress-song")) {
@@ -1075,14 +1659,17 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private fadeInHuntress(): void {
     if (this.huntressSprite) return;
-    this.huntressSprite = makeHuntressSprite(this).setAlpha(0);
+    this.huntressSprite = makeHuntressSprite(this);
     // Half-buried in the drift to Wren's left.
     this.huntressSprite.setPosition(560, 960);
-    this.tweens.add({
-      targets: this.huntressSprite,
-      alpha: 1,
-      duration: 700,
-      ease: "Sine.easeOut",
+    stageAnchoredSprite(this, this.huntressSprite, {
+      shadowWidth: 118,
+      shadowHeight: 20,
+      shadowAlpha: 0.22,
+      entranceOffsetY: 16,
+      entranceMs: 720,
+      breathDy: -2,
+      breathMs: 2300,
     });
   }
 
@@ -1090,18 +1677,17 @@ export class WinterMountainScene extends Phaser.Scene {
     if (!this.huntressSprite) return;
     const sprite = this.huntressSprite;
     this.huntressSprite = null;
-    this.tweens.add({
-      targets: sprite,
-      alpha: 0,
-      duration: 600,
+    fadeOutStagedSprite(this, sprite, {
+      durationMs: 620,
       ease: "Sine.easeIn",
-      onComplete: () => sprite.destroy(),
     });
   }
 
   private startFireflyBranch(nextWave: number): void {
     this.clearActiveTargets();
+    this.fadeOutHuntress();
     this.narration.say("winter_firefly_intro");
+    this.band.setObjective("Type the passage words to follow the fireflies.");
     this.store.update((s) => {
       if (!s.almanacLore.includes("the-firefly-trail")) {
         s.almanacLore.push("the-firefly-trail");
@@ -1114,8 +1700,86 @@ export class WinterMountainScene extends Phaser.Scene {
           "The lights bob between the pines, patient, waiting for you.",
           "They settle inside a paper lantern hidden in a hollow tree.",
         ],
-        () => this.startWave(nextWave),
+        () => {
+          this.dismissFireflyCue();
+          this.startWave(nextWave);
+        },
       );
+    });
+  }
+
+  private showFireflyCue(): Phaser.GameObjects.Container {
+    if (this.fireflyCue?.scene) return this.fireflyCue;
+
+    const c = this.add.container(1330, 790).setDepth(43).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 120, 18, { y: 24, alpha: 0.12 }));
+
+    const g = this.add.graphics();
+    const motes = [
+      { x: -42, y: -22, r: 5 },
+      { x: -12, y: -48, r: 4 },
+      { x: 18, y: -26, r: 5 },
+      { x: 46, y: -58, r: 4 },
+      { x: 66, y: -18, r: 4 },
+    ];
+    for (const mote of motes) {
+      g.fillStyle(0xf8d070, 0.18);
+      g.fillCircle(mote.x, mote.y, mote.r * 4);
+      g.fillStyle(0xf7e0a0, 0.82);
+      g.fillCircle(mote.x, mote.y, mote.r);
+    }
+    c.add(g);
+
+    addContainerWake(this, c, {
+      kind: "mote",
+      intervalMs: 170,
+      offsetY: -42,
+      spreadX: 54,
+      spreadY: 28,
+      color: PALETTE_HEX.brass,
+      depth: 42,
+      alpha: 0.32,
+    });
+    this.tweens.add({
+      targets: c,
+      alpha: 0.95,
+      y: 774,
+      duration: 620,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (c.scene) addIdleBreath(this, c, { dy: -8, durationMs: 1600 });
+      },
+    });
+    this.tweens.add({
+      targets: g,
+      scaleX: 1.08,
+      scaleY: 1.08,
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+
+    this.fireflyCue = c;
+    return c;
+  }
+
+  private dismissFireflyCue(): void {
+    const cue = this.fireflyCue;
+    this.clearForkChoiceWordAnchors();
+    if (!cue?.scene) {
+      this.fireflyCue = null;
+      return;
+    }
+    this.fireflyCue = null;
+    this.tweens.killTweensOf(cue);
+    this.tweens.add({
+      targets: cue,
+      alpha: 0,
+      y: cue.y - 26,
+      duration: 420,
+      ease: "Sine.easeIn",
+      onComplete: () => cue.destroy(),
     });
   }
 
@@ -1241,8 +1905,11 @@ export class WinterMountainScene extends Phaser.Scene {
   /** Fork 2 — Aftermath: bury under cairn stones OR take the pelt */
   private startFork2(): void {
     this.narration.say("winter_fork2_intro");
+    this.band.setObjective("Choose how Wren answers the Pack-Leader.");
+    const cairn = this.showCairnCue();
+    const pelt = this.showPeltCue();
 
-    const buryTarget = this.makeWord({
+    const buryTarget = this.makeWinterForkWord(cairn, {
       scene: this,
       word: "bury the pack leader",
       x: this.scale.width / 2 - 380,
@@ -1252,18 +1919,22 @@ export class WinterMountainScene extends Phaser.Scene {
       onComplete: () => {
         this.fork2Choice = "bury";
         this.clearActiveTargets();
+        this.band.setObjective("Type the cairn passage to lay the Pack-Leader down.");
         this.runPassageChain(
           BURY_PASSAGES,
           [
             "Stone by stone, you build the cairn. The mountain is quiet.",
             "The pack will not follow here again.",
           ],
-          () => this.startFoxGate(),
+          () => {
+            this.clearWinterForkCues();
+            this.startFoxGate();
+          },
         );
       },
-    });
+    }, { kind: "snow", color: PALETTE_HEX.frost, sourceOffsetY: -42 });
 
-    const peltTarget = this.makeWord({
+    const peltTarget = this.makeWinterForkWord(pelt, {
       scene: this,
       word: "take the pelt",
       x: this.scale.width / 2 + 380,
@@ -1273,20 +1944,96 @@ export class WinterMountainScene extends Phaser.Scene {
       onComplete: () => {
         this.fork2Choice = "pelt";
         this.clearActiveTargets();
+        this.band.setObjective("Type the pelt passage to carry the winter home.");
         this.runPassageChain(
           PELT_PASSAGES,
           [
             "The old one's pelt is heavy with winter. You roll it carefully.",
             "It smells of frost and old forests. It will mean something at the battle.",
           ],
-          () => this.startFoxGate(),
+          () => {
+            this.clearWinterForkCues();
+            this.startFoxGate();
+          },
         );
       },
-    });
+    }, { kind: "snow", color: PALETTE_HEX.frost, sourceOffsetY: -38 });
 
     this.typingInput.register(buryTarget);
     this.typingInput.register(peltTarget);
     this.activeTargets.push(buryTarget, peltTarget);
+  }
+
+  private showCairnCue(): Phaser.GameObjects.Container {
+    if (this.cairnCue?.scene) return this.cairnCue;
+
+    const c = this.add.container(650, 812).setDepth(43).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 150, 18, { y: 18, alpha: 0.18 }));
+    const g = this.add.graphics();
+    const stones = [
+      { x: -48, y: 0, w: 66, h: 24, color: 0x6d7580 },
+      { x: 18, y: 2, w: 70, h: 26, color: 0x59636f },
+      { x: -14, y: -24, w: 62, h: 24, color: 0x747d88 },
+      { x: 34, y: -42, w: 46, h: 20, color: 0x626b76 },
+      { x: -26, y: -55, w: 42, h: 18, color: 0x818992 },
+    ];
+    for (const stone of stones) {
+      g.fillStyle(stone.color, 0.9);
+      g.fillEllipse(stone.x, stone.y, stone.w, stone.h);
+      g.lineStyle(2, PALETTE_HEX.frost, 0.18);
+      g.strokeEllipse(stone.x, stone.y, stone.w * 0.88, stone.h * 0.72);
+    }
+    c.add(g);
+    this.tweens.add({
+      targets: c,
+      alpha: 1,
+      y: 792,
+      duration: 560,
+      ease: "Sine.easeOut",
+    });
+    this.cairnCue = c;
+    return c;
+  }
+
+  private showPeltCue(): Phaser.GameObjects.Container {
+    if (this.peltCue?.scene) return this.peltCue;
+
+    const c = this.add.container(1270, 808).setDepth(43).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 170, 20, { y: 18, alpha: 0.18 }));
+    const g = this.add.graphics();
+    g.fillStyle(0x726151, 0.92);
+    g.fillEllipse(-12, -10, 128, 46);
+    g.fillStyle(0x8a7662, 0.86);
+    g.fillEllipse(-46, -22, 58, 34);
+    g.fillEllipse(36, -26, 66, 30);
+    g.fillStyle(0xd8e7f0, 0.42);
+    g.fillEllipse(-42, -30, 28, 10);
+    g.fillEllipse(24, -36, 32, 10);
+    g.lineStyle(2, PALETTE_HEX.frost, 0.22);
+    g.strokeEllipse(-12, -10, 118, 36);
+    c.add(g);
+    this.tweens.add({
+      targets: c,
+      alpha: 1,
+      y: 790,
+      duration: 560,
+      ease: "Sine.easeOut",
+    });
+    this.peltCue = c;
+    return c;
+  }
+
+  private clearWinterForkCues(): void {
+    this.clearForkChoiceWordAnchors();
+    const cues = [this.fireflyCue, this.cairnCue, this.peltCue];
+    this.fireflyCue = null;
+    this.cairnCue = null;
+    this.peltCue = null;
+    for (const cue of cues) {
+      if (!cue?.scene) continue;
+      this.tweens.killTweensOf(cue);
+      cue.destroy();
+    }
   }
 
   /** Snow-fox companion gate — only if all three kindness conditions met.
@@ -1299,6 +2046,7 @@ export class WinterMountainScene extends Phaser.Scene {
     const foxEarned    = condFox && condHuntress && condBury;
 
     if (!foxEarned) {
+      this.band.setObjective("The mountain waits for its true name.");
       const metCount = [condFox, condHuntress, condBury].filter(Boolean).length;
       if (metCount === 2) {
         // Near-miss: acknowledge specifically what was one step away
@@ -1311,10 +2059,14 @@ export class WinterMountainScene extends Phaser.Scene {
           // Firefly branch taken — fox returns but looks for Sigrid
           nearMissLine =
             "The fox steps into the clearing, nose working. She looks past you — searching for something, or someone. She waits a long moment. Then turns back into the pines.";
+          this.showFoxCompanion();
+          this.time.delayedCall(2200, () => this.dismissFoxCompanion(620, 820));
         } else {
           // Pelt taken — fox sees what Wren carries and steps away
           nearMissLine =
             "The fox pads to the clearing's edge. Her eye finds the pelt in your hands. She holds very still. Then she steps back. She is gone.";
+          this.showFoxCompanion();
+          this.time.delayedCall(2200, () => this.dismissFoxCompanion(620, 820));
         }
         this.setNarrator(nearMissLine);
         this.time.delayedCall(3200, () => this.startTrueNamePassage());
@@ -1324,9 +2076,11 @@ export class WinterMountainScene extends Phaser.Scene {
       return;
     }
 
+    this.showFoxCompanion();
     this.narration.say("winter_fox_companion_accept");
+    this.band.setObjective("Choose whether the snow-fox joins your satchel.");
 
-    const whisperTarget = this.makeWord({
+    const whisperTarget = this.makeFoxWord({
       scene: this,
       word: "whisper to her",
       x: this.scale.width / 2 - 260,
@@ -1339,11 +2093,12 @@ export class WinterMountainScene extends Phaser.Scene {
           if (!s.satchel.includes("snow-fox-cub")) s.satchel.push("snow-fox-cub");
         });
         this.narration.say("winter_fox_companion_yes");
+        this.band.setObjective("The snow-fox joins you; the true name waits.");
         this.time.delayedCall(2400, () => this.startTrueNamePassage());
       },
     });
 
-    const letGoTarget = this.makeWord({
+    const letGoTarget = this.makeFoxWord({
       scene: this,
       word: "let her go",
       x: this.scale.width / 2 + 260,
@@ -1353,6 +2108,8 @@ export class WinterMountainScene extends Phaser.Scene {
       onComplete: () => {
         this.clearActiveTargets();
         this.narration.say("winter_fox_companion_no");
+        this.band.setObjective("The snow-fox stays behind; the true name waits.");
+        this.dismissFoxCompanion(620, 820);
         this.time.delayedCall(2000, () => this.startTrueNamePassage());
       },
     });
@@ -1362,10 +2119,50 @@ export class WinterMountainScene extends Phaser.Scene {
     this.activeTargets.push(whisperTarget, letGoTarget);
   }
 
+  private showFoxCompanion(): void {
+    if (this.foxCompanion?.scene) return;
+    this.foxCompanion = stageCompanionCameo(this, {
+      textureKey: "winter-companion-snow-fox",
+      startX: 610,
+      x: 700,
+      y: 830,
+      height: 108,
+      depth: 43,
+      shadowWidth: 88,
+      shadowHeight: 16,
+      shadowAlpha: 0.24,
+      breathDy: -3,
+      breathMs: 1900,
+      wake: {
+        kind: "snow",
+        intervalMs: 210,
+        offsetY: -12,
+        spreadX: 18,
+        spreadY: 8,
+        depth: 42,
+        alpha: 0.35,
+      },
+    });
+  }
+
+  private pulseFoxCompanion(): void {
+    playActorAttention(this, this.foxCompanion, {
+      scale: 1.035,
+      durationMs: 220,
+    });
+  }
+
+  private dismissFoxCompanion(x: number, y: number): void {
+    this.clearFoxWordAnchors();
+    dismissCompanionCameo(this, this.foxCompanion, { x, y, durationMs: 760 });
+    this.foxCompanion = null;
+  }
+
   /** The realm's true-name passage — three short lines, the mountain
    *  settling one line at a time. */
   private startTrueNamePassage(): void {
     this.narration.say("winter_truename_intro");
+    this.band.setObjective("Type the true-name passage to settle the mountain.");
     this.time.delayedCall(900, () => {
       this.runPassageChain(
         [...TRUE_NAME_LINES],
@@ -1383,6 +2180,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private startEnding(): void {
     this.clearActiveTargets();
     this.narration.say("winter_almanac_stamp");
+    this.band.setObjective("The Almanac stamps the Winter Mountain.");
 
     this.store.update((s) => {
       s.realms["winter-mountain"] = {
@@ -1403,42 +2201,20 @@ export class WinterMountainScene extends Phaser.Scene {
       this.cameras.main.fadeOut(700, 11, 10, 15);
       this.cameras.main.once(
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-        () => this.scene.start("PortalChamberScene", { store: this.store }),
+        () => this.scene.start("PortalChamberScene", {
+          store: this.store,
+          arrival: "winter-mountain",
+        }),
       );
     });
   }
 
   private showAlmanacStamp(onDone: () => void): void {
-    const stamp = this.add
-      .text(this.scale.width / 2, this.scale.height / 2, "the winter mountain", {
-        fontFamily: SERIF,
-        fontSize: "64px",
-        color: PALETTE.cream,
-        backgroundColor: "#1a1018",
-        padding: { left: 40, right: 40, top: 20, bottom: 20 },
-      })
-      .setOrigin(0.5)
-      .setAlpha(0)
-      .setScale(0.6);
-
-    this.tweens.add({
-      targets: stamp,
-      alpha: 1,
-      scale: 1,
-      duration: 350,
-      ease: "Back.easeOut",
-      onComplete: () => {
-        playChime();
-        this.time.delayedCall(1500, () => {
-          this.tweens.add({
-            targets: stamp,
-            alpha: 0,
-            duration: 300,
-            onComplete: onDone,
-          });
-        });
-      },
+    playRealmClearResonance(this, {
+      color: PALETTE_HEX.frost,
+      y: this.scale.height / 2 - 70,
     });
+    showAlmanacStampCard(this, "the winter mountain", onDone, { onReveal: playChime });
   }
 
   // ─── Shared utilities ─────────────────────────────────────────────────────
@@ -1464,7 +2240,20 @@ export class WinterMountainScene extends Phaser.Scene {
         x: this.scale.width / 2,
         y: this.scale.height / 2,
         fontSize: 36,
+        onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
+          playWrenAction(this.wrenSprite);
+          playActorAttention(this, this.huntressSprite, {
+            tint: PALETTE_HEX.frost,
+          });
+          playBodyImpact(this, this.wrenContainer, {
+            kind: "snow",
+            color: PALETTE_HEX.frost,
+            offsetY: -108,
+            ringRadius: 30,
+            count: 7,
+            depth: 58,
+          });
           step += 1;
           this.setNarrator(narratorLines[step - 1] ?? "");
           this.time.delayedCall(900, advance);
@@ -1475,6 +2264,18 @@ export class WinterMountainScene extends Phaser.Scene {
     };
 
     advance();
+  }
+
+  private playWrenTrailAction(): void {
+    playWrenAction(this.wrenSprite);
+    playBodyImpact(this, this.wrenContainer, {
+      kind: "snow",
+      color: PALETTE_HEX.frost,
+      offsetY: -108,
+      ringRadius: 26,
+      count: 6,
+      depth: 58,
+    });
   }
 
   // ─── Input ────────────────────────────────────────────────────────────────
@@ -1538,26 +2339,53 @@ export class WinterMountainScene extends Phaser.Scene {
       this.waveActive;
     this.wrenGlow.setAlpha(armed ? 0.55 : 0);
     // Don't overwrite a hurt pose mid-flash; the timer restores from there.
-    if (this.hurtPoseTimer) return;
+    if (isWrenHurtPlaying(this.wrenSprite)) return;
     setWrenPose(this.wrenSprite, armed ? "cast" : "front");
   }
 
   /** Briefly flash the hurt pose, then restore the resting pose. */
   private flashHurt(): void {
     if (!this.wrenSprite) return;
-    this.hurtPoseTimer?.remove();
-    setWrenPose(this.wrenSprite, "hurt");
-    this.hurtPoseTimer = this.time.delayedCall(420, () => {
-      this.hurtPoseTimer = null;
-      this.updateWrenGlow();
+    playWrenHurt(this.wrenSprite, {
+      durationMs: 420,
+      knockX: 0,
+      onComplete: () => this.updateWrenGlow(),
     });
   }
 
-  private setNarrator(text: string): void {
-    this.narration.sayRaw(text);
+  private setNarrator(text: string, speakerName: string | null = null): void {
+    this.narration.sayRaw(text, { speakerName });
+  }
+
+  private attendSpeaker(speakerName: string | null): void {
+    this.setBandSpeaker(speakerName);
+    if (speakerName === "Heldur") {
+      playActorAttention(this, this.heldurSprite, {
+        tint: PALETTE_HEX.frost,
+      });
+    } else if (speakerName === "Huntress") {
+      playActorAttention(this, this.huntressSprite, {
+        tint: PALETTE_HEX.frost,
+      });
+    }
+  }
+
+  private setBandSpeaker(speakerName: string | null): void {
+    if (!speakerName || speakerName === "Runa") {
+      this.band.setPortrait("band-portrait-runa", "Runa");
+    } else if (speakerName === "Heldur") {
+      this.band.setPortrait("heldur", "Heldur");
+    } else if (speakerName === "Huntress") {
+      this.band.setPortrait("huntress", "Huntress");
+    } else {
+      this.band.setPortrait(undefined, speakerName);
+    }
   }
 
   private clearActiveTargets(): void {
+    this.clearHeldurWordAnchors();
+    this.clearForkChoiceWordAnchors();
+    this.clearFoxWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();
@@ -1568,6 +2396,7 @@ export class WinterMountainScene extends Phaser.Scene {
   // ─── HUD: candles + charges ──────────────────────────────────────────────
 
   private redrawCandles(): void {
+    const previous = this.drawnCandles;
     this.candleGroup.removeAll(true);
     for (let i = 0; i < WAVE_CANDLES; i++) {
       const lit = i < this.candles;
@@ -1588,6 +2417,10 @@ export class WinterMountainScene extends Phaser.Scene {
       }
       this.candleGroup.add(g);
     }
+    if (previous !== null && previous !== this.candles) {
+      pulseUiObject(this, this.candleGroup, { scale: 1.14 });
+    }
+    this.drawnCandles = this.candles;
   }
 
   /** Recompute affordable thunderclaps from banked Soul; redraw the pip row
@@ -1605,6 +2438,7 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private redrawCharges(): void {
+    const previous = this.drawnThunderCharges;
     this.chargeGroup.removeAll(true);
     for (let i = 0; i < WAVE_CHARGES; i++) {
       const ready = i < this.castableThunder;
@@ -1621,6 +2455,10 @@ export class WinterMountainScene extends Phaser.Scene {
       }
       this.chargeGroup.add(g);
     }
+    if (previous !== null && previous !== this.castableThunder) {
+      pulseUiObject(this, this.chargeGroup, { scale: 1.16 });
+    }
+    this.drawnThunderCharges = this.castableThunder;
     this.updateWrenGlow();
   }
 
@@ -1628,6 +2466,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {
     const c = this.add.container(x, y);
+    c.add(addLocalGroundShadow(this, 98, 22, { y: 7, alpha: 0.34 }));
     this.wrenGlow = this.add.graphics();
     this.wrenGlow.fillStyle(PALETTE_HEX.brass, 1);
     this.wrenGlow.fillCircle(0, -40, 60);
@@ -1636,14 +2475,20 @@ export class WinterMountainScene extends Phaser.Scene {
 
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
+    stageContainerEntrance(this, c, {
+      breathDy: -4,
+      breathMs: 2100,
+    });
     return c;
   }
 
   private drawWolfInto(c: Phaser.GameObjects.Container, facingLeft: boolean): void {
+    c.add(addLocalGroundShadow(this, 158, 28, { y: 9, alpha: 0.4 }));
     c.add(makeWolfSprite(this, false, facingLeft));
   }
 
   private drawBossInto(c: Phaser.GameObjects.Container): Phaser.GameObjects.Image {
+    c.add(addLocalGroundShadow(this, 212, 38, { y: 12, alpha: 0.44 }));
     const sprite = makeWolfSprite(this, true, false);
     c.add(sprite);
     return sprite;

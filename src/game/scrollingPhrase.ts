@@ -8,6 +8,7 @@
 // typing state, this module owns the moving visuals and the timeout.
 
 import Phaser from "phaser";
+import { playBodyImpact, playBodyTypePulse, playClaimLine } from "./livingScene";
 import { PALETTE, PALETTE_HEX, SERIF } from "./palette";
 import { blurAlphaFor, bannerDangerAt, shouldEatSuffix } from "./skyBlur";
 import { playWordCompleteBurst } from "./vfx";
@@ -31,6 +32,9 @@ export interface ScrollingPhraseOptions {
   onComplete?: () => void;
   /** Called when the banner exits the far side without being typed. */
   onMiss?: () => void;
+  /** Optional origin for a brief claim-line flourish when the banner is targeted. */
+  claimLineFrom?: () => { x: number; y: number };
+  claimLineColor?: number;
 }
 
 const BANNER_PADDING_X = 32;
@@ -42,6 +46,7 @@ export class ScrollingPhrase {
   private readonly bannerGfx: Phaser.GameObjects.Graphics;
   private readonly target: TextWordTarget;
   private scrollTween: Phaser.Tweens.Tween | null = null;
+  private flutterTween: Phaser.Tweens.Tween | null = null;
   private resolved = false;
   /** Latest scroll progress 0..1 (1 = at the exit edge). Stored each frame so
    *  the offensive one-shots can rank banners by urgency even after a freeze. */
@@ -83,8 +88,32 @@ export class ScrollingPhrase {
       .setDepth(20)
       .setAlpha(0);
 
-    // Parchment-style banner — cream with a thin brass border.
+    // Parchment-style banner — cream with a thin brass border plus small
+    // pennant tails, so it reads as a scroll caught in wind rather than a flat
+    // UI rectangle.
     this.bannerGfx = opts.scene.add.graphics();
+    this.bannerGfx.fillStyle(PALETTE_HEX.cream, 0.82);
+    this.bannerGfx.fillTriangle(
+      -bannerW / 2 - 22,
+      0,
+      -bannerW / 2 + 6,
+      -bannerH / 2 + 8,
+      -bannerW / 2 + 6,
+      bannerH / 2 - 8,
+    );
+    this.bannerGfx.fillTriangle(
+      bannerW / 2 + 22,
+      0,
+      bannerW / 2 - 6,
+      -bannerH / 2 + 8,
+      bannerW / 2 - 6,
+      bannerH / 2 - 8,
+    );
+    this.bannerGfx.lineStyle(2, PALETTE_HEX.brass, 0.7);
+    this.bannerGfx.lineBetween(-bannerW / 2 - 22, 0, -bannerW / 2 + 6, -bannerH / 2 + 8);
+    this.bannerGfx.lineBetween(-bannerW / 2 - 22, 0, -bannerW / 2 + 6, bannerH / 2 - 8);
+    this.bannerGfx.lineBetween(bannerW / 2 + 22, 0, bannerW / 2 - 6, -bannerH / 2 + 8);
+    this.bannerGfx.lineBetween(bannerW / 2 + 22, 0, bannerW / 2 - 6, bannerH / 2 - 8);
     this.bannerGfx.fillStyle(PALETTE_HEX.cream, 0.92);
     this.bannerGfx.fillRoundedRect(
       -bannerW / 2,
@@ -116,6 +145,8 @@ export class ScrollingPhrase {
       // UI-cohesion: the same legibility outline every other word target carries,
       // so the scrolling banners read consistently with the rest of the realm.
       outline: true,
+      onClaim: () => this.playClaimLine(),
+      onAdvance: () => this.playTypedBodyPulse(),
       onComplete: () => this.handleComplete(),
     });
     opts.typingInput.register(this.target);
@@ -127,6 +158,17 @@ export class ScrollingPhrase {
       duration: 280,
       delay: opts.delayMs ?? 0,
       ease: "Sine.easeOut",
+      onComplete: () => this.playArrivalPulse(),
+    });
+    this.flutterTween = opts.scene.tweens.add({
+      targets: this.container,
+      scaleX: { from: 0.988, to: 1.012 },
+      scaleY: { from: 1.012, to: 0.992 },
+      duration: 1400 + Math.round(bannerW * 0.7),
+      delay: opts.delayMs ?? 0,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
     });
 
     this.scrollTween = opts.scene.tweens.add({
@@ -138,6 +180,7 @@ export class ScrollingPhrase {
       onUpdate: (tween) => {
         this.progress = tween.progress;
         this.target.setAnchorX(this.container.x);
+        this.target.setAnchorY(this.container.y);
         // Triage urgency cue — the banner's text tints cream → ember as it
         // nears the exit edge, so the player can prioritise among several.
         this.target.setDanger(bannerDangerAt(tween.progress));
@@ -146,11 +189,56 @@ export class ScrollingPhrase {
     });
   }
 
+  private playClaimLine(): void {
+    const from = this.opts.claimLineFrom?.();
+    if (!from) return;
+    playClaimLine(
+      this.opts.scene,
+      from.x,
+      from.y,
+      this.container.x,
+      this.opts.y,
+      { color: this.opts.claimLineColor ?? PALETTE_HEX.brass },
+    );
+  }
+
+  private playTypedBodyPulse(): void {
+    playBodyTypePulse(this.opts.scene, this.container, {
+      kind: "mote",
+      color: PALETTE_HEX.brass,
+      offsetY: 0,
+      depth: 22,
+      ringRadius: Math.min(38, this.bannerW / 6),
+    });
+  }
+
+  private playArrivalPulse(): void {
+    if (this.resolved) return;
+    playBodyImpact(this.opts.scene, this.container, {
+      kind: "mote",
+      color: PALETTE_HEX.brass,
+      offsetY: 0,
+      depth: 21,
+      ringRadius: Math.min(44, this.bannerW / 5),
+      count: 8,
+      durationMs: 320,
+    });
+  }
+
   private handleComplete(): void {
     if (this.resolved) return;
     this.resolved = true;
     this.scrollTween?.stop();
     this.scrollTween = null;
+    this.flutterTween?.stop();
+    this.flutterTween = null;
+    playBodyImpact(this.opts.scene, this.container, {
+      kind: "mote",
+      color: PALETTE_HEX.brass,
+      offsetY: 0,
+      ringRadius: Math.min(72, this.bannerW / 4),
+      count: 14,
+    });
     // Banner glows + dissolves.
     this.opts.scene.tweens.add({
       targets: this.container,
@@ -166,6 +254,8 @@ export class ScrollingPhrase {
   private handleMiss(): void {
     if (this.resolved) return;
     this.resolved = true;
+    this.flutterTween?.stop();
+    this.flutterTween = null;
     this.opts.typingInput.unregister(this.target);
     // Banner has already drifted off-screen. Tear it down.
     this.target.destroy();
@@ -179,6 +269,8 @@ export class ScrollingPhrase {
   destroy(): void {
     this.scrollTween?.stop();
     this.scrollTween = null;
+    this.flutterTween?.stop();
+    this.flutterTween = null;
     if (!this.resolved) {
       this.opts.typingInput.unregister(this.target);
       this.target.destroy();
@@ -224,6 +316,8 @@ export class ScrollingPhrase {
     this.resolved = true;
     this.scrollTween?.stop();
     this.scrollTween = null;
+    this.flutterTween?.stop();
+    this.flutterTween = null;
     this.frozenOverlay?.destroy();
     this.frozenOverlay = null;
     // The word was never typed, so the target is still registered — drop it.
@@ -233,6 +327,13 @@ export class ScrollingPhrase {
       color: PALETTE_HEX.ember,
       count: 16,
       radius: 60,
+    });
+    playBodyImpact(this.opts.scene, this.container, {
+      kind: "ember",
+      color: PALETTE_HEX.ember,
+      offsetY: 0,
+      ringRadius: Math.min(74, this.bannerW / 4),
+      count: 16,
     });
     this.opts.scene.tweens.add({
       targets: this.container,

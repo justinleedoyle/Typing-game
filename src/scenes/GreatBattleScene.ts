@@ -4,8 +4,10 @@ import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playDamageThud } from "../audio/damageThud";
 import { playPeriodSnapSting } from "../audio/quietLordSting";
+import { getRunaLine } from "../audio/runaLines";
 import { NarrationManager } from "../game/narrationManager";
 import { ConsoleBand } from "../game/ui/consoleBand";
+import { UI_HEX } from "../game/ui/uiTheme";
 import { flashDamageVignette } from "../game/vfx";
 import { flashQuietLordFragment } from "../game/quietLordIntrusion";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -20,6 +22,7 @@ import {
 } from "../game/finaleFacets";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
+import { makeQuietLordSprite, preloadQuietLord } from "../game/quietLord";
 import {
   pickAdaptiveWords,
   WINTER_WORD_BANK,
@@ -29,8 +32,36 @@ import {
   HAUNTED_WOOD_WORD_BANK,
 } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
+import {
+  addAmbientDrift,
+  addBackdropDrift,
+  addContainerWake,
+  addIdleBreath,
+  addLocalGroundShadow,
+  addLivingLight,
+  dismissCompanionCameo,
+  playBodyImpact,
+  playBodyTypePulse,
+  playActorAttention,
+  playClaimLine,
+  playSceneEventPulse,
+  pulseUiObject,
+  stageCompanionCameo,
+  type AmbientKind,
+  type ContainerWakeOptions,
+} from "../game/livingScene";
 import greatBattleBackdrop from "../../art/references/great-battle-clean.png";
 import runaPortrait from "../../art/runa/runa-front.png";
+import finaleWolfSprite from "../../art/wolf/wolf-pack.png";
+import finaleBellGhostSprite from "../../art/bell/ghost.png";
+import finaleGolemSprite from "../../art/forge/golem.png";
+import finaleLanternSpiritSprite from "../../art/sky/lantern-spirit.png";
+import finaleWoodGhostSprite from "../../art/wood/ghost.png";
+import snowFoxSprite from "../../art/companions/snow-fox.png";
+import glassFishSprite from "../../art/companions/glass-fish.png";
+import brassSongbirdSprite from "../../art/companions/brass-songbird.png";
+import lanternMothSprite from "../../art/companions/lantern-moth.png";
+import wispCatSprite from "../../art/companions/wisp-cat.png";
 
 // ─── Scene data ────────────────────────────────────────────────────────────────
 
@@ -76,6 +107,56 @@ interface WaveDef {
   label: string;
 }
 
+interface CompanionCameoSpec {
+  textureKey: string;
+  startX: number;
+  endX: number;
+  exitX: number;
+  y: number;
+  height: number;
+  shadowWidth: number;
+  shadowHeight: number;
+  shadowY: number;
+  shadowAlpha: number;
+  wake: ContainerWakeOptions;
+  liftY?: number;
+  bobMs?: number;
+  flipX?: boolean;
+}
+
+type FinaleCompanionActionId =
+  | "glass-fish"
+  | "brass-songbird"
+  | "lantern-moth"
+  | "wisp-cat";
+
+interface LordWordFxOptions {
+  kind?: AmbientKind;
+  color?: number;
+  claimColor?: number;
+  ringRadius?: number;
+  pulseOffsetX?: number;
+  impactOffsetX?: number;
+}
+
+interface FinaleEnemyArtSpec {
+  textureKey: string;
+  height: number;
+  shadowWidth: number;
+  shadowHeight: number;
+  shadowY: number;
+  shadowAlpha: number;
+  spriteY: number;
+  tint?: number;
+  alpha?: number;
+  flipX?: boolean;
+  glowColor?: number;
+  glowAlpha?: number;
+  glowY?: number;
+  glowWidth?: number;
+  glowHeight?: number;
+}
+
 const WAVE_DEFS: WaveDef[] = [
   {
     realmId: "winter-mountain",
@@ -119,13 +200,200 @@ const WAVE_DEFS: WaveDef[] = [
   },
 ];
 
+function finaleEnemyArtForRealm(realmId: string): FinaleEnemyArtSpec {
+  switch (realmId) {
+    case "winter-mountain":
+      return {
+        textureKey: "finale-wolf-pack",
+        height: 112,
+        shadowWidth: 156,
+        shadowHeight: 28,
+        shadowY: 42,
+        shadowAlpha: 0.38,
+        spriteY: -2,
+        alpha: 0.92,
+        flipX: true,
+      };
+    case "sunken-bell":
+      return {
+        textureKey: "finale-bell-ghost",
+        height: 106,
+        shadowWidth: 94,
+        shadowHeight: 20,
+        shadowY: 40,
+        shadowAlpha: 0.18,
+        spriteY: -4,
+        alpha: 0.74,
+        glowColor: 0xa7d2dd,
+        glowAlpha: 0.12,
+        glowY: -2,
+      };
+    case "clockwork-forge":
+      return {
+        textureKey: "finale-forge-golem",
+        height: 124,
+        shadowWidth: 138,
+        shadowHeight: 28,
+        shadowY: 46,
+        shadowAlpha: 0.42,
+        spriteY: -8,
+        glowColor: PALETTE_HEX.ember,
+        glowAlpha: 0.08,
+        glowY: -6,
+      };
+    case "sky-island":
+      return {
+        textureKey: "finale-lantern-spirit",
+        height: 112,
+        shadowWidth: 84,
+        shadowHeight: 18,
+        shadowY: 42,
+        shadowAlpha: 0.2,
+        spriteY: -6,
+        glowColor: 0xf5c842,
+        glowAlpha: 0.16,
+        glowY: -6,
+        glowWidth: 112,
+        glowHeight: 112,
+      };
+    case "haunted-wood":
+      return {
+        textureKey: "finale-wood-ghost",
+        height: 104,
+        shadowWidth: 96,
+        shadowHeight: 20,
+        shadowY: 42,
+        shadowAlpha: 0.2,
+        spriteY: -2,
+        alpha: 0.78,
+        tint: 0xd8e2cf,
+        glowColor: 0xd8e2cf,
+        glowAlpha: 0.1,
+        glowY: -4,
+      };
+    default:
+      return {
+        textureKey: "finale-wood-ghost",
+        height: 96,
+        shadowWidth: 86,
+        shadowHeight: 18,
+        shadowY: 38,
+        shadowAlpha: 0.18,
+        spriteY: 0,
+        alpha: 0.74,
+      };
+  }
+}
+
+function finaleWakeForRealm(realmId: string): ContainerWakeOptions {
+  switch (realmId) {
+    case "winter-mountain":
+      return {
+        kind: "snow",
+        intervalMs: 230,
+        spreadX: 46,
+        spreadY: 8,
+        alpha: 0.34,
+        size: 5,
+        driftX: 30,
+        driftY: -10,
+        durationMs: 820,
+      };
+    case "sunken-bell":
+      return {
+        kind: "bubble",
+        intervalMs: 320,
+        spreadX: 24,
+        spreadY: 10,
+        alpha: 0.3,
+        size: 4,
+        driftX: 18,
+        driftY: -38,
+        durationMs: 1200,
+      };
+    case "clockwork-forge":
+      return {
+        kind: "ember",
+        intervalMs: 190,
+        spreadX: 38,
+        spreadY: 8,
+        alpha: 0.38,
+        size: 4,
+        driftX: 20,
+        driftY: -30,
+        durationMs: 760,
+      };
+    case "sky-island":
+      return {
+        kind: "mote",
+        intervalMs: 230,
+        spreadX: 22,
+        spreadY: 16,
+        color: 0xf5c842,
+        alpha: 0.42,
+        size: 4,
+        driftX: 22,
+        driftY: -32,
+        durationMs: 900,
+      };
+    default:
+      return {
+        kind: "mist",
+        intervalMs: 300,
+        spreadX: 34,
+        spreadY: 10,
+        alpha: 0.2,
+        size: 8,
+        driftX: 26,
+        driftY: -18,
+        durationMs: 1050,
+      };
+  }
+}
+
+function finaleClaimColorForRealm(realmId: string): number {
+  switch (realmId) {
+    case "winter-mountain":
+      return PALETTE_HEX.frost;
+    case "sunken-bell":
+      return 0x4ab8d6;
+    case "clockwork-forge":
+      return PALETTE_HEX.ember;
+    case "sky-island":
+      return 0xf5c842;
+    default:
+      return 0xd8e2cf;
+  }
+}
+
+function finaleTypedPulseForRealm(realmId: string): {
+  kind: "bubble" | "ember" | "mist" | "mote" | "snow";
+  color: number;
+  ringRadius: number;
+} {
+  switch (realmId) {
+    case "winter-mountain":
+      return { kind: "snow", color: PALETTE_HEX.frost, ringRadius: 24 };
+    case "sunken-bell":
+      return { kind: "bubble", color: 0x4ab8d6, ringRadius: 22 };
+    case "clockwork-forge":
+      return { kind: "ember", color: PALETTE_HEX.ember, ringRadius: 24 };
+    case "sky-island":
+      return { kind: "mote", color: 0xf5c842, ringRadius: 22 };
+    default:
+      return { kind: "mist", color: 0xd8e2cf, ringRadius: 24 };
+  }
+}
+
 // ─── Enemy entity ──────────────────────────────────────────────────────────────
 
 interface Enemy {
-  graphic: Phaser.GameObjects.Graphics;
+  graphic: Phaser.GameObjects.Container;
   target: TextWordTarget | null;
+  advanceTween: Phaser.Tweens.Tween | null;
   x: number;
   y: number;
+  realmId: string;
   word: string;
   defeated: boolean;
   waveIdx: number;
@@ -137,11 +405,14 @@ export class GreatBattleScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
+  private band!: ConsoleBand;
   private activeTargets: TextWordTarget[] = [];
 
   // HUD
   private candleGroup!: Phaser.GameObjects.Container;
   private chargeGroup!: Phaser.GameObjects.Container;
+  private drawnCandles: number | null = null;
+  private drawnCharges: number | null = null;
   private candles = WAVE_CANDLES;
   private charges = WAVE_CHARGES;
 
@@ -175,6 +446,8 @@ export class GreatBattleScene extends Phaser.Scene {
   private againText!: Phaser.GameObjects.Text;
   private strikeLineGraphic!: Phaser.GameObjects.Graphics;
   private phase2Round1Words: string[] = [];
+  private facetSigil: Phaser.GameObjects.Graphics | null = null;
+  private facetChannel: Phaser.GameObjects.Graphics | null = null;
 
   // Phase 2 — relic state
   private bellsTongueSuperHitAvailable = false;
@@ -241,31 +514,106 @@ export class GreatBattleScene extends Phaser.Scene {
     // Phase 3
     this.brassSongbirdStallTimer = null;
     this.brassSongbirdActiveTarget = null;
+    this.facetSigil = null;
+    this.facetChannel = null;
   }
 
   preload(): void {
     this.load.image("great-battle-backdrop", greatBattleBackdrop);
     this.load.image("band-portrait-runa", runaPortrait);
+    this.load.image("finale-wolf-pack", finaleWolfSprite);
+    this.load.image("finale-bell-ghost", finaleBellGhostSprite);
+    this.load.image("finale-forge-golem", finaleGolemSprite);
+    this.load.image("finale-lantern-spirit", finaleLanternSpiritSprite);
+    this.load.image("finale-wood-ghost", finaleWoodGhostSprite);
+    this.load.image("finale-companion-snow-fox", snowFoxSprite);
+    this.load.image("finale-companion-glass-fish", glassFishSprite);
+    this.load.image("finale-companion-brass-songbird", brassSongbirdSprite);
+    this.load.image("finale-companion-lantern-moth", lanternMothSprite);
+    this.load.image("finale-companion-wisp-cat", wispCatSprite);
+    preloadQuietLord(this);
   }
 
   create(): void {
     this.cameras.main.fadeIn(700, 11, 10, 15);
 
-    this.add
+    const backdrop = this.add
       .image(0, 0, "great-battle-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addBackdropDrift(this, backdrop, { durationMs: 21000, driftX: -5, driftY: -3 });
+    addAmbientDrift(this, {
+      kind: "ash",
+      count: 48,
+      depth: -2,
+      area: { x: 0, y: 120, width: this.scale.width, height: 700 },
+      alpha: 0.28,
+      minSize: 1.5,
+      maxSize: 4.5,
+      driftX: 110,
+      driftY: -220,
+      minDurationMs: 5200,
+      maxDurationMs: 12500,
+    });
+    addLivingLight(this, {
+      x: 1210,
+      y: 640,
+      width: 900,
+      height: 360,
+      color: 0xd6754a,
+      alpha: 0.045,
+      depth: -5,
+      durationMs: 3800,
+      scale: 1.035,
+    });
+    addLivingLight(this, {
+      x: 1540,
+      y: 510,
+      width: 320,
+      height: 190,
+      color: 0xf0ad58,
+      alpha: 0.05,
+      depth: -5,
+      durationMs: 2600,
+      delayMs: 700,
+    });
+    addLivingLight(this, {
+      x: 420,
+      y: 650,
+      width: 520,
+      height: 240,
+      color: 0xb34b45,
+      alpha: 0.035,
+      depth: -6,
+      durationMs: 4300,
+      delayMs: 1100,
+      scale: 1.04,
+    });
+    addAmbientDrift(this, {
+      kind: "ash",
+      count: 18,
+      depth: -1.45,
+      area: { x: 0, y: 260, width: this.scale.width, height: 540 },
+      alpha: 0.17,
+      minSize: 3.5,
+      maxSize: 8,
+      driftX: 150,
+      driftY: -260,
+      minDurationMs: 4200,
+      maxDurationMs: 9800,
+    });
 
     // UI cohesion — the console band. The finale has no heart/soul HUD; its candle
     // (fail-state) + spell-charge meters dock into the band, with Runa at the portrait
     // nook. No satchel icons here (the band's zone holds the two meters instead).
-    const band = new ConsoleBand(this, {
+    this.band = new ConsoleBand(this, {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: [],
       satchelLabel: "",
     });
+    const band = this.band;
 
     // Narrator (framed dialogue card)
     this.narration = new NarrationManager(this, {
@@ -341,6 +689,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.typingInput.reset();
     this.input.keyboard?.off("keydown", this.onKeyDown, this);
     this.ambientHandle?.stop();
+    this.clearFacetSigil(false);
     if (this.brassSongbirdStallTimer) {
       this.brassSongbirdStallTimer.remove();
       this.brassSongbirdStallTimer = null;
@@ -362,12 +711,117 @@ export class GreatBattleScene extends Phaser.Scene {
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
   private setNarrator(text: string): void {
-    this.narration.sayRaw(text);
+    this.narration.sayRaw(text, { speakerName: null });
+  }
+
+  private showRelicNotice(id: string, label = "relic", durationMs = 2200): void {
+    this.band.showNotice(getRunaLine(id)?.text ?? id, { label, durationMs });
   }
 
   /** UI-cohesion: every finale word target gets the legibility outline (TTT-style). */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
-    return new TextWordTarget({ outline: true, ...opts });
+    return new TextWordTarget({ outline: true, depth: 6, ...opts });
+  }
+
+  /** Phase-2 boss words are attacks against the Quiet Lord, not free UI text. */
+  private makeLordWord(
+    opts: TextWordTargetOptions,
+    fx: LordWordFxOptions = {},
+  ): TextWordTarget {
+    const originalOnClaim = opts.onClaim;
+    const originalOnAdvance = opts.onAdvance;
+    const originalOnComplete = opts.onComplete;
+    const kind = fx.kind ?? "mist";
+    const color = fx.color ?? (this.isForceDuel ? UI_HEX.ember : UI_HEX.brass);
+    const claimColor = fx.claimColor ?? color;
+    const sideOffset =
+      fx.impactOffsetX ?? (opts.x - this.scale.width / 2) * 0.18;
+
+    return this.makeWord({
+      ...opts,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.scale.width / 2,
+          this.scale.height - 250,
+          opts.x,
+          opts.y,
+          { color: claimColor, depth: 6 },
+        );
+        originalOnClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, this.quietLordContainer, {
+          kind,
+          color,
+          offsetX: fx.pulseOffsetX ?? sideOffset,
+          offsetY: 508,
+          depth: 7,
+          ringRadius: fx.ringRadius ?? 34,
+          durationMs: 250,
+        });
+        originalOnAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        playBodyImpact(this, this.quietLordContainer, {
+          kind,
+          color,
+          offsetX: sideOffset,
+          offsetY: 508,
+          depth: 7,
+          ringRadius: (fx.ringRadius ?? 42) + 18,
+          count: 12,
+          durationMs: 420,
+        });
+        originalOnComplete();
+      },
+    });
+  }
+
+  /** Final phrase words rebuild the revealed `Again`, rather than floating alone. */
+  private makeFinalPhraseWord(opts: TextWordTargetOptions): TextWordTarget {
+    const originalOnClaim = opts.onClaim;
+    const originalOnAdvance = opts.onAdvance;
+    const originalOnComplete = opts.onComplete;
+    const phraseColor = 0xd4b8ff;
+
+    return this.makeWord({
+      ...opts,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          opts.x,
+          opts.y - 10,
+          this.againText.x,
+          this.againText.y + 24,
+          { color: phraseColor, depth: 8, durationMs: 440 },
+        );
+        originalOnClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, this.againText, {
+          kind: "mote",
+          color: phraseColor,
+          offsetY: 4,
+          depth: 11,
+          ringRadius: 30,
+          durationMs: 240,
+        });
+        originalOnAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        playBodyImpact(this, this.againText, {
+          kind: "mote",
+          color: phraseColor,
+          offsetY: 4,
+          depth: 11,
+          ringRadius: 54,
+          count: 10,
+          durationMs: 430,
+        });
+        originalOnComplete();
+      },
+    });
   }
 
   private clearActiveTargets(): void {
@@ -381,6 +835,7 @@ export class GreatBattleScene extends Phaser.Scene {
   // ─── HUD ────────────────────────────────────────────────────────────────────
 
   private redrawCandles(): void {
+    const previous = this.drawnCandles;
     this.candleGroup.removeAll(true);
     for (let i = 0; i < WAVE_CANDLES; i++) {
       const lit = i < this.candles;
@@ -403,9 +858,14 @@ export class GreatBattleScene extends Phaser.Scene {
       }
       this.candleGroup.add(g);
     }
+    if (previous !== null && previous !== this.candles) {
+      pulseUiObject(this, this.candleGroup, { scale: 1.14 });
+    }
+    this.drawnCandles = this.candles;
   }
 
   private redrawCharges(): void {
+    const previous = this.drawnCharges;
     this.chargeGroup.removeAll(true);
     for (let i = 0; i < this.waveCharges; i++) {
       const ready = i < this.charges;
@@ -422,6 +882,10 @@ export class GreatBattleScene extends Phaser.Scene {
       }
       this.chargeGroup.add(g);
     }
+    if (previous !== null && previous !== this.charges) {
+      pulseUiObject(this, this.chargeGroup, { scale: 1.16 });
+    }
+    this.drawnCharges = this.charges;
   }
 
   /** Snuff one candle — a Phase-1 breach or a fumbled Phase-2 counter. Reuses
@@ -443,6 +907,9 @@ export class GreatBattleScene extends Phaser.Scene {
   private breachEnemy(enemy: Enemy): void {
     if (enemy.defeated || this.runOver) return;
     enemy.defeated = true;
+    enemy.advanceTween?.stop();
+    enemy.advanceTween = null;
+    this.tweens.killTweensOf(enemy.graphic);
     if (enemy.target) {
       this.typingInput.unregister(enemy.target);
       const idx = this.activeTargets.indexOf(enemy.target);
@@ -452,6 +919,15 @@ export class GreatBattleScene extends Phaser.Scene {
     this.cameras.main.shake(180, 0.006);
     playDamageThud();
     flashDamageVignette(this);
+    const wake = finaleWakeForRealm(enemy.realmId);
+    playBodyImpact(this, enemy.graphic, {
+      kind: wake.kind,
+      color: wake.color,
+      offsetX: enemy.x,
+      offsetY: enemy.y + 34,
+      depth: 48,
+      ringRadius: 58,
+    });
     this.tweens.add({
       targets: enemy.graphic,
       alpha: 0,
@@ -495,7 +971,10 @@ export class GreatBattleScene extends Phaser.Scene {
       this.cameras.main.fadeOut(1200, 0, 0, 0);
       this.cameras.main.once(
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-        () => this.scene.start("PortalChamberScene", { store: this.store }),
+        () => this.scene.start("PortalChamberScene", {
+          store: this.store,
+          arrival: "great-battle",
+        }),
       );
     });
   }
@@ -504,6 +983,16 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private startPhase1(): void {
     this.narration.say("finale_phase1_arrival");
+    playSceneEventPulse(this, {
+      kind: "ash",
+      color: 0xc9a14a,
+      x: this.scale.width / 2,
+      y: 690,
+      ringWidth: 1200,
+      ringHeight: 190,
+      count: 16,
+      alpha: 0.11,
+    });
 
     // Build wave queue from cleared realms
     this.waveQueue = [];
@@ -533,7 +1022,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // §5.5.11 — Untethered Wind narration cue
     if (state.satchel.includes("untethered-wind")) {
       this.time.delayedCall(400, () => {
-        this.narration.say("finale_ally_untethered_wind");
+        this.showRelicNotice("finale_ally_untethered_wind", "wind");
       });
     }
 
@@ -566,6 +1055,17 @@ export class GreatBattleScene extends Phaser.Scene {
     this.waveCandleLost = false;
 
     this.setNarrator(`The ${waveDef.label} pour over the wall.`);
+    this.band.setObjective("Hold the wall: clear the realm echoes before candles fall.");
+    playSceneEventPulse(this, {
+      kind: "ash",
+      color: 0xc9a14a,
+      x: this.scale.width / 2,
+      y: 720,
+      ringWidth: 1120,
+      ringHeight: 170,
+      count: 12,
+      alpha: 0.1,
+    });
 
     let words = pickAdaptiveWords(
       waveDef.bank as readonly string[],
@@ -632,7 +1132,7 @@ export class GreatBattleScene extends Phaser.Scene {
     const easiest = waveEnemies.reduce((a, b) =>
       a.word.length <= b.word.length ? a : b,
     );
-    this.narration.say("finale_ally_etta_ledger");
+    this.showRelicNotice("finale_ally_etta_ledger", "ledger");
     this.defeatEnemy(easiest);
   }
 
@@ -643,91 +1143,166 @@ export class GreatBattleScene extends Phaser.Scene {
     );
     if (waveEnemies.length === 0) return;
     const victim = waveEnemies[Math.floor(Math.random() * waveEnemies.length)]!;
-    this.narration.say("finale_ally_ghost_king");
+    this.showRelicNotice("finale_ally_ghost_king", "ally");
     this.defeatEnemy(victim);
   }
 
   private spawnEnemy(waveDef: WaveDef, x: number, word: string, waveIdx: number): void {
-    const graphic = this.add.graphics().setDepth(3);
-    this.drawEnemyShape(graphic, waveDef.realmId, x, waveDef.baseY);
-
-    // §5.5.11 — firefly-lantern: enemy word text rendered brighter via the
-    // dawn-light overlay applied in startPhase1 (TextWordTarget doesn't expose
-    // a per-instance color override; the overlay tints the whole battlefield).
-
-    const target = this.makeWord({
-      scene: this,
-      word,
-      x,
-      y: waveDef.baseY - 60,
-      fontSize: 34,
-      onComplete: () => this.defeatEnemy(enemy),
+    const graphic = this.drawFinaleEnemyBody(waveDef.realmId, x, waveDef.baseY)
+      .setDepth(3)
+      .setAlpha(0);
+    addContainerWake(this, graphic, {
+      ...finaleWakeForRealm(waveDef.realmId),
+      offsetX: x,
+      offsetY: waveDef.baseY + 8,
+      depth: 2,
     });
+    graphic.y = -95;
 
     const enemy: Enemy = {
       graphic,
-      target,
+      target: null,
+      advanceTween: null,
       x,
       y: waveDef.baseY,
+      realmId: waveDef.realmId,
       word,
       defeated: false,
       waveIdx,
     };
 
     this.enemies.push(enemy);
+
+    const laneOffset = (x / this.scale.width - 0.5) * 50;
+    this.tweens.add({
+      targets: graphic,
+      y: 0,
+      alpha: 1,
+      duration: 560,
+      delay: Math.abs(laneOffset) * 8,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (enemy.defeated || this.runOver) return;
+        this.attachEnemyWord(enemy, waveDef);
+        this.beginEnemyAdvance(enemy);
+      },
+    });
+    this.tweens.add({
+      targets: graphic,
+      scaleX: { from: 0.98, to: 1.03 },
+      scaleY: { from: 1, to: 0.97 },
+      duration: 1300 + Math.abs(laneOffset) * 10,
+      delay: 560,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  private attachEnemyWord(enemy: Enemy, waveDef: WaveDef): void {
+    // §5.5.11 — firefly-lantern: enemy word text rendered brighter via the
+    // dawn-light overlay applied in startPhase1 (TextWordTarget doesn't expose
+    // a per-instance color override; the overlay tints the whole battlefield).
+    const target = this.makeWord({
+      scene: this,
+      word: enemy.word,
+      x: enemy.x,
+      y: enemy.graphic.y + waveDef.baseY - 60,
+      fontSize: 34,
+      onClaim: () =>
+        playClaimLine(
+          this,
+          this.scale.width / 2,
+          this.scale.height - 250,
+          enemy.x + enemy.graphic.x,
+          enemy.graphic.y + enemy.y - 60,
+          { color: finaleClaimColorForRealm(waveDef.realmId) },
+        ),
+      onAdvance: () =>
+        playBodyTypePulse(this, enemy.graphic, {
+          ...finaleTypedPulseForRealm(waveDef.realmId),
+          offsetX: enemy.x,
+          offsetY: enemy.y - 60,
+          depth: 6,
+        }),
+      onComplete: () => this.defeatEnemy(enemy),
+    });
+    enemy.target = target;
     this.typingInput.register(target);
     this.activeTargets.push(target);
+  }
 
+  private beginEnemyAdvance(enemy: Enemy): void {
     // §5.5.11 — untethered-wind: slow enemy advance by ~15% via longer tween.
     // Enemy advance is a slow downward drift toward the wall; if it completes
     // before the enemy is defeated, the line is breached → a candle is snuffed
     // (the fail-state stake). untethered-wind buys more time to clear it.
     const advanceDuration = 12000 * (1 / this.untetheredWindSlowMult);
-    this.tweens.add({
-      targets: graphic,
+    enemy.advanceTween = this.tweens.add({
+      targets: enemy.graphic,
       y: `+=${80}`,
       duration: advanceDuration,
       ease: "Linear",
-      onComplete: () => this.breachEnemy(enemy),
+      onUpdate: () => {
+        enemy.target?.setAnchorX(enemy.x + enemy.graphic.x);
+        enemy.target?.setAnchorY(enemy.graphic.y + enemy.y - 60);
+      },
+      onComplete: () => {
+        enemy.advanceTween = null;
+        this.breachEnemy(enemy);
+      },
     });
   }
 
-  private drawEnemyShape(g: Phaser.GameObjects.Graphics, realmId: string, x: number, y: number): void {
-    switch (realmId) {
-      case "winter-mountain":
-        // Shadow-wolf: dark grey filled triangle (downward ▼)
-        g.fillStyle(0x2a2832, 0.95);
-        g.fillTriangle(x - 22, y - 10, x + 22, y - 10, x, y + 20);
-        break;
-      case "sunken-bell":
-        // Tide-wraith: translucent blue-grey ellipse
-        g.fillStyle(0x4a6080, 0.55);
-        g.fillEllipse(x, y, 50, 70);
-        break;
-      case "clockwork-forge":
-        // Rogue golem: brass-colored rectangle with a dot eye
-        g.fillStyle(0x7a6030, 0.9);
-        g.fillRect(x - 18, y - 30, 36, 50);
-        g.fillStyle(PALETTE_HEX.ember, 0.9);
-        g.fillCircle(x + 8, y - 12, 4);
-        break;
-      case "sky-island":
-        // Sky-shard: bright gold thin triangle (upward ▲)
-        g.fillStyle(0xd4b84a, 0.92);
-        g.fillTriangle(x, y - 34, x - 14, y + 10, x + 14, y + 10);
-        break;
-      case "haunted-wood":
-        // Wood-haunt: translucent pale green-grey ellipse
-        g.fillStyle(0x6a8068, 0.45);
-        g.fillEllipse(x, y, 46, 66);
-        break;
+  private drawFinaleEnemyBody(
+    realmId: string,
+    x: number,
+    y: number,
+  ): Phaser.GameObjects.Container {
+    const c = this.add.container(0, 0);
+    const spec = finaleEnemyArtForRealm(realmId);
+    c.add(addLocalGroundShadow(this, spec.shadowWidth, spec.shadowHeight, {
+      x,
+      y: y + spec.shadowY,
+      alpha: spec.shadowAlpha,
+    }));
+
+    if (spec.glowColor) {
+      const glow = this.add.graphics();
+      glow.fillStyle(spec.glowColor, spec.glowAlpha ?? 0.14);
+      glow.fillEllipse(
+        x,
+        y + (spec.glowY ?? 0),
+        spec.glowWidth ?? 92,
+        spec.glowHeight ?? 92,
+      );
+      c.add(glow);
     }
+
+    const sprite = this.add.image(x, y + spec.spriteY, spec.textureKey);
+    sprite.setScale(spec.height / sprite.height);
+    if (spec.tint) sprite.setTint(spec.tint);
+    if (spec.alpha !== undefined) sprite.setAlpha(spec.alpha);
+    if (spec.flipX) sprite.setFlipX(true);
+    c.add(sprite);
+    return c;
   }
 
   private defeatEnemy(enemy: Enemy): void {
     if (enemy.defeated) return;
     playChime();
     enemy.defeated = true;
+    enemy.advanceTween?.stop();
+    enemy.advanceTween = null;
+    this.tweens.killTweensOf(enemy.graphic);
+    const wake = finaleWakeForRealm(enemy.realmId);
+    playBodyImpact(this, enemy.graphic, {
+      kind: wake.kind,
+      color: wake.color,
+      offsetX: enemy.x,
+      offsetY: enemy.y - 10,
+      depth: 48,
+    });
     if (enemy.target) {
       this.typingInput.unregister(enemy.target);
       const idx = this.activeTargets.indexOf(enemy.target);
@@ -772,18 +1347,296 @@ export class GreatBattleScene extends Phaser.Scene {
     }
 
     if (satchel.includes(waveDef.companionId)) {
-      // Show companion cameo
-      this.setNarrator(waveDef.companionLine);
-      this.time.delayedCall(2500, () => this.runNextWave());
+      this.showCompanionCameo(waveDef);
+      this.band.showNotice(waveDef.companionLine, { label: "ally", durationMs: 2400 });
+      this.time.delayedCall(2600, () => this.runNextWave());
     } else {
       // Brief pause, no cameo
       this.time.delayedCall(800, () => this.runNextWave());
     }
   }
 
+  private showCompanionCameo(waveDef: WaveDef): void {
+    const spec = this.companionCameoSpec(waveDef);
+    if (!spec) return;
+
+    const container = this.add
+      .container(spec.startX, spec.y)
+      .setDepth(7)
+      .setAlpha(0);
+    container.add(
+      addLocalGroundShadow(this, spec.shadowWidth, spec.shadowHeight, {
+        y: spec.shadowY,
+        alpha: spec.shadowAlpha,
+      }),
+    );
+
+    const sprite = this.add.image(0, 0, spec.textureKey).setOrigin(0.5, 1);
+    sprite.setScale(spec.height / Math.max(1, sprite.height));
+    if (spec.flipX) sprite.setFlipX(true);
+    container.add(sprite);
+
+    addContainerWake(this, container, {
+      ...spec.wake,
+      depth: spec.wake.depth ?? 6,
+    });
+
+    this.tweens.add({
+      targets: container,
+      x: spec.endX,
+      alpha: 1,
+      duration: 640,
+      ease: "Sine.easeOut",
+    });
+    this.tweens.add({
+      targets: container,
+      y: spec.y - (spec.liftY ?? 8),
+      duration: spec.bobMs ?? 820,
+      yoyo: true,
+      repeat: 1,
+      ease: "Sine.easeInOut",
+    });
+    this.tweens.add({
+      targets: sprite,
+      angle: { from: -2, to: 2 },
+      duration: 360,
+      yoyo: true,
+      repeat: 3,
+      ease: "Sine.easeInOut",
+    });
+    this.time.delayedCall(1780, () => {
+      if (!container.scene) return;
+      this.tweens.add({
+        targets: container,
+        x: spec.exitX,
+        alpha: 0,
+        duration: 680,
+        ease: "Sine.easeIn",
+        onComplete: () => container.destroy(),
+      });
+    });
+  }
+
+  private showFinaleCompanionAction(
+    companionId: FinaleCompanionActionId,
+  ): Phaser.GameObjects.Container {
+    const width = this.scale.width;
+    switch (companionId) {
+      case "glass-fish":
+        return stageCompanionCameo(this, {
+          textureKey: "finale-companion-glass-fish",
+          startX: width + 110,
+          startY: 700,
+          x: width * 0.62,
+          y: 650,
+          height: 94,
+          depth: 8,
+          flipX: true,
+          shadowWidth: 78,
+          shadowHeight: 12,
+          shadowOffsetY: 24,
+          shadowAlpha: 0.13,
+          breathDy: -16,
+          breathMs: 1450,
+          wake: {
+            kind: "bubble",
+            intervalMs: 140,
+            offsetY: -34,
+            spreadX: 24,
+            spreadY: 20,
+            depth: 7,
+            alpha: 0.34,
+          },
+        });
+      case "lantern-moth":
+        return stageCompanionCameo(this, {
+          textureKey: "finale-companion-lantern-moth",
+          startX: width + 95,
+          startY: 530,
+          x: width * 0.32,
+          y: 575,
+          height: 92,
+          depth: 8,
+          flipX: true,
+          shadowWidth: 62,
+          shadowHeight: 10,
+          shadowOffsetY: 34,
+          shadowAlpha: 0.12,
+          breathDy: -22,
+          breathMs: 1450,
+          wake: {
+            kind: "mote",
+            intervalMs: 120,
+            offsetY: -42,
+            spreadX: 28,
+            spreadY: 22,
+            depth: 7,
+            alpha: 0.42,
+          },
+        });
+      case "wisp-cat":
+        return stageCompanionCameo(this, {
+          textureKey: "finale-companion-wisp-cat",
+          startX: -100,
+          startY: 770,
+          x: width * 0.73,
+          y: 760,
+          height: 108,
+          depth: 8,
+          shadowWidth: 86,
+          shadowHeight: 16,
+          shadowOffsetY: 10,
+          shadowAlpha: 0.2,
+          breathDy: -5,
+          breathMs: 1800,
+          wake: {
+            kind: "mist",
+            intervalMs: 160,
+            offsetY: -8,
+            spreadX: 22,
+            spreadY: 10,
+            depth: 7,
+            alpha: 0.24,
+          },
+        });
+      case "brass-songbird":
+        return stageCompanionCameo(this, {
+          textureKey: "finale-companion-brass-songbird",
+          startX: width + 90,
+          startY: 485,
+          x: width * 0.66,
+          y: 510,
+          height: 78,
+          depth: 8,
+          flipX: true,
+          shadowWidth: 56,
+          shadowHeight: 10,
+          shadowOffsetY: 28,
+          shadowAlpha: 0.14,
+          breathDy: -14,
+          breathMs: 1350,
+          wake: {
+            kind: "ember",
+            intervalMs: 125,
+            offsetY: -34,
+            spreadX: 22,
+            spreadY: 16,
+            depth: 7,
+            alpha: 0.42,
+          },
+        });
+    }
+  }
+
+  private dismissFinaleCompanionAction(
+    companion: Phaser.GameObjects.Container,
+    exitX: number,
+    exitY: number,
+  ): void {
+    dismissCompanionCameo(this, companion, {
+      x: exitX,
+      y: exitY,
+      durationMs: 680,
+    });
+  }
+
+  private companionCameoSpec(waveDef: WaveDef): CompanionCameoSpec | null {
+    const width = this.scale.width;
+    const wake = finaleWakeForRealm(waveDef.realmId);
+
+    switch (waveDef.companionId) {
+      case "snow-fox-cub":
+        return {
+          textureKey: "finale-companion-snow-fox",
+          startX: -110,
+          endX: width * 0.24,
+          exitX: width * 0.36,
+          y: 788,
+          height: 118,
+          shadowWidth: 96,
+          shadowHeight: 18,
+          shadowY: 9,
+          shadowAlpha: 0.26,
+          wake: { ...wake, intervalMs: 150, offsetY: -8, depth: 6 },
+          liftY: 7,
+          bobMs: 620,
+        };
+      case "glass-fish":
+        return {
+          textureKey: "finale-companion-glass-fish",
+          startX: width + 100,
+          endX: width * 0.72,
+          exitX: width * 0.58,
+          y: 690,
+          height: 92,
+          shadowWidth: 72,
+          shadowHeight: 12,
+          shadowY: 22,
+          shadowAlpha: 0.16,
+          wake: { ...wake, intervalMs: 150, offsetY: -32, spreadY: 18, depth: 6 },
+          liftY: 18,
+          bobMs: 720,
+          flipX: true,
+        };
+      case "brass-songbird":
+        return {
+          textureKey: "finale-companion-brass-songbird",
+          startX: width + 95,
+          endX: width * 0.74,
+          exitX: width * 0.61,
+          y: 630,
+          height: 82,
+          shadowWidth: 58,
+          shadowHeight: 10,
+          shadowY: 28,
+          shadowAlpha: 0.15,
+          wake: { ...wake, intervalMs: 120, offsetY: -28, spreadY: 18, depth: 6 },
+          liftY: 20,
+          bobMs: 650,
+          flipX: true,
+        };
+      case "lantern-moth":
+        return {
+          textureKey: "finale-companion-lantern-moth",
+          startX: width + 90,
+          endX: width * 0.7,
+          exitX: width * 0.57,
+          y: 615,
+          height: 94,
+          shadowWidth: 64,
+          shadowHeight: 10,
+          shadowY: 34,
+          shadowAlpha: 0.14,
+          wake: { ...wake, intervalMs: 120, offsetY: -30, spreadY: 22, depth: 6 },
+          liftY: 24,
+          bobMs: 700,
+          flipX: true,
+        };
+      case "wisp-cat":
+        return {
+          textureKey: "finale-companion-wisp-cat",
+          startX: -105,
+          endX: width * 0.27,
+          exitX: width * 0.41,
+          y: 770,
+          height: 112,
+          shadowWidth: 90,
+          shadowHeight: 16,
+          shadowY: 10,
+          shadowAlpha: 0.22,
+          wake: { ...wake, intervalMs: 160, offsetY: -4, depth: 6 },
+          liftY: 9,
+          bobMs: 700,
+        };
+      default:
+        return null;
+    }
+  }
+
   private transitionToPhase2(): void {
     this.clearActiveTargets();
     this.enemies = [];
+    this.band.setObjective("The wall holds; the Quiet Lord is coming.");
     this.time.delayedCall(600, () => this.startPhase2());
   }
 
@@ -805,6 +1658,18 @@ export class GreatBattleScene extends Phaser.Scene {
       satchel.includes("wind-phrase") && satchel.includes("quiet-chant");
     this.whirlwindCancelAnnounced = false;
 
+    playSceneEventPulse(this, {
+      kind: "mist",
+      color: this.isForceDuel ? 0x9b2424 : 0x6b5ea8,
+      x: this.scale.width / 2,
+      y: 560,
+      depth: 3,
+      ringWidth: this.isForceDuel ? 760 : 640,
+      ringHeight: 260,
+      count: 14,
+      alpha: 0.12,
+    });
+    this.band.setObjective("Face the Quiet Lord; watch for realm facets.");
     this.drawQuietLord(this.isForceDuel, this.isKindnessDuel);
     this.showQuietLordDescription();
   }
@@ -812,27 +1677,39 @@ export class GreatBattleScene extends Phaser.Scene {
   private drawQuietLord(forceDuel = false, kindnessDuel = false): void {
     this.quietLordContainer = this.add.container(this.scale.width / 2, 0).setDepth(4);
 
-    const g = this.add.graphics();
-    // Body: two overlapping rounded rectangles of deep shadow
-    g.fillStyle(0x0e0c14, 0.92);
-    g.fillRoundedRect(-80, 100, 160, 420, 16);
-    g.fillRoundedRect(-60, 80, 120, 440, 12);
-    // Head: larger ellipse
-    g.fillStyle(0x1a1020, 0.9);
-    g.fillEllipse(0, 80, 140, 140);
-    // Eyes: two small dim red ellipses — glow brighter in force duel
+    const aura = this.add.graphics();
+    aura.fillStyle(forceDuel ? 0x5a1010 : 0x2a2038, forceDuel ? 0.2 : 0.14);
+    aura.fillEllipse(0, 310, 280, 520);
+    aura.lineStyle(2, forceDuel ? 0x9b2424 : 0x4b3d7a, 0.32);
+    aura.strokeEllipse(0, 310, 230, 480);
+
+    const shadow = addLocalGroundShadow(this, 190, 30, {
+      y: 560,
+      alpha: forceDuel ? 0.5 : 0.4,
+    });
+
+    const lordFigure = this.add.container(0, 0);
+    const lordSprite = makeQuietLordSprite(this).setPosition(0, 560);
+    if (forceDuel) lordSprite.setTint(0xffd0d0);
+
+    const eyes = this.add.graphics();
     const eyeColor = forceDuel ? 0xa01010 : 0x4a1010;
     const eyeAlpha = forceDuel ? 1.0 : 0.85;
-    g.fillStyle(eyeColor, eyeAlpha);
-    g.fillEllipse(-28, 68, 22, 14);
-    g.fillEllipse(28, 68, 22, 14);
+    eyes.fillStyle(eyeColor, eyeAlpha);
+    eyes.fillEllipse(-28, 190, 20, 12);
+    eyes.fillEllipse(28, 190, 20, 12);
+    lordFigure.add([lordSprite, eyes]);
 
     // §5.5.11 — ≥3 kindness relics: Lord is slightly smaller (he shrinks rather than cracks)
     if (kindnessDuel) {
       this.quietLordContainer.setScale(0.82);
     }
 
-    this.quietLordContainer.add(g);
+    this.quietLordContainer.add([aura, shadow, lordFigure]);
+    addIdleBreath(this, lordFigure, {
+      dy: forceDuel ? -6 : -4,
+      durationMs: forceDuel ? 1800 : 2400,
+    });
 
     // The accumulating word, WITHOUT its period (§5.5.10): the realms revealed
     // it letter by letter (A → Ag → … → Again, no period); the period only
@@ -911,10 +1788,12 @@ export class GreatBattleScene extends Phaser.Scene {
     const facets = resolveFacets(clearedRealmIds, state.satchel);
     if (facets.length === 0) {
       // No cleared realms → nothing to channel. Straight to the counter rounds.
+      this.band.setObjective("No realm facets answer him; type the counter-words.");
       this.startPhase2a();
       return;
     }
     this.narration.say("finale_facets_intro");
+    this.band.setObjective("Watch each realm facet and answer any defense word.");
     this.time.delayedCall(2000, () => this.runFacetSequence(facets, 0));
   }
 
@@ -926,18 +1805,35 @@ export class GreatBattleScene extends Phaser.Scene {
     }
     const { facet, counteredBy } = facets[idx]!;
     // Telegraph — name the facet so the player learns the counter over replays.
+    this.showFacetSigil(facet, counteredBy ? "countered" : "threat");
     this.narration.say(FACET_LINES[facet.id].telegraph);
+    this.band.setObjective(
+      counteredBy
+        ? `${facet.name} rises; a relic is ready to answer.`
+        : `${facet.name} rises; prepare to type its defense word.`,
+    );
     this.time.delayedCall(1700, () => {
       if (this.runOver) return;
       if (counteredBy) {
         // A relic answers it — neutralized, no challenge. The Lord flickers.
         this.narration.say(FACET_LINES[facet.id].countered);
+        this.band.setObjective(`${facet.name} is answered; hold steady.`);
+        playClaimLine(
+          this,
+          this.scale.width / 2,
+          this.scale.height - 250,
+          this.scale.width / 2,
+          300,
+          { color: UI_HEX.brass, depth: 6, durationMs: 520 },
+        );
+        this.playFacetImpact(facet, "countered");
         this.tweens.add({
           targets: this.quietLordContainer,
           alpha: { from: this.quietLordContainer.alpha, to: 0.7 },
           duration: 260,
           yoyo: true,
         });
+        this.time.delayedCall(1400, () => this.clearFacetSigil());
         this.time.delayedCall(1800, () => this.runFacetSequence(facets, idx + 1));
       } else {
         // No counter — survive the facet by typing its defense word in time.
@@ -950,6 +1846,7 @@ export class GreatBattleScene extends Phaser.Scene {
     if (this.runOver) return;
     // Dynamic prompt (the word varies) — same shape as the Phase-2c spell cue.
     this.setNarrator(`${facet.name} crashes down — type:  ${facet.defenseWord}`);
+    this.band.setObjective(`Type ${facet.defenseWord} before the facet lands.`);
 
     let resolved = false;
     const finish = (): void => {
@@ -963,6 +1860,8 @@ export class GreatBattleScene extends Phaser.Scene {
       if (resolved) return;
       resolved = true;
       this.clearActiveTargets();
+      this.playFacetImpact(facet, "landed");
+      this.clearFacetSigil();
       // It lands — the realms' hit cue + a candle gutters.
       this.cameras.main.shake(220, 0.006);
       playDamageThud();
@@ -978,12 +1877,33 @@ export class GreatBattleScene extends Phaser.Scene {
       x: this.scale.width / 2,
       y: 500,
       fontSize: 46,
+      onClaim: () =>
+        playClaimLine(
+          this,
+          this.scale.width / 2,
+          this.scale.height - 250,
+          this.scale.width / 2,
+          500,
+          { color: UI_HEX.brass, depth: 6 },
+        ),
+      onAdvance: () =>
+        this.facetSigil &&
+        playBodyTypePulse(this, this.facetSigil, {
+          kind: this.facetParticleKind(facet),
+          color: UI_HEX.brass,
+          offsetY: 0,
+          depth: 7,
+          ringRadius: 34,
+          durationMs: 260,
+        }),
       onComplete: () => {
         if (resolved) return;
         resolved = true;
         timer.remove();
         playChime();
         this.clearActiveTargets();
+        this.playFacetImpact(facet, "held");
+        this.clearFacetSigil();
         this.narration.say("finale_facet_held");
         finish();
       },
@@ -992,13 +1912,219 @@ export class GreatBattleScene extends Phaser.Scene {
     this.activeTargets.push(target);
   }
 
+  private showFacetSigil(facet: Facet, mode: "countered" | "threat"): void {
+    this.clearFacetSigil(false);
+
+    const color = mode === "countered" ? UI_HEX.brass : UI_HEX.ember;
+    const alpha = mode === "countered" ? 0.46 : 0.6;
+    const channel = this.add
+      .graphics()
+      .setDepth(2.8)
+      .setAlpha(0)
+      .setPosition(this.scale.width / 2, 0);
+    this.drawFacetChannelInto(channel, color, mode);
+    this.facetChannel = channel;
+
+    const g = this.add.graphics().setDepth(3).setAlpha(0).setPosition(this.scale.width / 2, 300);
+    this.drawFacetSigilInto(g, facet.id, color, mode);
+    this.facetSigil = g;
+
+    this.tweens.add({
+      targets: g,
+      alpha,
+      scaleX: { from: 0.86, to: 1 },
+      scaleY: { from: 0.86, to: 1 },
+      duration: 520,
+      ease: "Sine.easeOut",
+    });
+    this.tweens.add({
+      targets: channel,
+      alpha: mode === "countered" ? 0.34 : 0.46,
+      duration: 520,
+      ease: "Sine.easeOut",
+    });
+    this.tweens.add({
+      targets: channel,
+      alpha: mode === "countered" ? 0.18 : 0.28,
+      duration: 1400,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    this.tweens.add({
+      targets: g,
+      angle: mode === "countered" ? 3 : -3,
+      duration: 1700,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  private clearFacetSigil(fade = true): void {
+    const sigil = this.facetSigil;
+    const channel = this.facetChannel;
+    this.facetSigil = null;
+    this.facetChannel = null;
+    if (sigil) this.tweens.killTweensOf(sigil);
+    if (channel) this.tweens.killTweensOf(channel);
+    if (!fade) {
+      sigil?.destroy();
+      channel?.destroy();
+      return;
+    }
+    if (sigil) {
+      this.tweens.add({
+        targets: sigil,
+        alpha: 0,
+        scaleX: 1.08,
+        scaleY: 1.08,
+        duration: 260,
+        ease: "Sine.easeIn",
+        onComplete: () => sigil.destroy(),
+      });
+    }
+    if (channel) {
+      this.tweens.add({
+        targets: channel,
+        alpha: 0,
+        duration: 220,
+        ease: "Sine.easeIn",
+        onComplete: () => channel.destroy(),
+      });
+    }
+  }
+
+  private playFacetImpact(
+    facet: Facet,
+    outcome: "countered" | "held" | "landed",
+  ): void {
+    if (!this.facetSigil) return;
+    playBodyImpact(this, this.facetSigil, {
+      kind: this.facetParticleKind(facet),
+      color: outcome === "landed" ? UI_HEX.ember : UI_HEX.brass,
+      offsetY: 0,
+      depth: 7,
+      ringRadius: outcome === "landed" ? 86 : 64,
+      count: outcome === "landed" ? 18 : 13,
+      durationMs: outcome === "landed" ? 560 : 460,
+    });
+  }
+
+  private facetParticleKind(facet: Facet): "ash" | "bubble" | "ember" | "mist" | "mote" | "snow" {
+    switch (facet.id) {
+      case "cold":
+        return "snow";
+      case "toll":
+        return "bubble";
+      case "armor":
+        return "ember";
+      case "light":
+        return "mote";
+      case "grief":
+        return "mist";
+    }
+  }
+
+  private drawFacetChannelInto(
+    g: Phaser.GameObjects.Graphics,
+    color: number,
+    mode: "countered" | "threat",
+  ): void {
+    const alpha = mode === "countered" ? 0.38 : 0.48;
+    g.clear();
+    g.lineStyle(3, color, alpha);
+    g.beginPath();
+    g.moveTo(0, 372);
+    g.lineTo(-72, 432);
+    g.lineTo(-36, 505);
+    g.lineTo(0, 548);
+    g.lineTo(36, 505);
+    g.lineTo(72, 432);
+    g.lineTo(0, 372);
+    g.strokePath();
+
+    g.lineStyle(1, color, alpha * 0.72);
+    g.lineBetween(0, 396, 0, 542);
+    g.lineBetween(-58, 444, 58, 444);
+    g.lineBetween(-28, 502, 28, 502);
+    g.fillStyle(color, mode === "countered" ? 0.1 : 0.14);
+    g.fillCircle(0, 548, 36);
+  }
+
+  private drawFacetSigilInto(
+    g: Phaser.GameObjects.Graphics,
+    facetId: FacetId,
+    color: number,
+    mode: "countered" | "threat",
+  ): void {
+    g.clear();
+    g.lineStyle(3, color, mode === "countered" ? 0.82 : 0.74);
+    g.strokeCircle(0, 0, 96);
+    g.lineStyle(1, color, mode === "countered" ? 0.38 : 0.32);
+    g.strokeCircle(0, 0, 122);
+
+    if (facetId === "cold") {
+      for (let i = 0; i < 6; i++) {
+        const a = (Math.PI * 2 * i) / 6;
+        const x1 = Math.cos(a) * 26;
+        const y1 = Math.sin(a) * 26;
+        const x2 = Math.cos(a) * 82;
+        const y2 = Math.sin(a) * 82;
+        g.lineBetween(x1, y1, x2, y2);
+        g.lineBetween(Math.cos(a + 0.28) * 58, Math.sin(a + 0.28) * 58, x2, y2);
+        g.lineBetween(Math.cos(a - 0.28) * 58, Math.sin(a - 0.28) * 58, x2, y2);
+      }
+      return;
+    }
+
+    if (facetId === "toll") {
+      g.strokeEllipse(0, 12, 72, 94);
+      g.lineBetween(-42, 50, 42, 50);
+      g.lineBetween(-28, -35, 28, -35);
+      g.fillStyle(color, 0.6);
+      g.fillCircle(0, 56, 7);
+      return;
+    }
+
+    if (facetId === "armor") {
+      g.strokeRoundedRect(-46, -62, 92, 118, 10);
+      g.lineBetween(-34, -20, 34, -20);
+      g.lineBetween(-34, 18, 34, 18);
+      g.fillStyle(color, 0.2);
+      g.fillTriangle(0, -42, -26, 48, 26, 48);
+      return;
+    }
+
+    if (facetId === "light") {
+      for (let i = 0; i < 12; i++) {
+        const a = (Math.PI * 2 * i) / 12;
+        g.lineBetween(Math.cos(a) * 34, Math.sin(a) * 34, Math.cos(a) * 88, Math.sin(a) * 88);
+      }
+      g.fillStyle(color, 0.18);
+      g.fillCircle(0, 0, 42);
+      g.strokeCircle(0, 0, 34);
+      return;
+    }
+
+    // grief
+    g.lineBetween(0, -72, 0, 58);
+    g.lineBetween(0, -24, -46, -54);
+    g.lineBetween(0, -6, 48, -40);
+    g.lineBetween(0, 18, -38, 48);
+    g.lineBetween(0, 18, 38, 48);
+    g.strokeEllipse(0, 18, 58, 84);
+  }
+
   private startPhase2a(): void {
     const satchel = this.store.get().satchel;
+    this.band.setObjective("Type the counter-words to unmake his silence.");
 
     // §5.5.11 — bells-tongue: one-shot massive hit — ends Phase 2a early
     if (this.bellsTongueSuperHitAvailable) {
       this.bellsTongueSuperHitAvailable = false; // consumed
-      this.narration.say("finale_relic_bells_tongue");
+      this.showRelicNotice("finale_relic_bells_tongue");
+      this.band.setObjective("Bell's Tongue strikes; brace for the next counter.");
       this.time.delayedCall(1800, () => {
         // Camera flash to signal the super-hit
         this.cameras.main.flash(300, 200, 200, 255, false);
@@ -1025,7 +2151,7 @@ export class GreatBattleScene extends Phaser.Scene {
       : ["unmake", "unsay", "unfound"];
 
     if (satchel.includes("sabotage-wrench")) {
-      this.narration.say("finale_relic_sabotage_wrench");
+      this.showRelicNotice("finale_relic_sabotage_wrench");
     } else {
       this.narration.say("finale_phase2_unmake");
     }
@@ -1039,7 +2165,8 @@ export class GreatBattleScene extends Phaser.Scene {
       return;
     }
     const word = words[idx]!;
-    const target = this.makeWord({
+    this.band.setObjective(`Counter ${idx + 1}/${words.length}: type ${word}.`);
+    const target = this.makeLordWord({
       scene: this,
       word,
       x: this.scale.width / 2,
@@ -1079,8 +2206,9 @@ export class GreatBattleScene extends Phaser.Scene {
     // §5.5.11 — tether-cord: bind the Lord for one beat — spawn an extra free phrase first
     if (satchel.includes("tether-cord") && !this.tetherCordBindUsed) {
       this.tetherCordBindUsed = true;
-      this.narration.say("finale_relic_tether_cord");
-      const bindTarget = this.makeWord({
+      this.showRelicNotice("finale_relic_tether_cord");
+      this.band.setObjective("Type bound while the tether-cord holds him.");
+      const bindTarget = this.makeLordWord({
         scene: this,
         word: "bound",
         x: this.scale.width / 2,
@@ -1106,8 +2234,9 @@ export class GreatBattleScene extends Phaser.Scene {
     const satchel = this.store.get().satchel;
     if (satchel.includes("master-key") && !this.masterKeyFlankUsed) {
       this.masterKeyFlankUsed = true;
-      this.narration.say("finale_relic_master_key");
-      const flankTarget = this.makeWord({
+      this.showRelicNotice("finale_relic_master_key");
+      this.band.setObjective("Type flank through the Master-Key opening.");
+      const flankTarget = this.makeLordWord({
         scene: this,
         word: "flank",
         x: this.scale.width * 0.15,
@@ -1146,6 +2275,7 @@ export class GreatBattleScene extends Phaser.Scene {
     const hasGlassFish = satchel.includes("glass-fish");
     const hasLanternMoth = satchel.includes("lantern-moth");
     const hasWispCat = satchel.includes("wisp-cat");
+    this.band.setObjective("Clear all three duel words before the Lord steadies.");
 
     // Round 1: 3 words from BATTLE_WORD_BANK simultaneously
     const round1Words = pickAdaptiveWords(
@@ -1165,7 +2295,7 @@ export class GreatBattleScene extends Phaser.Scene {
     for (let i = 0; i < 3; i++) {
       const word = round1Words[i]!;
       const x = xPositions[i]!;
-      const target = this.makeWord({
+      const target = this.makeLordWord({
         scene: this,
         word,
         x,
@@ -1207,11 +2337,13 @@ export class GreatBattleScene extends Phaser.Scene {
 
   // §5.5.9 — glass-fish: brief flash + bonus hit window word
   private applyGlassFishHitWindow(onDone: () => void): void {
-    this.narration.say("finale_companion_glass_fish");
+    this.showRelicNotice("finale_companion_glass_fish", "ally");
+    this.band.setObjective("Type light while the glass-fish opens the corridor.");
+    const companion = this.showFinaleCompanionAction("glass-fish");
     // Flash the screen briefly (light corridor effect)
     this.cameras.main.flash(400, 160, 220, 255, false);
     this.time.delayedCall(500, () => {
-      const bonusTarget = this.makeWord({
+      const bonusTarget = this.makeLordWord({
         scene: this,
         word: "light",
         x: this.scale.width / 2,
@@ -1226,10 +2358,14 @@ export class GreatBattleScene extends Phaser.Scene {
             alpha: { from: this.quietLordContainer.alpha, to: 0.5 },
             duration: 300,
             yoyo: true,
-            onComplete: () => onDone(),
+            onComplete: () => {
+              playActorAttention(this, companion, { scale: 1.05, durationMs: 220 });
+              this.dismissFinaleCompanionAction(companion, this.scale.width * 0.48, 610);
+              onDone();
+            },
           });
         },
-      });
+      }, { kind: "bubble", color: 0xa7d2dd, ringRadius: 38 });
       this.typingInput.register(bonusTarget);
       this.activeTargets.push(bonusTarget);
     });
@@ -1239,7 +2375,9 @@ export class GreatBattleScene extends Phaser.Scene {
   private applyLanternMothHitWindow(): void {
     // Only fires if there are still live targets in play (avoid double-clear)
     if (this.activeTargets.length === 0) return;
-    this.narration.say("finale_companion_lantern_moth");
+    this.showRelicNotice("finale_companion_lantern_moth", "ally");
+    this.band.setObjective("Type throne before the lantern-moth's light fades.");
+    const companion = this.showFinaleCompanionAction("lantern-moth");
     // Warm light overlay
     const throneLight = this.add.graphics().setDepth(3).setAlpha(0);
     throneLight.fillStyle(0xffd080, 0.18);
@@ -1254,7 +2392,7 @@ export class GreatBattleScene extends Phaser.Scene {
     });
 
     // Spawn a bonus hit-window word on the side
-    const bonusTarget = this.makeWord({
+    const bonusTarget = this.makeLordWord({
       scene: this,
       word: "throne",
       x: this.scale.width * 0.15,
@@ -1269,14 +2407,19 @@ export class GreatBattleScene extends Phaser.Scene {
           duration: 250,
           yoyo: true,
         });
+        playActorAttention(this, companion, { scale: 1.05, durationMs: 220 });
+        this.dismissFinaleCompanionAction(companion, 330, 510);
         this.typingInput.unregister(bonusTarget);
         const idx = this.activeTargets.indexOf(bonusTarget);
         if (idx >= 0) this.activeTargets.splice(idx, 1);
         bonusTarget.destroy();
       },
-    });
+    }, { kind: "mote", color: 0xffd080, ringRadius: 36 });
     this.typingInput.register(bonusTarget);
     this.activeTargets.push(bonusTarget);
+    this.time.delayedCall(5200, () => {
+      if (companion.scene) this.dismissFinaleCompanionAction(companion, 330, 510);
+    });
   }
 
   // §5.5.11 — the Lord's whirlwind attack between rounds. Wren must type
@@ -1288,7 +2431,8 @@ export class GreatBattleScene extends Phaser.Scene {
     if (this.whirlwindCanceled) {
       if (!this.whirlwindCancelAnnounced) {
         this.whirlwindCancelAnnounced = true;
-        this.narration.say("finale_relic_windphrase_chant");
+        this.showRelicNotice("finale_relic_windphrase_chant");
+        this.band.setObjective("Wind-Phrase and Quiet-Chant cancel the whirlwind.");
         const pulse = this.add.graphics().setDepth(3).setAlpha(0);
         pulse.fillStyle(PALETTE_HEX.frost, 0.22);
         pulse.fillRect(0, 0, this.scale.width, this.scale.height);
@@ -1310,6 +2454,7 @@ export class GreatBattleScene extends Phaser.Scene {
     }
 
     this.narration.say("finale_phase2_whirlwind");
+    this.band.setObjective("Type hold to brace through the whirlwind.");
 
     const overlay = this.add.graphics().setDepth(2).setAlpha(0);
     overlay.fillStyle(PALETTE_HEX.dim, 0.28);
@@ -1336,7 +2481,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
     this.cameras.main.shake(240, 0.004);
 
-    const defenseTarget = this.makeWord({
+    const defenseTarget = this.makeLordWord({
       scene: this,
       word: "hold",
       x: this.scale.width / 2,
@@ -1357,15 +2502,17 @@ export class GreatBattleScene extends Phaser.Scene {
           },
         });
       },
-    });
+    }, { kind: "snow", color: PALETTE_HEX.frost, ringRadius: 40 });
     this.typingInput.register(defenseTarget);
     this.activeTargets.push(defenseTarget);
   }
 
   // §5.5.9 — wisp-cat: extra phrase target spawns mid-phase (flank)
   private applyWispCatFlank(onDone: () => void): void {
-    this.narration.say("finale_companion_wisp_cat");
-    const flankTarget = this.makeWord({
+    this.showRelicNotice("finale_companion_wisp_cat", "ally");
+    this.band.setObjective("Type flank through the wisp-cat opening.");
+    const companion = this.showFinaleCompanionAction("wisp-cat");
+    const flankTarget = this.makeLordWord({
       scene: this,
       word: "flank",
       x: this.scale.width * 0.85,
@@ -1380,16 +2527,21 @@ export class GreatBattleScene extends Phaser.Scene {
           alpha: { from: this.quietLordContainer.alpha, to: 0.55 },
           duration: 300,
           yoyo: true,
-          onComplete: () => onDone(),
+          onComplete: () => {
+            playActorAttention(this, companion, { scale: 1.05, durationMs: 220 });
+            this.dismissFinaleCompanionAction(companion, this.scale.width * 0.88, 735);
+            onDone();
+          },
         });
       },
-    });
+    }, { kind: "mist", color: 0x9fb69a, ringRadius: 36 });
     this.typingInput.register(flankTarget);
     this.activeTargets.push(flankTarget);
   }
 
   private onPhase2Round1Done(): void {
     this.narration.say("finale_phase2_wavers");
+    this.band.setObjective("The Quiet Lord wavers; brace for his answer.");
     this.tweens.add({
       targets: this.quietLordContainer,
       alpha: { from: 1.0, to: 0.6 },
@@ -1418,6 +2570,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private startPhase2bRound2(): void {
     // Round 2: 3 more words with no overlap
+    this.band.setObjective("Clear the last three duel words.");
     const allWords = (BATTLE_WORD_BANK as readonly string[]).filter(
       (w) => !this.phase2Round1Words.includes(w),
     );
@@ -1437,7 +2590,7 @@ export class GreatBattleScene extends Phaser.Scene {
     for (let i = 0; i < 3; i++) {
       const word = round2Words[i]!;
       const x = xPositions[i]!;
-      const target = this.makeWord({
+      const target = this.makeLordWord({
         scene: this,
         word,
         x,
@@ -1459,6 +2612,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private onPhase2Round2Done(): void {
     this.narration.say("finale_phase3_word_burns");
+    this.band.setObjective("His word burns open; prepare for the capital answer.");
 
     // §5.5.11 — force duel: Lord visually cracks open (camera shake)
     if (this.isForceDuel) {
@@ -1519,6 +2673,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private startPhase2Depth(): void {
     if (this.runOver) return;
+    this.band.setObjective("Mind the capitals in the Quiet Lord's word.");
     // Lowercase head so the claim captures no Shift (routes onComplete); the
     // capital tail then requires Shift via case-sensitive matching. Force gets a
     // second, deeper counter.
@@ -1539,8 +2694,9 @@ export class GreatBattleScene extends Phaser.Scene {
         ? "Answer in his own hand — mind the capitals:"
         : "Again, deeper — his name this time:";
     this.setNarrator(`${lead}  ${word}`);
+    this.band.setObjective("Mind the capitals in the Quiet Lord's word.");
 
-    const target = this.makeWord({
+    const target = this.makeLordWord({
       scene: this,
       word,
       x: this.scale.width / 2,
@@ -1556,6 +2712,10 @@ export class GreatBattleScene extends Phaser.Scene {
           this.runDepthWords(words, idx + 1),
         );
       },
+    }, {
+      kind: "ember",
+      color: this.isForceDuel ? UI_HEX.ember : UI_HEX.brass,
+      ringRadius: 44,
     });
     this.typingInput.register(target);
     this.activeTargets.push(target);
@@ -1572,6 +2732,7 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private onSpellWordComplete(): void {
+    this.band.setObjective("Again is loose; rebuild the final phrase.");
     this.tweens.add({
       targets: this.quietLordContainer,
       alpha: 0,
@@ -1588,6 +2749,17 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private startPhase3(): void {
     this.clearActiveTargets();
+    playSceneEventPulse(this, {
+      kind: "mote",
+      color: 0xd4b8ff,
+      x: this.scale.width / 2,
+      y: 430,
+      depth: 3,
+      ringWidth: 680,
+      ringHeight: 220,
+      count: 14,
+      alpha: 0.12,
+    });
 
     const satchel = this.store.get().satchel;
     const hasAnyCompanion = COMPANION_IDS.some((id) => satchel.includes(id));
@@ -1630,6 +2802,7 @@ export class GreatBattleScene extends Phaser.Scene {
   private deliverFinalPhrase(): void {
     const phrase = selectFinalPhrase(this.store.get().satchel);
     const words = phrase.split(" ");
+    this.band.setObjective("Type the final phrase into Again.");
     this.runFinalPhraseWords(words, 0);
   }
 
@@ -1639,8 +2812,9 @@ export class GreatBattleScene extends Phaser.Scene {
       return;
     }
     const word = words[idx]!;
+    this.band.setObjective(`Final phrase ${idx + 1}/${words.length}: type ${word}.`);
 
-    const target = this.makeWord({
+    const target = this.makeFinalPhraseWord({
       scene: this,
       word,
       x: this.scale.width / 2,
@@ -1692,8 +2866,14 @@ export class GreatBattleScene extends Phaser.Scene {
 
   // §5.5.9 — brass-songbird: auto-fill the next 3 characters of the stalled word
   private applyBrassSongbirdHint(_target: TextWordTarget, word: string): void {
-    // Show a narrator cue
-    this.narration.say("finale_companion_songbird");
+    this.showRelicNotice("finale_companion_songbird", "ally");
+    const companion = this.showFinaleCompanionAction("brass-songbird");
+    playActorAttention(this, companion, { scale: 1.05, durationMs: 220 });
+    this.time.delayedCall(1350, () => {
+      if (companion.scene) {
+        this.dismissFinaleCompanionAction(companion, this.scale.width * 0.56, 485);
+      }
+    });
 
     // TextWordTarget doesn't expose a direct "advance N chars" API, so we
     // simulate by injecting up to 3 typed characters via the typingInput.
@@ -1886,7 +3066,10 @@ export class GreatBattleScene extends Phaser.Scene {
         if (!this.creditsKeyListenerAdded) {
           this.creditsKeyListenerAdded = true;
           this.input.keyboard?.once("keydown", () => {
-            this.scene.start("PortalChamberScene", { store: this.store });
+            this.scene.start("PortalChamberScene", {
+              store: this.store,
+              arrival: "great-battle",
+            });
           });
         }
       },

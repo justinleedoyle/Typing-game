@@ -21,6 +21,7 @@ const SOURCE: Record<string, string> = {
   "wren-cast": wrenCast,
   "wren-hurt": wrenHurt,
 };
+const HURT_TIMER_KEY = "wrenHurtTimer";
 
 /** Loads every Wren pose texture. Call from a scene's preload(). */
 export function preloadWren(scene: Phaser.Scene): void {
@@ -84,6 +85,135 @@ export function bobWrenSprite(img: Phaser.GameObjects.Image): void {
       img.scaleX = baseScaleX;
     },
   });
+}
+
+/**
+ * A readable completion flourish for non-combat typed actions. Keystrokes already
+ * bob Wren; this switches to the cast/action pose for the completed verb, lifts
+ * slightly from the feet anchor, then restores the exact previous texture/scale.
+ */
+export function playWrenAction(
+  img: Phaser.GameObjects.Image,
+  opts: { faceLeft?: boolean; durationMs?: number } = {},
+): void {
+  const originalKey = img.texture.key;
+  const originalScaleX = img.scaleX;
+  const originalScaleY = img.scaleY;
+  const originalY = img.y;
+  const scene = img.scene;
+  scene.tweens.killTweensOf(img);
+  setWrenPose(img, "cast", opts.faceLeft ?? originalScaleX < 0);
+  scene.tweens.add({
+    targets: img,
+    y: originalY - 8,
+    duration: opts.durationMs ?? 180,
+    yoyo: true,
+    ease: "Sine.easeOut",
+    onComplete: () => {
+      if (!img.scene) return;
+      img.setTexture(originalKey);
+      img.scaleX = originalScaleX;
+      img.scaleY = originalScaleY;
+      img.y = originalY;
+    },
+  });
+}
+
+/** A smaller "attention" reaction for claiming an authored choice. It is less
+ *  forceful than playWrenAction(), which remains the completion flourish. */
+export function playWrenFocus(
+  img: Phaser.GameObjects.Image,
+  opts: { faceLeft?: boolean; durationMs?: number } = {},
+): void {
+  if (img.getData(HURT_TIMER_KEY)) return;
+  const originalKey = img.texture.key;
+  const originalScaleX = img.scaleX;
+  const originalScaleY = img.scaleY;
+  const originalX = img.x;
+  const originalY = img.y;
+  const scene = img.scene;
+  scene.tweens.killTweensOf(img);
+  const faceLeft = opts.faceLeft ?? originalScaleX < 0;
+  setWrenPose(img, "walk", faceLeft);
+  scene.tweens.add({
+    targets: img,
+    x: originalX + (faceLeft ? -5 : 5),
+    y: originalY - 3,
+    duration: opts.durationMs ?? 120,
+    yoyo: true,
+    ease: "Sine.easeOut",
+    onComplete: () => {
+      if (!img.scene) return;
+      img.setTexture(originalKey);
+      img.scaleX = originalScaleX;
+      img.scaleY = originalScaleY;
+      img.x = originalX;
+      img.y = originalY;
+    },
+  });
+}
+
+/** True while the heavier hurt-pose reaction is holding the sprite. */
+export function isWrenHurtPlaying(img: Phaser.GameObjects.Image): boolean {
+  return Boolean(img.getData(HURT_TIMER_KEY));
+}
+
+/**
+ * A readable enemy-hit reaction for combat stakes: switch into the painted hurt
+ * pose, tint briefly, and jolt from the feet anchor before restoring whatever
+ * pose/scale the scene had before. Distinct from flashWrenMiss(), which is only
+ * per-keystroke typo feedback.
+ */
+export function playWrenHurt(
+  img: Phaser.GameObjects.Image,
+  opts: {
+    faceLeft?: boolean;
+    durationMs?: number;
+    knockX?: number;
+    knockY?: number;
+    onComplete?: () => void;
+  } = {},
+): void {
+  const scene = img.scene;
+  if (!scene) return;
+
+  const priorTimer = img.getData(HURT_TIMER_KEY) as
+    | Phaser.Time.TimerEvent
+    | undefined;
+  priorTimer?.remove();
+
+  const originalKey = img.texture.key;
+  const originalScaleX = img.scaleX;
+  const originalScaleY = img.scaleY;
+  const originalX = img.x;
+  const originalY = img.y;
+  const facingLeft = opts.faceLeft ?? originalScaleX < 0;
+
+  scene.tweens.killTweensOf(img);
+  setWrenPose(img, "hurt", facingLeft);
+  img.setTintFill(0x8a3a2a);
+
+  scene.tweens.add({
+    targets: img,
+    x: originalX + (opts.knockX ?? (facingLeft ? -10 : 10)),
+    y: originalY + (opts.knockY ?? 6),
+    duration: 95,
+    yoyo: true,
+    ease: "Sine.easeOut",
+  });
+
+  const timer = scene.time.delayedCall(opts.durationMs ?? 420, () => {
+    if (!img.scene) return;
+    img.clearTint();
+    img.setTexture(originalKey);
+    img.scaleX = originalScaleX;
+    img.scaleY = originalScaleY;
+    img.x = originalX;
+    img.y = originalY;
+    img.setData(HURT_TIMER_KEY, undefined);
+    opts.onComplete?.();
+  });
+  img.setData(HURT_TIMER_KEY, timer);
 }
 
 /**

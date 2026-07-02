@@ -13,6 +13,7 @@ import { RELICS } from "../game/relics";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
+import { addAmbientDrift, addLivingLight } from "../game/livingScene";
 
 /** Page-stack entry. The Almanac walks: overview → for each cleared realm,
  *  the realm summary page then each of that realm's stamped lore pages, in
@@ -107,6 +108,7 @@ export class AlmanacScene extends Phaser.Scene {
   private nextTarget?: TextWordTarget;
   private prevTarget?: TextWordTarget;
   private closeTarget?: TextWordTarget;
+  private navTypingPulseTimes = new Map<string, number>();
 
   constructor() {
     super("AlmanacScene");
@@ -117,6 +119,7 @@ export class AlmanacScene extends Phaser.Scene {
     this.currentPage = 0;
     this.pageTexts = [];
     this.pageStack = [];
+    this.navTypingPulseTimes.clear();
   }
 
   preload(): void {
@@ -135,6 +138,66 @@ export class AlmanacScene extends Phaser.Scene {
     const g = this.add.graphics();
     g.fillStyle(0x0b0a0f, 0.92);
     g.fillRect(0, 0, this.scale.width, this.scale.height);
+    g.setDepth(-20);
+
+    addAmbientDrift(this, {
+      kind: "mote",
+      count: 18,
+      depth: -2,
+      area: {
+        x: 240,
+        y: 120,
+        width: this.scale.width - 480,
+        height: this.scale.height - 230,
+      },
+      alpha: 0.16,
+      minSize: 1.5,
+      maxSize: 4,
+      driftX: 62,
+      driftY: -118,
+      minDurationMs: 7200,
+      maxDurationMs: 14500,
+    });
+    addAmbientDrift(this, {
+      kind: "mote",
+      count: 8,
+      depth: -0.35,
+      area: {
+        x: BOOK_X + 60,
+        y: BOOK_Y + 120,
+        width: BOOK_WIDTH - 120,
+        height: BOOK_HEIGHT - 210,
+      },
+      alpha: 0.12,
+      minSize: 3,
+      maxSize: 6.5,
+      driftX: 32,
+      driftY: -56,
+      minDurationMs: 6600,
+      maxDurationMs: 12200,
+    });
+    addLivingLight(this, {
+      x: BOOK_X + 180,
+      y: BOOK_Y + 150,
+      width: 420,
+      height: 210,
+      color: UI_HEX.brass,
+      alpha: 0.035,
+      depth: -4,
+      durationMs: 3100,
+    });
+    addLivingLight(this, {
+      x: BOOK_X + BOOK_WIDTH - 210,
+      y: BOOK_Y + 650,
+      width: 380,
+      height: 220,
+      color: UI_HEX.parchment,
+      alpha: 0.028,
+      depth: -4,
+      durationMs: 3700,
+      delayMs: 600,
+      scale: 1.035,
+    });
 
     this.bookGraphics = this.add.graphics();
     this.drawBook();
@@ -614,11 +677,11 @@ export class AlmanacScene extends Phaser.Scene {
         x: LEFT_PAGE_X + 200,
         y: this.scale.height - 130,
         fontSize: 26,
-        onComplete: () => {
-          this.currentPage -= 1;
-          this.renderCurrentPage();
-          this.placeNavigationTargets();
-        },
+        outline: true,
+        frame: "banner",
+        onClaim: () => this.playPageFocus(-1),
+        onAdvance: () => this.playPageTypingPulse(-1),
+        onComplete: () => this.turnPage(-1),
       });
       this.typingInput.register(this.prevTarget);
     }
@@ -630,11 +693,11 @@ export class AlmanacScene extends Phaser.Scene {
         x: RIGHT_PAGE_X + 200,
         y: this.scale.height - 130,
         fontSize: 26,
-        onComplete: () => {
-          this.currentPage += 1;
-          this.renderCurrentPage();
-          this.placeNavigationTargets();
-        },
+        outline: true,
+        frame: "banner",
+        onClaim: () => this.playPageFocus(1),
+        onAdvance: () => this.playPageTypingPulse(1),
+        onComplete: () => this.turnPage(1),
       });
       this.typingInput.register(this.nextTarget);
     }
@@ -645,9 +708,158 @@ export class AlmanacScene extends Phaser.Scene {
       x: this.scale.width / 2,
       y: this.scale.height - 70,
       fontSize: 28,
+      outline: true,
+      frame: "banner",
+      onClaim: () => this.playCloseFocus(),
+      onAdvance: () => this.playCloseTypingPulse(),
       onComplete: () => this.closeBook(),
     });
     this.typingInput.register(this.closeTarget);
+  }
+
+  private turnPage(delta: -1 | 1): void {
+    const nextPage = this.currentPage + delta;
+    if (nextPage < 0 || nextPage >= this.pageStack.length) return;
+
+    this.currentPage = nextPage;
+    this.renderCurrentPage();
+    this.placeNavigationTargets();
+    this.playPageTurn(delta);
+  }
+
+  private playPageTurn(direction: -1 | 1): void {
+    const pageTop = BOOK_Y + 34;
+    const pageHeight = BOOK_HEIGHT - 68;
+    const outerX =
+      direction > 0 ? BOOK_X + BOOK_WIDTH - 68 : BOOK_X + 68;
+    const spineX =
+      direction > 0
+        ? BOOK_X + BOOK_WIDTH / 2 + 18
+        : BOOK_X + BOOK_WIDTH / 2 - 18;
+
+    const shimmer = this.add.graphics().setDepth(30).setAlpha(0.62);
+    shimmer.fillStyle(UI_HEX.parchment, 0.42);
+    shimmer.fillRoundedRect(-24, 0, 48, pageHeight, 18);
+    shimmer.lineStyle(2, UI_HEX.brass, 0.35);
+    shimmer.lineBetween(0, 18, 0, pageHeight - 18);
+    shimmer.setPosition(outerX, pageTop);
+
+    this.tweens.add({
+      targets: shimmer,
+      x: spineX,
+      alpha: 0,
+      duration: 420,
+      ease: "Sine.easeOut",
+      onComplete: () => shimmer.destroy(),
+    });
+  }
+
+  private playPageFocus(direction: -1 | 1): void {
+    const pageTop = BOOK_Y + 42;
+    const pageHeight = BOOK_HEIGHT - 84;
+    const edgeX =
+      direction > 0 ? BOOK_X + BOOK_WIDTH - 58 : BOOK_X + 58;
+
+    const focus = this.add.graphics().setDepth(29).setAlpha(0.76);
+    focus.lineStyle(3, UI_HEX.brass, 0.8);
+    focus.strokeRoundedRect(-18, 0, 36, pageHeight, 15);
+    focus.lineStyle(1, UI_HEX.brass, 0.42);
+    focus.lineBetween(0, 22, 0, pageHeight - 22);
+    focus.setPosition(edgeX, pageTop);
+
+    this.tweens.add({
+      targets: focus,
+      alpha: 0,
+      scaleX: 1.18,
+      duration: 360,
+      ease: "Sine.easeOut",
+      onComplete: () => focus.destroy(),
+    });
+  }
+
+  private playPageTypingPulse(direction: -1 | 1): void {
+    if (!this.shouldPlayNavigationPulse(`page-${direction}`)) return;
+
+    const pageTop = BOOK_Y + 52;
+    const pageHeight = BOOK_HEIGHT - 104;
+    const edgeX =
+      direction > 0 ? BOOK_X + BOOK_WIDTH - 58 : BOOK_X + 58;
+
+    const pulse = this.add.graphics().setDepth(28).setAlpha(0.42);
+    pulse.lineStyle(2, UI_HEX.brass, 0.42);
+    pulse.strokeRoundedRect(-13, 0, 26, pageHeight, 12);
+    pulse.lineStyle(1, UI_HEX.brass, 0.24);
+    pulse.lineBetween(0, 28, 0, pageHeight - 28);
+    pulse.setPosition(edgeX, pageTop);
+
+    this.tweens.add({
+      targets: pulse,
+      alpha: 0,
+      scaleX: 1.08,
+      duration: 170,
+      ease: "Sine.easeOut",
+      onComplete: () => pulse.destroy(),
+    });
+  }
+
+  private playCloseFocus(): void {
+    const focus = this.add
+      .graphics()
+      .setDepth(29)
+      .setAlpha(0.72)
+      .setPosition(BOOK_X + BOOK_WIDTH / 2, BOOK_Y + BOOK_HEIGHT / 2);
+    focus.lineStyle(3, UI_HEX.brass, 0.7);
+    focus.strokeRoundedRect(
+      -BOOK_WIDTH / 2 - 16,
+      -BOOK_HEIGHT / 2 - 16,
+      BOOK_WIDTH + 32,
+      BOOK_HEIGHT + 32,
+      24,
+    );
+    focus.lineStyle(2, UI_HEX.brass, 0.55);
+    focus.lineBetween(0, -BOOK_HEIGHT / 2 + 32, 0, BOOK_HEIGHT / 2 - 32);
+
+    this.tweens.add({
+      targets: focus,
+      alpha: 0,
+      scaleX: 1.025,
+      scaleY: 1.025,
+      duration: 420,
+      ease: "Sine.easeOut",
+      onComplete: () => focus.destroy(),
+    });
+  }
+
+  private playCloseTypingPulse(): void {
+    if (!this.shouldPlayNavigationPulse("close")) return;
+
+    const pulse = this.add
+      .graphics()
+      .setDepth(28)
+      .setAlpha(0.42)
+      .setPosition(this.scale.width / 2, this.scale.height - 70);
+    pulse.fillStyle(UI_HEX.brass, 0.035);
+    pulse.fillRoundedRect(-280, -30, 560, 60, 10);
+    pulse.lineStyle(1, UI_HEX.brass, 0.32);
+    pulse.strokeRoundedRect(-280, -30, 560, 60, 10);
+
+    this.tweens.add({
+      targets: pulse,
+      alpha: 0,
+      scaleX: 1.02,
+      scaleY: 1.08,
+      duration: 170,
+      ease: "Sine.easeOut",
+      onComplete: () => pulse.destroy(),
+    });
+  }
+
+  private shouldPlayNavigationPulse(key: string): boolean {
+    const now = this.time.now;
+    const last = this.navTypingPulseTimes.get(key) ?? -Infinity;
+    if (now - last < 90) return false;
+    this.navTypingPulseTimes.set(key, now);
+    return true;
   }
 
   private clearNavigationTargets(): void {

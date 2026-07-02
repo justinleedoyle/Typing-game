@@ -16,7 +16,7 @@ import {
 import { OneShotInvoker, type OneShotThreat } from "../game/oneShotInvoker";
 import { HeartSoulHud } from "../game/heartSoulHud";
 import { NarrationManager } from "../game/narrationManager";
-import { PALETTE, SERIF } from "../game/palette";
+import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { ScrollingPhrase } from "../game/scrollingPhrase";
 import { blurAmountAt } from "../game/skyBlur";
@@ -34,14 +34,45 @@ import {
   SKY_ISLAND_WORD_BANK,
 } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
+import { showAlmanacStampCard } from "../game/ui/almanacStamp";
 import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
-import { bobWrenSprite, flashWrenMiss, makeWrenSprite, preloadWren } from "../game/wren";
+import {
+  addAmbientDrift,
+  addBackdropDrift,
+  addContainerWake,
+  attachWordBodyAnchor,
+  dismissCompanionCameo,
+  fadeOutStagedSprite,
+  addIdleBreath,
+  addLocalGroundShadow,
+  addLivingLight,
+  playBodyImpact,
+  playBodyTypePulse,
+  playClaimLine,
+  playActorAttention,
+  playRealmClearResonance,
+  playSceneEventPulse,
+  stageContainerEntrance,
+  stageAnchoredSprite,
+  stageCompanionCameo,
+  type WordBodyAnchorHandle,
+} from "../game/livingScene";
+import {
+  bobWrenSprite,
+  flashWrenMiss,
+  makeWrenSprite,
+  playWrenAction,
+  playWrenFocus,
+  playWrenHurt,
+  preloadWren,
+} from "../game/wren";
 import skyIslandBackdrop from "../../art/references/sky-island-clean.png";
 import lanternSpiritSprite from "../../art/sky/lantern-spirit.png";
 import scholarSpiritSprite from "../../art/sky/scholar-spirit.png";
 import ettaSprite from "../../art/sky/etta.png";
 import runaPortrait from "../../art/runa/runa-front.png";
+import lanternMothSprite from "../../art/companions/lantern-moth.png";
 
 // Danger ramps in over the LAST 60% of a spirit's advance — earlier portion
 // stays cream so players can read the word, then it shifts red as the spirit
@@ -53,7 +84,7 @@ const DANGER_RAMP_START = 0.4;
 // amber body ellipse (the separate glow halo is kept as-is). The Scholar-Spirit
 // boss replaces the head+torso silhouette (head top ≈ -60, torso bottom ≈ +100,
 // so ~160 tall). Sizing is tune-later. */
-const LANTERN_SPIRIT_HEIGHT = 60;
+const LANTERN_SPIRIT_HEIGHT = 88;
 const SCHOLAR_SPIRIT_HEIGHT = 160;
 // Painted Scholar Etta — a small amber book-spirit child shown during her side
 // encounter. Smallish (~280px) and translucent (resting alpha 0.9). Positioning
@@ -77,6 +108,7 @@ interface LanternSpirit {
   glowGfx: Phaser.GameObjects.Graphics;
   pulseTween: Phaser.Tweens.Tween | null;
   target: TextWordTarget | null;
+  wordAnchor: WordBodyAnchorHandle | null;
   spawnX: number;
   restY: number;
   word: string;
@@ -157,6 +189,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
+  private band!: ConsoleBand;
   private spirits: LanternSpirit[] = [];
   private activeTargets: TextWordTarget[] = [];
   /** Temple scrolling-phrase banners currently in flight. */
@@ -177,10 +210,18 @@ export class SkyIslandScene extends Phaser.Scene {
    *  Faded in when her encounter begins, faded/destroyed out when it resolves;
    *  also cleaned up on SHUTDOWN as a safety net. */
   private ettaSprite: Phaser.GameObjects.Image | null = null;
+  private ettaWordAnchors: WordBodyAnchorHandle[] = [];
+  private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
+  private beaconFlameCue: Phaser.GameObjects.Container | null = null;
+  private kindAnswerCue: Phaser.GameObjects.Container | null = null;
+  private tetherThreadCue: Phaser.GameObjects.Container | null = null;
   private companionChoice: "take" | "let-go" | null = null;
+  private lanternMothCompanion: Phaser.GameObjects.Container | null = null;
+  private lanternMothWordAnchors: WordBodyAnchorHandle[] = [];
 
   // Boss state
   private bossContainer: Phaser.GameObjects.Container | null = null;
+  private bossWordAnchors: WordBodyAnchorHandle[] = [];
   /** Painted Scholar-Spirit boss body — kept so beats can tint-flash it. */
   private bossSprite: Phaser.GameObjects.Image | null = null;
   private bossRingTween: Phaser.Tweens.Tween | null = null;
@@ -201,6 +242,8 @@ export class SkyIslandScene extends Phaser.Scene {
   // that's toll-strike (bells-tongue) + jam-foe (sabotage-wrench, earned in the
   // Forge), both acting on the scrolling banners. Null until create().
   private oneShotInvoker: OneShotInvoker<ScrollingPhrase> | null = null;
+  private pathCue: Phaser.GameObjects.Container | null = null;
+  private pathWordAnchors: WordBodyAnchorHandle[] = [];
 
   private ambientHandle?: AmbientHandle;
   private revisit = false;
@@ -216,12 +259,22 @@ export class SkyIslandScene extends Phaser.Scene {
     this.activeTargets = [];
     this.activePhrases = [];
     this.oneShotInvoker = null;
+    this.pathCue = null;
+    this.pathWordAnchors = [];
     this.fork1Choice = null;
     this.fork2Choice = null;
     this.ettaDone = false;
     this.ettaSprite = null;
+    this.ettaWordAnchors = [];
+    this.forkChoiceWordAnchors = [];
+    this.beaconFlameCue = null;
+    this.kindAnswerCue = null;
+    this.tetherThreadCue = null;
     this.companionChoice = null;
+    this.lanternMothCompanion = null;
+    this.lanternMothWordAnchors = [];
     this.bossContainer = null;
+    this.bossWordAnchors = [];
     this.bossSprite = null;
     this.bossRingTween = null;
     this.quietLordFiredInPhase2 =
@@ -236,6 +289,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.load.image("sky-lantern-spirit", lanternSpiritSprite);
     this.load.image("scholar-spirit", scholarSpiritSprite);
     this.load.image("etta", ettaSprite);
+    this.load.image("sky-companion-lantern-moth", lanternMothSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
@@ -243,14 +297,88 @@ export class SkyIslandScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.fadeIn(600, 26, 16, 8);
-    this.add
+    const backdrop = this.add
       .image(0, 0, "sky-island-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
+    addBackdropDrift(this, backdrop, { durationMs: 17500, driftX: -2, driftY: -6 });
+    addAmbientDrift(this, {
+      kind: "mote",
+      count: 38,
+      depth: -2,
+      area: { x: 80, y: 100, width: this.scale.width - 160, height: 700 },
+      alpha: 0.24,
+      minSize: 1.5,
+      maxSize: 4.5,
+      driftX: 90,
+      driftY: -170,
+      minDurationMs: 6200,
+      maxDurationMs: 13000,
+    });
+    addLivingLight(this, {
+      x: 960,
+      y: 322,
+      width: 480,
+      height: 190,
+      color: 0xf2cc65,
+      alpha: 0.055,
+      depth: -5,
+      durationMs: 3100,
+    });
+    addLivingLight(this, {
+      x: 1450,
+      y: 435,
+      width: 420,
+      height: 190,
+      color: 0xe9b44e,
+      alpha: 0.045,
+      depth: -5,
+      durationMs: 3500,
+      delayMs: 850,
+    });
+    addLivingLight(this, {
+      x: 960,
+      y: 650,
+      width: 780,
+      height: 300,
+      color: 0x9ad8ff,
+      alpha: 0.035,
+      depth: -6,
+      durationMs: 4300,
+      delayMs: 500,
+      scale: 1.035,
+    });
+    addAmbientDrift(this, {
+      kind: "mote",
+      count: 14,
+      depth: -1.45,
+      area: { x: 80, y: 300, width: this.scale.width - 160, height: 470 },
+      alpha: 0.16,
+      minSize: 4,
+      maxSize: 9,
+      driftX: 120,
+      driftY: -210,
+      minDurationMs: 5200,
+      maxDurationMs: 10800,
+    });
     this.drawTempleStones();
     this.drawAmbientLanterns();
     this.wrenContainer = this.drawWren(this.scale.width / 2, 900);
+    playSceneEventPulse(this, {
+      kind: "mote",
+      color: 0xf2cc65,
+      x: this.wrenContainer.x,
+      y: this.wrenContainer.y - 90,
+      depth: -0.25,
+      durationMs: 720,
+      ringWidth: 270,
+      ringHeight: 92,
+      count: 8,
+      alpha: 0.1,
+      spreadX: 126,
+      spreadY: 38,
+    });
 
     // Tier 4 — a revisit is a free-passage replay (no combat) → neutral loadout.
     // Resolved before the band so the passive relic icons can populate it.
@@ -263,13 +391,18 @@ export class SkyIslandScene extends Phaser.Scene {
     // composition) that houses the meters + satchel. Passive relics show as icon
     // tiles ("always on"); the offensive one-shots drop in as charge cards. This
     // replaces the floating top-right HUD and the centered one-shot stack.
-    const band = new ConsoleBand(this, {
+    this.band = new ConsoleBand(this, {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,
     });
+    const band = this.band;
 
-    this.narration = new NarrationManager(this, { y: 150, framed: true });
+    this.narration = new NarrationManager(this, {
+      y: 150,
+      framed: true,
+      onSpeak: (speakerName) => this.attendSpeaker(speakerName),
+    });
 
     this.typingInput = new TypingInputController(this.store);
     this.typingInput.setKeystrokeHooks({
@@ -283,7 +416,11 @@ export class SkyIslandScene extends Phaser.Scene {
     new HeartSoulHud(this, {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
-      onSustainedLowHeart: () => this.setNarrator(pickLowHeartLine().text),
+      onSustainedLowHeart: () =>
+        this.band.showNotice(pickLowHeartLine().text, {
+          label: "heart",
+          durationMs: 2400,
+        }),
       anchor: band.metersAnchor,
       plate: false,
     });
@@ -303,7 +440,7 @@ export class SkyIslandScene extends Phaser.Scene {
       getThreats: () => this.liveBannerThreats(),
       applyEffect: (effect, targets) => this.applyOneShot(effect, targets),
       isActive: () => this.activePhrases.some((p) => !p.isResolved()),
-      announce: (text) => this.setNarrator(text),
+      announce: (text) => this.band.showNotice(text, { label: "relic" }),
       slots: band.oneShotSlots,
       compact: true,
     });
@@ -314,10 +451,13 @@ export class SkyIslandScene extends Phaser.Scene {
       this.oneShotInvoker?.destroy();
       this.oneShotInvoker = null;
       this.bossRingTween?.stop();
+      this.pathCue = null;
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
       this.templeLanterns.forEach((g) => g.destroy());
       this.templeLanterns = [];
+      this.clearSkyForkCues();
+      this.clearEttaWordAnchors();
       this.ettaSprite?.destroy();
       this.ettaSprite = null;
     });
@@ -352,6 +492,7 @@ export class SkyIslandScene extends Phaser.Scene {
     }
 
     this.setNarrator(narratorLine);
+    this.band.setObjective("Type the sky memory to return to the Almanac.");
     this.time.delayedCall(2400, () => this.deliverRevisitPassage(words));
   }
 
@@ -363,7 +504,10 @@ export class SkyIslandScene extends Phaser.Scene {
           this.cameras.main.fadeOut(700, 26, 16, 8);
           this.cameras.main.once(
             Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-            () => this.scene.start("PortalChamberScene", { store: this.store }),
+            () => this.scene.start("PortalChamberScene", {
+              store: this.store,
+              arrival: "sky-island",
+            }),
           );
         });
         return;
@@ -376,7 +520,9 @@ export class SkyIslandScene extends Phaser.Scene {
         x: this.scale.width / 2,
         y: this.scale.height / 2,
         fontSize: 44,
+        onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
+          playWrenAction(this.wrenSprite);
           playChime();
           idx += 1;
           this.typingInput.unregister(target);
@@ -394,12 +540,14 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private startAct1(): void {
     this.narration.say("sky_intro_arrival");
+    this.band.setObjective("Type each path word to cross the floating stones.");
     this.time.delayedCall(2800, () => this.runPathBeats(0));
   }
 
   /** Three exploration beats: balance / lantern / stepping */
   private runPathBeats(idx: number): void {
     if (idx >= PATH_BEATS.length) {
+      this.dismissPathCue();
       this.time.delayedCall(700, () => this.startLanternLighter());
       return;
     }
@@ -409,14 +557,21 @@ export class SkyIslandScene extends Phaser.Scene {
       "A paper lantern hangs right across the path, still lit. Lift it aside gently.",
       "Stepping stones. The gaps are wide, the island hums below your feet.",
     ];
+    this.showPathCue(beat);
     this.setNarrator(narrations[idx] ?? "");
-    const target = this.makeWord({
+    const target = this.makePathWord({
       scene: this,
       word: beat,
       x: this.scale.width / 2,
       y: this.scale.height / 2,
       fontSize: 44,
+      onClaim: () => {
+        playWrenFocus(this.wrenSprite);
+        this.pulsePathCue(false);
+      },
       onComplete: () => {
+        playWrenAction(this.wrenSprite);
+        this.pulsePathCue(true);
         playChime();
         this.time.delayedCall(600, () => this.runPathBeats(idx + 1));
       },
@@ -425,12 +580,146 @@ export class SkyIslandScene extends Phaser.Scene {
     this.activeTargets.push(target);
   }
 
+  private showPathCue(beat: (typeof PATH_BEATS)[number]): void {
+    this.dismissPathCue(false);
+    const cue =
+      beat === "balance"
+        ? this.drawBalanceBridgeCue()
+        : beat === "lantern"
+          ? this.drawPathLanternCue()
+          : this.drawSteppingStonesCue();
+    this.pathCue = cue;
+    this.tweens.add({
+      targets: cue,
+      alpha: 0.88,
+      y: cue.y - 8,
+      duration: 380,
+      ease: "Sine.easeOut",
+      onComplete: () => addIdleBreath(this, cue, { dy: -3, durationMs: 2700 }),
+    });
+  }
+
+  private drawBalanceBridgeCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(this.scale.width / 2 - 52, 802).setDepth(-1).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 250, 24, { y: 20, alpha: 0.14 }));
+    const bridge = this.add.graphics().setAngle(-3);
+    bridge.fillStyle(0x6b5c45, 0.82);
+    bridge.fillRoundedRect(-132, -16, 264, 32, 12);
+    bridge.fillStyle(0x9b8a6a, 0.72);
+    bridge.fillRoundedRect(-118, -10, 70, 12, 6);
+    bridge.fillRoundedRect(-28, -10, 58, 12, 6);
+    bridge.fillRoundedRect(52, -10, 60, 12, 6);
+    bridge.lineStyle(2, 0xd6c386, 0.24);
+    bridge.lineBetween(-118, -18, -92, 18);
+    bridge.lineBetween(-18, -18, 6, 18);
+    bridge.lineBetween(86, -18, 106, 18);
+    c.add(bridge);
+    return c;
+  }
+
+  private drawPathLanternCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(this.scale.width / 2 + 22, 748).setDepth(-1).setAlpha(0);
+    const cord = this.add.graphics();
+    cord.lineStyle(1.5, 0x8a7060, 0.54);
+    cord.lineBetween(0, -104, 0, -34);
+    cord.lineStyle(1, 0xc9a14a, 0.46);
+    cord.lineBetween(-24, -34, 24, -34);
+    c.add(cord);
+
+    const glow = this.add.graphics();
+    glow.fillStyle(0xf5c842, 0.1);
+    glow.fillEllipse(0, 8, 126, 126);
+    glow.lineStyle(2, 0xf5c842, 0.16);
+    glow.strokeEllipse(0, 8, 96, 102);
+    c.add(glow);
+
+    const body = this.add.graphics();
+    body.fillStyle(0xd49020, 0.7);
+    body.fillRoundedRect(-21, -26, 42, 58, 18);
+    body.lineStyle(2, 0xfdedb0, 0.74);
+    body.strokeRoundedRect(-21, -26, 42, 58, 18);
+    body.fillStyle(0xfdedb0, 0.74);
+    body.fillEllipse(0, 2, 16, 26);
+    c.add(body);
+
+    this.tweens.add({
+      targets: [glow, body],
+      scaleX: 1.08,
+      scaleY: 1.12,
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    return c;
+  }
+
+  private drawSteppingStonesCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(this.scale.width / 2 + 36, 820).setDepth(-1).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 240, 22, { y: 18, alpha: 0.12 }));
+    const stones = this.add.graphics();
+    const stoneSpecs = [
+      { x: -102, y: 18, w: 78, h: 30 },
+      { x: -24, y: -6, w: 88, h: 34 },
+      { x: 74, y: 14, w: 76, h: 30 },
+    ];
+    stoneSpecs.forEach((stone, i) => {
+      stones.fillStyle(i === 1 ? 0x6c725f : 0x565d50, 0.92);
+      stones.fillEllipse(stone.x, stone.y, stone.w, stone.h);
+      stones.lineStyle(2, 0xd6c386, 0.18);
+      stones.strokeEllipse(stone.x, stone.y, stone.w * 0.9, stone.h * 0.78);
+    });
+    c.add(stones);
+    return c;
+  }
+
+  private pulsePathCue(completion: boolean): void {
+    if (!this.pathCue?.scene) return;
+    playActorAttention(this, this.pathCue, {
+      scale: completion ? 1.035 : 1.018,
+      durationMs: completion ? 260 : 180,
+    });
+    playBodyImpact(this, this.pathCue, {
+      kind: "mote",
+      color: PALETTE_HEX.brass,
+      offsetY: -12,
+      depth: 12,
+      ringRadius: completion ? 44 : 28,
+      count: completion ? 9 : 5,
+      durationMs: completion ? 460 : 260,
+    });
+  }
+
+  private dismissPathCue(animate = true): void {
+    const cue = this.pathCue;
+    this.clearPathWordAnchors();
+    if (!cue?.scene) {
+      this.pathCue = null;
+      return;
+    }
+    this.pathCue = null;
+    this.tweens.killTweensOf(cue);
+    if (!animate) {
+      cue.destroy();
+      return;
+    }
+    this.tweens.add({
+      targets: cue,
+      alpha: 0,
+      y: cue.y - 20,
+      duration: 260,
+      ease: "Sine.easeIn",
+      onComplete: () => cue.destroy(),
+    });
+  }
+
   // ─── Lantern-Lighter NPC ──────────────────────────────────────────────────
 
   private startLanternLighter(): void {
+    this.band.setObjective("Answer the Lantern-Lighter before the spirits wake.");
     this.narration.say("sky_lantern_lighter_intro");
     this.time.delayedCall(2000, () => {
-      this.setNarrator(LIGHTER_LINE_1);
+      this.setNarrator(LIGHTER_LINE_1, "Lantern-Lighter");
       this.time.delayedCall(600, () => {
         const t = this.makeWord({
           scene: this,
@@ -441,9 +730,9 @@ export class SkyIslandScene extends Phaser.Scene {
           onComplete: () => {
             playChime();
             this.clearActiveTargets();
-            this.setNarrator(LIGHTER_LINE_2);
+            this.setNarrator(LIGHTER_LINE_2, "Lantern-Lighter");
             this.time.delayedCall(3200, () => {
-              this.setNarrator(LIGHTER_LINE_3);
+              this.setNarrator(LIGHTER_LINE_3, "Lantern-Lighter");
               this.time.delayedCall(2800, () => this.onLighterConvoComplete());
             });
           },
@@ -477,8 +766,10 @@ export class SkyIslandScene extends Phaser.Scene {
     // the first spirit encounter lands with the same weight.
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseSkyWave({ y: 710, ringWidth: 980, ringHeight: 160 });
 
     this.setNarrator("Two lantern-spirits drift from the tower path, pale and unhurried.");
+    this.band.setObjective("Clear the lantern-spirits before they reach Wren.");
     const words = pickAdaptiveWords(
       filterWordsByLength(SKY_ISLAND_WORD_BANK, 6, 8),
       2,
@@ -524,6 +815,7 @@ export class SkyIslandScene extends Phaser.Scene {
     // like an event, not just "more text appears."
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
+    this.pulseSkyWave();
 
     if (this.templeLanterns.length === 0) {
       this.drawTempleLanterns();
@@ -561,6 +853,11 @@ export class SkyIslandScene extends Phaser.Scene {
       "The fifth and final chamber. They fly, three at once. Type before they leave you.",
     ];
     this.setNarrator(templeNames[idx] ?? "");
+    this.band.setObjective(
+      cfg.count === 1
+        ? "Finish the moving scroll before it leaves the path."
+        : `Triage ${cfg.count} moving scrolls before they leave the path.`,
+    );
 
     // Pick `cfg.count` distinct phrases from the long-phrase bank.
     const phrases = shuffleArr(
@@ -580,6 +877,11 @@ export class SkyIslandScene extends Phaser.Scene {
         // Tier 4 — quiet-advance buys more time before a banner scrolls off.
         durationMs: cfg.durationMs * this.combat.advanceMult,
         delayMs: i * cfg.staggerMs,
+        claimLineFrom: () => ({
+          x: this.wrenContainer.x,
+          y: this.wrenContainer.y - 116,
+        }),
+        claimLineColor: 0xf5c842,
         onComplete: () => this.onPhraseResolved(true),
         onMiss: () => this.onPhraseResolved(false),
       });
@@ -593,7 +895,7 @@ export class SkyIslandScene extends Phaser.Scene {
    *  and shakes Wren. */
   private onPhraseResolved(success: boolean): void {
     if (!success) {
-      flashWrenMiss(this.wrenSprite);
+      playWrenHurt(this.wrenSprite, { knockX: 0 });
       this.cameras.main.shake(180, 0.004);
       this.typingInput.getStats().record(false);
     }
@@ -635,6 +937,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.setNarrator(
       "A sealed scroll, pinned in still air. No haste here — but no mistakes. One slip and it reseals.",
     );
+    this.band.setObjective("Type the sealed scroll with no mistakes.");
     // No scrolling banners this temple — clear the blur-driven list.
     this.activePhrases = [];
     this.templePhrasesRemaining = 0;
@@ -683,17 +986,35 @@ export class SkyIslandScene extends Phaser.Scene {
    *  the phrase target so the (equal-depth) text renders on top of it. */
   private drawSealedScroll(cx: number, cy: number): Phaser.GameObjects.Container {
     const c = this.add.container(cx, cy);
+    const shadow = this.add.graphics();
     const g = this.add.graphics();
     const w = 920;
     const h = 120;
+    shadow.fillStyle(0x05030a, 0.28);
+    shadow.fillRoundedRect(-w / 2 + 10, -h / 2 + 14, w, h, 14);
+    c.add(shadow);
+    // Hanging cords/pins: the scroll is "pinned in still air", not a loose UI
+    // card. Keep these subtle so the phrase remains the focal point.
+    g.lineStyle(2, 0xc9a14a, 0.38);
+    g.lineBetween(-w / 2 + 110, -h / 2 - 58, -w / 2 + 76, -h / 2 + 8);
+    g.lineBetween(w / 2 - 110, -h / 2 - 58, w / 2 - 76, -h / 2 + 8);
+    g.fillStyle(0xc9a14a, 0.66);
+    g.fillCircle(-w / 2 + 110, -h / 2 - 58, 6);
+    g.fillCircle(w / 2 - 110, -h / 2 - 58, 6);
     g.fillStyle(0xf3ead2, 0.95);
     g.fillRoundedRect(-w / 2, -h / 2, w, h, 14);
+    g.fillStyle(0xe1d2ad, 0.55);
+    g.fillTriangle(-w / 2 + 18, -h / 2 + 12, -w / 2 + 66, -h / 2 + 12, -w / 2 + 18, -h / 2 + 46);
+    g.fillTriangle(w / 2 - 18, h / 2 - 12, w / 2 - 66, h / 2 - 12, w / 2 - 18, h / 2 - 46);
     g.lineStyle(3, 0xc9a14a, 0.9);
     g.strokeRoundedRect(-w / 2, -h / 2, w, h, 14);
     // Rolled ends.
     g.fillStyle(0xc9a14a, 0.85);
     g.fillRoundedRect(-w / 2 - 14, -h / 2 - 6, 14, h + 12, 6);
     g.fillRoundedRect(w / 2, -h / 2 - 6, 14, h + 12, 6);
+    g.lineStyle(2, 0x8a7060, 0.55);
+    g.lineBetween(-w / 2 + 34, -h / 2 + 22, w / 2 - 34, -h / 2 + 22);
+    g.lineBetween(-w / 2 + 34, h / 2 - 22, w / 2 - 34, h / 2 - 22);
     c.add(g);
     // Wax seal motif at the bottom edge.
     const seal = this.add.graphics();
@@ -702,6 +1023,25 @@ export class SkyIslandScene extends Phaser.Scene {
     seal.fillStyle(0x7a2a1e, 0.9);
     seal.fillCircle(0, h / 2 - 8, 8);
     c.add(seal);
+    this.tweens.add({
+      targets: seal,
+      scaleX: 1.08,
+      scaleY: 1.08,
+      duration: 1300,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    c.once(Phaser.GameObjects.Events.DESTROY, () => this.tweens.killTweensOf(seal));
+    playBodyImpact(this, c, {
+      kind: "mote",
+      color: 0xf5c842,
+      offsetY: 0,
+      depth: 21,
+      ringRadius: 58,
+      count: 10,
+      durationMs: 420,
+    });
     return c;
   }
 
@@ -793,26 +1133,22 @@ export class SkyIslandScene extends Phaser.Scene {
     }
   }
 
-  /** Surface the active relic effects once, before the realm's first combat, so
-   *  the player sees their earlier-realm choices paying off. Empty loadout
-   *  (incl. revisits) passes straight through. */
+  /** Surface that the satchel is doing something here, once and briefly. The
+   *  persistent console-band icons show what you carry, so avoid flooding the
+   *  narration card with one line per relic. */
   private announceCombatLoadout(onDone: () => void): void {
     const lines = this.combat.announcements;
     if (lines.length === 0) {
       onDone();
       return;
     }
-    let i = 0;
-    const showNext = (): void => {
-      if (i >= lines.length) {
-        this.time.delayedCall(700, onDone);
-        return;
-      }
-      this.setNarrator(lines[i]!);
-      i += 1;
-      this.time.delayedCall(2200, showNext);
-    };
-    showNext();
+    this.band.showNotice(
+      lines.length === 1
+        ? lines[0]!
+        : "Your satchel stirs; its relics answer here.",
+      { label: "satchel" },
+    );
+    this.time.delayedCall(1900, onDone);
   }
 
   // ─── Scholar Etta side encounter ─────────────────────────────────────────
@@ -823,9 +1159,9 @@ export class SkyIslandScene extends Phaser.Scene {
     );
     this.showEtta();
     this.time.delayedCall(2000, () => {
-      this.setNarrator(ETTA_LINE);
+      this.setNarrator(ETTA_LINE, "Etta");
       this.time.delayedCall(600, () => {
-        const helpTarget = this.makeWord({
+        const helpTarget = this.makeEttaWord({
           scene: this,
           word: ETTA_HELP_TRIGGER,
           x: this.scale.width / 2 - 300,
@@ -833,13 +1169,16 @@ export class SkyIslandScene extends Phaser.Scene {
           frame: "banner",
           fontSize: 36,
           onComplete: () => {
+            playActorAttention(this, this.ettaSprite, {
+              tint: PALETTE_HEX.brass,
+            });
             this.clearActiveTargets();
             this.startEttaHelp(nextTempleIdx);
           },
         });
         // Any other typed word (typing something that doesn't start with 'h')
         // will just fail to claim — but we also offer a "skip" word
-        const skipTarget = this.makeWord({
+        const skipTarget = this.makeEttaWord({
           scene: this,
           word: "keep moving",
           x: this.scale.width / 2 + 300,
@@ -847,6 +1186,9 @@ export class SkyIslandScene extends Phaser.Scene {
           frame: "banner",
           fontSize: 36,
           onComplete: () => {
+            playActorAttention(this, this.ettaSprite, {
+              tint: PALETTE_HEX.brass,
+            });
             this.clearActiveTargets();
             this.hideEtta();
             this.setNarrator("The scholar watches you go in silence.");
@@ -863,7 +1205,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private startEttaHelp(nextTempleIdx: number): void {
     this.setNarrator("You approach the book. Scholar Etta holds her breath.");
     this.time.delayedCall(1200, () => {
-      const liftTarget = this.makeWord({
+      const liftTarget = this.makeEttaWord({
         scene: this,
         word: ETTA_CHAIN_1,
         x: this.scale.width / 2,
@@ -871,10 +1213,13 @@ export class SkyIslandScene extends Phaser.Scene {
         fontSize: 38,
         onComplete: () => {
           playChime();
+          playActorAttention(this, this.ettaSprite, {
+            tint: PALETTE_HEX.brass,
+          });
           this.clearActiveTargets();
           this.setNarrator("The book is heavier than it looks. Old paper, dense with writing.");
           this.time.delayedCall(1400, () => {
-            const placeTarget = this.makeWord({
+            const placeTarget = this.makeEttaWord({
               scene: this,
               word: ETTA_CHAIN_2,
               x: this.scale.width / 2,
@@ -882,6 +1227,9 @@ export class SkyIslandScene extends Phaser.Scene {
               fontSize: 38,
               onComplete: () => {
                 playChime();
+                playActorAttention(this, this.ettaSprite, {
+                  tint: PALETTE_HEX.brass,
+                });
                 this.clearActiveTargets();
                 this.ettaDone = true;
                 this.store.update((s) => {
@@ -914,15 +1262,20 @@ export class SkyIslandScene extends Phaser.Scene {
     const sprite = this.add
       .image(ETTA_SPRITE_X, ETTA_SPRITE_Y, "etta")
       .setOrigin(0.5, 1)
-      .setDepth(ETTA_SPRITE_DEPTH)
-      .setAlpha(0);
+      .setDepth(ETTA_SPRITE_DEPTH);
     sprite.setScale(ETTA_SPRITE_HEIGHT / sprite.height);
     this.ettaSprite = sprite;
-    this.tweens.add({
-      targets: sprite,
-      alpha: ETTA_RESTING_ALPHA,
-      duration: 700,
-      ease: "Sine.easeOut",
+    stageAnchoredSprite(this, sprite, {
+      shadowWidth: 110,
+      shadowHeight: 22,
+      shadowOffsetY: 8,
+      shadowAlpha: 0.18,
+      shadowDepth: ETTA_SPRITE_DEPTH - 0.1,
+      restAlpha: ETTA_RESTING_ALPHA,
+      entranceOffsetY: 14,
+      entranceMs: 760,
+      breathDy: -3,
+      breathMs: 2500,
     });
   }
 
@@ -930,13 +1283,11 @@ export class SkyIslandScene extends Phaser.Scene {
   private hideEtta(): void {
     const sprite = this.ettaSprite;
     if (!sprite) return;
+    this.clearEttaWordAnchors();
     this.ettaSprite = null;
-    this.tweens.add({
-      targets: sprite,
-      alpha: 0,
-      duration: 600,
+    fadeOutStagedSprite(this, sprite, {
+      durationMs: 620,
       ease: "Sine.easeIn",
-      onComplete: () => sprite.destroy(),
     });
   }
 
@@ -944,8 +1295,10 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private startFork1(): void {
     this.narration.say("sky_fork1_intro");
+    this.band.setObjective("Choose whether to help Etta or take the flame.");
+    this.showFork1Cues();
 
-    const helpTarget = this.makeWord({
+    const helpTarget = this.makeEttaWord({
       scene: this,
       word: "help scholar etta",
       x: this.scale.width / 2 - 400,
@@ -958,7 +1311,7 @@ export class SkyIslandScene extends Phaser.Scene {
         this.startFork1HelpEtta();
       },
     });
-    const stealTarget = this.makeWord({
+    const stealTarget = this.makeSkyForkWord(this.beaconFlameCue, {
       scene: this,
       word: "steal the flame",
       x: this.scale.width / 2 + 400,
@@ -970,13 +1323,15 @@ export class SkyIslandScene extends Phaser.Scene {
         this.fork1Choice = "steal-flame";
         this.startFork1StealFlame();
       },
-    });
+    }, -76);
     this.typingInput.register(helpTarget);
     this.typingInput.register(stealTarget);
     this.activeTargets.push(helpTarget, stealTarget);
   }
 
   private startFork1HelpEtta(): void {
+    this.fadeOutForkCue(this.beaconFlameCue);
+    this.beaconFlameCue = null;
     if (!this.ettaDone) {
       // Formal commit to the etta path if side encounter was skipped
       this.store.update((s) => {
@@ -1005,6 +1360,7 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private startFork1StealFlame(): void {
+    this.hideEtta();
     this.setNarrator("You reach into the beacon and close your hand around the flame.");
     this.time.delayedCall(1800, () => {
       this.runPassageChain(
@@ -1015,7 +1371,12 @@ export class SkyIslandScene extends Phaser.Scene {
           "You hold a curl of golden fire in your palm.",
           "Something shifts in the air. The summit calls louder.",
         ],
-        () => this.startAct3(),
+        () => {
+          this.fadeOutForkCue(this.beaconFlameCue);
+          this.beaconFlameCue = null;
+          this.startAct3();
+        },
+        { body: this.beaconFlameCue, sourceOffsetY: -76 },
       );
     });
   }
@@ -1036,9 +1397,11 @@ export class SkyIslandScene extends Phaser.Scene {
     // with the same event-weight as a wave.
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
-    this.setNarrator(`The spirit speaks: "${RIDDLE_1_DISPLAY}"`);
+    this.pulseSkyWave({ y: 560, ringWidth: 820, ringHeight: 190, count: 14 });
+    this.setNarrator(RIDDLE_1_DISPLAY, "Scholar-Spirit");
+    this.band.setObjective("Answer the Scholar-Spirit's riddle.");
     this.time.delayedCall(1200, () => {
-      const target = this.makeWord({
+      const target = this.makeScholarBossWord({
         scene: this,
         word: BOSS_PHASE1_ANSWER,
         x: this.scale.width / 2,
@@ -1060,9 +1423,11 @@ export class SkyIslandScene extends Phaser.Scene {
   private startBossPhase2(): void {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
-    this.setNarrator(`The spirit asks again: "${RIDDLE_2_DISPLAY}"`);
+    this.pulseSkyWave({ y: 560, ringWidth: 820, ringHeight: 190, count: 14 });
+    this.setNarrator(RIDDLE_2_DISPLAY, "Scholar-Spirit");
+    this.band.setObjective("Answer the second riddle.");
     this.time.delayedCall(1200, () => {
-      const target = this.makeWord({
+      const target = this.makeScholarBossWord({
         scene: this,
         word: BOSS_PHASE2_ANSWER,
         x: this.scale.width / 2,
@@ -1094,14 +1459,16 @@ export class SkyIslandScene extends Phaser.Scene {
   private startBossPhase3(): void {
     playWaveSting();
     this.cameras.main.shake(220, 0.005);
-    this.setNarrator(`The spirit speaks its last riddle: "${RIDDLE_3_DISPLAY}"`);
+    this.pulseSkyWave({ y: 560, ringWidth: 820, ringHeight: 190, count: 14 });
+    this.setNarrator(RIDDLE_3_DISPLAY, "Scholar-Spirit");
+    this.band.setObjective("Type the final answer before the spirit fades.");
     this.time.delayedCall(1400, () => {
       // Track typed characters to progressively dim the spirit as the
       // sentence fills in — mirrors the per-word alpha from the old sequential
       // runner but driven by cursor position at quarter-sentence milestones.
       const totalChars = BOSS_PHASE3_ANSWER.length;
       let lastFadeBand = 0;
-      const target = this.makeWord({
+      const target = this.makeScholarBossWord({
         scene: this,
         word: BOSS_PHASE3_ANSWER,
         x: this.scale.width / 2,
@@ -1186,8 +1553,10 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private startFork2(): void {
     this.setNarrator("The summit is quiet. Two choices remain.");
+    this.band.setObjective("Choose how to answer the tethered spirit.");
+    this.showFork2Cues();
 
-    const kindTarget = this.makeWord({
+    const kindTarget = this.makeSkyForkWord(this.kindAnswerCue, {
       scene: this,
       word: "answer kindly",
       x: this.scale.width / 2 - 380,
@@ -1199,8 +1568,8 @@ export class SkyIslandScene extends Phaser.Scene {
         this.fork2Choice = "answer-kindly";
         this.startFork2KindEnding();
       },
-    });
-    const tetherTarget = this.makeWord({
+    }, -56);
+    const tetherTarget = this.makeSkyForkWord(this.tetherThreadCue, {
       scene: this,
       word: "cut the tether",
       x: this.scale.width / 2 + 380,
@@ -1212,16 +1581,18 @@ export class SkyIslandScene extends Phaser.Scene {
         this.fork2Choice = "cut-tether";
         this.startFork2CutTether();
       },
-    });
+    }, -58);
     this.typingInput.register(kindTarget);
     this.typingInput.register(tetherTarget);
     this.activeTargets.push(kindTarget, tetherTarget);
   }
 
   private startFork2KindEnding(): void {
+    this.fadeOutForkCue(this.tetherThreadCue);
+    this.tetherThreadCue = null;
     this.setNarrator("You speak to what remains of the spirit.");
     this.time.delayedCall(1400, () => {
-      const t = this.makeWord({
+      const t = this.makeSkyForkWord(this.kindAnswerCue, {
         scene: this,
         word: "you kept the light",
         x: this.scale.width / 2,
@@ -1231,15 +1602,19 @@ export class SkyIslandScene extends Phaser.Scene {
           playChime();
           this.clearActiveTargets();
           this.setNarrator("The lanterns around the summit brighten. The island breathes.");
+          this.fadeOutForkCue(this.kindAnswerCue);
+          this.kindAnswerCue = null;
           this.time.delayedCall(2200, () => this.startLanternMothGate());
         },
-      });
+      }, -56);
       this.typingInput.register(t);
       this.activeTargets.push(t);
     });
   }
 
   private startFork2CutTether(): void {
+    this.fadeOutForkCue(this.kindAnswerCue);
+    this.kindAnswerCue = null;
     this.setNarrator("You find the thread that binds the spirit to the beacon.");
     this.time.delayedCall(1400, () => {
       this.runPassageChain(
@@ -1248,7 +1623,12 @@ export class SkyIslandScene extends Phaser.Scene {
           "The thread is thin as spider-silk, strong as iron.",
           "The island lurches once, then steadies. A wind rushes past — freed.",
         ],
-        () => this.startLanternMothGate(),
+        () => {
+          this.fadeOutForkCue(this.tetherThreadCue);
+          this.tetherThreadCue = null;
+          this.startLanternMothGate();
+        },
+        { body: this.tetherThreadCue, sourceOffsetY: -58 },
       );
     });
   }
@@ -1261,8 +1641,9 @@ export class SkyIslandScene extends Phaser.Scene {
       this.setNarrator(
         "A lantern-moth drifts down from the beacon's height, wings lit like paper.",
       );
+      this.showLanternMothCompanion();
       this.time.delayedCall(1200, () => {
-        const takeTarget = this.makeWord({
+        const takeTarget = this.makeLanternMothWord({
           scene: this,
           word: "take her with you",
           x: this.scale.width / 2 - 300,
@@ -1280,10 +1661,11 @@ export class SkyIslandScene extends Phaser.Scene {
             this.setNarrator(
               "The moth lands on your wrist, wings folding. She is coming with you.",
             );
+            this.pulseLanternMothCompanion();
             this.time.delayedCall(2400, () => this.startTrueNamePassage());
           },
         });
-        const letGoTarget = this.makeWord({
+        const letGoTarget = this.makeLanternMothWord({
           scene: this,
           word: "let her go",
           x: this.scale.width / 2 + 300,
@@ -1296,6 +1678,7 @@ export class SkyIslandScene extends Phaser.Scene {
             this.setNarrator(
               "She rises again into the golden air, wings a bright smear against the dusk.",
             );
+            this.dismissLanternMothCompanion(1270, 500);
             this.time.delayedCall(2000, () => this.startTrueNamePassage());
           },
         });
@@ -1307,6 +1690,52 @@ export class SkyIslandScene extends Phaser.Scene {
       // Gate not met — no near-miss (single condition, as specified)
       this.startTrueNamePassage();
     }
+  }
+
+  private showLanternMothCompanion(): void {
+    if (this.lanternMothCompanion?.scene) return;
+    this.lanternMothCompanion = stageCompanionCameo(this, {
+      textureKey: "sky-companion-lantern-moth",
+      startX: 1320,
+      startY: 520,
+      x: 1160,
+      y: 650,
+      height: 104,
+      depth: 43,
+      flipX: true,
+      shadowWidth: 70,
+      shadowHeight: 10,
+      shadowOffsetY: 34,
+      shadowAlpha: 0.12,
+      breathDy: -22,
+      breathMs: 1450,
+      wake: {
+        kind: "mote",
+        intervalMs: 120,
+        offsetY: -42,
+        spreadX: 26,
+        spreadY: 24,
+        depth: 42,
+        alpha: 0.42,
+      },
+    });
+  }
+
+  private pulseLanternMothCompanion(): void {
+    playActorAttention(this, this.lanternMothCompanion, {
+      scale: 1.045,
+      durationMs: 220,
+    });
+  }
+
+  private dismissLanternMothCompanion(x: number, y: number): void {
+    this.clearLanternMothWordAnchors();
+    dismissCompanionCameo(this, this.lanternMothCompanion, {
+      x,
+      y,
+      durationMs: 720,
+    });
+    this.lanternMothCompanion = null;
   }
 
   // ─── True-name passage ────────────────────────────────────────────────────
@@ -1373,41 +1802,22 @@ export class SkyIslandScene extends Phaser.Scene {
       this.cameras.main.fadeOut(700, 26, 16, 8);
       this.cameras.main.once(
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-        () => this.scene.start("PortalChamberScene", { store: this.store }),
+        () => this.scene.start("PortalChamberScene", {
+          store: this.store,
+          arrival: "sky-island",
+        }),
       );
     });
   }
 
   private showAlmanacStamp(onDone: () => void): void {
-    const stamp = this.add
-      .text(this.scale.width / 2, this.scale.height / 2, "the sky island of lanterns", {
-        fontFamily: SERIF,
-        fontSize: "60px",
-        color: PALETTE.cream,
-        backgroundColor: "#1a1008",
-        padding: { left: 40, right: 40, top: 20, bottom: 20 },
-      })
-      .setOrigin(0.5)
-      .setAlpha(0)
-      .setScale(0.6);
-
-    this.tweens.add({
-      targets: stamp,
-      alpha: 1,
-      scale: 1,
-      duration: 350,
-      ease: "Back.easeOut",
-      onComplete: () => {
-        playChime();
-        this.time.delayedCall(1500, () => {
-          this.tweens.add({
-            targets: stamp,
-            alpha: 0,
-            duration: 300,
-            onComplete: onDone,
-          });
-        });
-      },
+    playRealmClearResonance(this, {
+      color: PALETTE_HEX.brass,
+      y: this.scale.height / 2 - 60,
+    });
+    showAlmanacStampCard(this, "the sky island of lanterns", onDone, {
+      fontSize: 50,
+      onReveal: playChime,
     });
   }
 
@@ -1433,6 +1843,19 @@ export class SkyIslandScene extends Phaser.Scene {
     const lanternSprite = this.add.image(0, 0, "sky-lantern-spirit");
     lanternSprite.setScale(LANTERN_SPIRIT_HEIGHT / lanternSprite.height);
     container.add(lanternSprite);
+    addContainerWake(this, container, {
+      kind: "mote",
+      intervalMs: 230,
+      spreadX: 20,
+      spreadY: 16,
+      color: 0xf5c842,
+      alpha: 0.42,
+      size: 4,
+      depth: -1,
+      driftX: 22,
+      driftY: -32,
+      durationMs: 900,
+    });
     container.setAlpha(0);
 
     const spirit: LanternSpirit = {
@@ -1441,6 +1864,7 @@ export class SkyIslandScene extends Phaser.Scene {
       glowGfx,
       pulseTween: null,
       target: null,
+      wordAnchor: null,
       spawnX: targetX,
       restY: targetY,
       word,
@@ -1458,6 +1882,15 @@ export class SkyIslandScene extends Phaser.Scene {
       ease: "Sine.easeOut",
       onComplete: () => {
         if (spirit.defeated) return;
+        playBodyImpact(this, container, {
+          kind: "mote",
+          color: 0xf5c842,
+          offsetY: -36,
+          depth: 21,
+          ringRadius: 32,
+          count: 8,
+          durationMs: 360,
+        });
         // Idle pulse — a soft alpha breathe on the painted body.
         spirit.pulseTween = this.tweens.add({
           targets: lanternSprite,
@@ -1486,9 +1919,42 @@ export class SkyIslandScene extends Phaser.Scene {
       // Lantern-amber burst on completion — spirits "bloom out" in their own
       // light, matching the theme rather than the default brass.
       burstColor: 0xf5c842,
+      onClaim: () =>
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 116,
+          spirit.container.x,
+          spirit.restY - 80,
+          { color: 0xf5c842 },
+        ),
+      onAdvance: () =>
+        playBodyTypePulse(this, spirit.container, {
+          kind: "mote",
+          color: 0xf5c842,
+          offsetY: -48,
+          depth: 22,
+          ringRadius: 22,
+        }),
       onComplete: () => this.defeatSpirit(spirit),
     });
     spirit.target = target;
+    spirit.wordAnchor?.destroy();
+    spirit.wordAnchor = attachWordBodyAnchor(
+      this,
+      spirit.container,
+      () =>
+        spirit.target
+          ? { x: spirit.target.getAnchorX(), y: spirit.target.getAnchorY() }
+          : null,
+      {
+        color: 0xf5c842,
+        alpha: 0.24,
+        depth: 20,
+        sourceOffsetY: -46,
+        targetOffsetY: 24,
+      },
+    );
     this.typingInput.register(target);
     this.activeTargets.push(target);
   }
@@ -1544,9 +2010,17 @@ export class SkyIslandScene extends Phaser.Scene {
       if (idx >= 0) this.activeTargets.splice(idx, 1);
       spirit.target = null;
     }
+    spirit.wordAnchor?.destroy();
+    spirit.wordAnchor = null;
     spirit.advanceTween?.stop();
     spirit.advanceTween = null;
     this.tweens.killTweensOf(spirit.container);
+    playBodyImpact(this, spirit.container, {
+      kind: "mote",
+      color: 0xf5c842,
+      offsetY: -42,
+      ringRadius: 48,
+    });
 
     // Bloom: expand glow radius briefly
     this.tweens.add({
@@ -1586,6 +2060,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private spiritReachesWren(spirit: LanternSpirit): void {
     // Gentle flash — no wave reset
     this.cameras.main.flash(300, 26, 16, 8, false);
+    playWrenHurt(this.wrenSprite, { knockX: 0 });
     playDamageThud();
     flashDamageVignette(this);
 
@@ -1596,6 +2071,8 @@ export class SkyIslandScene extends Phaser.Scene {
       spirit.target.destroy();
       spirit.target = null;
     }
+    spirit.wordAnchor?.destroy();
+    spirit.wordAnchor = null;
     this.tweens.killTweensOf(spirit.container);
 
     this.tweens.add({
@@ -1627,6 +2104,10 @@ export class SkyIslandScene extends Phaser.Scene {
     passages: string[],
     narratorLines: string[],
     onDone: () => void,
+    owner?: {
+      body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined;
+      sourceOffsetY?: number;
+    },
   ): void {
     let step = 0;
 
@@ -1635,18 +2116,34 @@ export class SkyIslandScene extends Phaser.Scene {
         this.time.delayedCall(1400, onDone);
         return;
       }
-      const target = this.makeWord({
+      const opts: TextWordTargetOptions = {
         scene: this,
         word: passages[step] ?? "",
         x: this.scale.width / 2,
         y: this.scale.height / 2,
         fontSize: 36,
+        onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
+          playWrenAction(this.wrenSprite);
+          playActorAttention(this, this.ettaSprite, {
+            tint: PALETTE_HEX.brass,
+          });
+          playBodyImpact(this, this.wrenContainer, {
+            kind: "mote",
+            color: PALETTE_HEX.brass,
+            offsetY: -108,
+            ringRadius: 30,
+            count: 7,
+            depth: 58,
+          });
           step += 1;
           this.setNarrator(narratorLines[step - 1] ?? "");
           this.time.delayedCall(1400, advance);
         },
-      });
+      };
+      const target = owner?.body?.scene
+        ? this.makeSkyForkWord(owner.body, opts, owner.sourceOffsetY)
+        : this.makeEttaWord(opts);
       this.typingInput.register(target);
       this.activeTargets.push(target);
     };
@@ -1655,10 +2152,20 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private idleBob(c: Phaser.GameObjects.Container): void {
+    c.setScale(1, 1);
     this.tweens.add({
       targets: c,
       y: { from: c.y, to: c.y - 8 },
       duration: 1100,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    this.tweens.add({
+      targets: c,
+      scaleX: 0.992,
+      scaleY: 1.022,
+      duration: 1450,
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
@@ -1677,17 +2184,668 @@ export class SkyIslandScene extends Phaser.Scene {
     this.typingInput.handleChar(event.key);
   }
 
-  private setNarrator(text: string): void {
-    this.narration.sayRaw(text);
+  private setNarrator(text: string, speakerName: string | null = null): void {
+    this.narration.sayRaw(text, { speakerName });
+  }
+
+  private attendSpeaker(speakerName: string | null): void {
+    this.setBandSpeaker(speakerName);
+    if (speakerName === "Etta") {
+      playActorAttention(this, this.ettaSprite, {
+        tint: PALETTE_HEX.brass,
+        scale: 1.03,
+        durationMs: 220,
+      });
+    } else if (speakerName === "Scholar-Spirit") {
+      playActorAttention(this, this.bossContainer, {
+        tint: PALETTE_HEX.brass,
+        scale: 1.02,
+        durationMs: 220,
+      });
+    }
+  }
+
+  private setBandSpeaker(speakerName: string | null): void {
+    if (!speakerName || speakerName === "Runa") {
+      this.band.setPortrait("band-portrait-runa", "Runa");
+    } else if (speakerName === "Etta") {
+      this.band.setPortrait("etta", "Etta");
+    } else if (speakerName === "Scholar-Spirit") {
+      this.band.setPortrait("scholar-spirit", "Scholar-Spirit");
+    } else {
+      this.band.setPortrait(undefined, speakerName);
+    }
+  }
+
+  private pulseSkyWave(
+    opts: { y?: number; ringWidth?: number; ringHeight?: number; count?: number } = {},
+  ): void {
+    playSceneEventPulse(this, {
+      kind: "mote",
+      color: 0xffc96f,
+      x: this.scale.width / 2,
+      y: 650,
+      ringWidth: 1120,
+      ringHeight: 170,
+      count: 12,
+      alpha: 0.14,
+      ...opts,
+    });
   }
 
   /** UI-cohesion: every Sky-Island word target gets the legibility outline by
    *  default (TTT-style). Fork choices pass frame: "banner". */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
-    return new TextWordTarget({ outline: true, ...opts });
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    return new TextWordTarget({
+      outline: true,
+      ...opts,
+      onClaim: (mods) => {
+        if (opts.frame === "banner") playWrenFocus(this.wrenSprite);
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        this.playWrenTypingPulse();
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        if (opts.frame === "banner") playWrenAction(this.wrenSprite);
+        onComplete();
+      },
+    });
+  }
+
+  private makePathWord(opts: TextWordTargetOptions): TextWordTarget {
+    const cue = this.pathCue;
+    if (!cue?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.pathWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.pathWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.brass,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          cue.x,
+          cue.y - 16,
+          { color: PALETTE_HEX.brass, depth: 58 },
+        );
+        playActorAttention(this, cue, {
+          tint: PALETTE_HEX.brass,
+          scale: 1.022,
+          durationMs: 180,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, cue, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: -18,
+          depth: 58,
+          ringRadius: 28,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, cue, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: -18,
+          depth: 58,
+          ringRadius: 48,
+          count: 10,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      cue,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.brass,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -18,
+        targetOffsetY: 24,
+      },
+    );
+    this.pathWordAnchors.push(anchor);
+    cue.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
+  private makeEttaWord(opts: TextWordTargetOptions): TextWordTarget {
+    const etta = this.ettaSprite;
+    if (!etta?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.ettaWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.ettaWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.brass,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          etta.x,
+          etta.y - 120,
+          { color: PALETTE_HEX.brass, depth: 58 },
+        );
+        playActorAttention(this, etta, {
+          tint: PALETTE_HEX.brass,
+          scale: 1.02,
+          durationMs: 180,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, etta, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: -120,
+          depth: 58,
+          ringRadius: 28,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, etta, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: -120,
+          depth: 58,
+          ringRadius: 52,
+          count: 12,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      etta,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.brass,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -120,
+        targetOffsetY: 24,
+      },
+    );
+    this.ettaWordAnchors.push(anchor);
+    etta.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
+  private makeSkyForkWord(
+    body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined,
+    opts: TextWordTargetOptions,
+    sourceOffsetY = -48,
+  ): TextWordTarget {
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.forkChoiceWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.forkChoiceWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.brass,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y + sourceOffsetY,
+          { color: PALETTE_HEX.brass, depth: 58 },
+        );
+        playActorAttention(this, body, {
+          tint: PALETTE_HEX.brass,
+          scale: 1.022,
+          durationMs: 180,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: sourceOffsetY,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: sourceOffsetY,
+          depth: 58,
+          ringRadius: 46,
+          count: 11,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.brass,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY,
+        targetOffsetY: 24,
+      },
+    );
+    this.forkChoiceWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
+  private showFork1Cues(): void {
+    this.showEtta();
+    if (!this.beaconFlameCue?.scene) {
+      this.beaconFlameCue = this.createBeaconFlameCue();
+    }
+  }
+
+  private showFork2Cues(): void {
+    if (!this.kindAnswerCue?.scene) {
+      this.kindAnswerCue = this.createKindAnswerCue();
+    }
+    if (!this.tetherThreadCue?.scene) {
+      this.tetherThreadCue = this.createTetherThreadCue();
+    }
+  }
+
+  private createBeaconFlameCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(1320, 792).setDepth(42).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 126, 18, { y: 14, alpha: 0.18 }));
+    const g = this.add.graphics();
+    g.fillStyle(0x3b3025, 0.82);
+    g.fillRoundedRect(-44, -38, 88, 46, 12);
+    g.lineStyle(2, PALETTE_HEX.brass, 0.42);
+    g.strokeRoundedRect(-44, -38, 88, 46, 12);
+    g.fillStyle(PALETTE_HEX.brass, 0.78);
+    g.fillTriangle(0, -126, -24, -62, 22, -62);
+    g.fillStyle(0xfff0a8, 0.58);
+    g.fillTriangle(4, -110, -12, -68, 18, -68);
+    g.lineStyle(2, 0xffd989, 0.38);
+    g.strokeEllipse(0, -78, 86, 54);
+    g.strokeEllipse(0, -78, 118, 76);
+    c.add(g);
+    addContainerWake(this, c, {
+      kind: "mote",
+      intervalMs: 430,
+      spreadX: 34,
+      spreadY: 20,
+      offsetY: -72,
+      alpha: 0.26,
+      size: 4,
+      depth: 41,
+      driftY: -50,
+      durationMs: 1300,
+    });
+    this.tweens.add({
+      targets: c,
+      y: 770,
+      alpha: 0.92,
+      duration: 680,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!c.scene) return;
+        addIdleBreath(this, c, { dy: -4, durationMs: 2500 });
+      },
+    });
+    return c;
+  }
+
+  private createKindAnswerCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(700, 798).setDepth(42).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 134, 18, { y: 14, alpha: 0.18 }));
+    const g = this.add.graphics();
+    g.fillStyle(0x2c241b, 0.76);
+    g.fillRoundedRect(-54, -46, 108, 54, 14);
+    g.lineStyle(2, PALETTE_HEX.brass, 0.38);
+    g.strokeRoundedRect(-54, -46, 108, 54, 14);
+    g.lineStyle(2, 0xffe2a0, 0.42);
+    g.lineBetween(-30, -21, 30, -21);
+    g.lineBetween(-24, -6, 24, -6);
+    g.fillStyle(0xffd989, 0.58);
+    g.fillCircle(0, -80, 16);
+    g.lineStyle(2, 0xffd989, 0.28);
+    g.strokeCircle(0, -80, 32);
+    c.add(g);
+    addContainerWake(this, c, {
+      kind: "mote",
+      intervalMs: 480,
+      spreadX: 34,
+      spreadY: 16,
+      offsetY: -54,
+      alpha: 0.22,
+      size: 3.5,
+      depth: 41,
+      driftY: -44,
+      durationMs: 1250,
+    });
+    this.tweens.add({
+      targets: c,
+      y: 778,
+      alpha: 0.88,
+      duration: 640,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!c.scene) return;
+        addIdleBreath(this, c, { dy: -3, durationMs: 2600 });
+      },
+    });
+    return c;
+  }
+
+  private createTetherThreadCue(): Phaser.GameObjects.Container {
+    const c = this.add.container(1220, 798).setDepth(42).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 132, 18, { y: 14, alpha: 0.18 }));
+    const g = this.add.graphics();
+    g.lineStyle(3, PALETTE_HEX.brass, 0.42);
+    g.beginPath();
+    g.moveTo(-52, -28);
+    g.lineTo(-16, -72);
+    g.lineTo(18, -38);
+    g.lineTo(54, -92);
+    g.strokePath();
+    g.fillStyle(0x3f3120, 0.86);
+    g.fillCircle(-52, -28, 9);
+    g.fillCircle(54, -92, 10);
+    g.fillStyle(0xffe4a8, 0.62);
+    g.fillCircle(-16, -72, 6);
+    g.fillCircle(18, -38, 6);
+    g.lineStyle(1, 0xffe4a8, 0.24);
+    g.strokeEllipse(0, -58, 130, 78);
+    c.add(g);
+    addContainerWake(this, c, {
+      kind: "mote",
+      intervalMs: 500,
+      spreadX: 38,
+      spreadY: 20,
+      offsetY: -50,
+      alpha: 0.24,
+      size: 3.5,
+      depth: 41,
+      driftY: -42,
+      durationMs: 1250,
+    });
+    this.tweens.add({
+      targets: c,
+      y: 778,
+      alpha: 0.9,
+      duration: 640,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!c.scene) return;
+        addIdleBreath(this, c, { dy: -4, durationMs: 2400 });
+      },
+    });
+    return c;
+  }
+
+  private fadeOutForkCue(
+    cue: Phaser.GameObjects.Container | null,
+    opts: { riseY?: number; durationMs?: number } = {},
+  ): void {
+    if (!cue?.scene) return;
+    this.tweens.killTweensOf(cue);
+    this.tweens.add({
+      targets: cue,
+      y: cue.y + (opts.riseY ?? -18),
+      alpha: 0,
+      duration: opts.durationMs ?? 540,
+      ease: "Sine.easeIn",
+      onComplete: () => {
+        if (cue.scene) cue.destroy();
+      },
+    });
+  }
+
+  private clearSkyForkCues(): void {
+    this.clearForkChoiceWordAnchors();
+    for (const cue of [this.beaconFlameCue, this.kindAnswerCue, this.tetherThreadCue]) {
+      if (!cue?.scene) continue;
+      this.tweens.killTweensOf(cue);
+      cue.destroy();
+    }
+    this.beaconFlameCue = null;
+    this.kindAnswerCue = null;
+    this.tetherThreadCue = null;
+  }
+
+  private makeLanternMothWord(opts: TextWordTargetOptions): TextWordTarget {
+    const body = this.lanternMothCompanion;
+    if (!body?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.lanternMothWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.lanternMothWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.brass,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y - 70,
+          { color: PALETTE_HEX.brass, depth: 58 },
+        );
+        this.pulseLanternMothCompanion();
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: -70,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: -70,
+          depth: 58,
+          ringRadius: 44,
+          count: 9,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.brass,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -70,
+        targetOffsetY: 24,
+      },
+    );
+    this.lanternMothWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
+  private playWrenTypingPulse(): void {
+    playBodyTypePulse(this, this.wrenContainer, {
+      kind: "mote",
+      color: PALETTE_HEX.brass,
+      offsetY: -108,
+      depth: 58,
+      ringRadius: 22,
+    });
+  }
+
+  private makeScholarBossWord(opts: TextWordTargetOptions): TextWordTarget {
+    if (!this.bossContainer) return this.makeWord(opts);
+    const body = this.bossContainer;
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.bossWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.bossWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.brass,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y,
+          { color: PALETTE_HEX.brass, depth: 58 },
+        );
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: 0,
+          depth: 58,
+          ringRadius: 30,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: 0,
+          depth: 58,
+          ringRadius: 58,
+          count: 14,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.brass,
+        alpha: 0.2,
+        depth: 44,
+        sourceOffsetY: 0,
+        targetOffsetY: 24,
+      },
+    );
+    this.bossWordAnchors.push(anchor);
+    return target;
+  }
+
+  private clearBossWordAnchors(): void {
+    for (const anchor of this.bossWordAnchors) anchor.destroy();
+    this.bossWordAnchors = [];
+  }
+
+  private clearPathWordAnchors(): void {
+    for (const anchor of this.pathWordAnchors) anchor.destroy();
+    this.pathWordAnchors = [];
+  }
+
+  private clearEttaWordAnchors(): void {
+    for (const anchor of this.ettaWordAnchors) anchor.destroy();
+    this.ettaWordAnchors = [];
+  }
+
+  private clearForkChoiceWordAnchors(): void {
+    for (const anchor of this.forkChoiceWordAnchors) anchor.destroy();
+    this.forkChoiceWordAnchors = [];
+  }
+
+  private clearLanternMothWordAnchors(): void {
+    for (const anchor of this.lanternMothWordAnchors) anchor.destroy();
+    this.lanternMothWordAnchors = [];
   }
 
   private clearActiveTargets(): void {
+    this.clearBossWordAnchors();
+    this.clearPathWordAnchors();
+    this.clearEttaWordAnchors();
+    this.clearForkChoiceWordAnchors();
+    this.clearLanternMothWordAnchors();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();
@@ -1820,8 +2978,13 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {
     const c = this.add.container(x, y);
+    c.add(addLocalGroundShadow(this, 92, 20, { y: 6, alpha: 0.28 }));
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
+    stageContainerEntrance(this, c, {
+      breathDy: -5,
+      breathMs: 2200,
+    });
     return c;
   }
 

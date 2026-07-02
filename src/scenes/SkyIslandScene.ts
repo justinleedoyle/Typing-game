@@ -247,6 +247,8 @@ export class SkyIslandScene extends Phaser.Scene {
   private oneShotInvoker: OneShotInvoker<ScrollingPhrase> | null = null;
   private pathCue: Phaser.GameObjects.Container | null = null;
   private pathWordAnchors: WordBodyAnchorHandle[] = [];
+  private revisitMemoryCue: Phaser.GameObjects.Container | null = null;
+  private revisitMemoryWordAnchor: WordBodyAnchorHandle | null = null;
 
   private ambientHandle?: AmbientHandle;
   private revisit = false;
@@ -264,6 +266,8 @@ export class SkyIslandScene extends Phaser.Scene {
     this.oneShotInvoker = null;
     this.pathCue = null;
     this.pathWordAnchors = [];
+    this.revisitMemoryCue = null;
+    this.revisitMemoryWordAnchor = null;
     this.fork1Choice = null;
     this.fork2Choice = null;
     this.ettaDone = false;
@@ -460,6 +464,7 @@ export class SkyIslandScene extends Phaser.Scene {
       this.templeLanterns.forEach((g) => g.destroy());
       this.templeLanterns = [];
       this.clearSkyForkCues();
+      this.dismissRevisitMemoryCue(false);
       this.clearEttaWordAnchors();
       this.ettaSprite?.destroy();
       this.ettaSprite = null;
@@ -517,24 +522,148 @@ export class SkyIslandScene extends Phaser.Scene {
       }
       const word = words[idx];
       if (word === undefined) return;
+      this.showRevisitMemoryCue(idx, words.length);
+      const wordPos = this.revisitMemoryWordPosition(idx, words.length);
       const target = this.makeWord({
         scene: this,
         word,
-        x: this.scale.width / 2,
-        y: this.scale.height / 2,
-        fontSize: 44,
-        onClaim: () => playWrenFocus(this.wrenSprite),
+        x: wordPos.x,
+        y: wordPos.y,
+        fontSize: 40,
+        onClaim: () => {
+          playWrenFocus(this.wrenSprite);
+          this.pulseRevisitMemoryCue(false);
+        },
         onComplete: () => {
           playWrenAction(this.wrenSprite);
+          this.pulseRevisitMemoryCue(true);
           playChime();
           idx += 1;
           this.typingInput.unregister(target);
-          this.time.delayedCall(200, advance);
+          const activeIdx = this.activeTargets.indexOf(target);
+          if (activeIdx >= 0) this.activeTargets.splice(activeIdx, 1);
+          this.time.delayedCall(260, () => {
+            this.dismissRevisitMemoryCue();
+            this.time.delayedCall(120, advance);
+          });
         },
       });
+      this.attachRevisitMemoryWordAnchor(target);
       this.typingInput.register(target);
+      this.activeTargets.push(target);
     };
     advance();
+  }
+
+  private showRevisitMemoryCue(idx: number, total: number): void {
+    this.dismissRevisitMemoryCue(false);
+    const pos = this.revisitMemoryCuePosition(idx, total);
+    const cue = this.add.container(pos.x, pos.y).setDepth(42).setAlpha(0);
+    this.revisitMemoryCue = cue;
+
+    cue.add(addLocalGroundShadow(this, 116, 18, { y: 14, alpha: 0.14 }));
+
+    const lantern = this.add.graphics();
+    lantern.fillStyle(PALETTE_HEX.brass, 0.1);
+    lantern.fillEllipse(0, -7, 112, 52);
+    lantern.lineStyle(2, PALETTE_HEX.brass, 0.38);
+    lantern.strokeEllipse(0, -7, 94, 38);
+    lantern.lineStyle(1.5, 0xf3ead2, 0.38);
+    lantern.lineBetween(-18, -18, -10, 14);
+    lantern.lineBetween(18, -18, 10, 14);
+    lantern.lineBetween(-10, 14, 10, 14);
+    lantern.fillStyle(0xffd878, 0.54);
+    lantern.fillCircle(0, -1, 6);
+    lantern.fillStyle(0xf3ead2, 0.28);
+    lantern.fillCircle(-36, 1, 2.8);
+    lantern.fillCircle(36, 1, 2.8);
+    cue.add(lantern);
+
+    this.tweens.add({
+      targets: cue,
+      alpha: 0.84,
+      y: pos.y - 5,
+      duration: 320,
+      ease: "Sine.easeOut",
+      onComplete: () => addIdleBreath(this, cue, { dy: -2, durationMs: 2700 }),
+    });
+  }
+
+  private revisitMemoryCuePosition(idx: number, total: number): { x: number; y: number } {
+    const spacing = total <= 4 ? 190 : 160;
+    const startX = this.scale.width / 2 - ((total - 1) * spacing) / 2;
+    return {
+      x: startX + idx * spacing,
+      y: idx % 2 === 0 ? 760 : 720,
+    };
+  }
+
+  private revisitMemoryWordPosition(idx: number, total: number): { x: number; y: number } {
+    const cue = this.revisitMemoryCuePosition(idx, total);
+    return { x: cue.x, y: cue.y - 110 };
+  }
+
+  private attachRevisitMemoryWordAnchor(target: TextWordTarget): void {
+    const cue = this.revisitMemoryCue;
+    if (!cue?.scene) return;
+    this.releaseRevisitMemoryWordAnchor();
+    this.revisitMemoryWordAnchor = attachWordBodyAnchor(
+      this,
+      cue,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.brass,
+        alpha: 0.12,
+        depth: 44,
+        sourceOffsetY: -20,
+        targetOffsetY: 24,
+      },
+    );
+  }
+
+  private releaseRevisitMemoryWordAnchor(): void {
+    this.revisitMemoryWordAnchor?.destroy();
+    this.revisitMemoryWordAnchor = null;
+  }
+
+  private pulseRevisitMemoryCue(completion: boolean): void {
+    if (!this.revisitMemoryCue?.scene) return;
+    playActorAttention(this, this.revisitMemoryCue, {
+      scale: completion ? 1.04 : 1.018,
+      durationMs: completion ? 260 : 170,
+    });
+    playBodyImpact(this, this.revisitMemoryCue, {
+      kind: "mote",
+      color: PALETTE_HEX.brass,
+      offsetY: -20,
+      depth: 48,
+      ringRadius: completion ? 42 : 26,
+      count: completion ? 8 : 5,
+      durationMs: completion ? 430 : 240,
+    });
+  }
+
+  private dismissRevisitMemoryCue(animate = true): void {
+    this.releaseRevisitMemoryWordAnchor();
+    const cue = this.revisitMemoryCue;
+    if (!cue?.scene) {
+      this.revisitMemoryCue = null;
+      return;
+    }
+    this.revisitMemoryCue = null;
+    this.tweens.killTweensOf(cue);
+    if (!animate) {
+      cue.destroy();
+      return;
+    }
+    this.tweens.add({
+      targets: cue,
+      alpha: 0,
+      y: cue.y + 14,
+      duration: 220,
+      ease: "Sine.easeIn",
+      onComplete: () => cue.destroy(),
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2901,6 +3030,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.clearEttaWordAnchors();
     this.clearForkChoiceWordAnchors();
     this.clearLanternMothWordAnchors();
+    this.dismissRevisitMemoryCue(false);
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

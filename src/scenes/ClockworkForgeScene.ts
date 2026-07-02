@@ -172,6 +172,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private wrenSprite!: Phaser.GameObjects.Image;
   private catwalkCue: Phaser.GameObjects.Container | null = null;
   private catwalkCueWordAnchor: WordBodyAnchorHandle | null = null;
+  private revisitMemoryCue: Phaser.GameObjects.Container | null = null;
+  private revisitMemoryWordAnchor: WordBodyAnchorHandle | null = null;
   private apprenticeCue: Phaser.GameObjects.Container | null = null;
   private standDownCue: Phaser.GameObjects.Container | null = null;
   private fightCue: Phaser.GameObjects.Container | null = null;
@@ -228,6 +230,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.forkChoiceWordAnchors = [];
     this.catwalkCue = null;
     this.catwalkCueWordAnchor = null;
+    this.revisitMemoryCue = null;
+    this.revisitMemoryWordAnchor = null;
     this.apprenticeCue = null;
     this.standDownCue = null;
     this.fightCue = null;
@@ -410,6 +414,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.releaseCatwalkCueWordAnchor();
       this.catwalkCue?.destroy();
       this.catwalkCue = null;
+      this.dismissRevisitMemoryCue(false);
       this.clearFornWordAnchors();
       this.clearForkChoiceWordAnchors();
       this.clearForgeChoiceCues(false);
@@ -468,24 +473,156 @@ export class ClockworkForgeScene extends Phaser.Scene {
       }
       const word = words[idx];
       if (word === undefined) return;
+      this.showRevisitMemoryCue(idx, words.length);
+      const wordPos = this.revisitMemoryWordPosition(idx, words.length);
       const target = this.makeWord({
         scene: this,
         word,
-        x: this.scale.width / 2,
-        y: this.scale.height - 340,
-        fontSize: 44,
-        onClaim: () => playWrenFocus(this.wrenSprite),
+        x: wordPos.x,
+        y: wordPos.y,
+        fontSize: 40,
+        onClaim: () => {
+          playWrenFocus(this.wrenSprite);
+          this.pulseRevisitMemoryCue(false);
+        },
         onComplete: () => {
           playWrenAction(this.wrenSprite);
+          this.pulseRevisitMemoryCue(true);
           playChime();
           idx += 1;
           this.typingInput.unregister(target);
-          this.time.delayedCall(200, advance);
+          const activeIdx = this.activeTargets.indexOf(target);
+          if (activeIdx >= 0) this.activeTargets.splice(activeIdx, 1);
+          this.time.delayedCall(260, () => {
+            this.dismissRevisitMemoryCue();
+            this.time.delayedCall(120, advance);
+          });
         },
       });
+      this.attachRevisitMemoryWordAnchor(target);
       this.typingInput.register(target);
+      this.activeTargets.push(target);
     };
     advance();
+  }
+
+  private showRevisitMemoryCue(idx: number, total: number): void {
+    this.dismissRevisitMemoryCue(false);
+    const pos = this.revisitMemoryCuePosition(idx, total);
+    const cue = this.add.container(pos.x, pos.y).setDepth(42).setAlpha(0);
+    this.revisitMemoryCue = cue;
+
+    cue.add(addLocalGroundShadow(this, 124, 20, { y: 12, alpha: 0.2 }));
+
+    const gear = this.add.graphics();
+    gear.fillStyle(PALETTE_HEX.ember, 0.1);
+    gear.fillEllipse(0, 0, 120, 40);
+    gear.lineStyle(2, PALETTE_HEX.ember, 0.38);
+    gear.strokeEllipse(0, 0, 100, 30);
+    gear.lineStyle(2, 0xf3c36a, 0.42);
+    gear.strokeCircle(0, -3, 22);
+    gear.lineStyle(1.5, 0xf3c36a, 0.34);
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI * 2 * i) / 6;
+      const innerX = Math.cos(angle) * 16;
+      const innerY = -3 + Math.sin(angle) * 16;
+      const outerX = Math.cos(angle) * 30;
+      const outerY = -3 + Math.sin(angle) * 30;
+      gear.lineBetween(innerX, innerY, outerX, outerY);
+    }
+    gear.fillStyle(0xffd277, 0.44);
+    gear.fillCircle(0, -3, 4);
+    gear.fillCircle(-42, 2, 2.8);
+    gear.fillCircle(42, 2, 2.8);
+    cue.add(gear);
+
+    this.tweens.add({
+      targets: cue,
+      alpha: 0.84,
+      y: pos.y - 5,
+      duration: 320,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (cue.scene) this.idleBob(cue);
+      },
+    });
+  }
+
+  private revisitMemoryCuePosition(idx: number, total: number): { x: number; y: number } {
+    const spacing = total <= 4 ? 190 : 165;
+    const startX = this.scale.width / 2 - ((total - 1) * spacing) / 2;
+    return {
+      x: startX + idx * spacing,
+      y: idx % 2 === 0 ? FLOOR_Y + 8 : FLOOR_Y - 28,
+    };
+  }
+
+  private revisitMemoryWordPosition(idx: number, total: number): { x: number; y: number } {
+    const cue = this.revisitMemoryCuePosition(idx, total);
+    return { x: cue.x, y: cue.y - 108 };
+  }
+
+  private attachRevisitMemoryWordAnchor(target: TextWordTarget): void {
+    const cue = this.revisitMemoryCue;
+    if (!cue?.scene) return;
+    this.releaseRevisitMemoryWordAnchor();
+    this.revisitMemoryWordAnchor = attachWordBodyAnchor(
+      this,
+      cue,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.ember,
+        alpha: 0.13,
+        depth: 44,
+        sourceOffsetY: -18,
+        targetOffsetY: 24,
+      },
+    );
+  }
+
+  private releaseRevisitMemoryWordAnchor(): void {
+    this.revisitMemoryWordAnchor?.destroy();
+    this.revisitMemoryWordAnchor = null;
+  }
+
+  private pulseRevisitMemoryCue(completion: boolean): void {
+    if (!this.revisitMemoryCue?.scene) return;
+    playActorAttention(this, this.revisitMemoryCue, {
+      scale: completion ? 1.04 : 1.018,
+      durationMs: completion ? 260 : 170,
+    });
+    playBodyImpact(this, this.revisitMemoryCue, {
+      kind: "ember",
+      color: PALETTE_HEX.ember,
+      offsetY: -18,
+      depth: 48,
+      ringRadius: completion ? 42 : 26,
+      count: completion ? 8 : 5,
+      durationMs: completion ? 430 : 240,
+    });
+  }
+
+  private dismissRevisitMemoryCue(animate = true): void {
+    this.releaseRevisitMemoryWordAnchor();
+    const cue = this.revisitMemoryCue;
+    if (!cue?.scene) {
+      this.revisitMemoryCue = null;
+      return;
+    }
+    this.revisitMemoryCue = null;
+    this.tweens.killTweensOf(cue);
+    if (!animate) {
+      cue.destroy();
+      return;
+    }
+    this.tweens.add({
+      targets: cue,
+      alpha: 0,
+      y: cue.y + 14,
+      duration: 220,
+      ease: "Sine.easeIn",
+      onComplete: () => cue.destroy(),
+    });
   }
 
   // ─── ACT 1 — Descent into the Forge ─────────────────────────────────────────
@@ -2841,6 +2978,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.clearForkChoiceWordAnchors();
     this.clearSongbirdWordAnchors();
     this.releaseCatwalkCueWordAnchor();
+    this.dismissRevisitMemoryCue(false);
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

@@ -108,6 +108,13 @@ export interface MovingWordEnemyConfig {
   /** Subtle squash/stretch while the body is alive. Default keeps shared
    *  advancing enemies from reading as static cutouts. */
   bodyBreathScale?: number;
+  /** Short body-first beat after the entrance lands, before the word attaches
+   *  and the advance begins. This lets the painted figure register as the
+   *  source of the threat instead of appearing simultaneously with its label.
+   *  Default 140ms; set 0 to keep the old immediate attach. */
+  wordAttachDelayMs?: number;
+  /** Scale settle on arrival before the idle breath starts. Default 0.026. */
+  arrivalSettleScale?: number;
 
   // ── TextWordTarget passthrough ─────────────────────────────────────────────
   fontSize?: number;
@@ -198,6 +205,9 @@ export class MovingWordEnemy {
   private readonly baseScaleX: number;
   private readonly baseScaleY: number;
   private readonly bodyBreathScale: number;
+  private readonly wordAttachDelayMs: number;
+  private readonly arrivalSettleScale: number;
+  private arrivalTimer: Phaser.Time.TimerEvent | null = null;
 
   constructor(config: MovingWordEnemyConfig) {
     this.cfg = config;
@@ -217,6 +227,8 @@ export class MovingWordEnemy {
     this.baseScaleX = config.container.scaleX;
     this.baseScaleY = config.container.scaleY;
     this.bodyBreathScale = config.bodyBreathScale ?? 0.018;
+    this.wordAttachDelayMs = config.wordAttachDelayMs ?? 140;
+    this.arrivalSettleScale = config.arrivalSettleScale ?? 0.026;
 
     // Entrance: sweep in from off-screen, fade to rest alpha, then come alive.
     config.scene.tweens.add({
@@ -228,11 +240,7 @@ export class MovingWordEnemy {
       ease: "Sine.easeOut",
       onComplete: () => {
         if (this.defeated || !this.waveActive()) return;
-        this.playArrivalImpact();
-        // A ward-gated enemy (the Winter boss) advances mute until attachWord().
-        if (!this.cfg.manualAttach) this.attachTarget();
-        this.idleBob();
-        this.startAdvance();
+        this.beginArrivalBeat();
       },
     });
   }
@@ -318,6 +326,7 @@ export class MovingWordEnemy {
     if (this.defeated) return;
     this.defeated = true;
     this.clearFreeze();
+    this.clearArrivalTimer();
     this.dropTarget(true);
     this.advanceTween?.stop();
     this.advanceTween = null;
@@ -354,6 +363,7 @@ export class MovingWordEnemy {
   freeze(durationMs?: number): void {
     if (this.defeated) return;
     this.frozen = true;
+    this.clearArrivalTimer();
     this.advanceTween?.stop();
     this.advanceTween = null;
     const c = this.cfg.container;
@@ -382,6 +392,7 @@ export class MovingWordEnemy {
     this.clearFreeze();
     // startAdvance recomputes its duration from the body's CURRENT position, so
     // the enemy resumes from where it froze (it's guarded against a dead wave).
+    if (!this.cfg.manualAttach && !this.wordTarget) this.attachTarget();
     this.startAdvance();
   }
 
@@ -489,6 +500,55 @@ export class MovingWordEnemy {
     });
   }
 
+  private beginArrivalBeat(): void {
+    this.playArrivalImpact();
+    this.playArrivalSettle();
+
+    if (this.wordAttachDelayMs <= 0) {
+      this.beginLiveAdvance();
+      return;
+    }
+
+    this.clearArrivalTimer();
+    this.arrivalTimer = this.cfg.scene.time.delayedCall(
+      this.wordAttachDelayMs,
+      () => {
+        this.arrivalTimer = null;
+        this.beginLiveAdvance();
+      },
+    );
+  }
+
+  private beginLiveAdvance(): void {
+    if (this.defeated || this.frozen || !this.waveActive()) return;
+    // A ward-gated enemy (the Winter boss) advances mute until attachWord().
+    if (!this.cfg.manualAttach) this.attachTarget();
+    this.idleBob();
+    this.startAdvance();
+  }
+
+  private playArrivalSettle(): void {
+    if (this.arrivalSettleScale <= 0 || this.wordAttachDelayMs <= 0) return;
+    const c = this.cfg.container;
+    const halfSettleMs = Math.max(
+      45,
+      Math.min(85, Math.round(this.wordAttachDelayMs / 2)),
+    );
+    c.setScale(this.baseScaleX, this.baseScaleY);
+    this.cfg.scene.tweens.add({
+      targets: c,
+      scaleX: this.baseScaleX * (1 + this.arrivalSettleScale),
+      scaleY: this.baseScaleY * (1 - this.arrivalSettleScale * 0.46),
+      duration: halfSettleMs,
+      yoyo: true,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!c.scene || this.defeated || this.frozen) return;
+        c.setScale(this.baseScaleX, this.baseScaleY);
+      },
+    });
+  }
+
   private idleBob(): void {
     const c = this.cfg.container;
     c.setScale(this.baseScaleX, this.baseScaleY);
@@ -583,6 +643,7 @@ export class MovingWordEnemy {
     if (this.defeated) return;
     this.defeated = true;
     this.clearFreeze();
+    this.clearArrivalTimer();
     this.cfg.onDefeated?.(this);
     // On a player completion the TextWordTarget animates and destroys ITSELF, so
     // we only drop the reference; a programmatic defeat (the word was never
@@ -657,6 +718,11 @@ export class MovingWordEnemy {
     this.cfg.onTargetDetached?.(target);
     if (destroy) target.destroy();
     this.wordTarget = null;
+  }
+
+  private clearArrivalTimer(): void {
+    this.arrivalTimer?.remove(false);
+    this.arrivalTimer = null;
   }
 
   private waveActive(): boolean {

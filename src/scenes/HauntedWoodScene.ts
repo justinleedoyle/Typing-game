@@ -169,6 +169,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private groveLightCue: Phaser.GameObjects.Container | null = null;
   private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
   private pathCue: Phaser.GameObjects.Container | null = null;
+  private pathCueWordAnchor: WordBodyAnchorHandle | null = null;
   private ingaFigure: Phaser.GameObjects.Container | null = null;
   private ingaWordAnchors: WordBodyAnchorHandle[] = [];
   private ghostKingBody: Phaser.GameObjects.Image | null = null;
@@ -203,6 +204,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.groveLightCue = null;
     this.forkChoiceWordAnchors = [];
     this.pathCue = null;
+    this.pathCueWordAnchor = null;
     this.ingaFigure = null;
     this.ingaWordAnchors = [];
     this.ghostKingBody = null;
@@ -392,6 +394,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.compassGlyphs = [];
       this.clearWoodForkCues();
       this.shrineFigure = null;
+      this.releasePathCueWordAnchor();
       this.pathCue = null;
       this.clearIngaWordAnchors();
       this.ingaFigure = null;
@@ -508,6 +511,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         },
         onComplete: () => {
           playWrenAction(this.wrenSprite);
+          this.releasePathCueWordAnchor();
           this.pulsePathCue(true);
           playChime();
           this.clearActiveTargets();
@@ -516,6 +520,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           this.time.delayedCall(1600, advance);
         },
       });
+      this.attachPathCueWordAnchor(i, target);
       this.typingInput.register(target);
       this.activeTargets.push(target);
     };
@@ -654,6 +659,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private dismissPathCue(animate = true): void {
+    this.releasePathCueWordAnchor();
     const cue = this.pathCue;
     if (!cue?.scene) {
       this.pathCue = null;
@@ -673,6 +679,30 @@ export class HauntedWoodScene extends Phaser.Scene {
       ease: "Sine.easeIn",
       onComplete: () => cue.destroy(),
     });
+  }
+
+  private attachPathCueWordAnchor(idx: number, target: TextWordTarget): void {
+    const cue = this.pathCue;
+    if (!cue?.scene) return;
+    this.releasePathCueWordAnchor();
+    const sourceOffsetY = idx === 1 ? -34 : idx === 2 ? -76 : -18;
+    this.pathCueWordAnchor = attachWordBodyAnchor(
+      this,
+      cue,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.moss,
+        alpha: 0.14,
+        depth: 7,
+        sourceOffsetY,
+        targetOffsetY: 24,
+      },
+    );
+  }
+
+  private releasePathCueWordAnchor(): void {
+    this.pathCueWordAnchor?.destroy();
+    this.pathCueWordAnchor = null;
   }
 
   // ─── Act 1 — Inga NPC ────────────────────────────────────────────────────
@@ -2455,6 +2485,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.clearBossWordAnchors();
     this.clearForkChoiceWordAnchors();
     this.clearWispCatWordAnchors();
+    this.releasePathCueWordAnchor();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

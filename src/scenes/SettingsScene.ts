@@ -17,7 +17,12 @@ import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
 import { setAudioLevel } from "../audio/context";
-import { addAmbientDrift, addLivingLight } from "../game/livingScene";
+import {
+  addAmbientDrift,
+  addLivingLight,
+  attachWordBodyAnchor,
+  type WordBodyAnchorHandle,
+} from "../game/livingScene";
 import { SERIF } from "../game/palette";
 import { difficultyLabel, togglePuristMode } from "../game/purist";
 import {
@@ -62,6 +67,7 @@ export class SettingsScene extends Phaser.Scene {
   // tear them down before re-rendering instead of leaking through the scene.
   private rowTexts: Phaser.GameObjects.GameObject[] = [];
   private menuTargets: TextWordTarget[] = [];
+  private menuAnchorReleases: Array<() => void> = [];
   private focusMarks: Phaser.GameObjects.GameObject[] = [];
   private uiTypingPulseTimes = new Map<string, number>();
 
@@ -87,6 +93,7 @@ export class SettingsScene extends Phaser.Scene {
     this.mode = "normal";
     this.rowTexts = [];
     this.menuTargets = [];
+    this.menuAnchorReleases = [];
     this.focusMarks = [];
     this.uiTypingPulseTimes.clear();
     this.renameBuffer = "";
@@ -280,6 +287,10 @@ export class SettingsScene extends Phaser.Scene {
 
   private clearMenu(): void {
     this.clearFocusMarks();
+    for (const release of [...this.menuAnchorReleases]) {
+      release();
+    }
+    this.menuAnchorReleases = [];
     for (const t of this.rowTexts) t.destroy();
     this.rowTexts = [];
     for (const t of this.menuTargets) {
@@ -339,8 +350,59 @@ export class SettingsScene extends Phaser.Scene {
       onAdvance: () => this.pulseMenuRowTyping(index),
       onComplete,
     });
+    this.attachActionAnchor(target, index);
     this.typingInput.register(target);
     this.menuTargets.push(target);
+  }
+
+  private attachActionAnchor(target: TextWordTarget, index: number): void {
+    const y = ROW_START_Y + index * ROW_SPACING;
+    this.attachTargetAnchor(target, ROW_X + VALUE_OFFSET_X - 20, y + 12, {
+      alpha: 0.11,
+      targetOffsetY: -14,
+    });
+  }
+
+  private attachResetTargetAnchor(
+    target: TextWordTarget,
+    xOffset: number,
+  ): void {
+    this.attachTargetAnchor(target, this.scale.width / 2 + xOffset, 478, {
+      alpha: 0.12,
+      targetOffsetY: -16,
+    });
+  }
+
+  private attachTargetAnchor(
+    target: TextWordTarget,
+    sourceX: number,
+    sourceY: number,
+    opts: { alpha: number; targetOffsetY: number },
+  ): void {
+    const source = this.add.zone(sourceX, sourceY, 1, 1);
+    const handle: WordBodyAnchorHandle = attachWordBodyAnchor(
+      this,
+      source,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: UI_HEX.brass,
+        alpha: opts.alpha,
+        depth: 11,
+        sourceOffsetY: 0,
+        targetOffsetY: opts.targetOffsetY,
+      },
+    );
+
+    let released = false;
+    const release = (): void => {
+      if (released) return;
+      released = true;
+      handle.destroy();
+      source.destroy();
+      const idx = this.menuAnchorReleases.indexOf(release);
+      if (idx >= 0) this.menuAnchorReleases.splice(idx, 1);
+    };
+    this.menuAnchorReleases.push(release);
   }
 
   private pulseMenuRow(index: number): void {
@@ -594,6 +656,7 @@ export class SettingsScene extends Phaser.Scene {
       onAdvance: () => this.pulseResetPanelTyping(),
       onComplete: () => this.performReset(),
     });
+    this.attachResetTargetAnchor(confirmTarget, -160);
     this.typingInput.register(confirmTarget);
     this.menuTargets.push(confirmTarget);
 
@@ -613,6 +676,7 @@ export class SettingsScene extends Phaser.Scene {
         this.renderMenu();
       },
     });
+    this.attachResetTargetAnchor(cancelTarget, 160);
     this.typingInput.register(cancelTarget);
     this.menuTargets.push(cancelTarget);
   }

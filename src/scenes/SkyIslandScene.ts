@@ -442,7 +442,7 @@ export class SkyIslandScene extends Phaser.Scene {
       spendSoul: (cost) => this.typingInput.getStats().spendSoul(cost),
       getThreats: () => this.liveBannerThreats(),
       applyEffect: (effect, targets) => this.applyOneShot(effect, targets),
-      isActive: () => this.activePhrases.some((p) => !p.isResolved()),
+      isActive: () => this.activePhrases.some((p) => p.isReady() && !p.isFrozen()),
       announce: (text) => this.band.showNotice(text, { label: "relic" }),
       slots: band.oneShotSlots,
       compact: true,
@@ -1120,7 +1120,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private liveBannerThreats(): OneShotThreat<ScrollingPhrase>[] {
     const threats: OneShotThreat<ScrollingPhrase>[] = [];
     for (const p of this.activePhrases) {
-      if (p.isResolved() || p.isFrozen()) continue;
+      if (!p.isReady() || p.isResolved() || p.isFrozen()) continue;
       threats.push({
         enemy: p,
         progress: p.getProgress(),

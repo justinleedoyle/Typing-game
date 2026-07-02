@@ -40,13 +40,18 @@ export interface ScrollingPhraseOptions {
 const BANNER_PADDING_X = 32;
 const BANNER_PADDING_Y = 18;
 const BANNER_FONT_SIZE = 30;
+const BANNER_ENTRY_MS = 420;
+const BANNER_WORD_ATTACH_DELAY_MS = 140;
+const BANNER_ENTRY_MARGIN_X = 70;
 
 export class ScrollingPhrase {
   private readonly container: Phaser.GameObjects.Container;
   private readonly bannerGfx: Phaser.GameObjects.Graphics;
-  private readonly target: TextWordTarget;
+  private target: TextWordTarget | null = null;
+  private entryTween: Phaser.Tweens.Tween | null = null;
   private scrollTween: Phaser.Tweens.Tween | null = null;
   private flutterTween: Phaser.Tweens.Tween | null = null;
+  private wordAttachTimer: Phaser.Time.TimerEvent | null = null;
   private resolved = false;
   /** Latest scroll progress 0..1 (1 = at the exit edge). Stored each frame so
    *  the offensive one-shots can rank banners by urgency even after a freeze. */
@@ -80,6 +85,10 @@ export class ScrollingPhrase {
 
     const startX =
       opts.fromSide === "left" ? -bannerW / 2 - 40 : screenW + bannerW / 2 + 40;
+    const entryX =
+      opts.fromSide === "left"
+        ? bannerW / 2 + BANNER_ENTRY_MARGIN_X
+        : screenW - bannerW / 2 - BANNER_ENTRY_MARGIN_X;
     const endX =
       opts.fromSide === "left" ? screenW + bannerW / 2 + 40 : -bannerW / 2 - 40;
 
@@ -132,33 +141,27 @@ export class ScrollingPhrase {
     );
     this.container.add(this.bannerGfx);
 
-    // The target wraps its own text rendering. Place its anchor at the
-    // banner center; the target's container is independent — we move it
-    // each frame via setAnchorX to track the banner.
-    this.target = new TextWordTarget({
-      scene: opts.scene,
-      word: opts.phrase,
-      x: startX,
-      y: opts.y,
-      fontSize: BANNER_FONT_SIZE,
-      burstColor: PALETTE_HEX.brass,
-      // UI-cohesion: the same legibility outline every other word target carries,
-      // so the scrolling banners read consistently with the rest of the realm.
-      outline: true,
-      onClaim: () => this.playClaimLine(),
-      onAdvance: () => this.playTypedBodyPulse(),
-      onComplete: () => this.handleComplete(),
-    });
-    opts.typingInput.register(this.target);
-
-    // Fade in, then drift across the screen.
-    opts.scene.tweens.add({
+    // Body-first arrival: the parchment slides into view, lands, and only then
+    // becomes a registered typing target. This keeps the word from floating in
+    // before the physical scroll exists on screen.
+    this.entryTween = opts.scene.tweens.add({
       targets: this.container,
+      x: entryX,
       alpha: 1,
-      duration: 280,
+      duration: BANNER_ENTRY_MS,
       delay: opts.delayMs ?? 0,
       ease: "Sine.easeOut",
-      onComplete: () => this.playArrivalPulse(),
+      onComplete: () => {
+        this.entryTween = null;
+        this.playArrivalPulse();
+        this.wordAttachTimer = opts.scene.time.delayedCall(
+          BANNER_WORD_ATTACH_DELAY_MS,
+          () => {
+            this.wordAttachTimer = null;
+            this.attachTarget(endX);
+          },
+        );
+      },
     });
     this.flutterTween = opts.scene.tweens.add({
       targets: this.container,
@@ -170,23 +173,57 @@ export class ScrollingPhrase {
       repeat: -1,
       ease: "Sine.easeInOut",
     });
+  }
 
-    this.scrollTween = opts.scene.tweens.add({
+  private attachTarget(endX: number): void {
+    if (this.resolved || this.target) return;
+    // The target wraps its own text rendering. Place its anchor at the
+    // banner center; the target's container is independent — we move it
+    // each frame via setAnchorX to track the banner.
+    this.target = new TextWordTarget({
+      scene: this.opts.scene,
+      word: this.opts.phrase,
+      x: this.container.x,
+      y: this.container.y,
+      fontSize: BANNER_FONT_SIZE,
+      burstColor: PALETTE_HEX.brass,
+      // UI-cohesion: the same legibility outline every other word target carries,
+      // so the scrolling banners read consistently with the rest of the realm.
+      outline: true,
+      onClaim: () => this.playClaimLine(),
+      onAdvance: () => this.playTypedBodyPulse(),
+      onComplete: () => this.handleComplete(),
+    });
+    this.opts.typingInput.register(this.target);
+    this.startScroll(endX);
+  }
+
+  private startScroll(endX: number): void {
+    this.scrollTween = this.opts.scene.tweens.add({
       targets: this.container,
       x: endX,
-      duration: opts.durationMs,
-      delay: opts.delayMs ?? 0,
+      duration: this.opts.durationMs,
       ease: "Linear",
       onUpdate: (tween) => {
         this.progress = tween.progress;
-        this.target.setAnchorX(this.container.x);
-        this.target.setAnchorY(this.container.y);
+        this.syncTargetToBanner();
         // Triage urgency cue — the banner's text tints cream → ember as it
         // nears the exit edge, so the player can prioritise among several.
-        this.target.setDanger(bannerDangerAt(tween.progress));
+        this.target?.setDanger(bannerDangerAt(tween.progress));
       },
       onComplete: () => this.handleMiss(),
     });
+  }
+
+  private syncTargetToBanner(): void {
+    if (!this.target) return;
+    this.target.setAnchorX(this.container.x);
+    this.target.setAnchorY(this.container.y);
+  }
+
+  private clearWordAttachTimer(): void {
+    this.wordAttachTimer?.remove(false);
+    this.wordAttachTimer = null;
   }
 
   private playClaimLine(): void {
@@ -228,10 +265,14 @@ export class ScrollingPhrase {
   private handleComplete(): void {
     if (this.resolved) return;
     this.resolved = true;
+    this.clearWordAttachTimer();
+    this.entryTween?.stop();
+    this.entryTween = null;
     this.scrollTween?.stop();
     this.scrollTween = null;
     this.flutterTween?.stop();
     this.flutterTween = null;
+    this.target = null;
     playBodyImpact(this.opts.scene, this.container, {
       kind: "mote",
       color: PALETTE_HEX.brass,
@@ -254,11 +295,15 @@ export class ScrollingPhrase {
   private handleMiss(): void {
     if (this.resolved) return;
     this.resolved = true;
+    this.clearWordAttachTimer();
+    this.entryTween?.stop();
+    this.entryTween = null;
+    this.scrollTween?.stop();
+    this.scrollTween = null;
     this.flutterTween?.stop();
     this.flutterTween = null;
-    this.opts.typingInput.unregister(this.target);
+    this.dropTarget();
     // Banner has already drifted off-screen. Tear it down.
-    this.target.destroy();
     this.container.destroy();
     // Knock feedback at the scene level — caller's onMiss handles Heart
     // drop, camera shake, etc.
@@ -267,14 +312,14 @@ export class ScrollingPhrase {
   }
 
   destroy(): void {
+    this.clearWordAttachTimer();
+    this.entryTween?.stop();
+    this.entryTween = null;
     this.scrollTween?.stop();
     this.scrollTween = null;
     this.flutterTween?.stop();
     this.flutterTween = null;
-    if (!this.resolved) {
-      this.opts.typingInput.unregister(this.target);
-      this.target.destroy();
-    }
+    if (!this.resolved) this.dropTarget();
     this.container.destroy();
   }
 
@@ -307,13 +352,28 @@ export class ScrollingPhrase {
     return this.frozen;
   }
 
+  /** True once the parchment has arrived and the phrase is actually typeable. */
+  isReady(): boolean {
+    return this.target !== null && !this.resolved;
+  }
+
+  private dropTarget(): void {
+    if (!this.target) return;
+    this.opts.typingInput.unregister(this.target);
+    this.target.destroy();
+    this.target = null;
+  }
+
   /** Tier 4 toll-strike — fell this banner as a clean clear (the bell's tongue).
    *  Counts toward the wave like a completion (no miss penalty): halt the scroll,
    *  tear down the still-live typing target, burst + dissolve, and fire onComplete.
    *  No-op once resolved. */
   strike(): void {
-    if (this.resolved) return;
+    if (this.resolved || !this.target) return;
     this.resolved = true;
+    this.clearWordAttachTimer();
+    this.entryTween?.stop();
+    this.entryTween = null;
     this.scrollTween?.stop();
     this.scrollTween = null;
     this.flutterTween?.stop();
@@ -321,8 +381,7 @@ export class ScrollingPhrase {
     this.frozenOverlay?.destroy();
     this.frozenOverlay = null;
     // The word was never typed, so the target is still registered — drop it.
-    this.opts.typingInput.unregister(this.target);
-    this.target.destroy();
+    this.dropTarget();
     playWordCompleteBurst(this.opts.scene, this.container.x, this.opts.y, {
       color: PALETTE_HEX.ember,
       count: 16,
@@ -351,7 +410,7 @@ export class ScrollingPhrase {
    *  overlay reads the seized state. Stays held until typed or torn down. No-op
    *  once resolved or already frozen. */
   freeze(): void {
-    if (this.resolved || this.frozen) return;
+    if (this.resolved || this.frozen || !this.target) return;
     this.frozen = true;
     this.scrollTween?.stop();
     this.scrollTween = null;
@@ -374,7 +433,7 @@ export class ScrollingPhrase {
    *  have read ahead; the banner also dims but stays locatable for triage.
    *  No-op once resolved so the completion / miss fade is not undone. */
   setBlur(amount: number): void {
-    if (this.resolved) return;
+    if (this.resolved || !this.target) return;
     const clamped = Math.max(0, Math.min(1, amount));
     this.target.setSuffixMasked(shouldEatSuffix(clamped));
     const alpha = blurAlphaFor(clamped);

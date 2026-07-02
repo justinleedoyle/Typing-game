@@ -230,6 +230,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private heldurWordAnchors: WordBodyAnchorHandle[] = [];
   private huntressSprite: Phaser.GameObjects.Image | null = null;
   private riverCue: Phaser.GameObjects.Container | null = null;
+  private riverCueWordAnchor: WordBodyAnchorHandle | null = null;
   private fireflyCue: Phaser.GameObjects.Container | null = null;
   private cairnCue: Phaser.GameObjects.Container | null = null;
   private peltCue: Phaser.GameObjects.Container | null = null;
@@ -283,6 +284,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.heldurWordAnchors = [];
     this.huntressSprite = null;
     this.riverCue = null;
+    this.riverCueWordAnchor = null;
     this.fireflyCue = null;
     this.cairnCue = null;
     this.peltCue = null;
@@ -593,12 +595,13 @@ export class WinterMountainScene extends Phaser.Scene {
     ];
     this.showRiverCue(beat);
     this.setNarrator(narrations[idx]);
+    const wordPos = this.riverWordPosition(beat);
     const target = this.makeWord({
       scene: this,
       word: beat,
-      x: this.scale.width / 2,
-      y: this.scale.height / 2,
-      fontSize: 44,
+      x: wordPos.x,
+      y: wordPos.y,
+      fontSize: 42,
       onClaim: () => {
         playWrenFocus(this.wrenSprite);
         this.pulseRiverCue(false);
@@ -607,21 +610,18 @@ export class WinterMountainScene extends Phaser.Scene {
         this.playWrenTrailAction();
         this.pulseRiverCue(true);
         playChime();
+        this.releaseRiverCueWordAnchor();
         this.time.delayedCall(700, () => this.runRiverBeats(idx + 1));
       },
     });
+    this.attachRiverCueWordAnchor(target);
     this.typingInput.register(target);
     this.activeTargets.push(target);
   }
 
   private showRiverCue(beat: (typeof RIVER_BEATS)[number]): void {
     this.dismissRiverCue(false);
-    const pos =
-      beat === "lift"
-        ? { x: this.scale.width / 2 - 92, y: 846 }
-        : beat === "step"
-          ? { x: this.scale.width / 2 + 84, y: 858 }
-          : { x: this.scale.width / 2 + 18, y: 748 };
+    const pos = this.riverCuePosition(beat);
     const cue = this.add.container(pos.x, pos.y).setDepth(-1).setAlpha(0);
     this.riverCue = cue;
 
@@ -683,6 +683,43 @@ export class WinterMountainScene extends Phaser.Scene {
     });
   }
 
+  private riverCuePosition(beat: (typeof RIVER_BEATS)[number]): { x: number; y: number } {
+    if (beat === "lift") return { x: this.scale.width / 2 - 92, y: 846 };
+    if (beat === "step") return { x: this.scale.width / 2 + 84, y: 858 };
+    return { x: this.scale.width / 2 + 18, y: 748 };
+  }
+
+  private riverWordPosition(beat: (typeof RIVER_BEATS)[number]): { x: number; y: number } {
+    const cue = this.riverCuePosition(beat);
+    return {
+      x: cue.x,
+      y: cue.y - (beat === "duck" ? 122 : 126),
+    };
+  }
+
+  private attachRiverCueWordAnchor(target: TextWordTarget): void {
+    const cue = this.riverCue;
+    if (!cue?.scene) return;
+    this.releaseRiverCueWordAnchor();
+    this.riverCueWordAnchor = attachWordBodyAnchor(
+      this,
+      cue,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.frost,
+        alpha: 0.13,
+        depth: 7,
+        sourceOffsetY: -26,
+        targetOffsetY: 24,
+      },
+    );
+  }
+
+  private releaseRiverCueWordAnchor(): void {
+    this.riverCueWordAnchor?.destroy();
+    this.riverCueWordAnchor = null;
+  }
+
   private pulseRiverCue(completion: boolean): void {
     if (!this.riverCue?.scene) return;
     playActorAttention(this, this.riverCue, {
@@ -701,6 +738,7 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private dismissRiverCue(animate = true): void {
+    this.releaseRiverCueWordAnchor();
     const cue = this.riverCue;
     if (!cue?.scene) {
       this.riverCue = null;

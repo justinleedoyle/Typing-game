@@ -410,6 +410,7 @@ export class GreatBattleScene extends Phaser.Scene {
   private narration!: NarrationManager;
   private band!: ConsoleBand;
   private activeTargets: TextWordTarget[] = [];
+  private targetAnchors = new Map<TextWordTarget, WordBodyAnchorHandle>();
 
   // HUD
   private candleGroup!: Phaser.GameObjects.Container;
@@ -488,6 +489,7 @@ export class GreatBattleScene extends Phaser.Scene {
   init(data: BattleSceneData): void {
     this.store = data.store;
     this.activeTargets = [];
+    this.targetAnchors = new Map();
     this.enemies = [];
     this.waveQueue = [];
     this.currentWaveIdx = -1;
@@ -690,6 +692,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private onShutdown(): void {
     this.typingInput.reset();
+    this.clearTargetAnchors();
     this.input.keyboard?.off("keydown", this.onKeyDown, this);
     this.ambientHandle?.stop();
     this.clearFacetSigil(false);
@@ -740,7 +743,8 @@ export class GreatBattleScene extends Phaser.Scene {
     const sideOffset =
       fx.impactOffsetX ?? (opts.x - this.scale.width / 2) * 0.18;
 
-    return this.makeWord({
+    let target!: TextWordTarget;
+    target = this.makeWord({
       ...opts,
       onClaim: (mods) => {
         playClaimLine(
@@ -766,6 +770,7 @@ export class GreatBattleScene extends Phaser.Scene {
         originalOnAdvance?.(cursor, wordLength);
       },
       onComplete: () => {
+        this.clearTargetAnchor(target);
         playBodyImpact(this, this.quietLordContainer, {
           kind,
           color,
@@ -779,6 +784,24 @@ export class GreatBattleScene extends Phaser.Scene {
         originalOnComplete();
       },
     });
+
+    this.trackTargetAnchor(
+      target,
+      attachWordBodyAnchor(
+        this,
+        this.quietLordContainer,
+        () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+        {
+          color: claimColor,
+          alpha: 0.14,
+          depth: 7,
+          sourceOffsetX: sideOffset,
+          sourceOffsetY: 490,
+          targetOffsetY: 24,
+        },
+      ),
+    );
+    return target;
   }
 
   /** Final phrase words rebuild the revealed `Again`, rather than floating alone. */
@@ -788,7 +811,8 @@ export class GreatBattleScene extends Phaser.Scene {
     const originalOnComplete = opts.onComplete;
     const phraseColor = 0xd4b8ff;
 
-    return this.makeWord({
+    let target!: TextWordTarget;
+    target = this.makeWord({
       ...opts,
       onClaim: (mods) => {
         playClaimLine(
@@ -813,6 +837,7 @@ export class GreatBattleScene extends Phaser.Scene {
         originalOnAdvance?.(cursor, wordLength);
       },
       onComplete: () => {
+        this.clearTargetAnchor(target);
         playBodyImpact(this, this.againText, {
           kind: "mote",
           color: phraseColor,
@@ -825,10 +850,46 @@ export class GreatBattleScene extends Phaser.Scene {
         originalOnComplete();
       },
     });
+
+    this.trackTargetAnchor(
+      target,
+      attachWordBodyAnchor(
+        this,
+        this.againText,
+        () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+        {
+          color: phraseColor,
+          alpha: 0.15,
+          depth: 9,
+          sourceOffsetY: 22,
+          targetOffsetY: 24,
+        },
+      ),
+    );
+    return target;
+  }
+
+  private trackTargetAnchor(
+    target: TextWordTarget,
+    anchor: WordBodyAnchorHandle,
+  ): void {
+    this.clearTargetAnchor(target);
+    this.targetAnchors.set(target, anchor);
+  }
+
+  private clearTargetAnchor(target: TextWordTarget): void {
+    this.targetAnchors.get(target)?.destroy();
+    this.targetAnchors.delete(target);
+  }
+
+  private clearTargetAnchors(): void {
+    for (const anchor of this.targetAnchors.values()) anchor.destroy();
+    this.targetAnchors.clear();
   }
 
   private clearActiveTargets(): void {
     for (const t of this.activeTargets) {
+      this.clearTargetAnchor(t);
       this.typingInput.unregister(t);
       t.destroy();
     }

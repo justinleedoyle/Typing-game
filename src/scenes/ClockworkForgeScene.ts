@@ -171,6 +171,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   private catwalkCue: Phaser.GameObjects.Container | null = null;
+  private catwalkCueWordAnchor: WordBodyAnchorHandle | null = null;
   private apprenticeCue: Phaser.GameObjects.Container | null = null;
   private standDownCue: Phaser.GameObjects.Container | null = null;
   private fightCue: Phaser.GameObjects.Container | null = null;
@@ -226,6 +227,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.fornWordAnchors = [];
     this.forkChoiceWordAnchors = [];
     this.catwalkCue = null;
+    this.catwalkCueWordAnchor = null;
     this.apprenticeCue = null;
     this.standDownCue = null;
     this.fightCue = null;
@@ -405,6 +407,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.input.keyboard?.off("keyup", this.onKeyUp, this);
       this.ambientHandle?.stop();
+      this.releaseCatwalkCueWordAnchor();
       this.catwalkCue?.destroy();
       this.catwalkCue = null;
       this.clearFornWordAnchors();
@@ -516,11 +519,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
       },
       onComplete: () => {
         playWrenAction(this.wrenSprite, { faceLeft: x < this.wrenContainer.x });
+        this.releaseCatwalkCueWordAnchor();
         this.pulseCatwalkCue(true);
         this.setNarrator(narration);
         this.time.delayedCall(1400, () => this.startCatwalkBeats(idx + 1));
       },
     });
+    this.attachCatwalkCueWordAnchor(idx, target);
     this.typingInput.register(target);
     this.activeTargets.push(target);
   }
@@ -2093,6 +2098,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private dismissCatwalkCue(animate = true): void {
+    this.releaseCatwalkCueWordAnchor();
     const cue = this.catwalkCue;
     if (!cue?.scene) {
       this.catwalkCue = null;
@@ -2113,6 +2119,30 @@ export class ClockworkForgeScene extends Phaser.Scene {
       ease: "Sine.easeIn",
       onComplete: () => cue.destroy(),
     });
+  }
+
+  private attachCatwalkCueWordAnchor(idx: number, target: TextWordTarget): void {
+    const cue = this.catwalkCue;
+    if (!cue?.scene) return;
+    this.releaseCatwalkCueWordAnchor();
+    const sourceOffsetY = idx === 1 ? -36 : -8;
+    this.catwalkCueWordAnchor = attachWordBodyAnchor(
+      this,
+      cue,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.ember,
+        alpha: 0.14,
+        depth: 7,
+        sourceOffsetY,
+        targetOffsetY: 24,
+      },
+    );
+  }
+
+  private releaseCatwalkCueWordAnchor(): void {
+    this.catwalkCueWordAnchor?.destroy();
+    this.catwalkCueWordAnchor = null;
   }
 
   // ─── Input ────────────────────────────────────────────────────────────────────
@@ -2795,6 +2825,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.clearFornWordAnchors();
     this.clearForkChoiceWordAnchors();
     this.clearSongbirdWordAnchors();
+    this.releaseCatwalkCueWordAnchor();
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

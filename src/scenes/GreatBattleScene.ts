@@ -85,6 +85,7 @@ const BATTLE_WORD_BANK = [
 // §5.5.11 — counter-loadout: how long Wren has to type a facet's defense word
 // before it lands (uncountered facets only). "Tune on live build."
 const FACET_CHALLENGE_MS = 6000;
+const FINALE_ENEMY_WORD_ATTACH_DELAY_MS = 140;
 
 // Per-facet narration ids. Kept as string literals here (not built dynamically)
 // so the sayResolution test's id-shaped-token scan over the scene source can
@@ -394,6 +395,7 @@ interface Enemy {
   target: TextWordTarget | null;
   wordAnchor: WordBodyAnchorHandle | null;
   advanceTween: Phaser.Tweens.Tween | null;
+  arrivalTimer: Phaser.Time.TimerEvent | null;
   x: number;
   y: number;
   realmId: string;
@@ -973,6 +975,8 @@ export class GreatBattleScene extends Phaser.Scene {
     enemy.defeated = true;
     enemy.advanceTween?.stop();
     enemy.advanceTween = null;
+    enemy.arrivalTimer?.remove(false);
+    enemy.arrivalTimer = null;
     enemy.wordAnchor?.destroy();
     enemy.wordAnchor = null;
     this.tweens.killTweensOf(enemy.graphic);
@@ -1230,6 +1234,7 @@ export class GreatBattleScene extends Phaser.Scene {
       target: null,
       wordAnchor: null,
       advanceTween: null,
+      arrivalTimer: null,
       x,
       y: waveDef.baseY,
       realmId: waveDef.realmId,
@@ -1250,8 +1255,7 @@ export class GreatBattleScene extends Phaser.Scene {
       ease: "Sine.easeOut",
       onComplete: () => {
         if (enemy.defeated || this.runOver) return;
-        this.attachEnemyWord(enemy, waveDef);
-        this.beginEnemyAdvance(enemy);
+        this.beginEnemyThreat(enemy, waveDef);
       },
     });
     this.tweens.add({
@@ -1264,6 +1268,30 @@ export class GreatBattleScene extends Phaser.Scene {
       repeat: -1,
       ease: "Sine.easeInOut",
     });
+  }
+
+  private beginEnemyThreat(enemy: Enemy, waveDef: WaveDef): void {
+    const wake = finaleWakeForRealm(enemy.realmId);
+    playBodyImpact(this, enemy.graphic, {
+      kind: wake.kind,
+      color: wake.color,
+      offsetX: enemy.x,
+      offsetY: enemy.y - 12,
+      depth: 6,
+      ringRadius: 34,
+      count: 7,
+      durationMs: 300,
+    });
+    enemy.arrivalTimer?.remove(false);
+    enemy.arrivalTimer = this.time.delayedCall(
+      FINALE_ENEMY_WORD_ATTACH_DELAY_MS,
+      () => {
+        enemy.arrivalTimer = null;
+        if (enemy.defeated || this.runOver || !enemy.graphic.scene) return;
+        this.attachEnemyWord(enemy, waveDef);
+        this.beginEnemyAdvance(enemy);
+      },
+    );
   }
 
   private attachEnemyWord(enemy: Enemy, waveDef: WaveDef): void {
@@ -1378,6 +1406,8 @@ export class GreatBattleScene extends Phaser.Scene {
     enemy.defeated = true;
     enemy.advanceTween?.stop();
     enemy.advanceTween = null;
+    enemy.arrivalTimer?.remove(false);
+    enemy.arrivalTimer = null;
     enemy.wordAnchor?.destroy();
     enemy.wordAnchor = null;
     this.tweens.killTweensOf(enemy.graphic);

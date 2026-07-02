@@ -86,6 +86,8 @@ const DANGER_RAMP_START = 0.4;
 // so ~160 tall). Sizing is tune-later. */
 const LANTERN_SPIRIT_HEIGHT = 88;
 const SCHOLAR_SPIRIT_HEIGHT = 160;
+const SPIRIT_WORD_ATTACH_DELAY_MS = 140;
+const SPIRIT_ARRIVAL_SETTLE_SCALE = 0.026;
 // Painted Scholar Etta — a small amber book-spirit child shown during her side
 // encounter. Smallish (~280px) and translucent (resting alpha 0.9). Positioning
 // is tune-later: left of centre (x≈520) so she's clear of the centred typed
@@ -114,6 +116,7 @@ interface LanternSpirit {
   word: string;
   defeated: boolean;
   advanceTween: Phaser.Tweens.Tween | null;
+  arrivalTimer: Phaser.Time.TimerEvent | null;
   advanceMs: number;
 }
 
@@ -1885,6 +1888,7 @@ export class SkyIslandScene extends Phaser.Scene {
       word,
       defeated: false,
       advanceTween: null,
+      arrivalTimer: null,
       advanceMs,
     };
 
@@ -1906,6 +1910,7 @@ export class SkyIslandScene extends Phaser.Scene {
           count: 8,
           durationMs: 360,
         });
+        this.playSpiritArrivalSettle(spirit);
         // Idle pulse — a soft alpha breathe on the painted body.
         spirit.pulseTween = this.tweens.add({
           targets: lanternSprite,
@@ -1915,13 +1920,41 @@ export class SkyIslandScene extends Phaser.Scene {
           repeat: -1,
           ease: "Sine.easeInOut",
         });
-        this.idleBob(container);
-        this.attachSpiritTarget(spirit);
-        this.startSpiritAdvance(spirit);
+        this.beginSpiritThreat(spirit);
       },
     });
 
     this.spirits.push(spirit);
+  }
+
+  private beginSpiritThreat(spirit: LanternSpirit): void {
+    spirit.arrivalTimer?.remove(false);
+    spirit.arrivalTimer = this.time.delayedCall(
+      SPIRIT_WORD_ATTACH_DELAY_MS,
+      () => {
+        spirit.arrivalTimer = null;
+        if (spirit.defeated || !spirit.container.scene) return;
+        this.idleBob(spirit.container);
+        this.attachSpiritTarget(spirit);
+        this.startSpiritAdvance(spirit);
+      },
+    );
+  }
+
+  private playSpiritArrivalSettle(spirit: LanternSpirit): void {
+    spirit.container.setScale(1, 1);
+    this.tweens.add({
+      targets: spirit.container,
+      scaleX: 1 + SPIRIT_ARRIVAL_SETTLE_SCALE,
+      scaleY: 1 - SPIRIT_ARRIVAL_SETTLE_SCALE * 0.46,
+      duration: 70,
+      yoyo: true,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!spirit.container.scene || spirit.defeated) return;
+        spirit.container.setScale(1, 1);
+      },
+    });
   }
 
   private attachSpiritTarget(spirit: LanternSpirit): void {
@@ -2018,6 +2051,8 @@ export class SkyIslandScene extends Phaser.Scene {
     // Stop pulse, fully light the lantern (bloom effect)
     spirit.pulseTween?.stop();
     spirit.pulseTween = null;
+    spirit.arrivalTimer?.remove(false);
+    spirit.arrivalTimer = null;
 
     if (spirit.target) {
       this.typingInput.unregister(spirit.target);
@@ -2088,6 +2123,8 @@ export class SkyIslandScene extends Phaser.Scene {
     }
     spirit.wordAnchor?.destroy();
     spirit.wordAnchor = null;
+    spirit.arrivalTimer?.remove(false);
+    spirit.arrivalTimer = null;
     this.tweens.killTweensOf(spirit.container);
 
     this.tweens.add({

@@ -38,6 +38,7 @@ import {
   addContainerWake,
   addIdleBreath,
   addLocalGroundShadow,
+  attachWordBodyAnchor,
   addLivingLight,
   dismissCompanionCameo,
   playBodyImpact,
@@ -49,6 +50,7 @@ import {
   stageCompanionCameo,
   type AmbientKind,
   type ContainerWakeOptions,
+  type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import greatBattleBackdrop from "../../art/references/great-battle-clean.png";
 import runaPortrait from "../../art/runa/runa-front.png";
@@ -390,6 +392,7 @@ function finaleTypedPulseForRealm(realmId: string): {
 interface Enemy {
   graphic: Phaser.GameObjects.Container;
   target: TextWordTarget | null;
+  wordAnchor: WordBodyAnchorHandle | null;
   advanceTween: Phaser.Tweens.Tween | null;
   x: number;
   y: number;
@@ -909,6 +912,8 @@ export class GreatBattleScene extends Phaser.Scene {
     enemy.defeated = true;
     enemy.advanceTween?.stop();
     enemy.advanceTween = null;
+    enemy.wordAnchor?.destroy();
+    enemy.wordAnchor = null;
     this.tweens.killTweensOf(enemy.graphic);
     if (enemy.target) {
       this.typingInput.unregister(enemy.target);
@@ -1162,6 +1167,7 @@ export class GreatBattleScene extends Phaser.Scene {
     const enemy: Enemy = {
       graphic,
       target: null,
+      wordAnchor: null,
       advanceTween: null,
       x,
       y: waveDef.baseY,
@@ -1228,6 +1234,23 @@ export class GreatBattleScene extends Phaser.Scene {
       onComplete: () => this.defeatEnemy(enemy),
     });
     enemy.target = target;
+    enemy.wordAnchor?.destroy();
+    enemy.wordAnchor = attachWordBodyAnchor(
+      this,
+      enemy.graphic,
+      () =>
+        enemy.target
+          ? { x: enemy.target.getAnchorX(), y: enemy.target.getAnchorY() }
+          : null,
+      {
+        color: finaleClaimColorForRealm(waveDef.realmId),
+        alpha: 0.16,
+        depth: 5,
+        sourceOffsetX: enemy.x,
+        sourceOffsetY: enemy.y - 44,
+        targetOffsetY: 24,
+      },
+    );
     this.typingInput.register(target);
     this.activeTargets.push(target);
   }
@@ -1294,6 +1317,8 @@ export class GreatBattleScene extends Phaser.Scene {
     enemy.defeated = true;
     enemy.advanceTween?.stop();
     enemy.advanceTween = null;
+    enemy.wordAnchor?.destroy();
+    enemy.wordAnchor = null;
     this.tweens.killTweensOf(enemy.graphic);
     const wake = finaleWakeForRealm(enemy.realmId);
     playBodyImpact(this, enemy.graphic, {

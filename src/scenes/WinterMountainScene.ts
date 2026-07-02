@@ -231,6 +231,8 @@ export class WinterMountainScene extends Phaser.Scene {
   private huntressSprite: Phaser.GameObjects.Image | null = null;
   private riverCue: Phaser.GameObjects.Container | null = null;
   private riverCueWordAnchor: WordBodyAnchorHandle | null = null;
+  private revisitMemoryCue: Phaser.GameObjects.Container | null = null;
+  private revisitMemoryWordAnchor: WordBodyAnchorHandle | null = null;
   private fireflyCue: Phaser.GameObjects.Container | null = null;
   private cairnCue: Phaser.GameObjects.Container | null = null;
   private peltCue: Phaser.GameObjects.Container | null = null;
@@ -285,6 +287,8 @@ export class WinterMountainScene extends Phaser.Scene {
     this.huntressSprite = null;
     this.riverCue = null;
     this.riverCueWordAnchor = null;
+    this.revisitMemoryCue = null;
+    this.revisitMemoryWordAnchor = null;
     this.fireflyCue = null;
     this.cairnCue = null;
     this.peltCue = null;
@@ -492,6 +496,7 @@ export class WinterMountainScene extends Phaser.Scene {
       this.typingInput.reset();
       this.coldDecayTimer?.remove();
       this.riverCue = null;
+      this.dismissRevisitMemoryCue(false);
       this.clearWinterForkCues();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.input.keyboard?.off("keyup", this.onKeyUp, this);
@@ -550,24 +555,147 @@ export class WinterMountainScene extends Phaser.Scene {
       }
       const word = words[idx];
       if (word === undefined) return;
+      this.showRevisitMemoryCue(idx, words.length);
+      const wordPos = this.revisitMemoryWordPosition(idx, words.length);
       const target = this.makeWord({
         scene: this,
         word,
-        x: this.scale.width / 2,
-        y: this.scale.height / 2,
-        fontSize: 44,
-        onClaim: () => playWrenFocus(this.wrenSprite),
+        x: wordPos.x,
+        y: wordPos.y,
+        fontSize: 40,
+        onClaim: () => {
+          playWrenFocus(this.wrenSprite);
+          this.pulseRevisitMemoryCue(false);
+        },
         onComplete: () => {
           this.playWrenTrailAction();
+          this.pulseRevisitMemoryCue(true);
           playChime();
           idx += 1;
           this.typingInput.unregister(target);
-          this.time.delayedCall(200, advance);
+          const activeIdx = this.activeTargets.indexOf(target);
+          if (activeIdx >= 0) this.activeTargets.splice(activeIdx, 1);
+          this.time.delayedCall(260, () => {
+            this.dismissRevisitMemoryCue();
+            this.time.delayedCall(120, advance);
+          });
         },
       });
+      this.attachRevisitMemoryWordAnchor(target);
       this.typingInput.register(target);
+      this.activeTargets.push(target);
     };
     advance();
+  }
+
+  private showRevisitMemoryCue(idx: number, total: number): void {
+    this.dismissRevisitMemoryCue(false);
+    const pos = this.revisitMemoryCuePosition(idx, total);
+    const cue = this.add.container(pos.x, pos.y).setDepth(-1).setAlpha(0);
+    this.revisitMemoryCue = cue;
+
+    cue.add(addLocalGroundShadow(this, 132, 18, { y: 10, alpha: 0.18 }));
+
+    const frost = this.add.graphics();
+    frost.fillStyle(0xdbeeff, 0.12);
+    frost.fillEllipse(0, 0, 124, 34);
+    frost.lineStyle(2, PALETTE_HEX.frost, 0.36);
+    frost.strokeEllipse(0, 0, 112, 28);
+    frost.lineStyle(1, 0xf4fbff, 0.34);
+    frost.lineBetween(-38, -3, -12, 6);
+    frost.lineBetween(-6, 5, 18, -6);
+    frost.lineBetween(24, -5, 46, 4);
+    frost.fillStyle(0xf4fbff, 0.42);
+    frost.fillCircle(-46, 0, 3.4);
+    frost.fillCircle(0, -2, 2.8);
+    frost.fillCircle(44, 1, 3.1);
+    cue.add(frost);
+
+    this.tweens.add({
+      targets: cue,
+      alpha: 0.82,
+      y: pos.y - 5,
+      duration: 320,
+      ease: "Sine.easeOut",
+      onComplete: () => addIdleBreath(this, cue, { dy: -2, durationMs: 2600 }),
+    });
+  }
+
+  private revisitMemoryCuePosition(idx: number, total: number): { x: number; y: number } {
+    const spacing = total <= 4 ? 185 : 160;
+    const startX = this.scale.width / 2 - ((total - 1) * spacing) / 2;
+    return {
+      x: startX + idx * spacing,
+      y: idx % 2 === 0 ? 818 : 790,
+    };
+  }
+
+  private revisitMemoryWordPosition(idx: number, total: number): { x: number; y: number } {
+    const cue = this.revisitMemoryCuePosition(idx, total);
+    return { x: cue.x, y: cue.y - 112 };
+  }
+
+  private attachRevisitMemoryWordAnchor(target: TextWordTarget): void {
+    const cue = this.revisitMemoryCue;
+    if (!cue?.scene) return;
+    this.releaseRevisitMemoryWordAnchor();
+    this.revisitMemoryWordAnchor = attachWordBodyAnchor(
+      this,
+      cue,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.frost,
+        alpha: 0.11,
+        depth: 7,
+        sourceOffsetY: -18,
+        targetOffsetY: 24,
+      },
+    );
+  }
+
+  private releaseRevisitMemoryWordAnchor(): void {
+    this.revisitMemoryWordAnchor?.destroy();
+    this.revisitMemoryWordAnchor = null;
+  }
+
+  private pulseRevisitMemoryCue(completion: boolean): void {
+    if (!this.revisitMemoryCue?.scene) return;
+    playActorAttention(this, this.revisitMemoryCue, {
+      scale: completion ? 1.04 : 1.018,
+      durationMs: completion ? 260 : 170,
+    });
+    playBodyImpact(this, this.revisitMemoryCue, {
+      kind: "snow",
+      color: PALETTE_HEX.frost,
+      offsetY: -16,
+      depth: 10,
+      ringRadius: completion ? 42 : 26,
+      count: completion ? 8 : 5,
+      durationMs: completion ? 430 : 240,
+    });
+  }
+
+  private dismissRevisitMemoryCue(animate = true): void {
+    this.releaseRevisitMemoryWordAnchor();
+    const cue = this.revisitMemoryCue;
+    if (!cue?.scene) {
+      this.revisitMemoryCue = null;
+      return;
+    }
+    this.revisitMemoryCue = null;
+    this.tweens.killTweensOf(cue);
+    if (!animate) {
+      cue.destroy();
+      return;
+    }
+    this.tweens.add({
+      targets: cue,
+      alpha: 0,
+      y: cue.y + 14,
+      duration: 220,
+      ease: "Sine.easeIn",
+      onComplete: () => cue.destroy(),
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2424,6 +2552,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.clearHeldurWordAnchors();
     this.clearForkChoiceWordAnchors();
     this.clearFoxWordAnchors();
+    this.dismissRevisitMemoryCue(false);
     for (const t of this.activeTargets) {
       this.typingInput.unregister(t);
       t.destroy();

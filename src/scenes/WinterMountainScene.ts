@@ -538,7 +538,10 @@ export class WinterMountainScene extends Phaser.Scene {
           this.cameras.main.fadeOut(700, 11, 10, 15);
           this.cameras.main.once(
             Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-            () => this.scene.start("PortalChamberScene", { store: this.store }),
+            () => this.scene.start("PortalChamberScene", {
+              store: this.store,
+              arrival: "winter-mountain",
+            }),
           );
         });
         return;
@@ -2198,7 +2201,10 @@ export class WinterMountainScene extends Phaser.Scene {
       this.cameras.main.fadeOut(700, 11, 10, 15);
       this.cameras.main.once(
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-        () => this.scene.start("PortalChamberScene", { store: this.store }),
+        () => this.scene.start("PortalChamberScene", {
+          store: this.store,
+          arrival: "winter-mountain",
+        }),
       );
     });
   }

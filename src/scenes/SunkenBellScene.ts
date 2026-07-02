@@ -458,7 +458,10 @@ export class SunkenBellScene extends Phaser.Scene {
           this.cameras.main.fadeOut(700, 8, 24, 32);
           this.cameras.main.once(
             Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-            () => this.scene.start("PortalChamberScene", { store: this.store }),
+            () => this.scene.start("PortalChamberScene", {
+              store: this.store,
+              arrival: "sunken-bell",
+            }),
           );
         });
         return;
@@ -1786,7 +1789,10 @@ export class SunkenBellScene extends Phaser.Scene {
       this.cameras.main.once(
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
         () => {
-          this.scene.start("PortalChamberScene", { store: this.store });
+          this.scene.start("PortalChamberScene", {
+            store: this.store,
+            arrival: "sunken-bell",
+          });
         },
       );
     });

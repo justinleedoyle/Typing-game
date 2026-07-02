@@ -455,7 +455,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
           this.cameras.main.fadeOut(700, 26, 16, 8);
           this.cameras.main.once(
             Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-            () => this.scene.start("PortalChamberScene", { store: this.store }),
+            () => this.scene.start("PortalChamberScene", {
+              store: this.store,
+              arrival: "clockwork-forge",
+            }),
           );
         });
         return;
@@ -1672,7 +1675,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.cameras.main.once(
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
         () => {
-          this.scene.start("PortalChamberScene", { store: this.store });
+          this.scene.start("PortalChamberScene", {
+            store: this.store,
+            arrival: "clockwork-forge",
+          });
         },
       );
     });

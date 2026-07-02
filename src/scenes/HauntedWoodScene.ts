@@ -441,7 +441,10 @@ export class HauntedWoodScene extends Phaser.Scene {
           this.cameras.main.fadeOut(700, 14, 18, 14);
           this.cameras.main.once(
             Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-            () => this.scene.start("PortalChamberScene", { store: this.store }),
+            () => this.scene.start("PortalChamberScene", {
+              store: this.store,
+              arrival: "haunted-wood",
+            }),
           );
         });
         return;
@@ -1384,7 +1387,10 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.cameras.main.once(
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
         () => {
-          this.scene.start("PortalChamberScene", { store: this.store });
+          this.scene.start("PortalChamberScene", {
+            store: this.store,
+            arrival: "haunted-wood",
+          });
         },
       );
     });

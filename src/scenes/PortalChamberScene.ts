@@ -25,6 +25,7 @@ import {
   addLivingLight,
   attachWordBodyAnchor,
   playClaimLine,
+  playSceneEventPulse,
   type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import { preloadSatchelIcons, satchelIconFor } from "../game/ui/satchelIcons";
@@ -42,8 +43,18 @@ import hubBackdrop from "../../art/references/hub-portal-chamber-clean.png";
 import portalActiveSheet from "../../art/portal/portal-active-sheet.png";
 import runaSprite from "../../art/runa/runa-front.png";
 
+type HubArrivalSource =
+  | "opening"
+  | "winter-mountain"
+  | "sunken-bell"
+  | "clockwork-forge"
+  | "sky-island"
+  | "haunted-wood"
+  | "great-battle";
+
 interface ChamberSceneData {
   store: SaveStore;
+  arrival?: HubArrivalSource;
 }
 
 type Zone = "portals" | "desk" | "shelf";
@@ -151,6 +162,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private portalTypingPulseTimes = new Map<string, number>();
   private ambientHandle?: AmbientHandle;
   private showPortalRevisits = false;
+  private hubArrival: HubArrivalSource | null = null;
 
   constructor() {
     super("PortalChamberScene");
@@ -158,6 +170,7 @@ export class PortalChamberScene extends Phaser.Scene {
 
   init(data: ChamberSceneData): void {
     this.store = data.store;
+    this.hubArrival = data.arrival ?? null;
     this.archGraphics = new Map();
     this.archGlows = new Map();
     this.archSprites = new Map();
@@ -261,6 +274,7 @@ export class PortalChamberScene extends Phaser.Scene {
 
     // Enter the portals zone initially.
     this.enterZone("portals", false);
+    this.playHubArrival();
 
     // Auth mid-session changes restart the scene so all state re-renders cleanly.
     const { data: subscription } = supabase.auth.onAuthStateChange((event) => {
@@ -1469,6 +1483,93 @@ export class PortalChamberScene extends Phaser.Scene {
       ease: "Sine.easeOut",
       onComplete: () => pulse.destroy(),
     });
+  }
+
+  private playHubArrival(): void {
+    const arrival = this.hubArrival;
+    if (!arrival) return;
+
+    const arch = ARCHES.find((a) => a.id === arrival);
+    const sourceX = arch?.x ?? HUB_STATIONS.portalFloor.x;
+    const sourceY = arch
+      ? arch.baseY - arch.height / 2 + 34
+      : HUB_STATIONS.portalFloor.y - 250;
+    const color = arrival === "great-battle"
+      ? 0x8b6ad8
+      : arrival === "opening"
+        ? 0x9fd7ff
+        : UI_HEX.brass;
+
+    playSceneEventPulse(this, {
+      kind: "mote",
+      color,
+      x: sourceX,
+      y: sourceY,
+      depth: 6,
+      durationMs: 620,
+      ringWidth: arch ? arch.width * 0.64 : 330,
+      ringHeight: arch ? arch.height * 0.42 : 110,
+      count: 8,
+      alpha: 0.1,
+      spreadX: arch ? arch.width * 0.28 : 130,
+      spreadY: arch ? arch.height * 0.12 : 44,
+    });
+
+    if (arch) {
+      this.focusPortalForScene(arch.sceneKey);
+    } else {
+      this.focusStation(HUB_STATIONS.portalFloor);
+    }
+
+    this.playHubArrivalFlecks(
+      sourceX,
+      sourceY,
+      this.wrenContainer.x,
+      this.wrenContainer.y - 112,
+      color,
+    );
+  }
+
+  private playHubArrivalFlecks(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    color: number,
+  ): void {
+    playClaimLine(this, fromX, fromY, toX, toY, {
+      color,
+      depth: 8,
+      durationMs: 360,
+    });
+
+    for (let i = 0; i < 9; i++) {
+      const angle = (Math.PI * 2 * i) / 9;
+      const startX = fromX + Math.cos(angle) * Phaser.Math.Between(18, 42);
+      const startY = fromY + Math.sin(angle) * Phaser.Math.Between(18, 54);
+      const targetX = toX + Math.cos(angle + 0.5) * Phaser.Math.Between(12, 38);
+      const targetY = toY + Math.sin(angle + 0.5) * Phaser.Math.Between(8, 26);
+      const fleck = this.add
+        .graphics()
+        .setPosition(startX, startY)
+        .setDepth(9)
+        .setAlpha(0.68);
+      fleck.fillStyle(i % 3 === 0 ? UI_HEX.brass : color, 0.76);
+      fleck.fillCircle(0, 0, Phaser.Math.FloatBetween(2.2, 4.4));
+
+      this.tweens.add({
+        targets: fleck,
+        x: targetX,
+        y: targetY,
+        alpha: 0,
+        scaleX: 0.34,
+        scaleY: 0.34,
+        duration: 320 + i * 18,
+        delay: i * 12,
+        ease: "Sine.easeIn",
+        onComplete: () => fleck.destroy(),
+      });
+    }
   }
 
   private focusStation(station: StationSpec): void {

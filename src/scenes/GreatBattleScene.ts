@@ -971,7 +971,10 @@ export class GreatBattleScene extends Phaser.Scene {
       this.cameras.main.fadeOut(1200, 0, 0, 0);
       this.cameras.main.once(
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-        () => this.scene.start("PortalChamberScene", { store: this.store }),
+        () => this.scene.start("PortalChamberScene", {
+          store: this.store,
+          arrival: "great-battle",
+        }),
       );
     });
   }
@@ -3063,7 +3066,10 @@ export class GreatBattleScene extends Phaser.Scene {
         if (!this.creditsKeyListenerAdded) {
           this.creditsKeyListenerAdded = true;
           this.input.keyboard?.once("keydown", () => {
-            this.scene.start("PortalChamberScene", { store: this.store });
+            this.scene.start("PortalChamberScene", {
+              store: this.store,
+              arrival: "great-battle",
+            });
           });
         }
       },

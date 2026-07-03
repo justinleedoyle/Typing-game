@@ -97,6 +97,8 @@ export class ConsoleBand {
   private portraitImage?: Phaser.GameObjects.Image;
   private portraitFallback?: Phaser.GameObjects.Text;
   private portraitLabel?: Phaser.GameObjects.Text;
+  private renderedPortraitKey = "";
+  private portraitInitialized = false;
 
   constructor(scene: Phaser.Scene, opts: ConsoleBandOptions = {}) {
     this.scene = scene;
@@ -232,25 +234,34 @@ export class ConsoleBand {
    *  in-world NPC is speaking. Passing no key (or an unloaded key) falls back
    *  to an intentional monogram inside the frame instead of an empty box. */
   setPortrait(textureKey?: string, name?: string): void {
+    const trimmedName = name?.trim() ?? "";
+    const resolvedTextureKey =
+      textureKey && this.scene.textures.exists(textureKey) ? textureKey : "";
+    const portraitKey = `${resolvedTextureKey}\n${trimmedName}`;
+    if (this.portraitInitialized && portraitKey === this.renderedPortraitKey) {
+      return;
+    }
+
     this.portraitImage?.destroy();
     this.portraitImage = undefined;
     this.portraitFallback?.destroy();
     this.portraitFallback = undefined;
-    const trimmedName = name?.trim() ?? "";
 
-    if (textureKey && this.scene.textures.exists(textureKey)) {
-      const img = this.scene.add.image(PORTRAIT_CX, MID_Y, textureKey);
+    if (resolvedTextureKey) {
+      const img = this.scene.add.image(PORTRAIT_CX, MID_Y, resolvedTextureKey);
       const fit = Math.min(
         (PORTRAIT_W - 8) / img.width,
         (PORTRAIT_H - 8) / img.height,
       );
-      img.setScale(fit);
+      img.setScale(fit * 0.96);
       this.container.add(img);
       this.portraitImage = img;
       img.setAlpha(0.84);
       this.scene.tweens.add({
         targets: img,
         alpha: 1,
+        scaleX: fit,
+        scaleY: fit,
         duration: 160,
         ease: "Sine.easeOut",
       });
@@ -265,11 +276,14 @@ export class ConsoleBand {
         })
         .setOrigin(0.5)
         .setAlpha(0.68);
+      fallback.setScale(0.94);
       this.container.add(fallback);
       this.portraitFallback = fallback;
       this.scene.tweens.add({
         targets: fallback,
         alpha: 0.9,
+        scaleX: 1,
+        scaleY: 1,
         duration: 160,
         ease: "Sine.easeOut",
       });
@@ -291,6 +305,9 @@ export class ConsoleBand {
     this.portraitLabel.setText(this.formatPortraitName(trimmedName));
     if (this.portraitFallback) this.container.bringToTop(this.portraitFallback);
     this.container.bringToTop(this.portraitLabel);
+    if (this.portraitInitialized) this.playPortraitWake();
+    this.portraitInitialized = true;
+    this.renderedPortraitKey = portraitKey;
   }
 
   private formatPortraitName(name: string): string {
@@ -342,6 +359,50 @@ export class ConsoleBand {
     frame.lineStyle(2, UI_HEX.brass, 0.9);
     frame.strokeRoundedRect(x - PORTRAIT_W / 2, y - PORTRAIT_H / 2, PORTRAIT_W, PORTRAIT_H, 7);
     this.container.add(frame);
+  }
+
+  private playPortraitWake(): void {
+    const x = PORTRAIT_CX;
+    const y = MID_Y;
+    const frame = this.scene.add.graphics().setAlpha(0.68);
+    frame.lineStyle(2, UI_HEX.brass, 0.64);
+    frame.strokeRoundedRect(
+      x - PORTRAIT_W / 2 - 4,
+      y - PORTRAIT_H / 2 - 4,
+      PORTRAIT_W + 8,
+      PORTRAIT_H + 8,
+      9,
+    );
+    frame.lineStyle(1, UI_HEX.parchment, 0.28);
+    frame.strokeRoundedRect(
+      x - PORTRAIT_W / 2 + 5,
+      y - PORTRAIT_H / 2 + 5,
+      PORTRAIT_W - 10,
+      PORTRAIT_H - 10,
+      5,
+    );
+    frame.fillStyle(UI_HEX.brass, 0.08);
+    frame.fillRoundedRect(
+      x - PORTRAIT_W / 2 - 2,
+      y - PORTRAIT_H / 2 - 2,
+      PORTRAIT_W + 4,
+      PORTRAIT_H + 4,
+      8,
+    );
+    this.container.add(frame);
+    if (this.portraitImage) this.container.bringToTop(this.portraitImage);
+    if (this.portraitFallback) this.container.bringToTop(this.portraitFallback);
+    if (this.portraitLabel) this.container.bringToTop(this.portraitLabel);
+
+    this.scene.tweens.add({
+      targets: frame,
+      alpha: 0,
+      scaleX: 1.04,
+      scaleY: 1.035,
+      duration: 320,
+      ease: "Sine.easeOut",
+      onComplete: () => frame.destroy(),
+    });
   }
 
   private drawSatchel(

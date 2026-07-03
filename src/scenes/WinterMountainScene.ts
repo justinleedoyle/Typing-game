@@ -235,6 +235,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private heldurWordAnchors: WordBodyAnchorHandle[] = [];
   private huntressSprite: Phaser.GameObjects.Image | null = null;
   private riverCue: Phaser.GameObjects.Container | null = null;
+  private riverCueBeat: (typeof RIVER_BEATS)[number] | null = null;
   private riverCueWordAnchor: WordBodyAnchorHandle | null = null;
   private revisitMemoryCue: Phaser.GameObjects.Container | null = null;
   private revisitMemoryWordAnchor: WordBodyAnchorHandle | null = null;
@@ -291,6 +292,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.heldurWordAnchors = [];
     this.huntressSprite = null;
     this.riverCue = null;
+    this.riverCueBeat = null;
     this.riverCueWordAnchor = null;
     this.revisitMemoryCue = null;
     this.revisitMemoryWordAnchor = null;
@@ -710,6 +712,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private startAct1(): void {
     this.narration.say("winter_intro_arrival");
     this.band.setObjective("Type each trail word to move through the pass.");
+    this.showRiverCue("lift");
     this.time.delayedCall(2600, () => this.runRiverBeats(0));
   }
 
@@ -753,10 +756,12 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private showRiverCue(beat: (typeof RIVER_BEATS)[number]): void {
+    if (this.riverCue?.scene && this.riverCueBeat === beat) return;
     this.dismissRiverCue(false);
     const pos = this.riverCuePosition(beat);
     const cue = this.add.container(pos.x, pos.y).setDepth(-1).setAlpha(0);
     this.riverCue = cue;
+    this.riverCueBeat = beat;
 
     if (beat !== "duck") {
       cue.add(addLocalGroundShadow(this, beat === "lift" ? 180 : 150, 20, {
@@ -875,9 +880,11 @@ export class WinterMountainScene extends Phaser.Scene {
     const cue = this.riverCue;
     if (!cue?.scene) {
       this.riverCue = null;
+      this.riverCueBeat = null;
       return;
     }
     this.riverCue = null;
+    this.riverCueBeat = null;
     this.tweens.killTweensOf(cue);
     if (!animate) {
       cue.destroy();

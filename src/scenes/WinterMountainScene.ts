@@ -826,7 +826,7 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private riverCuePosition(beat: (typeof RIVER_BEATS)[number]): { x: number; y: number } {
-    if (beat === "lift") return { x: this.scale.width / 2 - 92, y: 846 };
+    if (beat === "lift") return { x: this.scale.width / 2 - 250, y: 846 };
     if (beat === "step") return { x: this.scale.width / 2 + 84, y: 858 };
     return { x: this.scale.width / 2 + 18, y: 748 };
   }

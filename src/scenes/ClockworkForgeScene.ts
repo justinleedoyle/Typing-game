@@ -2098,6 +2098,46 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   // ─── Passage chain ────────────────────────────────────────────────────────────
 
+  private forgePassageWordPosition(
+    owner: ForgePassageOwner,
+    word: string,
+  ): { x: number; y: number } {
+    const width = this.scale.width;
+    const height = this.scale.height;
+    const fallback = { x: width / 2, y: height - 340 };
+    const long = word.length > 16;
+    let body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined;
+    let sourceOffsetY = -56;
+    let side = 1;
+    let lift = long ? 116 : 102;
+
+    if (owner === "forn") {
+      body = this.fornSprite;
+      sourceOffsetY = -128;
+      side = 1;
+      lift = 92;
+    } else if (owner === "apprentices") {
+      body = this.apprenticeCue;
+      sourceOffsetY = -68;
+      side = -1;
+    } else if (owner === "peaceful-order") {
+      body = this.standDownCue;
+      sourceOffsetY = -54;
+      side = 1;
+    } else {
+      return fallback;
+    }
+
+    if (!body?.scene) return fallback;
+
+    const lateral = long ? 220 : 180;
+    const xInset = long ? 420 : 300;
+    return {
+      x: Phaser.Math.Clamp(body.x + side * lateral, xInset, width - xInset),
+      y: Phaser.Math.Clamp(body.y + sourceOffsetY - lift, 280, height - 430),
+    };
+  }
+
   private runPassageChain(
     passages: string[],
     narratorLines: string[],
@@ -2124,11 +2164,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
         trueNameAnchor?.destroy();
         trueNameAnchor = null;
       };
+      const pos = trueNameSeal
+        ? { x: trueNameSeal.x, y: trueNameSeal.y - 118 }
+        : this.forgePassageWordPosition(owner, word);
       const opts: TextWordTargetOptions = {
         scene: this,
         word,
-        x: trueNameSeal?.x ?? this.scale.width / 2,
-        y: trueNameSeal ? trueNameSeal.y - 118 : this.scale.height - 340,
+        x: pos.x,
+        y: pos.y,
         fontSize: 36,
         burstColor: trueNameSeal ? PALETTE_HEX.ember : undefined,
         onClaim: () => {

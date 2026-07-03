@@ -60,6 +60,7 @@ import {
   playWrenFocus,
   playWrenHurt,
   preloadWren,
+  setWrenPose,
 } from "../game/wren";
 import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
@@ -997,23 +998,34 @@ export class SunkenBellScene extends Phaser.Scene {
         lanternAnchor = null;
       };
 
+      const wordPos = this.descentLanternWordPosition(i);
       const target = this.makeWord({
         scene: this,
         word,
-        x: pos.x,
-        y: pos.y - 60,
+        x: wordPos.x,
+        y: wordPos.y,
         fontSize: 36,
         onClaim: () => {
-          playWrenFocus(this.wrenSprite);
+          this.swimWrenTowardDescentLantern(i);
+          playWrenFocus(this.wrenSprite, {
+            faceLeft: wordPos.x < this.wrenContainer.x,
+          });
           this.pulseDescentLantern(lantern, false);
         },
         onComplete: () => {
-          playWrenAction(this.wrenSprite);
+          playWrenAction(this.wrenSprite, {
+            faceLeft: wordPos.x < this.wrenContainer.x,
+          });
           releaseLanternAnchor();
           this.lightDescentLantern(lantern);
           lit += 1;
           if (lit >= DESCENT_LANTERN_WORDS.length) {
-            this.time.delayedCall(800, () => this.startOlinNPC());
+            this.time.delayedCall(320, () => {
+              this.swimWrenTowardDescentLantern(1, () => {
+                this.resetWrenToFront();
+                this.time.delayedCall(360, () => this.startOlinNPC());
+              });
+            });
           }
         },
       });
@@ -1021,6 +1033,56 @@ export class SunkenBellScene extends Phaser.Scene {
       this.typingInput.register(target);
       this.activeTargets.push(target);
     });
+  }
+
+  private descentLanternWordPosition(index: number): { x: number; y: number } {
+    const pos = DESCENT_LANTERN_POSITIONS[index];
+    if (!pos) return { x: WREN_X, y: WREN_Y - 180 };
+    if (index === 1) return { x: pos.x + 154, y: pos.y - 72 };
+    return { x: pos.x, y: pos.y - 60 };
+  }
+
+  private descentLanternWrenX(index: number): number {
+    const pos = DESCENT_LANTERN_POSITIONS[index];
+    if (!pos) return WREN_X;
+    if (index === 0) return pos.x + 128;
+    if (index === 2) return pos.x - 128;
+    return pos.x;
+  }
+
+  private swimWrenTowardDescentLantern(
+    index: number,
+    onComplete?: () => void,
+  ): void {
+    if (!this.wrenContainer?.scene) {
+      onComplete?.();
+      return;
+    }
+    const x = this.descentLanternWrenX(index);
+    const distance = Math.abs(this.wrenContainer.x - x);
+    if (distance < 4) {
+      onComplete?.();
+      return;
+    }
+    playActorAttention(this, this.wrenContainer, {
+      scale: 1.012,
+      durationMs: 240,
+    });
+    this.tweens.add({
+      targets: this.wrenContainer,
+      x,
+      duration: Phaser.Math.Clamp(distance * 1.9, 320, 780),
+      ease: "Sine.easeInOut",
+      onComplete,
+    });
+  }
+
+  private resetWrenToFront(): void {
+    if (!this.wrenSprite?.scene) return;
+    this.tweens.killTweensOf(this.wrenSprite);
+    setWrenPose(this.wrenSprite, "front");
+    this.wrenSprite.x = 0;
+    this.wrenSprite.y = 0;
   }
 
   private showDescentLanterns(): void {

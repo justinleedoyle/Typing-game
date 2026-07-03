@@ -656,10 +656,20 @@ export class GreatBattleScene extends Phaser.Scene {
       fontSize: "15px",
       color: "#a59b89",
     };
-    this.add.text(430, meterY - 40, "candles", finaleHudLabel).setOrigin(0.5).setDepth(1500);
-    this.add.text(720, meterY - 40, "spells", finaleHudLabel).setOrigin(0.5).setDepth(1500);
+    const candleLabel = this.add
+      .text(430, meterY - 40, "candles", finaleHudLabel)
+      .setOrigin(0.5)
+      .setDepth(1500);
+    const chargeLabel = this.add
+      .text(720, meterY - 40, "spells", finaleHudLabel)
+      .setOrigin(0.5)
+      .setDepth(1500);
     this.redrawCandles();
     this.redrawCharges();
+    this.stageFinaleMeterObject(candleLabel, 70, { offsetY: 5 });
+    this.stageFinaleMeterObject(this.candleGroup, 95, { offsetY: 8 });
+    this.stageFinaleMeterObject(chargeLabel, 115, { offsetY: 5 });
+    this.stageFinaleMeterObject(this.chargeGroup, 140, { offsetY: 8 });
 
     // Untethered Wind: slow enemy advance by ~15%
     if (satchel.includes("untethered-wind")) {
@@ -1114,6 +1124,35 @@ export class GreatBattleScene extends Phaser.Scene {
       pulseUiObject(this, this.chargeGroup, { scale: 1.16 });
     }
     this.drawnCharges = this.charges;
+  }
+
+  private stageFinaleMeterObject(
+    object: Phaser.GameObjects.GameObject,
+    delayMs: number,
+    opts: { offsetY?: number } = {},
+  ): void {
+    const item = object as Phaser.GameObjects.GameObject & {
+      alpha: number;
+      y: number;
+      setAlpha: (value: number) => unknown;
+      setY: (value: number) => unknown;
+    };
+    if (typeof item.y !== "number" || !item.setAlpha || !item.setY) return;
+
+    const baseY = item.y;
+    const finalAlpha = item.alpha;
+    item.setAlpha(0);
+    item.setY(baseY + (opts.offsetY ?? 8));
+    this.time.delayedCall(delayMs, () => {
+      if (!object.scene) return;
+      this.tweens.add({
+        targets: item,
+        alpha: finalAlpha,
+        y: baseY,
+        duration: 230,
+        ease: "Sine.easeOut",
+      });
+    });
   }
 
   /** Snuff one candle — a Phase-1 breach or a fumbled Phase-2 counter. Reuses

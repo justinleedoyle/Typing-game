@@ -1044,6 +1044,23 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
+  private dismissWallWard(durationMs = 520): void {
+    const ward = this.wallWard;
+    if (!ward?.active) return;
+    this.wallWard = undefined;
+    this.wallWardFlames = [];
+    this.tweens.killTweensOf(ward);
+    this.tweens.add({
+      targets: ward,
+      alpha: 0,
+      scaleX: 1.08,
+      scaleY: 1.16,
+      duration: durationMs,
+      ease: "Sine.easeIn",
+      onComplete: () => ward.destroy(),
+    });
+  }
+
   private redrawCandles(): void {
     const previous = this.drawnCandles;
     this.candleGroup.removeAll(true);
@@ -1166,6 +1183,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // targets, and stop listening for keystrokes.
     this.time.removeAllEvents();
     this.clearActiveTargets();
+    this.dismissWallWard(760);
     this.input.keyboard?.off("keydown", this.onKeyDown, this);
     this.ambientHandle?.stop();
 
@@ -1904,6 +1922,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private transitionToPhase2(): void {
     this.clearActiveTargets();
+    this.dismissWallWard();
     this.enemies = [];
     this.band.setObjective("The wall holds; the Quiet Lord is coming.");
     this.time.delayedCall(600, () => this.startPhase2());

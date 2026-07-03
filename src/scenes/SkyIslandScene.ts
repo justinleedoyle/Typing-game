@@ -126,6 +126,8 @@ interface LanternSpirit {
 
 /** Path exploration words: traversal moments */
 const PATH_BEATS = ["balance", "lantern", "stepping"] as const;
+const SKY_WREN_STAGE_X = 960;
+const SKY_WREN_STAGE_Y = 900;
 
 /** Lantern-Lighter typed conversation */
 const LIGHTER_LINE_1 =
@@ -466,6 +468,7 @@ export class SkyIslandScene extends Phaser.Scene {
       this.oneShotInvoker?.destroy();
       this.oneShotInvoker = null;
       this.bossRingTween?.stop();
+      if (this.wrenContainer?.scene) this.tweens.killTweensOf(this.wrenContainer);
       this.pathCue = null;
       this.pathCueBeat = null;
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
@@ -684,6 +687,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.narration.say("sky_intro_arrival");
     this.band.setObjective("Type each path word to cross the floating stones.");
     this.showPathCue("balance");
+    this.time.delayedCall(780, () => this.stageWrenAtPathEntrance());
     this.time.delayedCall(2800, () => this.runPathBeats(0));
   }
 
@@ -691,7 +695,8 @@ export class SkyIslandScene extends Phaser.Scene {
   private runPathBeats(idx: number): void {
     if (idx >= PATH_BEATS.length) {
       this.dismissPathCue();
-      this.time.delayedCall(700, () => this.startLanternLighter());
+      this.resetWrenToSkyStage();
+      this.time.delayedCall(780, () => this.startLanternLighter());
       return;
     }
     const beat = PATH_BEATS[idx];
@@ -710,7 +715,11 @@ export class SkyIslandScene extends Phaser.Scene {
       y: wordPos.y,
       fontSize: 44,
       onClaim: () => {
-        playWrenFocus(this.wrenSprite);
+        const destination = this.pathWrenPosition(beat);
+        playWrenFocus(this.wrenSprite, {
+          faceLeft: destination.x < this.wrenContainer.x,
+        });
+        this.walkWrenToPathBeat(beat);
         this.pulsePathCue(false);
       },
       onComplete: () => {
@@ -759,20 +768,105 @@ export class SkyIslandScene extends Phaser.Scene {
     }
   }
 
+  private pathWrenPosition(beat: (typeof PATH_BEATS)[number]): { x: number; y: number } {
+    const cue = this.pathCue;
+    if (!cue?.scene) return { x: SKY_WREN_STAGE_X, y: SKY_WREN_STAGE_Y };
+
+    switch (beat) {
+      case "balance":
+        return { x: cue.x - 112, y: cue.y + 56 };
+      case "lantern":
+        return { x: cue.x + 18, y: cue.y + 108 };
+      case "stepping":
+        return { x: cue.x + 136, y: cue.y + 50 };
+    }
+  }
+
+  private stageWrenAtPathEntrance(): void {
+    const cue = this.pathCue;
+    if (!cue?.scene) return;
+    this.moveWrenTo(cue.x - 36, cue.y + 76, {
+      durationMs: 840,
+      quiet: true,
+    });
+  }
+
+  private walkWrenToPathBeat(beat: (typeof PATH_BEATS)[number]): void {
+    const destination = this.pathWrenPosition(beat);
+    this.moveWrenTo(destination.x, destination.y, {
+      durationMs: beat === "lantern" ? 620 : 560,
+      ringWidth: beat === "lantern" ? 170 : 220,
+    });
+  }
+
+  private resetWrenToSkyStage(): void {
+    this.moveWrenTo(SKY_WREN_STAGE_X, SKY_WREN_STAGE_Y, {
+      durationMs: 580,
+      ringWidth: 210,
+      quiet: true,
+    });
+  }
+
+  private moveWrenTo(
+    x: number,
+    y: number,
+    opts: { durationMs?: number; ringWidth?: number; quiet?: boolean } = {},
+  ): void {
+    if (!this.wrenContainer?.scene) return;
+    this.tweens.killTweensOf(this.wrenContainer);
+    this.tweens.add({
+      targets: this.wrenContainer,
+      x,
+      y,
+      duration: opts.durationMs ?? 560,
+      ease: "Sine.easeInOut",
+      onComplete: () => {
+        if (!this.wrenContainer?.scene) return;
+        addIdleBreath(this, this.wrenContainer, { dy: -5, durationMs: 2200 });
+      },
+    });
+    if (opts.quiet) return;
+    playSceneEventPulse(this, {
+      kind: "mote",
+      color: 0xf2cc65,
+      x,
+      y: y - 16,
+      depth: -0.2,
+      durationMs: 520,
+      ringWidth: opts.ringWidth ?? 210,
+      ringHeight: 54,
+      count: 6,
+      alpha: 0.1,
+      spreadX: 76,
+      spreadY: 18,
+    });
+  }
+
   private drawBalanceBridgeCue(): Phaser.GameObjects.Container {
     const c = this.add.container(this.scale.width / 2 - 52, 802).setDepth(-1).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 250, 24, { y: 20, alpha: 0.14 }));
+    c.add(addLocalGroundShadow(this, 276, 24, { y: 24, alpha: 0.12 }));
+    const rocks = this.add.graphics().setAngle(-3);
+    rocks.fillStyle(0x3f4850, 0.5);
+    rocks.fillEllipse(-138, 14, 92, 34);
+    rocks.fillEllipse(138, 18, 104, 38);
+    rocks.lineStyle(1.5, 0xd6c386, 0.12);
+    rocks.strokeEllipse(-138, 14, 76, 22);
+    rocks.strokeEllipse(138, 18, 82, 24);
+    c.add(rocks);
+
     const bridge = this.add.graphics().setAngle(-3);
-    bridge.fillStyle(0x6b5c45, 0.82);
+    bridge.fillStyle(0x6b5c45, 0.66);
     bridge.fillRoundedRect(-132, -16, 264, 32, 12);
-    bridge.fillStyle(0x9b8a6a, 0.72);
-    bridge.fillRoundedRect(-118, -10, 70, 12, 6);
-    bridge.fillRoundedRect(-28, -10, 58, 12, 6);
-    bridge.fillRoundedRect(52, -10, 60, 12, 6);
-    bridge.lineStyle(2, 0xd6c386, 0.24);
-    bridge.lineBetween(-118, -18, -92, 18);
-    bridge.lineBetween(-18, -18, 6, 18);
-    bridge.lineBetween(86, -18, 106, 18);
+    bridge.lineStyle(2, 0xd6c386, 0.22);
+    bridge.strokeRoundedRect(-132, -16, 264, 32, 12);
+    bridge.fillStyle(0x9b8a6a, 0.58);
+    bridge.fillRoundedRect(-118, -9, 64, 11, 6);
+    bridge.fillRoundedRect(-34, -12, 62, 12, 6);
+    bridge.fillRoundedRect(52, -8, 60, 11, 6);
+    bridge.lineStyle(1.5, 0xf3ead2, 0.14);
+    bridge.lineBetween(-118, -18, -94, 17);
+    bridge.lineBetween(-18, -19, 3, 18);
+    bridge.lineBetween(86, -17, 106, 18);
     c.add(bridge);
     return c;
   }
@@ -816,7 +910,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private drawSteppingStonesCue(): Phaser.GameObjects.Container {
     const c = this.add.container(this.scale.width / 2 + 36, 820).setDepth(-1).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 240, 22, { y: 18, alpha: 0.12 }));
+    c.add(addLocalGroundShadow(this, 250, 24, { y: 20, alpha: 0.1 }));
     const stones = this.add.graphics();
     const stoneSpecs = [
       { x: -102, y: 18, w: 78, h: 30 },
@@ -824,10 +918,12 @@ export class SkyIslandScene extends Phaser.Scene {
       { x: 74, y: 14, w: 76, h: 30 },
     ];
     stoneSpecs.forEach((stone, i) => {
-      stones.fillStyle(i === 1 ? 0x6c725f : 0x565d50, 0.92);
+      stones.fillStyle(i === 1 ? 0x6c725f : 0x565d50, 0.76);
       stones.fillEllipse(stone.x, stone.y, stone.w, stone.h);
       stones.lineStyle(2, 0xd6c386, 0.18);
       stones.strokeEllipse(stone.x, stone.y, stone.w * 0.9, stone.h * 0.78);
+      stones.fillStyle(0xf3ead2, 0.08);
+      stones.fillEllipse(stone.x - 12, stone.y - 5, stone.w * 0.28, stone.h * 0.22);
     });
     c.add(stones);
     return c;
@@ -3387,22 +3483,38 @@ export class SkyIslandScene extends Phaser.Scene {
   // ─── Drawing ──────────────────────────────────────────────────────────────
 
   private drawTempleStones(): void {
-    const g = this.add.graphics();
-    g.fillStyle(0x5e5040, 1);
-    // Left columns
-    for (const x of [160, 360, 560]) {
-      g.fillRect(x - 18, 680, 36, 180);
-      g.fillRect(x - 26, 674, 52, 18);
+    const g = this.add.graphics().setDepth(-8).setAlpha(0.56);
+    const drawRuin = (x: number, height: number, tilt: number): void => {
+      g.save();
+      g.translateCanvas(x, 848);
+      g.rotateCanvas(Phaser.Math.DegToRad(tilt));
+      g.fillStyle(0x33414b, 0.34);
+      g.fillRoundedRect(-18, -height, 36, height, 6);
+      g.fillStyle(0x63707a, 0.24);
+      g.fillRoundedRect(-26, -height - 15, 52, 18, 6);
+      g.lineStyle(1.5, 0xd6c386, 0.08);
+      g.lineBetween(-11, -height + 22, 11, -height + 10);
+      g.lineBetween(-10, -height + 72, 12, -height + 58);
+      g.restore();
+    };
+
+    for (const [x, height, tilt] of [
+      [170, 128, -2],
+      [352, 158, 1.5],
+      [545, 104, -1],
+      [1378, 116, 1],
+      [1572, 154, -1.5],
+      [1754, 128, 2],
+    ] as const) {
+      drawRuin(x, height, tilt);
     }
-    // Right columns
-    for (const x of [1360, 1560, 1760]) {
-      g.fillRect(x - 18, 680, 36, 180);
-      g.fillRect(x - 26, 674, 52, 18);
-    }
-    // Faint lintel suggestions
-    g.fillStyle(0x4a3c2c, 0.7);
-    g.fillRect(130, 658, 480, 20);
-    g.fillRect(1330, 658, 480, 20);
+
+    g.lineStyle(8, 0x33414b, 0.18);
+    g.lineBetween(126, 688, 600, 668);
+    g.lineBetween(1326, 672, 1812, 692);
+    g.lineStyle(2, 0xd6c386, 0.07);
+    g.lineBetween(138, 684, 584, 666);
+    g.lineBetween(1340, 670, 1798, 688);
   }
 
   /** Phaser update tick. Drives per-frame lantern blur on active phrases —

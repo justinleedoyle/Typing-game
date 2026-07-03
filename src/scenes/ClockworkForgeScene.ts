@@ -1241,8 +1241,11 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const helpForn = this.makeFornWord({
       scene: this,
       word: "help smith forn",
-      x: 540,
-      y: this.scale.height - 320,
+      ...this.forgeChoiceWordPosition(this.fornSprite, -128, "help smith forn", {
+        side: "right",
+        long: true,
+        lift: 92,
+      }),
       fontSize: 32,
       frame: "banner",
       onComplete: () => this.startFornBranch(),
@@ -1252,8 +1255,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
       {
         scene: this,
         word: "join the apprentices",
-        x: 1360,
-        y: this.scale.height - 320,
+        ...this.forgeChoiceWordPosition(this.apprenticeCue, -68, "join the apprentices", {
+          side: "left",
+          long: true,
+        }),
         fontSize: 32,
         frame: "banner",
         onComplete: () => this.startCabalBranch(),
@@ -1573,8 +1578,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
       {
         scene: this,
         word: "give the peaceful order",
-        x: 620,
-        y: this.scale.height - 320,
+        ...this.forgeChoiceWordPosition(this.standDownCue, -54, "give the peaceful order", {
+          side: "left",
+          long: true,
+        }),
         fontSize: 32,
         frame: "banner",
         onComplete: () => {
@@ -1589,8 +1596,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
       {
         scene: this,
         word: "fight to the end",
-        x: 1320,
-        y: this.scale.height - 320,
+        ...this.forgeChoiceWordPosition(this.fightCue, -58, "fight to the end", {
+          side: "right",
+          long: true,
+        }),
         fontSize: 32,
         frame: "banner",
         onComplete: () => {
@@ -1620,8 +1629,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
       {
         scene: this,
         word: "STAND DOWN",
-        x: 720,
-        y: this.scale.height - 340,
+        ...this.forgeChoiceWordPosition(this.standDownCue, -54, "STAND DOWN", {
+          side: "right",
+        }),
         fontSize: 40,
         // The peaceful-branch finale demands the full capitalized order.
         caseSensitive: true,
@@ -1721,8 +1731,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
       const whistle = this.makeSongbirdWord({
         scene: this,
         word: "whistle softly",
-        x: this.scale.width / 2 - 340,
-        y: this.scale.height - 320,
+        ...this.forgeChoiceWordPosition(this.songbirdCompanion, -54, "whistle softly", {
+          side: "left",
+          long: true,
+        }),
         fontSize: 32,
         frame: "banner",
         onComplete: () => this.awardSongbird(),
@@ -1730,8 +1742,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
       const leave = this.makeSongbirdWord({
         scene: this,
         word: "leave it be",
-        x: this.scale.width / 2 + 340,
-        y: this.scale.height - 320,
+        ...this.forgeChoiceWordPosition(this.songbirdCompanion, -54, "leave it be", {
+          side: "right",
+        }),
         fontSize: 32,
         frame: "banner",
         onComplete: () => {
@@ -2143,6 +2156,29 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
     const lateral = long ? 220 : 180;
     const xInset = long ? 420 : 300;
+    return {
+      x: Phaser.Math.Clamp(body.x + side * lateral, xInset, width - xInset),
+      y: Phaser.Math.Clamp(body.y + sourceOffsetY - lift, 280, height - 430),
+    };
+  }
+
+  private forgeChoiceWordPosition(
+    body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined,
+    sourceOffsetY: number,
+    word: string,
+    opts: { side?: "left" | "right"; long?: boolean; lift?: number } = {},
+  ): { x: number; y: number } {
+    const width = this.scale.width;
+    const height = this.scale.height;
+    if (!body?.scene) return { x: width / 2, y: height - 340 };
+
+    const long = opts.long ?? word.length > 16;
+    const side =
+      opts.side === "left" ? -1 : opts.side === "right" ? 1 : body.x < width / 2 ? 1 : -1;
+    const lateral = long ? 220 : 180;
+    const xInset = long ? 420 : 300;
+    const lift = opts.lift ?? (long ? 116 : 102);
+
     return {
       x: Phaser.Math.Clamp(body.x + side * lateral, xInset, width - xInset),
       y: Phaser.Math.Clamp(body.y + sourceOffsetY - lift, 280, height - 430),

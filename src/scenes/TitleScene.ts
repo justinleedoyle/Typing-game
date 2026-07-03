@@ -94,7 +94,12 @@ export class TitleScene extends Phaser.Scene {
       maxDurationMs: 11800,
     });
 
-    this.drawTitlePlate(width / 2, height / 2 - 54);
+    const titleObjects = this.drawTitlePlate(width / 2, height / 2 - 54);
+    titleObjects.forEach((object, index) => {
+      this.stageTitleObject(object, 90 + index * 45, {
+        offsetY: index === 0 ? 8 : 12,
+      });
+    });
 
     this.prompt = this.add
       .text(width / 2, height - 168, "press any key", {
@@ -106,14 +111,11 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(4);
     this.promptPlate = this.drawPromptPlate(this.prompt);
+    this.stageTitleObject(this.promptPlate, 300, { offsetY: 6 });
+    this.stageTitleObject(this.prompt, 335, { offsetY: 10, skipIfTyped: true });
 
-    this.promptTween = this.tweens.add({
-      targets: this.prompt,
-      alpha: { from: 1, to: 0.35 },
-      duration: 1400,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.easeInOut",
+    this.time.delayedCall(650, () => {
+      this.startPromptIdleTween();
     });
 
     // Kick off save loading immediately so the chamber transition doesn't
@@ -133,7 +135,7 @@ export class TitleScene extends Phaser.Scene {
     });
   }
 
-  private drawTitlePlate(x: number, y: number): void {
+  private drawTitlePlate(x: number, y: number): Phaser.GameObjects.GameObject[] {
     const w = 1160;
     const h = 220;
     const plate = this.add.graphics().setDepth(2);
@@ -141,11 +143,11 @@ export class TitleScene extends Phaser.Scene {
     plate.fillRoundedRect(x - w / 2, y - h / 2, w, h, 12);
     plate.lineStyle(3, UI_HEX.frame, 0.92);
     plate.strokeRoundedRect(x - w / 2, y - h / 2, w, h, 12);
-    cornerTicks(this, w, h, { inset: 10, size: 18, width: 3 })
+    const corners = cornerTicks(this, w, h, { inset: 10, size: 18, width: 3 })
       .setPosition(x, y)
       .setDepth(3);
 
-    this.add
+    const title = this.add
       .text(x, y - 32, "The Portalwright's Almanac", {
         fontFamily: SERIF,
         fontSize: "78px",
@@ -155,7 +157,7 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(4);
 
-    this.add
+    const subtitle = this.add
       .text(x, y + 50, "a typing adventure", {
         fontFamily: SERIF,
         fontSize: "30px",
@@ -164,6 +166,8 @@ export class TitleScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(4);
+
+    return [plate, corners, title, subtitle];
   }
 
   private drawPromptPlate(prompt: Phaser.GameObjects.Text): Phaser.GameObjects.Graphics {
@@ -184,6 +188,55 @@ export class TitleScene extends Phaser.Scene {
   private redrawPromptPlate(): void {
     this.promptPlate?.destroy();
     this.promptPlate = this.drawPromptPlate(this.prompt);
+  }
+
+  private startPromptIdleTween(): void {
+    if (
+      this.hasTyped ||
+      this.transitioning ||
+      this.promptTween ||
+      !this.prompt.scene
+    ) {
+      return;
+    }
+    this.promptTween = this.tweens.add({
+      targets: this.prompt,
+      alpha: { from: 1, to: 0.35 },
+      duration: 1400,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  private stageTitleObject(
+    object: Phaser.GameObjects.GameObject,
+    delayMs: number,
+    opts: { offsetY?: number; skipIfTyped?: boolean } = {},
+  ): void {
+    const item = object as Phaser.GameObjects.GameObject & {
+      alpha: number;
+      y: number;
+      setAlpha: (value: number) => unknown;
+      setY: (value: number) => unknown;
+    };
+    if (typeof item.y !== "number" || !item.setAlpha || !item.setY) return;
+
+    const baseY = item.y;
+    const finalAlpha = item.alpha;
+    item.setAlpha(0);
+    item.setY(baseY + (opts.offsetY ?? 10));
+    this.time.delayedCall(delayMs, () => {
+      if (opts.skipIfTyped && this.hasTyped) return;
+      if (!object.scene) return;
+      this.tweens.add({
+        targets: item,
+        alpha: finalAlpha,
+        y: baseY,
+        duration: 260,
+        ease: "Sine.easeOut",
+      });
+    });
   }
 
   private playTitleStartPulse(): void {
@@ -238,7 +291,9 @@ export class TitleScene extends Phaser.Scene {
     if (!this.hasTyped) {
       this.hasTyped = true;
       this.promptTween?.stop();
+      this.tweens.killTweensOf(this.prompt);
       this.prompt.setAlpha(1);
+      this.prompt.setY(this.scale.height - 168);
       this.prompt.setText("the cartographer is waking up...");
       this.redrawPromptPlate();
       this.playTitleStartPulse();

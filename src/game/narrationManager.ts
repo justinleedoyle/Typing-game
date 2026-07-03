@@ -63,6 +63,9 @@ export class NarrationManager {
   private cardCorners?: Phaser.GameObjects.Graphics;
   private speakerBg?: Phaser.GameObjects.Graphics;
   private speakerText?: Phaser.GameObjects.Text;
+  private cardW = 0;
+  private cardH = 0;
+  private renderedLineKey = "";
   private readonly onSpeak?: (speakerName: string | null, text: string) => void;
 
   constructor(
@@ -143,6 +146,8 @@ export class NarrationManager {
       speakerTabW + SPEAKER_TAB_SIDE_PAD,
     );
     const h = Math.max(56, this.text.height + CARD_PAD_Y * 2);
+    this.cardW = w;
+    this.cardH = h;
     this.cardBg.clear();
     this.cardBg.fillStyle(UI_HEX.parchment, 0.96);
     this.cardBg.fillRoundedRect(-w / 2, -h / 2, w, h, 10);
@@ -224,12 +229,16 @@ export class NarrationManager {
     const speakerName = opts.speakerName === undefined
       ? this.defaultSpeakerName
       : opts.speakerName;
+    const lineKey = `${speakerName ?? ""}\n${text}`;
+    const changed = lineKey !== this.renderedLineKey;
     this.text.setText(text);
     if (this.framed) this.setSpeaker(speakerName);
     if (this.framed) this.redrawCard();
     if (text) this.onSpeak?.(speakerName, text);
     const root = this.container ?? this.text;
     root.setAlpha(0);
+    if (this.framed && changed) this.playCardWake();
+    this.renderedLineKey = lineKey;
     this.scene.tweens.add({
       targets: root,
       alpha: 1,
@@ -243,6 +252,7 @@ export class NarrationManager {
     const root = this.container ?? this.text;
     this.scene.tweens.killTweensOf(root);
     this.text.setText("");
+    this.renderedLineKey = "";
     if (this.framed) {
       this.setSpeaker(null);
       this.cardBg?.clear();
@@ -256,5 +266,55 @@ export class NarrationManager {
    *  narrator already saying this?" */
   currentText(): string {
     return this.text.text;
+  }
+
+  private playCardWake(): void {
+    if (!this.container || this.cardW <= 0 || this.cardH <= 0) return;
+
+    const edge = this.scene.add.graphics().setAlpha(0.68);
+    edge.lineStyle(2, UI_HEX.brass, 0.54);
+    edge.strokeRoundedRect(
+      -this.cardW / 2 - 5,
+      -this.cardH / 2 - 5,
+      this.cardW + 10,
+      this.cardH + 10,
+      12,
+    );
+    edge.fillStyle(UI_HEX.brass, 0.16);
+    edge.fillRect(-this.cardW / 2, -this.cardH / 2, this.cardW, 3);
+    this.container.add(edge);
+
+    this.scene.tweens.add({
+      targets: edge,
+      alpha: 0,
+      scaleX: 1.025,
+      scaleY: 1.08,
+      duration: 430,
+      ease: "Sine.easeOut",
+      onComplete: () => edge.destroy(),
+    });
+
+    const sweep = this.scene.add.graphics().setAlpha(0.24);
+    sweep.fillStyle(UI_HEX.parchment, 0.42);
+    sweep.fillRoundedRect(
+      -this.cardW / 2 + 14,
+      -this.cardH / 2 + 7,
+      Math.min(90, this.cardW * 0.16),
+      this.cardH - 14,
+      7,
+    );
+    this.container.add(sweep);
+    if (this.speakerBg?.visible) this.container.bringToTop(this.speakerBg);
+    if (this.speakerText?.visible) this.container.bringToTop(this.speakerText);
+    this.container.bringToTop(this.text);
+
+    this.scene.tweens.add({
+      targets: sweep,
+      x: this.cardW - Math.min(120, this.cardW * 0.22),
+      alpha: 0,
+      duration: 500,
+      ease: "Sine.easeOut",
+      onComplete: () => sweep.destroy(),
+    });
   }
 }

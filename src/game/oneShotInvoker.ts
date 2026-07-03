@@ -299,11 +299,24 @@ export class OneShotInvoker<E> {
   }
 
   private setWidgetVisible(w: Widget, visible: boolean): void {
-    w.container.setAlpha(visible ? 1 : 0);
     if (visible) {
-      if (!w.wasVisible && w.state !== "spent") this.pulseCard(w, "enter");
+      if (!w.wasVisible) {
+        this.cfg.scene.tweens.killTweensOf(w.container);
+        w.container.setAlpha(0).setScale(0.97);
+        this.cfg.scene.tweens.add({
+          targets: w.container,
+          alpha: 1,
+          scaleX: 1,
+          scaleY: 1,
+          duration: 220,
+          ease: "Sine.easeOut",
+        });
+        if (w.state !== "spent") this.pulseCard(w, "enter");
+      }
       w.wasVisible = true;
     } else {
+      this.cfg.scene.tweens.killTweensOf(w.container);
+      w.container.setAlpha(0).setScale(1);
       w.wasVisible = false;
       w.lastChargeTier = -1;
     }

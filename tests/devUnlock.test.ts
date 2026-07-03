@@ -14,12 +14,12 @@ import {
 import type { SaveState } from "../src/game/saveState";
 import { RELICS } from "../src/game/relics";
 
-// A minimal save touching only what applyDevUnlock reads/writes (realms +
-// satchel). Built locally so this harness doesn't import saveState's runtime
+// A minimal save touching only what applyDevUnlock reads/writes (opening gate,
+// realms, and satchel). Built locally so this harness doesn't import saveState's runtime
 // (which pulls in the supabase client → realtime WebSocket init that crashes
 // under Node < 22 if imported before the suite's process.exit).
 function freshSave(): SaveState {
-  return { realms: {}, satchel: [] } as unknown as SaveState;
+  return { typewriterAwakened: false, realms: {}, satchel: [] } as unknown as SaveState;
 }
 
 await suite("parseDevTarget: only triggers on ?dev", () => {
@@ -74,6 +74,7 @@ await suite("parseDevTarget: ?dev=<target> resolves the scene-key jump", () => {
 await suite("applyDevUnlock: clears every realm + fills the satchel", () => {
   const s = freshSave();
   applyDevUnlock(s);
+  assert(s.typewriterAwakened === true, "opening gate is complete so ?dev opens the hub");
   for (const id of Object.keys(REALM_SCENE_KEYS)) {
     assert(s.realms[id]?.cleared === true, `${id} cleared`);
   }

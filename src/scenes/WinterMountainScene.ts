@@ -461,14 +461,18 @@ export class WinterMountainScene extends Phaser.Scene {
       fontStyle: "italic",
       color: "#a59b89",
     };
-    this.add
+    const candleLabel = this.add
       .text(band.satchelAnchor.x + 90, band.satchelAnchor.y - 38, "candles", hudLabelStyle)
       .setOrigin(0.5)
       .setDepth(1500);
-    this.add
+    const thunderLabel = this.add
       .text(band.satchelAnchor.x + 370, band.satchelAnchor.y - 38, "thunder", hudLabelStyle)
       .setOrigin(0.5)
       .setDepth(1500);
+    this.stageWinterMeterObject(candleLabel, 70, { offsetY: 5 });
+    this.stageWinterMeterObject(this.candleGroup, 95, { offsetY: 8 });
+    this.stageWinterMeterObject(thunderLabel, 115, { offsetY: 5 });
+    this.stageWinterMeterObject(this.chargeGroup, 140, { offsetY: 8 });
 
     this.typingInput = new TypingInputController(this.store);
     this.director = new WaveDirector(this.typingInput.getStats());
@@ -2900,6 +2904,35 @@ export class WinterMountainScene extends Phaser.Scene {
     }
     this.drawnThunderCharges = this.castableThunder;
     this.updateWrenGlow();
+  }
+
+  private stageWinterMeterObject(
+    object: Phaser.GameObjects.GameObject,
+    delayMs: number,
+    opts: { offsetY?: number } = {},
+  ): void {
+    const item = object as Phaser.GameObjects.GameObject & {
+      alpha: number;
+      y: number;
+      setAlpha: (value: number) => unknown;
+      setY: (value: number) => unknown;
+    };
+    if (typeof item.y !== "number" || !item.setAlpha || !item.setY) return;
+
+    const baseY = item.y;
+    const finalAlpha = item.alpha;
+    item.setAlpha(0);
+    item.setY(baseY + (opts.offsetY ?? 8));
+    this.time.delayedCall(delayMs, () => {
+      if (!object.scene) return;
+      this.tweens.add({
+        targets: item,
+        alpha: finalAlpha,
+        y: baseY,
+        duration: 230,
+        ease: "Sine.easeOut",
+      });
+    });
   }
 
   // ─── Drawing ──────────────────────────────────────────────────────────────

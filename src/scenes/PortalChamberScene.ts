@@ -164,6 +164,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private portalFloorCallGlow?: Phaser.GameObjects.Container;
   private stationTypingPulseTimes = new WeakMap<StationSpec, number>();
   private portalTypingPulseTimes = new Map<string, number>();
+  private lastHintText = "";
   private ambientHandle?: AmbientHandle;
   private showPortalRevisits = false;
   private hubArrival: HubArrivalSource | null = null;
@@ -189,6 +190,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.portalFloorCallGlow = undefined;
     this.stationTypingPulseTimes = new WeakMap();
     this.portalTypingPulseTimes = new Map();
+    this.lastHintText = "";
     this.showPortalRevisits = false;
     this.activeZone = "portals";
     this.openingUtilityScene = false;
@@ -374,6 +376,7 @@ export class PortalChamberScene extends Phaser.Scene {
       const arch = ARCHES[nextAvailableIdx];
       this.registerRealmPortalTarget(arch, nextAvailableIdx, false, {
         fontSize: 30,
+        entryDelayMs: 40,
       });
       this.setHint("type the glowing arch's name to step through  ·  backspace to cancel");
       // First-arrival narration — only while nothing is cleared yet (the
@@ -408,6 +411,7 @@ export class PortalChamberScene extends Phaser.Scene {
         this.showPortalFloorCallGlow(0x8b6ad8);
         this.typingInput.register(battleTarget);
         this.zoneTargets.push(battleTarget);
+        this.stageHubTarget(battleTarget, 80);
         this.narration.say("hub_all_cleared");
         this.setHint("");
       } else {
@@ -436,6 +440,7 @@ export class PortalChamberScene extends Phaser.Scene {
         this.showPortalFloorCallGlow(UI_HEX.brass);
         this.typingInput.register(ngPlusTarget);
         this.zoneTargets.push(ngPlusTarget);
+        this.stageHubTarget(ngPlusTarget, 80);
         this.narration.say("hub_post_battle");
         this.setHint("");
       }
@@ -448,6 +453,7 @@ export class PortalChamberScene extends Phaser.Scene {
         this.registerRealmPortalTarget(ARCHES[i], i, true, {
           fontSize: 22,
           priority: -1,
+          entryDelayMs: 80 + i * 28,
         });
       }
     } else {
@@ -463,6 +469,7 @@ export class PortalChamberScene extends Phaser.Scene {
           fontSize: 20,
           priority: -1,
           stationPulse: HUB_STATIONS.portalFloor,
+          entryDelayMs: 130,
         },
       );
     }
@@ -471,10 +478,12 @@ export class PortalChamberScene extends Phaser.Scene {
     this.registerNavTarget("runa", 420, 908, () => this.enterZone("desk"), {
       fontSize: 23,
       stationPulse: HUB_STATIONS.desk,
+      entryDelayMs: 110,
     });
     this.registerNavTarget("shelf", 1740, 930, () => this.enterZone("shelf"), {
       fontSize: 23,
       stationPulse: HUB_STATIONS.shelf,
+      entryDelayMs: 150,
     });
     // Keep the first portal view quiet: one account station target reveals
     // settings/sign-in controls after the player intentionally focuses it.
@@ -486,6 +495,7 @@ export class PortalChamberScene extends Phaser.Scene {
       {
         fontSize: 18,
         stationPulse: HUB_STATIONS.account,
+        entryDelayMs: 190,
       },
     );
   }
@@ -494,7 +504,7 @@ export class PortalChamberScene extends Phaser.Scene {
     arch: ArchSpec,
     archIndex: number,
     revisit: boolean,
-    opts: { fontSize: number; priority?: number },
+    opts: { fontSize: number; priority?: number; entryDelayMs?: number },
   ): void {
     let releaseAnchor = (): void => {};
     const target = new TextWordTarget({
@@ -518,6 +528,7 @@ export class PortalChamberScene extends Phaser.Scene {
     releaseAnchor = this.attachPortalWordAnchor(target, arch);
     this.typingInput.register(target);
     this.zoneTargets.push(target);
+    this.stageHubTarget(target, opts.entryDelayMs ?? (revisit ? 90 : 50));
   }
 
   private attachPortalWordAnchor(
@@ -648,7 +659,7 @@ export class PortalChamberScene extends Phaser.Scene {
       640,
       908,
       () => this.enterZone("portals"),
-      { fontSize: 22, stationPulse: HUB_STATIONS.portalFloor },
+      { fontSize: 22, stationPulse: HUB_STATIONS.portalFloor, entryDelayMs: 70 },
     );
   }
 
@@ -674,7 +685,7 @@ export class PortalChamberScene extends Phaser.Scene {
       1520,
       930,
       () => this.enterZone("portals"),
-      { fontSize: 22, stationPulse: HUB_STATIONS.portalFloor },
+      { fontSize: 22, stationPulse: HUB_STATIONS.portalFloor, entryDelayMs: 70 },
     );
   }
 
@@ -782,7 +793,12 @@ export class PortalChamberScene extends Phaser.Scene {
     x: number,
     y: number,
     onComplete: () => void,
-    opts: { fontSize?: number; priority?: number; stationPulse?: StationSpec } = {},
+    opts: {
+      fontSize?: number;
+      priority?: number;
+      stationPulse?: StationSpec;
+      entryDelayMs?: number;
+    } = {},
   ): void {
     let releaseAnchor = (): void => {};
     const t = new TextWordTarget({
@@ -810,6 +826,15 @@ export class PortalChamberScene extends Phaser.Scene {
     }
     this.typingInput.register(t);
     this.zoneTargets.push(t);
+    this.stageHubTarget(t, opts.entryDelayMs ?? 70);
+  }
+
+  private stageHubTarget(target: TextWordTarget, delayMs: number): void {
+    target.playEntryWake({
+      delayMs,
+      durationMs: 230,
+      offsetY: 10,
+    });
   }
 
   private attachStationWordAnchor(
@@ -1139,6 +1164,7 @@ export class PortalChamberScene extends Phaser.Scene {
       persistent: true,
     });
     this.typingInput.register(target);
+    this.stageHubTarget(target, 170);
   }
 
   private async renderAccountStatus(): Promise<void> {
@@ -1167,6 +1193,7 @@ export class PortalChamberScene extends Phaser.Scene {
       {
         fontSize: 18,
         stationPulse: HUB_STATIONS.account,
+        entryDelayMs: 70,
       },
     );
     this.registerNavTarget(
@@ -1178,6 +1205,7 @@ export class PortalChamberScene extends Phaser.Scene {
         fontSize: 18,
         priority: -2,
         stationPulse: HUB_STATIONS.account,
+        entryDelayMs: 130,
       },
     );
     void this.addAccountAuthTarget();
@@ -1215,6 +1243,7 @@ export class PortalChamberScene extends Phaser.Scene {
     });
     this.typingInput.register(target);
     this.zoneTargets.push(target);
+    this.stageHubTarget(target, 110);
   }
 
   private openAlmanac(): void {
@@ -2154,9 +2183,14 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private setHint(text: string): void {
+    const changed = text !== this.lastHintText;
+    this.lastHintText = text;
     this.hint.setText(text);
     this.hintPlate.clear();
-    if (!text) return;
+    if (!text) {
+      this.hint.setAlpha(1);
+      return;
+    }
 
     const width = Math.min(1260, Math.max(420, this.hint.width + 70));
     const height = Math.max(42, this.hint.height + 18);
@@ -2166,6 +2200,37 @@ export class PortalChamberScene extends Phaser.Scene {
     this.hintPlate.fillRoundedRect(x, y, width, height, 8);
     this.hintPlate.lineStyle(1, UI_HEX.brass, 0.64);
     this.hintPlate.strokeRoundedRect(x, y, width, height, 8);
+    if (changed) this.playHintWake(width, height);
+  }
+
+  private playHintWake(width: number, height: number): void {
+    this.hint.setAlpha(0.62);
+    this.tweens.add({
+      targets: this.hint,
+      alpha: 1,
+      duration: 180,
+      ease: "Sine.easeOut",
+    });
+
+    const pulse = this.add
+      .container(this.hint.x, this.hint.y)
+      .setDepth(26)
+      .setAlpha(0.46);
+    const g = this.add.graphics();
+    g.lineStyle(1, UI_HEX.brass, 0.55);
+    g.strokeRoundedRect(-width / 2, -height / 2, width, height, 8);
+    g.fillStyle(UI_HEX.parchment, 0.1);
+    g.fillRoundedRect(-width / 2 + 18, -height / 2 + 7, width - 36, 4, 2);
+    pulse.add(g);
+    this.tweens.add({
+      targets: pulse,
+      alpha: 0,
+      scaleX: 1.025,
+      scaleY: 1.14,
+      duration: 280,
+      ease: "Sine.easeOut",
+      onComplete: () => pulse.destroy(),
+    });
   }
 
   /** Painted Runa stands at her desk on the far left of the hub. */

@@ -306,8 +306,8 @@ export class TitleScene extends Phaser.Scene {
     this.transitioning = true;
     this.store = await this.storePromise;
     // Dev unlock (opt-in via ?dev) — unlock every realm + fill the satchel, and
-    // with ?dev=<realmId> jump straight into that realm. For art + feel-tuning;
-    // a no-op in normal play. The unlock persists to the cloud save (the login).
+    // with ?dev=<target> jump straight into a realm or the finale. For art +
+    // feel-tuning; a no-op in normal play. The unlock persists to the cloud save.
     const dev = parseDevTarget(
       typeof location !== "undefined" ? location.search : "",
     );

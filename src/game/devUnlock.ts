@@ -7,6 +7,8 @@
 //   ?dev=clockwork-forge  → the same unlock, then jump STRAIGHT into that realm's
 //                           combat (so any realm's enemies/bosses + relic effects +
 //                           companion art are reachable in one hop).
+//   ?dev=great-battle     → the same unlock, then jump STRAIGHT into the finale
+//                           without marking the finale already cleared.
 //
 // The unlock writes to the real save (tied to the player's login), so once you've
 // loaded ?dev once, everything stays unlocked in normal play too. The jump is a
@@ -24,10 +26,16 @@ export const REALM_SCENE_KEYS: Record<string, string> = {
   "haunted-wood": "HauntedWoodScene",
 };
 
+/** Direct scene shortcuts for screenshot/feel-tuning entry points. */
+export const DEV_SCENE_KEYS: Record<string, string> = {
+  ...REALM_SCENE_KEYS,
+  "great-battle": "GreatBattleScene",
+};
+
 export interface DevTarget {
   /** True when `?dev` is present — unlock everything. */
   readonly unlock: boolean;
-  /** Set when `?dev=<realmId>` names a real realm — jump straight into it. */
+  /** Set when `?dev=<target>` names a dev entry point — jump straight into it. */
   readonly realmSceneKey: string | null;
 }
 
@@ -36,7 +44,7 @@ export function parseDevTarget(search: string): DevTarget {
   const params = new URLSearchParams(search);
   if (!params.has("dev")) return { unlock: false, realmSceneKey: null };
   const realm = params.get("dev") ?? "";
-  return { unlock: true, realmSceneKey: REALM_SCENE_KEYS[realm] ?? null };
+  return { unlock: true, realmSceneKey: DEV_SCENE_KEYS[realm] ?? null };
 }
 
 /** Mutate a save into the fully-unlocked dev state: every realm cleared + every

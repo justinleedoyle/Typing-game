@@ -1821,8 +1821,10 @@ export class WinterMountainScene extends Phaser.Scene {
     const kindTarget = this.makeFoxWord({
       scene: this,
       word: "i mean no harm",
-      x: this.scale.width / 2 - 320,
-      y: this.scale.height - 340,
+      ...this.winterPassageWordPosition(this.foxCompanion, -60, "i mean no harm", {
+        side: "left",
+        long: true,
+      }),
       frame: "banner",
       fontSize: 30,
       onComplete: () => {
@@ -1843,8 +1845,10 @@ export class WinterMountainScene extends Phaser.Scene {
     const hurtTarget = this.makeFoxWord({
       scene: this,
       word: "i don't have time",
-      x: this.scale.width / 2 + 320,
-      y: this.scale.height - 340,
+      ...this.winterPassageWordPosition(this.foxCompanion, -60, "i don't have time", {
+        side: "right",
+        long: true,
+      }),
       frame: "banner",
       fontSize: 30,
       onComplete: () => {
@@ -1873,8 +1877,9 @@ export class WinterMountainScene extends Phaser.Scene {
     const huntress = this.makeWinterForkWord(this.huntressSprite, {
       scene: this,
       word: "save the huntress",
-      x: this.scale.width / 2 - 380,
-      y: this.scale.height - 340,
+      ...this.winterPassageWordPosition(this.huntressSprite, -150, "save the huntress", {
+        long: true,
+      }),
       frame: "banner",
       fontSize: 32,
       onComplete: () => {
@@ -1885,8 +1890,9 @@ export class WinterMountainScene extends Phaser.Scene {
     const firefly = this.makeWinterForkWord(fireflies, {
       scene: this,
       word: "follow the fireflies",
-      x: this.scale.width / 2 + 380,
-      y: this.scale.height - 340,
+      ...this.winterPassageWordPosition(fireflies, -34, "follow the fireflies", {
+        long: true,
+      }),
       frame: "banner",
       fontSize: 32,
       onComplete: () => {
@@ -2182,8 +2188,9 @@ export class WinterMountainScene extends Phaser.Scene {
     const buryTarget = this.makeWinterForkWord(cairn, {
       scene: this,
       word: "bury the pack leader",
-      x: this.scale.width / 2 - 380,
-      y: this.scale.height - 340,
+      ...this.winterPassageWordPosition(cairn, -42, "bury the pack leader", {
+        long: true,
+      }),
       frame: "banner",
       fontSize: 30,
       onComplete: () => {
@@ -2208,8 +2215,7 @@ export class WinterMountainScene extends Phaser.Scene {
     const peltTarget = this.makeWinterForkWord(pelt, {
       scene: this,
       word: "take the pelt",
-      x: this.scale.width / 2 + 380,
-      y: this.scale.height - 340,
+      ...this.winterPassageWordPosition(pelt, -38, "take the pelt"),
       frame: "banner",
       fontSize: 30,
       onComplete: () => {
@@ -2355,8 +2361,10 @@ export class WinterMountainScene extends Phaser.Scene {
     const whisperTarget = this.makeFoxWord({
       scene: this,
       word: "whisper to her",
-      x: this.scale.width / 2 - 260,
-      y: this.scale.height - 340,
+      ...this.winterPassageWordPosition(this.foxCompanion, -60, "whisper to her", {
+        side: "left",
+        long: true,
+      }),
       frame: "banner",
       fontSize: 32,
       onComplete: () => {
@@ -2373,8 +2381,9 @@ export class WinterMountainScene extends Phaser.Scene {
     const letGoTarget = this.makeFoxWord({
       scene: this,
       word: "let her go",
-      x: this.scale.width / 2 + 260,
-      y: this.scale.height - 340,
+      ...this.winterPassageWordPosition(this.foxCompanion, -60, "let her go", {
+        side: "right",
+      }),
       frame: "banner",
       fontSize: 32,
       onComplete: () => {
@@ -2549,13 +2558,15 @@ export class WinterMountainScene extends Phaser.Scene {
     body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined,
     sourceOffsetY: number,
     word: string,
+    opts: { side?: "left" | "right"; long?: boolean } = {},
   ): { x: number; y: number } {
     const width = this.scale.width;
     const height = this.scale.height;
     if (!body?.scene) return { x: width / 2, y: height / 2 };
 
-    const long = word.length > 16;
-    const side = body.x < width / 2 ? 1 : -1;
+    const long = opts.long ?? word.length > 16;
+    const side =
+      opts.side === "left" ? -1 : opts.side === "right" ? 1 : body.x < width / 2 ? 1 : -1;
     const lateral = long ? 220 : 180;
     const xInset = long ? 420 : 300;
     const lift = long ? 116 : 102;

@@ -202,6 +202,7 @@ export class SettingsScene extends Phaser.Scene {
     });
 
     this.renderMenu();
+    this.playSettingsEntryWake();
   }
 
   // ─── Menu rendering ─────────────────────────────────────────────────────────
@@ -472,6 +473,44 @@ export class SettingsScene extends Phaser.Scene {
       mark.destroy();
     }
     this.focusMarks = [];
+  }
+
+  private playSettingsEntryWake(): void {
+    this.time.delayedCall(140, () => {
+      const frame = this.add.graphics().setDepth(18).setAlpha(0.48);
+      frame.setPosition(PANEL_X, PANEL_Y);
+      frame.lineStyle(2, UI_HEX.brass, 0.52);
+      frame.strokeRoundedRect(
+        -PANEL_W / 2 - 10,
+        -PANEL_H / 2 - 10,
+        PANEL_W + 20,
+        PANEL_H + 20,
+        16,
+      );
+      frame.fillStyle(UI_HEX.brass, 0.035);
+      frame.fillRoundedRect(-PANEL_W / 2, -PANEL_H / 2, PANEL_W, PANEL_H, 12);
+
+      this.tweens.add({
+        targets: frame,
+        alpha: 0,
+        scaleX: 1.018,
+        scaleY: 1.024,
+        duration: 680,
+        ease: "Sine.easeOut",
+        onComplete: () => frame.destroy(),
+      });
+
+      for (let i = 0; i < 5; i += 1) {
+        this.time.delayedCall(90 + i * 55, () => {
+          this.pulseTypingBox(
+            ROW_X + 30,
+            ROW_START_Y + i * ROW_SPACING + 28,
+            940,
+            i === 0 ? 112 : 92,
+          );
+        });
+      }
+    });
   }
 
   /** Dim sub-hint under the Difficulty row that surfaces the otherwise-hidden

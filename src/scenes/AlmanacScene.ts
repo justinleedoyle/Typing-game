@@ -224,6 +224,7 @@ export class AlmanacScene extends Phaser.Scene {
 
     this.renderCurrentPage();
     this.placeNavigationTargets();
+    this.playBookEntryWake();
   }
 
   /** Walk cleared realms in REALM_ORDER and inline the lore pages the
@@ -910,6 +911,58 @@ export class AlmanacScene extends Phaser.Scene {
     if (now - last < 90) return false;
     this.navTypingPulseTimes.set(key, now);
     return true;
+  }
+
+  private playBookEntryWake(): void {
+    this.time.delayedCall(160, () => {
+      const pageTop = BOOK_Y + 42;
+      const pageHeight = BOOK_HEIGHT - 84;
+      const spineX = BOOK_X + BOOK_WIDTH / 2;
+      const outline = this.add
+        .graphics()
+        .setDepth(29)
+        .setAlpha(0.46)
+        .setPosition(spineX, BOOK_Y + BOOK_HEIGHT / 2);
+      outline.lineStyle(2, UI_HEX.brass, 0.54);
+      outline.strokeRoundedRect(
+        -BOOK_WIDTH / 2 - 10,
+        -BOOK_HEIGHT / 2 - 10,
+        BOOK_WIDTH + 20,
+        BOOK_HEIGHT + 20,
+        22,
+      );
+      outline.lineStyle(2, UI_HEX.brass, 0.32);
+      outline.lineBetween(0, -BOOK_HEIGHT / 2 + 32, 0, BOOK_HEIGHT / 2 - 32);
+
+      this.tweens.add({
+        targets: outline,
+        alpha: 0,
+        scaleX: 1.018,
+        scaleY: 1.024,
+        duration: 680,
+        ease: "Sine.easeOut",
+        onComplete: () => outline.destroy(),
+      });
+
+      for (const edgeX of [BOOK_X + 58, BOOK_X + BOOK_WIDTH - 58]) {
+        const edge = this.add.graphics().setDepth(30).setAlpha(0.5);
+        edge.lineStyle(3, UI_HEX.brass, 0.48);
+        edge.lineBetween(0, 0, 0, pageHeight);
+        edge.lineStyle(1, UI_HEX.parchment, 0.38);
+        const innerOffsetX = edgeX < spineX ? 12 : -12;
+        edge.lineBetween(innerOffsetX, 18, innerOffsetX, pageHeight - 18);
+        edge.setPosition(edgeX, pageTop);
+        this.tweens.add({
+          targets: edge,
+          x: edgeX + (edgeX < spineX ? 16 : -16),
+          alpha: 0,
+          duration: 560,
+          delay: edgeX < spineX ? 40 : 100,
+          ease: "Sine.easeOut",
+          onComplete: () => edge.destroy(),
+        });
+      }
+    });
   }
 
   private clearNavigationTargets(): void {

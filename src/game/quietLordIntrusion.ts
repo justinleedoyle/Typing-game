@@ -6,7 +6,8 @@
 // Two entry points use the same visual:
 //
 //   playQuietLordIntrusion — the mid-realm beat per §5.5.10. Dims the screen,
-//     surfaces a sentence of his text, then clears. Once per realm.
+//     opens a small ink-scar in the world, surfaces a sentence of his text,
+//     then clears. Once per realm.
 //
 //   flashQuietLordFragment — the boss-defeat reveal per §5.5.10. The
 //     accumulating word fragment (A → Ag → Aga → Agai → Again) flashes
@@ -27,6 +28,64 @@ import { SERIF } from "./palette";
  *  well across both pure-uppercase (`A`) and mixed-case (`Again`) at
  *  fontSizes 32–64. */
 const STROKE_OFFSET_RATIO = 0.1;
+const SCAR_INK = 0x05050a;
+const SCAR_VIOLET = 0x2b1634;
+const SCAR_EDGE = 0x704f82;
+
+function createQuietLordScar(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  depth: number,
+): Phaser.GameObjects.Graphics {
+  const w = Math.max(180, width);
+  const h = Math.max(72, height);
+  const g = scene.add.graphics().setPosition(x, y).setDepth(depth).setAlpha(0);
+
+  g.fillStyle(SCAR_INK, 0.44);
+  g.fillRoundedRect(-w / 2, -h / 2, w, h, 18);
+  g.fillStyle(SCAR_VIOLET, 0.36);
+  g.fillEllipse(0, -2, w * 0.92, h * 0.72);
+
+  g.lineStyle(2, SCAR_EDGE, 0.42);
+  g.strokeRoundedRect(-w / 2 + 7, -h / 2 + 7, w - 14, h - 14, 14);
+
+  const tearY = -h * 0.06;
+  g.lineStyle(3, SCAR_INK, 0.88);
+  g.beginPath();
+  g.moveTo(-w * 0.42, tearY + 3);
+  g.lineTo(-w * 0.25, tearY - 5);
+  g.lineTo(-w * 0.06, tearY + 2);
+  g.lineTo(w * 0.14, tearY - 4);
+  g.lineTo(w * 0.34, tearY + 4);
+  g.lineTo(w * 0.44, tearY - 2);
+  g.strokePath();
+
+  g.lineStyle(1.5, SCAR_EDGE, 0.26);
+  g.lineBetween(-w * 0.34, -h * 0.26, -w * 0.2, -h * 0.37);
+  g.lineBetween(w * 0.18, h * 0.3, w * 0.34, h * 0.22);
+  g.lineBetween(-w * 0.08, h * 0.36, w * 0.06, h * 0.28);
+
+  return g;
+}
+
+function playScarEntry(
+  scene: Phaser.Scene,
+  scar: Phaser.GameObjects.Graphics,
+  durationMs: number,
+): void {
+  scar.setScale(0.94, 0.86);
+  scene.tweens.add({
+    targets: scar,
+    alpha: 0.9,
+    scaleX: 1,
+    scaleY: 1,
+    duration: durationMs,
+    ease: "Sine.easeOut",
+  });
+}
 
 export interface QuietLordIntrusionOptions {
   /** Center x of the scratched line. */
@@ -92,6 +151,15 @@ export function playQuietLordIntrusion(
     .setOrigin(0.5)
     .setDepth(52)
     .setAlpha(0);
+  const scar = createQuietLordScar(
+    scene,
+    opts.x,
+    opts.y,
+    text.width + 96,
+    fontSize + 58,
+    51,
+  );
+  playScarEntry(scene, scar, fadeInMs);
   scene.tweens.add({
     targets: text,
     alpha: 1,
@@ -141,13 +209,14 @@ export function playQuietLordIntrusion(
   // 4) Hold, then fade everything out together and clean up.
   scene.time.delayedCall(fadeInMs + holdMs, () => {
     scene.tweens.add({
-      targets: [text, stroke, dim],
+      targets: [text, stroke, scar, dim],
       alpha: 0,
       duration: fadeOutMs,
       ease: "Sine.easeIn",
       onComplete: () => {
         text.destroy();
         stroke.destroy();
+        scar.destroy();
         dim.destroy();
         opts.onDone?.();
       },
@@ -199,6 +268,8 @@ export function flashQuietLordFragment(
     .setOrigin(0.5)
     .setDepth(52)
     .setAlpha(0);
+  const scar = createQuietLordScar(scene, x, y, text.width + 108, fontSize + 76, 51);
+  playScarEntry(scene, scar, fadeInMs);
   scene.tweens.add({
     targets: text,
     alpha: 1,
@@ -238,13 +309,14 @@ export function flashQuietLordFragment(
 
   scene.time.delayedCall(fadeInMs + holdMs, () => {
     scene.tweens.add({
-      targets: [text, stroke],
+      targets: [text, stroke, scar],
       alpha: 0,
       duration: fadeOutMs,
       ease: "Sine.easeIn",
       onComplete: () => {
         text.destroy();
         stroke.destroy();
+        scar.destroy();
         opts.onDone?.();
       },
     });

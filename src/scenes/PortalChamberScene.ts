@@ -57,7 +57,7 @@ interface ChamberSceneData {
   arrival?: HubArrivalSource;
 }
 
-type Zone = "portals" | "desk" | "shelf";
+type Zone = "portals" | "desk" | "shelf" | "account";
 
 interface StationSpec {
   readonly x: number;
@@ -99,6 +99,7 @@ const ZONE_X: Record<Zone, number> = {
   desk:    330,
   portals: 990,
   shelf:   1660,
+  account: 1660,
 };
 const WREN_Y = 900;
 const SHELF_GRID = {
@@ -166,6 +167,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private ambientHandle?: AmbientHandle;
   private showPortalRevisits = false;
   private hubArrival: HubArrivalSource | null = null;
+  private activeZone: Zone = "portals";
 
   constructor() {
     super("PortalChamberScene");
@@ -185,6 +187,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.stationTypingPulseTimes = new WeakMap();
     this.portalTypingPulseTimes = new Map();
     this.showPortalRevisits = false;
+    this.activeZone = "portals";
   }
 
   preload(): void {
@@ -277,7 +280,7 @@ export class PortalChamberScene extends Phaser.Scene {
 
     // Persistent (non-zone) targets.
     this.addAlmanacTarget();
-    void this.addAuthTarget();
+    void this.renderAccountStatus();
 
     // Enter the portals zone initially.
     this.enterZone("portals", false);
@@ -297,12 +300,14 @@ export class PortalChamberScene extends Phaser.Scene {
   // ─── Zone system ──────────────────────────────────────────────────────────
 
   private enterZone(zone: Zone, animate = true): void {
+    this.activeZone = zone;
     this.clearZoneTargets();
     this.walkWrenTo(ZONE_X[zone], animate);
 
     if (zone === "portals") this.registerPortalZoneTargets();
     if (zone === "desk")    this.registerDeskZoneTargets();
     if (zone === "shelf")   this.registerShelfZoneTargets();
+    if (zone === "account") this.registerAccountZoneTargets();
   }
 
   private clearZoneTargets(): void {
@@ -471,13 +476,13 @@ export class PortalChamberScene extends Phaser.Scene {
       fontSize: 23,
       stationPulse: HUB_STATIONS.shelf,
     });
-    // Settings lives in the account plaque, separated from sign-in/out so the
-    // top-right controls read as a deliberate station instead of overlapping UI.
+    // Keep the first portal view quiet: one account station target reveals
+    // settings/sign-in controls after the player intentionally focuses it.
     this.registerNavTarget(
-      "settings",
+      "account",
       ACCOUNT_PANEL.x,
-      ACCOUNT_PANEL.settingsY,
-      () => this.enterSettings(),
+      ACCOUNT_PANEL.authY,
+      () => this.enterZone("account"),
       {
         fontSize: 18,
         stationPulse: HUB_STATIONS.account,
@@ -1009,79 +1014,80 @@ export class PortalChamberScene extends Phaser.Scene {
     this.typingInput.register(target);
   }
 
-  private async addAuthTarget(): Promise<void> {
+  private async renderAccountStatus(): Promise<void> {
     const name = await currentUserDisplayName();
-    if (name) {
-      this.add
-        .text(ACCOUNT_PANEL.x, ACCOUNT_PANEL.statusY, `signed in as ${name}`, {
-          fontFamily: SERIF,
-          fontSize: "15px",
-          fontStyle: "italic",
-          color: "#9d8f6d",
-          align: "center",
-          wordWrap: { width: ACCOUNT_PANEL.width - 30 },
-        })
-        .setOrigin(0.5)
-        .setDepth(1);
-      let releaseAnchor = (): void => {};
-      const target = new TextWordTarget({
-        scene: this,
-        word: "sign out",
-        x: ACCOUNT_PANEL.x,
-        y: ACCOUNT_PANEL.authY,
+    this.add
+      .text(ACCOUNT_PANEL.x, ACCOUNT_PANEL.statusY, name ? `signed in as ${name}` : "local save", {
+        fontFamily: SERIF,
+        fontSize: "15px",
+        fontStyle: "italic",
+        color: "#9d8f6d",
+        align: "center",
+        wordWrap: { width: ACCOUNT_PANEL.width - 30 },
+      })
+      .setOrigin(0.5)
+      .setDepth(1);
+  }
+
+  private registerAccountZoneTargets(): void {
+    this.narration.clear();
+    this.setHint("account station  ·  type settings, sign in/out, or portals");
+    this.registerNavTarget(
+      "settings",
+      ACCOUNT_PANEL.x,
+      ACCOUNT_PANEL.settingsY,
+      () => this.enterSettings(),
+      {
         fontSize: 18,
-        priority: -1,
-        outline: true,
-        onClaim: () => this.focusStation(HUB_STATIONS.account),
-        onAdvance: () => this.pulseStationTyping(HUB_STATIONS.account),
-        onComplete: () => {
-          releaseAnchor();
-          this.playHubActorAction(HUB_STATIONS.account.x);
-          this.pulseStation(HUB_STATIONS.account);
+        stationPulse: HUB_STATIONS.account,
+      },
+    );
+    this.registerNavTarget(
+      "portals",
+      ACCOUNT_PANEL.x,
+      ACCOUNT_PANEL.y + ACCOUNT_PANEL.height / 2 + 26,
+      () => this.enterZone("portals"),
+      {
+        fontSize: 18,
+        priority: -2,
+        stationPulse: HUB_STATIONS.account,
+      },
+    );
+    void this.addAccountAuthTarget();
+  }
+
+  private async addAccountAuthTarget(): Promise<void> {
+    const zoneAtRequest = this.activeZone;
+    const name = await currentUserDisplayName();
+    if (zoneAtRequest !== "account" || this.activeZone !== "account") return;
+
+    let releaseAnchor = (): void => {};
+    const target = new TextWordTarget({
+      scene: this,
+      word: name ? "sign out" : "sign in",
+      x: ACCOUNT_PANEL.x,
+      y: ACCOUNT_PANEL.authY,
+      fontSize: 18,
+      priority: -1,
+      outline: true,
+      onClaim: () => this.focusStation(HUB_STATIONS.account),
+      onAdvance: () => this.pulseStationTyping(HUB_STATIONS.account),
+      onComplete: () => {
+        releaseAnchor();
+        this.playHubActorAction(HUB_STATIONS.account.x);
+        this.pulseStation(HUB_STATIONS.account);
+        if (name) {
           void signOut();
-        },
-      });
-      releaseAnchor = this.attachStationWordAnchor(target, HUB_STATIONS.account, {
-        persistent: true,
-        alpha: 0.1,
-      });
-      this.typingInput.register(target);
-    } else {
-      this.add
-        .text(ACCOUNT_PANEL.x, ACCOUNT_PANEL.statusY, "local save only", {
-          fontFamily: SERIF,
-          fontSize: "15px",
-          fontStyle: "italic",
-          color: "#9d8f6d",
-          align: "center",
-          wordWrap: { width: ACCOUNT_PANEL.width - 30 },
-        })
-        .setOrigin(0.5)
-        .setDepth(1);
-      let releaseAnchor = (): void => {};
-      const target = new TextWordTarget({
-        scene: this,
-        word: "sign in",
-        x: ACCOUNT_PANEL.x,
-        y: ACCOUNT_PANEL.authY,
-        fontSize: 18,
-        priority: -1,
-        outline: true,
-        onClaim: () => this.focusStation(HUB_STATIONS.account),
-        onAdvance: () => this.pulseStationTyping(HUB_STATIONS.account),
-        onComplete: () => {
-          releaseAnchor();
-          this.playHubActorAction(HUB_STATIONS.account.x);
-          this.pulseStation(HUB_STATIONS.account);
+        } else {
           void signInWithGoogle(window.location.href);
-        },
-      });
-      releaseAnchor = this.attachStationWordAnchor(target, HUB_STATIONS.account, {
-        persistent: true,
-        alpha: 0.1,
-      });
-      this.typingInput.register(target);
-    }
+        }
+      },
+    });
+    releaseAnchor = this.attachStationWordAnchor(target, HUB_STATIONS.account, {
+      alpha: 0.1,
+    });
+    this.typingInput.register(target);
+    this.zoneTargets.push(target);
   }
 
   private openAlmanac(): void {

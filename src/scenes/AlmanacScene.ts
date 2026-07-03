@@ -115,6 +115,7 @@ export class AlmanacScene extends Phaser.Scene {
   private closeTarget?: TextWordTarget;
   private navAnchorReleases: Array<() => void> = [];
   private navTypingPulseTimes = new Map<string, number>();
+  private closing = false;
 
   constructor() {
     super("AlmanacScene");
@@ -127,6 +128,7 @@ export class AlmanacScene extends Phaser.Scene {
     this.pageStack = [];
     this.navAnchorReleases = [];
     this.navTypingPulseTimes.clear();
+    this.closing = false;
   }
 
   preload(): void {
@@ -965,6 +967,51 @@ export class AlmanacScene extends Phaser.Scene {
     });
   }
 
+  private playBookCloseWake(): void {
+    const pageTop = BOOK_Y + 42;
+    const pageHeight = BOOK_HEIGHT - 84;
+    const spineX = BOOK_X + BOOK_WIDTH / 2;
+    const centerY = BOOK_Y + BOOK_HEIGHT / 2;
+
+    const cover = this.add.graphics().setDepth(31).setAlpha(0.46).setPosition(spineX, centerY);
+    cover.fillStyle(UI_HEX.panel, 0.12);
+    cover.fillRoundedRect(-BOOK_WIDTH / 2 - 8, -BOOK_HEIGHT / 2 - 8, BOOK_WIDTH + 16, BOOK_HEIGHT + 16, 18);
+    cover.lineStyle(2, UI_HEX.brass, 0.5);
+    cover.strokeRoundedRect(-BOOK_WIDTH / 2 - 8, -BOOK_HEIGHT / 2 - 8, BOOK_WIDTH + 16, BOOK_HEIGHT + 16, 18);
+    cover.lineStyle(2, UI_HEX.brass, 0.34);
+    cover.lineBetween(0, -BOOK_HEIGHT / 2 + 28, 0, BOOK_HEIGHT / 2 - 28);
+
+    this.tweens.add({
+      targets: cover,
+      alpha: 0,
+      scaleX: 0.965,
+      scaleY: 1.012,
+      duration: 420,
+      ease: "Sine.easeInOut",
+      onComplete: () => cover.destroy(),
+    });
+
+    for (const edgeX of [BOOK_X + 62, BOOK_X + BOOK_WIDTH - 62]) {
+      const leftSide = edgeX < spineX;
+      const edge = this.add.graphics().setDepth(32).setAlpha(0.58).setPosition(edgeX, pageTop);
+      edge.fillStyle(UI_HEX.parchment, 0.045);
+      edge.fillRoundedRect(leftSide ? -8 : -30, 0, 38, pageHeight, 10);
+      edge.lineStyle(3, UI_HEX.brass, 0.52);
+      edge.lineBetween(0, 0, 0, pageHeight);
+      edge.lineStyle(1, UI_HEX.parchment, 0.34);
+      edge.lineBetween(leftSide ? 12 : -12, 20, leftSide ? 12 : -12, pageHeight - 20);
+      this.tweens.add({
+        targets: edge,
+        x: spineX + (leftSide ? -36 : 36),
+        alpha: 0,
+        scaleX: 0.55,
+        duration: 360,
+        ease: "Sine.easeIn",
+        onComplete: () => edge.destroy(),
+      });
+    }
+  }
+
   private clearNavigationTargets(): void {
     for (const release of [...this.navAnchorReleases]) {
       release();
@@ -982,14 +1029,20 @@ export class AlmanacScene extends Phaser.Scene {
   }
 
   private closeBook(): void {
+    if (this.closing) return;
+    this.closing = true;
     playChime();
-    this.cameras.main.fadeOut(350, 11, 10, 15);
-    this.cameras.main.once(
-      Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-      () => {
-        this.scene.start("PortalChamberScene", { store: this.store });
-      },
-    );
+    this.clearNavigationTargets();
+    this.playBookCloseWake();
+    this.time.delayedCall(220, () => {
+      this.cameras.main.fadeOut(430, 11, 10, 15);
+      this.cameras.main.once(
+        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+        () => {
+          this.scene.start("PortalChamberScene", { store: this.store });
+        },
+      );
+    });
   }
 
   private onKeyDown(event: KeyboardEvent): void {

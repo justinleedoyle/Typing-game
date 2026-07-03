@@ -169,6 +169,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private hubArrival: HubArrivalSource | null = null;
   private activeZone: Zone = "portals";
   private openingUtilityScene = false;
+  private enteringGreatBattle = false;
 
   constructor() {
     super("PortalChamberScene");
@@ -190,6 +191,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.showPortalRevisits = false;
     this.activeZone = "portals";
     this.openingUtilityScene = false;
+    this.enteringGreatBattle = false;
   }
 
   preload(): void {
@@ -397,14 +399,7 @@ export class PortalChamberScene extends Phaser.Scene {
           onAdvance: () => this.pulseStationTyping(HUB_STATIONS.portalFloor),
           onComplete: () => {
             releaseAnchor();
-            this.portalFloorCallGlow?.destroy();
-            this.portalFloorCallGlow = undefined;
-            this.playHubActorAction(HUB_STATIONS.portalFloor.x);
-            this.pulseStation(HUB_STATIONS.portalFloor);
-            this.cameras.main.fadeOut(600, 10, 8, 15);
-            this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-              this.scene.start("GreatBattleScene", { store: this.store });
-            });
+            this.enterGreatBattle();
           },
         });
         releaseAnchor = this.attachPortalFloorCallAnchor(battleTarget, 0x8b6ad8);
@@ -879,6 +874,136 @@ export class PortalChamberScene extends Phaser.Scene {
         },
       );
     });
+  }
+
+  private enterGreatBattle(): void {
+    if (this.enteringGreatBattle) return;
+    this.enteringGreatBattle = true;
+    playChime();
+    this.setHint("");
+    this.narration.clear();
+    this.portalFloorCallGlow?.destroy();
+    this.portalFloorCallGlow = undefined;
+    this.playHubActorAction(HUB_STATIONS.portalFloor.x);
+    this.pulseStation(HUB_STATIONS.portalFloor);
+    this.playGreatBattleEntryWake();
+    this.time.delayedCall(300, () => {
+      this.cameras.main.fadeOut(620, 10, 8, 15);
+      this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+        this.scene.start("GreatBattleScene", { store: this.store });
+      });
+    });
+  }
+
+  private playGreatBattleEntryWake(): void {
+    const cx = HUB_STATIONS.portalFloor.x;
+    const cy = HUB_STATIONS.portalFloor.y - 268;
+    const violet = 0x8b6ad8;
+
+    const wash = this.add.graphics().setDepth(6).setAlpha(0);
+    wash.fillStyle(0x0b0a0f, 0.26);
+    wash.fillRect(0, 0, this.scale.width, this.scale.height);
+    this.tweens.add({
+      targets: wash,
+      alpha: 0.22,
+      duration: 120,
+      hold: 150,
+      yoyo: true,
+      ease: "Sine.easeInOut",
+      onComplete: () => wash.destroy(),
+    });
+
+    const seal = this.add.container(cx, cy).setDepth(12).setAlpha(0.78);
+    const sealMark = this.add.graphics();
+    sealMark.fillStyle(violet, 0.075);
+    sealMark.fillEllipse(0, 0, 420, 128);
+    sealMark.lineStyle(2, violet, 0.58);
+    sealMark.strokeEllipse(0, 0, 430, 132);
+    sealMark.lineStyle(1, UI_HEX.brass, 0.44);
+    sealMark.strokeEllipse(0, 0, 270, 76);
+    sealMark.lineBetween(-142, 0, 142, 0);
+    sealMark.lineBetween(0, -38, 0, 38);
+    seal.add(sealMark);
+    seal.add(
+      cornerTicks(this, 360, 104, {
+        inset: 4,
+        size: 12,
+        width: 2,
+      }),
+    );
+
+    this.tweens.add({
+      targets: seal,
+      alpha: 0,
+      scaleX: 1.18,
+      scaleY: 1.16,
+      duration: 520,
+      ease: "Sine.easeOut",
+      onComplete: () => seal.destroy(),
+    });
+
+    for (let i = 0; i < 3; i += 1) {
+      const ring = this.add.graphics().setPosition(cx, cy).setDepth(11 + i * 0.1).setAlpha(0.68);
+      ring.lineStyle(2, i === 1 ? UI_HEX.brass : violet, 0.62 - i * 0.08);
+      ring.strokeEllipse(0, 0, 270 + i * 88, 78 + i * 30);
+      ring.setScale(0.72 + i * 0.08);
+      this.tweens.add({
+        targets: ring,
+        alpha: 0,
+        scaleX: 1.26 + i * 0.08,
+        scaleY: 1.2 + i * 0.06,
+        duration: 440,
+        delay: i * 48,
+        ease: "Sine.easeOut",
+        onComplete: () => ring.destroy(),
+      });
+    }
+
+    this.playGreatBattleEntryFlecks(cx, cy, violet);
+
+    if (this.wrenContainer?.active) {
+      const startX = this.wrenContainer.x;
+      const startY = this.wrenContainer.y;
+      this.tweens.killTweensOf(this.wrenContainer);
+      this.tweens.add({
+        targets: this.wrenContainer,
+        x: startX + (cx - startX) * 0.05,
+        y: startY - 10,
+        alpha: 0.88,
+        duration: 340,
+        ease: "Sine.easeInOut",
+      });
+    }
+  }
+
+  private playGreatBattleEntryFlecks(cx: number, cy: number, violet: number): void {
+    if (!this.wrenContainer?.active) return;
+    const fromX = this.wrenContainer.x;
+    const fromY = this.wrenContainer.y - 116;
+    const colors = [UI_HEX.brass, violet, UI_HEX.parchment];
+
+    for (let i = 0; i < 12; i += 1) {
+      const angle = (Math.PI * 2 * i) / 12;
+      const startX = fromX + Math.cos(angle) * (22 + (i % 3) * 8);
+      const startY = fromY + Math.sin(angle) * (12 + (i % 2) * 6);
+      const targetX = cx + Math.cos(angle + 0.7) * (54 + (i % 4) * 8);
+      const targetY = cy + Math.sin(angle + 0.7) * (22 + (i % 3) * 5);
+      const fleck = this.add.graphics().setPosition(startX, startY).setDepth(13).setAlpha(0.76);
+      fleck.fillStyle(colors[i % colors.length], 0.78);
+      fleck.fillCircle(0, 0, 2.4 + (i % 3) * 0.7);
+      this.tweens.add({
+        targets: fleck,
+        x: targetX,
+        y: targetY,
+        alpha: 0,
+        scaleX: 0.32,
+        scaleY: 0.32,
+        duration: 330 + i * 16,
+        delay: i * 12,
+        ease: "Sine.easeIn",
+        onComplete: () => fleck.destroy(),
+      });
+    }
   }
 
   private playPortalTravel(sceneKey: string): void {

@@ -1336,11 +1336,14 @@ export class SkyIslandScene extends Phaser.Scene {
     this.time.delayedCall(2000, () => {
       this.setNarrator(ETTA_LINE, "Etta");
       this.time.delayedCall(600, () => {
+        const helpPos = this.skyOwnedWordPosition(this.ettaSprite, -120, ETTA_HELP_TRIGGER, {
+          side: "left",
+        });
         const helpTarget = this.makeEttaWord({
           scene: this,
           word: ETTA_HELP_TRIGGER,
-          x: this.scale.width / 2 - 300,
-          y: this.scale.height - 340,
+          x: helpPos.x,
+          y: helpPos.y,
           frame: "banner",
           fontSize: 36,
           onComplete: () => {
@@ -1353,11 +1356,14 @@ export class SkyIslandScene extends Phaser.Scene {
         });
         // Any other typed word (typing something that doesn't start with 'h')
         // will just fail to claim — but we also offer a "skip" word
+        const skipPos = this.skyOwnedWordPosition(this.ettaSprite, -120, "keep moving", {
+          side: "right",
+        });
         const skipTarget = this.makeEttaWord({
           scene: this,
           word: "keep moving",
-          x: this.scale.width / 2 + 300,
-          y: this.scale.height - 340,
+          x: skipPos.x,
+          y: skipPos.y,
           frame: "banner",
           fontSize: 36,
           onComplete: () => {
@@ -1568,11 +1574,14 @@ export class SkyIslandScene extends Phaser.Scene {
     this.band.setObjective("Choose whether to help Etta or take the flame.");
     this.showFork1Cues();
 
+    const helpPos = this.skyOwnedWordPosition(this.ettaSprite, -120, "help scholar etta", {
+      side: "left",
+    });
     const helpTarget = this.makeEttaWord({
       scene: this,
       word: "help scholar etta",
-      x: this.scale.width / 2 - 400,
-      y: this.scale.height - 340,
+      x: helpPos.x,
+      y: helpPos.y,
       frame: "banner",
       fontSize: 30,
       onComplete: () => {
@@ -1581,11 +1590,14 @@ export class SkyIslandScene extends Phaser.Scene {
         this.startFork1HelpEtta();
       },
     });
+    const stealPos = this.skyOwnedWordPosition(this.beaconFlameCue, -76, "steal the flame", {
+      side: "right",
+    });
     const stealTarget = this.makeSkyForkWord(this.beaconFlameCue, {
       scene: this,
       word: "steal the flame",
-      x: this.scale.width / 2 + 400,
-      y: this.scale.height - 340,
+      x: stealPos.x,
+      y: stealPos.y,
       frame: "banner",
       fontSize: 30,
       onComplete: () => {
@@ -1829,11 +1841,14 @@ export class SkyIslandScene extends Phaser.Scene {
     this.band.setObjective("Choose how to answer the tethered spirit.");
     this.showFork2Cues();
 
+    const kindPos = this.skyOwnedWordPosition(this.kindAnswerCue, -56, "answer kindly", {
+      side: "left",
+    });
     const kindTarget = this.makeSkyForkWord(this.kindAnswerCue, {
       scene: this,
       word: "answer kindly",
-      x: this.scale.width / 2 - 380,
-      y: this.scale.height - 340,
+      x: kindPos.x,
+      y: kindPos.y,
       frame: "banner",
       fontSize: 30,
       onComplete: () => {
@@ -1842,11 +1857,14 @@ export class SkyIslandScene extends Phaser.Scene {
         this.startFork2KindEnding();
       },
     }, -56);
+    const tetherPos = this.skyOwnedWordPosition(this.tetherThreadCue, -58, "cut the tether", {
+      side: "right",
+    });
     const tetherTarget = this.makeSkyForkWord(this.tetherThreadCue, {
       scene: this,
       word: "cut the tether",
-      x: this.scale.width / 2 + 380,
-      y: this.scale.height - 340,
+      x: tetherPos.x,
+      y: tetherPos.y,
       frame: "banner",
       fontSize: 30,
       onComplete: () => {

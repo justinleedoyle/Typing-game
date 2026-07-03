@@ -216,19 +216,20 @@ function finaleEnemyArtForRealm(realmId: string): FinaleEnemyArtSpec {
     case "winter-mountain":
       return {
         textureKey: "finale-wolf-pack",
-        height: 124,
-        shadowWidth: 176,
-        shadowHeight: 30,
+        height: 150,
+        shadowWidth: 216,
+        shadowHeight: 36,
         shadowY: 42,
-        shadowAlpha: 0.44,
-        spriteY: -2,
-        alpha: 1,
+        shadowAlpha: 0.52,
+        spriteY: -6,
+        alpha: 0.98,
+        tint: 0xdfeaff,
         flipX: true,
         glowColor: PALETTE_HEX.frost,
-        glowAlpha: 0.09,
-        glowY: -2,
-        glowWidth: 190,
-        glowHeight: 82,
+        glowAlpha: 0.18,
+        glowY: -4,
+        glowWidth: 238,
+        glowHeight: 104,
       };
     case "sunken-bell":
       return {

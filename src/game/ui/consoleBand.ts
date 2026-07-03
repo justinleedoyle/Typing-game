@@ -87,8 +87,11 @@ export class ConsoleBand {
   private objectiveContainer!: Phaser.GameObjects.Container;
   private objectiveLabel!: Phaser.GameObjects.Text;
   private objectiveText!: Phaser.GameObjects.Text;
+  private bandWidth = 0;
+  private objectiveWidth = 0;
   private objectiveTextMaxWidth = 0;
   private objectiveValue = "";
+  private renderedReadoutKey = "";
   private noticeActive = false;
   private noticeTimer: Phaser.Time.TimerEvent | null = null;
   private portraitImage?: Phaser.GameObjects.Image;
@@ -161,8 +164,16 @@ export class ConsoleBand {
     const trimmed = text.trim();
     if (trimmed.length === 0) {
       this.objectiveContainer.setVisible(false);
+      this.renderedReadoutKey = "";
       return;
     }
+    const readoutKey = [
+      label,
+      trimmed,
+      colors.labelColor ?? "",
+      colors.textColor ?? "",
+    ].join("\n");
+    const changed = readoutKey !== this.renderedReadoutKey;
     this.objectiveLabel.setText(label);
     this.objectiveLabel.setColor(colors.labelColor ?? "#a59b89");
     this.objectiveText.setColor(colors.textColor ?? "#f3ead2");
@@ -176,6 +187,8 @@ export class ConsoleBand {
       duration: 220,
       ease: "Sine.easeOut",
     });
+    if (changed) this.playReadoutWake(label);
+    this.renderedReadoutKey = readoutKey;
   }
 
   private fitObjectiveText(text: string): void {
@@ -295,6 +308,7 @@ export class ConsoleBand {
   }
 
   private drawSurface(scene: Phaser.Scene, W: number): void {
+    this.bandWidth = W;
     const g = scene.add.graphics();
     // Soft cast shadow rising onto the world, so the band reads as foreground.
     g.fillStyle(0x000000, 0.32);
@@ -374,6 +388,7 @@ export class ConsoleBand {
 
   private drawObjectiveReadout(scene: Phaser.Scene, W: number): void {
     const width = Math.max(620, W - OBJECTIVE_X - 34);
+    this.objectiveWidth = width;
     this.objectiveTextMaxWidth = width - OBJECTIVE_LABEL_W - 18;
     this.objectiveContainer = scene.add
       .container(OBJECTIVE_X, OBJECTIVE_Y)
@@ -406,5 +421,56 @@ export class ConsoleBand {
       .setOrigin(0, 0.5);
     this.objectiveContainer.add(this.objectiveText);
     this.container.add(this.objectiveContainer);
+  }
+
+  private playReadoutWake(label: string): void {
+    const notice = label !== "task";
+    const color = notice ? UI_HEX.parchment : UI_HEX.brass;
+    const rail = this.scene.add.graphics().setAlpha(0.78);
+    rail.fillStyle(color, notice ? 0.34 : 0.26);
+    rail.fillRect(0, 0, this.bandWidth, 3);
+    rail.fillStyle(color, notice ? 0.11 : 0.08);
+    rail.fillRect(0, 3, this.bandWidth, 14);
+    this.container.add(rail);
+
+    this.scene.tweens.add({
+      targets: rail,
+      alpha: 0,
+      duration: notice ? 520 : 420,
+      ease: "Sine.easeOut",
+      onComplete: () => rail.destroy(),
+    });
+
+    const strip = this.scene.add
+      .graphics()
+      .setPosition(OBJECTIVE_X, OBJECTIVE_Y)
+      .setAlpha(0.62);
+    strip.fillStyle(color, notice ? 0.12 : 0.08);
+    strip.fillRoundedRect(
+      -10,
+      -OBJECTIVE_H / 2 - 3,
+      this.objectiveWidth + 20,
+      OBJECTIVE_H + 6,
+      8,
+    );
+    strip.lineStyle(1, color, notice ? 0.42 : 0.28);
+    strip.strokeRoundedRect(
+      -10,
+      -OBJECTIVE_H / 2 - 3,
+      this.objectiveWidth + 20,
+      OBJECTIVE_H + 6,
+      8,
+    );
+    this.container.add(strip);
+    this.container.bringToTop(this.objectiveContainer);
+
+    this.scene.tweens.add({
+      targets: strip,
+      alpha: 0,
+      scaleX: 1.015,
+      duration: notice ? 540 : 430,
+      ease: "Sine.easeOut",
+      onComplete: () => strip.destroy(),
+    });
   }
 }

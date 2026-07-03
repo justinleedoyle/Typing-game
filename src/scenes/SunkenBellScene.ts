@@ -1550,11 +1550,14 @@ export class SunkenBellScene extends Phaser.Scene {
     this.setNarrator("Force the doors — OPEN, on the toll.");
     this.band.setObjective("Type OPEN on the toll.");
     this.time.delayedCall(700, () => {
+      const pos = this.bellPassageWordPosition(this.doorForceCue, -48, {
+        side: "left",
+      });
       const openTarget = this.makeBellForkWord(this.doorForceCue, {
         scene: this,
         word: "OPEN",
-        x: this.scale.width / 2,
-        y: this.scale.height - 340,
+        x: pos.x,
+        y: pos.y,
         fontSize: 56,
         caseSensitive: true,
         burstColor: BELL_BURST_COLOR,
@@ -1582,11 +1585,14 @@ export class SunkenBellScene extends Phaser.Scene {
       }
       const word = forcePhrases[step];
       if (word === undefined) return;
+      const pos = this.bellPassageWordPosition(this.doorForceCue, -48, {
+        side: "left",
+      });
       const target = this.makeBellForkWord(this.doorForceCue, {
         scene: this,
         word,
-        x: this.scale.width / 2,
-        y: this.scale.height - 340,
+        x: pos.x,
+        y: pos.y,
         fontSize: 40,
         onComplete: () => {
           step += 1;
@@ -2566,6 +2572,27 @@ export class SunkenBellScene extends Phaser.Scene {
     return target;
   }
 
+  private bellPassageWordPosition(
+    body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined,
+    sourceOffsetY: number,
+    opts: { side?: "left" | "right"; long?: boolean; lift?: number } = {},
+  ): { x: number; y: number } {
+    const width = this.scale.width;
+    const height = this.scale.height;
+    const sourceX = body?.scene ? body.x : width / 2;
+    const sourceY = body?.scene ? body.y + sourceOffsetY : height - 460;
+    const side =
+      opts.side === "left" ? -1 : opts.side === "right" ? 1 : sourceX < width / 2 ? 1 : -1;
+    const lateral = opts.long ? 180 : 150;
+    const xInset = opts.long ? 380 : 300;
+    const lift = opts.lift ?? (opts.long ? 116 : 102);
+
+    return {
+      x: Phaser.Math.Clamp(sourceX + side * lateral, xInset, width - xInset),
+      y: Phaser.Math.Clamp(sourceY - lift, 280, height - 430),
+    };
+  }
+
   private clearForkChoiceWordAnchors(): void {
     for (const anchor of this.forkChoiceWordAnchors) anchor.destroy();
     this.forkChoiceWordAnchors = [];
@@ -2957,11 +2984,15 @@ export class SunkenBellScene extends Phaser.Scene {
       }
       const step = steps[idx];
       if (!step) return;
+      const pos = this.bellPassageWordPosition(this.doorChantCue, -62, {
+        side: "right",
+        long: step.word.length > 14,
+      });
       const target = this.makeBellForkWord(this.doorChantCue, {
         scene: this,
         word: step.word,
-        x: this.scale.width / 2,
-        y: this.scale.height - 340,
+        x: pos.x,
+        y: pos.y,
         fontSize: 34,
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
@@ -3003,11 +3034,21 @@ export class SunkenBellScene extends Phaser.Scene {
       }
       const step = steps[idx];
       if (!step) return;
+      const freeingAurland = this.fork2Choice === "free-aurland";
+      const pos = this.bellPassageWordPosition(
+        freeingAurland ? this.aurlandImage : this.bellTongueCue,
+        freeingAurland ? -142 : -48,
+        {
+          side: freeingAurland ? "right" : "left",
+          long: step.word.length > 12,
+          lift: freeingAurland ? 92 : undefined,
+        },
+      );
       const targetOptions: TextWordTargetOptions = {
         scene: this,
         word: step.word,
-        x: this.scale.width / 2,
-        y: this.scale.height - 340,
+        x: pos.x,
+        y: pos.y,
         fontSize: 36,
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
@@ -3030,7 +3071,7 @@ export class SunkenBellScene extends Phaser.Scene {
         },
       };
       const target =
-        this.fork2Choice === "free-aurland"
+        freeingAurland
           ? this.makeAurlandWord(targetOptions)
           : this.makeBellForkWord(this.bellTongueCue, targetOptions, -48);
       this.typingInput.register(target);

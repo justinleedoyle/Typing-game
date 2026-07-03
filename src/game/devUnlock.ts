@@ -51,6 +51,10 @@ export function parseDevTarget(search: string): DevTarget {
  *  relic (incl. companions) in the satchel. In-place to match SaveStore.update;
  *  preserves any existing RealmProgress fields (choices, intrusion flags). */
 export function applyDevUnlock(s: SaveState): void {
+  // The full `?dev` shortcut is meant to land in the hub, not replay the
+  // opening cinematic on a fresh profile. This is the same gate the opening
+  // sets after the typewriter/doorway beat completes.
+  s.typewriterAwakened = true;
   for (const id of Object.keys(REALM_SCENE_KEYS)) {
     const existing = s.realms[id];
     s.realms[id] = existing

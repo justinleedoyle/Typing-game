@@ -467,6 +467,7 @@ export class PortalChamberScene extends Phaser.Scene {
         },
         {
           fontSize: 20,
+          frame: "banner",
           priority: -1,
           stationPulse: HUB_STATIONS.portalFloor,
           entryDelayMs: 130,
@@ -796,6 +797,7 @@ export class PortalChamberScene extends Phaser.Scene {
     opts: {
       fontSize?: number;
       priority?: number;
+      frame?: "banner";
       stationPulse?: StationSpec;
       entryDelayMs?: number;
     } = {},
@@ -809,6 +811,7 @@ export class PortalChamberScene extends Phaser.Scene {
       fontSize: opts.fontSize ?? 26,
       priority: opts.priority ?? -2,
       outline: true,
+      frame: opts.frame,
       onClaim: () => {
         if (opts.stationPulse) this.focusStation(opts.stationPulse);
       },

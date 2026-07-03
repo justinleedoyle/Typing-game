@@ -863,11 +863,12 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.setNarrator("i don't know my name.", "Inga");
     this.time.delayedCall(1800, () => {
       // Wren types a reply
+      const pos = this.ownerPassageWordPosition(this.ingaFigure, -62);
       const reply = this.makeIngaWord({
         scene: this,
         word: "i'll find it.",
-        x: this.scale.width / 2,
-        y: this.scale.height - 340,
+        x: pos.x,
+        y: pos.y,
         fontSize: 36,
         onComplete: () => {
           this.clearActiveTargets();
@@ -1105,11 +1106,12 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startIngaNameReveal(): void {
     this.setNarrator("Her name. Type it back to her.");
+    const pos = this.ownerPassageWordPosition(this.ingaFigure, -62);
     const target = this.makeIngaWord({
       scene: this,
       word: "inga",
-      x: this.scale.width / 2,
-      y: this.scale.height - 340,
+      x: pos.x,
+      y: pos.y,
       fontSize: 44,
       onComplete: () => {
         this.clearActiveTargets();
@@ -1456,11 +1458,17 @@ export class HauntedWoodScene extends Phaser.Scene {
     );
     this.showWispCatCompanion();
     this.time.delayedCall(1600, () => {
+      const callPos = this.ownerPassageWordPosition(this.wispCatCompanion, -58, {
+        side: "left",
+      });
+      const leavePos = this.ownerPassageWordPosition(this.wispCatCompanion, -58, {
+        side: "right",
+      });
       const callTarget = this.makeWispCatWord({
         scene: this,
         word: "call to her",
-        x: this.scale.width / 2 - 320,
-        y: this.scale.height - 340,
+        x: callPos.x,
+        y: callPos.y,
         fontSize: 30,
         frame: "banner",
         onComplete: () => {
@@ -1480,8 +1488,8 @@ export class HauntedWoodScene extends Phaser.Scene {
       const leaveTarget = this.makeWispCatWord({
         scene: this,
         word: "leave her",
-        x: this.scale.width / 2 + 320,
-        y: this.scale.height - 340,
+        x: leavePos.x,
+        y: leavePos.y,
         fontSize: 30,
         frame: "banner",
         onComplete: () => {
@@ -1872,10 +1880,13 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private ownerPassageWordPosition(
-    body: Phaser.GameObjects.Container | Phaser.GameObjects.Image,
+    body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined,
     sourceOffsetY = -48,
+    opts: { side?: "left" | "right" } = {},
   ): { x: number; y: number } {
-    const side = body.x < this.scale.width / 2 ? 1 : -1;
+    if (!body?.scene) return { x: this.scale.width / 2, y: this.scale.height - 340 };
+    const side =
+      opts.side === "left" ? -1 : opts.side === "right" ? 1 : body.x < this.scale.width / 2 ? 1 : -1;
     const x = Math.max(330, Math.min(this.scale.width - 330, body.x + side * 185));
     const y = Math.max(330, Math.min(this.scale.height - 360, body.y + sourceOffsetY - 92));
     return { x, y };

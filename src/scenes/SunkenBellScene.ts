@@ -179,6 +179,7 @@ export class SunkenBellScene extends Phaser.Scene {
    *  zone (set in create() from band.satchelAnchor) — like Winter's candles. */
   private breathAnchor = { x: 0, y: 0 };
   private drawnBreathFraction: number | null = null;
+  private breathMeterWakeToken = 0;
 
   // Tier 4 — relics earned in EARLIER realms shape this realm's combat. The
   // bounded loadout is resolved once in create() (neutral on a revisit); the
@@ -691,9 +692,16 @@ export class SunkenBellScene extends Phaser.Scene {
   /** Turn the air stake on/off for an encounter. Resets to full when enabled;
    *  hides the gauge when disabled. */
   private setBreathActive(active: boolean): void {
+    const wasActive = this.breathActive;
+    if (!active) {
+      this.breathMeterWakeToken += 1;
+      this.tweens.killTweensOf(this.breathBar);
+      this.tweens.killTweensOf(this.breathLabel);
+    }
     this.breathActive = active;
     if (active) this.breath.reset();
     this.drawBreathBar();
+    if (active && !wasActive) this.stageBreathMeterEntry();
   }
 
   /** Redraw the air gauge in the console band's satchel zone from the current
@@ -703,6 +711,8 @@ export class SunkenBellScene extends Phaser.Scene {
     const bar = this.breathBar;
     bar.clear();
     if (!this.breathActive) {
+      this.tweens.killTweensOf(bar);
+      this.tweens.killTweensOf(this.breathLabel);
       bar.setAlpha(0);
       this.breathLabel.setAlpha(0);
       this.drawnBreathFraction = null;
@@ -733,6 +743,45 @@ export class SunkenBellScene extends Phaser.Scene {
       });
     }
     this.drawnBreathFraction = frac;
+  }
+
+  private stageBreathMeterEntry(): void {
+    const wakeToken = ++this.breathMeterWakeToken;
+    this.stageBreathMeterObject(this.breathLabel, wakeToken, 70, { offsetY: 5 });
+    this.stageBreathMeterObject(this.breathBar, wakeToken, 95, { offsetY: 8 });
+  }
+
+  private stageBreathMeterObject(
+    object: Phaser.GameObjects.GameObject,
+    wakeToken: number,
+    delayMs: number,
+    opts: { offsetY?: number } = {},
+  ): void {
+    const item = object as Phaser.GameObjects.GameObject & {
+      alpha: number;
+      y: number;
+      setAlpha: (value: number) => unknown;
+      setY: (value: number) => unknown;
+    };
+    if (typeof item.y !== "number" || !item.setAlpha || !item.setY) return;
+
+    this.tweens.killTweensOf(item);
+    const baseY = item.y;
+    const finalAlpha = item.alpha;
+    item.setAlpha(0);
+    item.setY(baseY + (opts.offsetY ?? 8));
+    this.time.delayedCall(delayMs, () => {
+      if (!this.breathActive || this.breathMeterWakeToken !== wakeToken || !object.scene) {
+        return;
+      }
+      this.tweens.add({
+        targets: item,
+        alpha: finalAlpha,
+        y: baseY,
+        duration: 230,
+        ease: "Sine.easeOut",
+      });
+    });
   }
 
   /** Out of air — a non-terminal shove (the Bell has no candle/game-over

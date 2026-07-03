@@ -1486,11 +1486,15 @@ export class SunkenBellScene extends Phaser.Scene {
     this.band.setObjective("Choose how to open the nave doors.");
     this.showDoorCues();
 
+    const chantPos = this.bellPassageWordPosition(this.doorChantCue, -62, {
+      side: "left",
+      long: true,
+    });
     const chantTarget = this.makeBellForkWord(this.doorChantCue, {
       scene: this,
       word: "open slowly",
-      x: this.scale.width / 2 - 380,
-      y: this.scale.height - 340,
+      x: chantPos.x,
+      y: chantPos.y,
       fontSize: 32,
       frame: "banner",
       onComplete: () => {
@@ -1499,11 +1503,15 @@ export class SunkenBellScene extends Phaser.Scene {
         this.startFork1Chant();
       },
     }, -62);
+    const forcePos = this.bellPassageWordPosition(this.doorForceCue, -48, {
+      side: "right",
+      long: true,
+    });
     const forceTarget = this.makeBellForkWord(this.doorForceCue, {
       scene: this,
       word: "force them open",
-      x: this.scale.width / 2 + 380,
-      y: this.scale.height - 340,
+      x: forcePos.x,
+      y: forcePos.y,
       fontSize: 32,
       frame: "banner",
       onComplete: () => {
@@ -1849,11 +1857,15 @@ export class SunkenBellScene extends Phaser.Scene {
     this.band.setObjective("Choose Aurland's fate beneath the bell.");
     this.showFateCues();
 
+    const freePos = this.bellPassageWordPosition(this.aurlandFateCue, -52, {
+      side: "left",
+      long: true,
+    });
     const freeTarget = this.makeBellForkWord(this.aurlandFateCue, {
       scene: this,
       word: "free king aurland",
-      x: this.scale.width / 2 - 360,
-      y: this.scale.height - 340,
+      x: freePos.x,
+      y: freePos.y,
       fontSize: 30,
       frame: "banner",
       onComplete: () => {
@@ -1862,11 +1874,15 @@ export class SunkenBellScene extends Phaser.Scene {
         this.startFork2FreeAurland();
       },
     }, -52);
+    const claimPos = this.bellPassageWordPosition(this.bellTongueCue, -48, {
+      side: "right",
+      long: true,
+    });
     const claimTarget = this.makeBellForkWord(this.bellTongueCue, {
       scene: this,
       word: "claim the tongue",
-      x: this.scale.width / 2 + 360,
-      y: this.scale.height - 340,
+      x: claimPos.x,
+      y: claimPos.y,
       fontSize: 30,
       frame: "banner",
       onComplete: () => {
@@ -1974,11 +1990,16 @@ export class SunkenBellScene extends Phaser.Scene {
       this.setNarrator("A small glass-fish leads the way up through the dark water.");
       this.showGlassFishCompanion();
       this.time.delayedCall(1000, () => {
+        const takePos = this.bellPassageWordPosition(
+          this.glassFishCompanion,
+          -54,
+          { side: "left", long: true },
+        );
         const takeTarget = this.makeGlassFishWord({
           scene: this,
           word: "take her with you",
-          x: this.scale.width / 2 - 300,
-          y: this.scale.height - 340,
+          x: takePos.x,
+          y: takePos.y,
           fontSize: 30,
           frame: "banner",
           onComplete: () => {
@@ -1989,11 +2010,16 @@ export class SunkenBellScene extends Phaser.Scene {
             this.startTrueNamePassage();
           },
         });
+        const letGoPos = this.bellPassageWordPosition(
+          this.glassFishCompanion,
+          -54,
+          { side: "right" },
+        );
         const letGoTarget = this.makeGlassFishWord({
           scene: this,
           word: "let her go",
-          x: this.scale.width / 2 + 300,
-          y: this.scale.height - 340,
+          x: letGoPos.x,
+          y: letGoPos.y,
           fontSize: 30,
           frame: "banner",
           onComplete: () => {

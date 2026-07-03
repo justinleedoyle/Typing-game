@@ -285,6 +285,7 @@ export class PortalChamberScene extends Phaser.Scene {
     // Enter the portals zone initially.
     this.enterZone("portals", false);
     this.playHubArrival();
+    this.playHubInitialRoomWake();
 
     // Auth mid-session changes restart the scene so all state re-renders cleanly.
     const { data: subscription } = supabase.auth.onAuthStateChange((event) => {
@@ -1724,6 +1725,81 @@ export class PortalChamberScene extends Phaser.Scene {
       this.wrenContainer.y - 112,
       color,
     );
+  }
+
+  private playHubInitialRoomWake(): void {
+    if (this.hubArrival || this.activeZone !== "portals") return;
+
+    const state = this.store.get();
+    const firstUnclearedIdx = REALM_SEQUENCE.findIndex(
+      (id) => !state.realms[id]?.cleared,
+    );
+    const nextAvailableIdx = firstUnclearedIdx === -1
+      ? REALM_SEQUENCE.length
+      : firstUnclearedIdx;
+
+    this.time.delayedCall(280, () => {
+      if (this.activeZone !== "portals" || !this.wrenContainer.scene) return;
+
+      if (nextAvailableIdx < REALM_SEQUENCE.length) {
+        const arch = ARCHES[nextAvailableIdx]!;
+        const sourceX = arch.x;
+        const sourceY = arch.baseY - arch.height / 2 + 34;
+
+        this.focusPortalForScene(arch.sceneKey);
+        this.pulseStation(HUB_STATIONS.portalFloor);
+        playSceneEventPulse(this, {
+          kind: "mote",
+          color: UI_HEX.brass,
+          x: sourceX,
+          y: sourceY,
+          depth: 6,
+          durationMs: 620,
+          ringWidth: arch.width * 0.58,
+          ringHeight: arch.height * 0.36,
+          count: 7,
+          alpha: 0.085,
+          spreadX: arch.width * 0.22,
+          spreadY: arch.height * 0.1,
+        });
+        this.playHubArrivalFlecks(
+          sourceX,
+          sourceY,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          UI_HEX.brass,
+        );
+        return;
+      }
+
+      const battleCleared = !!state.realms["great-battle"]?.cleared;
+      const color = battleCleared ? UI_HEX.brass : 0x8b6ad8;
+      const sourceX = HUB_STATIONS.portalFloor.x;
+      const sourceY = HUB_STATIONS.portalFloor.y - 268;
+
+      this.focusStation(HUB_STATIONS.portalFloor);
+      playSceneEventPulse(this, {
+        kind: "mote",
+        color,
+        x: sourceX,
+        y: sourceY,
+        depth: 6,
+        durationMs: 660,
+        ringWidth: 330,
+        ringHeight: 110,
+        count: 8,
+        alpha: 0.09,
+        spreadX: 130,
+        spreadY: 44,
+      });
+      this.playHubArrivalFlecks(
+        sourceX,
+        sourceY,
+        this.wrenContainer.x,
+        this.wrenContainer.y - 112,
+        color,
+      );
+    });
   }
 
   private playHubArrivalFlecks(

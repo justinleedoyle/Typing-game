@@ -274,6 +274,8 @@ export class OpeningScene extends Phaser.Scene {
     });
     this.typingInput.register(boy);
     this.typingInput.register(girl);
+    boy.playEntryWake({ delayMs: 70, durationMs: 240, offsetY: 12 });
+    girl.playEntryWake({ delayMs: 120, durationMs: 240, offsetY: 12 });
     this.beat2_5Targets = [boy, girl];
   }
 
@@ -305,6 +307,7 @@ export class OpeningScene extends Phaser.Scene {
       onComplete: () => this.onBeat4Complete(),
     });
     this.typingInput.register(target);
+    this.stageStudyTarget(target);
   }
 
   private onBeat4Complete(): void {
@@ -326,6 +329,7 @@ export class OpeningScene extends Phaser.Scene {
       onComplete: () => this.onBeat5Complete(),
     });
     this.typingInput.register(target);
+    this.stageStudyTarget(target);
   }
 
   private onBeat5Complete(): void {
@@ -397,6 +401,7 @@ export class OpeningScene extends Phaser.Scene {
       onComplete: () => this.onBeat8Complete(),
     });
     this.typingInput.register(target);
+    this.stageStudyTarget(target);
   }
 
   private onBeat8Complete(): void {
@@ -611,6 +616,14 @@ export class OpeningScene extends Phaser.Scene {
     });
     releaseAnchor = this.attachStudyWordAnchor(target, opts.response);
     return target;
+  }
+
+  private stageStudyTarget(target: TextWordTarget): void {
+    target.playEntryWake({
+      delayMs: 80,
+      durationMs: 250,
+      offsetY: 12,
+    });
   }
 
   private attachStudyWordAnchor(

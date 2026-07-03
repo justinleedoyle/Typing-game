@@ -356,6 +356,11 @@ export class SettingsScene extends Phaser.Scene {
     this.attachActionAnchor(target, index);
     this.typingInput.register(target);
     this.menuTargets.push(target);
+    target.playEntryWake({
+      delayMs: 70 + index * 35,
+      durationMs: 230,
+      offsetY: 10,
+    });
   }
 
   private attachActionAnchor(target: TextWordTarget, index: number): void {
@@ -739,6 +744,7 @@ export class SettingsScene extends Phaser.Scene {
     this.attachResetTargetAnchor(confirmTarget, -160);
     this.typingInput.register(confirmTarget);
     this.menuTargets.push(confirmTarget);
+    confirmTarget.playEntryWake({ delayMs: 80, durationMs: 240, offsetY: 12 });
 
     const cancelTarget = new TextWordTarget({
       scene: this,
@@ -759,6 +765,7 @@ export class SettingsScene extends Phaser.Scene {
     this.attachResetTargetAnchor(cancelTarget, 160);
     this.typingInput.register(cancelTarget);
     this.menuTargets.push(cancelTarget);
+    cancelTarget.playEntryWake({ delayMs: 125, durationMs: 240, offsetY: 12 });
   }
 
   private pulseResetPanel(): void {

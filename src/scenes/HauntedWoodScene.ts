@@ -1038,11 +1038,14 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.band.setObjective("Choose an offering or the bone-flute.");
     this.showFork1Cues();
 
+    const offeringPos = this.ownerPassageWordPosition(this.offeringCue, -42, {
+      side: "left",
+    });
     const offeringTarget = this.makeWoodForkWord(this.offeringCue, {
       scene: this,
       word: "leave an offering",
-      x: this.scale.width / 2 - 380,
-      y: this.scale.height - 340,
+      x: offeringPos.x,
+      y: offeringPos.y,
       fontSize: 30,
       frame: "banner",
       onComplete: () => {
@@ -1051,11 +1054,14 @@ export class HauntedWoodScene extends Phaser.Scene {
         this.startFork1Offering();
       },
     }, -42);
+    const flutePos = this.ownerPassageWordPosition(this.boneFluteCue, -62, {
+      side: "right",
+    });
     const fluteTarget = this.makeWoodForkWord(this.boneFluteCue, {
       scene: this,
       word: "take the bone-flute",
-      x: this.scale.width / 2 + 380,
-      y: this.scale.height - 340,
+      x: flutePos.x,
+      y: flutePos.y,
       fontSize: 30,
       frame: "banner",
       onComplete: () => {
@@ -1178,11 +1184,14 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.band.setObjective("Choose a bargain or light the grove.");
     this.showFork2Cues();
 
+    const bargainPos = this.ownerPassageWordPosition(this.ghostKingBody, -30, {
+      side: "left",
+    });
     const bargainTarget = this.makeGhostKingWord({
       scene: this,
       word: "speak your true name",
-      x: this.scale.width / 2 - 400,
-      y: this.scale.height - 340,
+      x: bargainPos.x,
+      y: bargainPos.y,
       fontSize: 28,
       frame: "banner",
       onComplete: () => {
@@ -1192,11 +1201,14 @@ export class HauntedWoodScene extends Phaser.Scene {
         this.startFork2Bargain();
       },
     });
+    const forcePos = this.ownerPassageWordPosition(this.groveLightCue, -58, {
+      side: "right",
+    });
     const forceTarget = this.makeWoodForkWord(this.groveLightCue, {
       scene: this,
       word: "light the grove",
-      x: this.scale.width / 2 + 400,
-      y: this.scale.height - 340,
+      x: forcePos.x,
+      y: forcePos.y,
       fontSize: 28,
       frame: "banner",
       onComplete: () => {

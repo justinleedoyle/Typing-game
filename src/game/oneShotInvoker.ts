@@ -68,6 +68,7 @@ export interface OneShotInvokerConfig<E> {
 }
 
 type WidgetState = "charging" | "ready" | "spent";
+type CardWakeKind = "enter" | "charge" | "ready" | "spent" | "claim" | "typing";
 
 interface Widget {
   readonly effect: OffensiveOneShot;
@@ -77,6 +78,8 @@ interface Widget {
   readonly barBg: Phaser.GameObjects.Graphics;
   readonly barFill: Phaser.GameObjects.Graphics;
   readonly readyRail: Phaser.GameObjects.Graphics | null;
+  readonly cardW: number;
+  readonly cardH: number;
   /** Absolute screen position for the live word target (container x,y + offset). */
   readonly wordX: number;
   readonly wordY: number;
@@ -86,6 +89,8 @@ interface Widget {
   announcedReady: boolean;
   pulse: Phaser.Tweens.Tween | null;
   lastCardPulseAt: number;
+  lastChargeTier: number;
+  wasVisible: boolean;
 }
 
 const BAR_W = 150;
@@ -197,6 +202,8 @@ export class OneShotInvoker<E> {
   ): Widget {
     const inv = INVOCATIONS[effect];
     const { scene } = this.cfg;
+    const cardW = this.compact ? this.barW + 30 : this.barW + 90;
+    const cardH = this.compact ? 70 : 92;
     const titleText = scene.add
       .text(0, titleY, inv.title, {
         fontFamily: SERIF,
@@ -230,6 +237,8 @@ export class OneShotInvoker<E> {
       barBg,
       barFill,
       readyRail,
+      cardW,
+      cardH,
       wordX: cx,
       wordY: y + wordOffsetY,
       state: "charging",
@@ -237,6 +246,8 @@ export class OneShotInvoker<E> {
       announcedReady: false,
       pulse: null,
       lastCardPulseAt: -Infinity,
+      lastChargeTier: -1,
+      wasVisible: false,
     };
   }
 
@@ -251,15 +262,17 @@ export class OneShotInvoker<E> {
     for (const w of this.widgets) {
       if (w.state === "spent") {
         // Spent widgets only show while a wave is live (a quiet "spent" trophy).
-        w.container.setAlpha(active ? 1 : 0);
+        this.setWidgetVisible(w, active);
         continue;
       }
 
       // Hidden entirely between waves / during dialogue.
-      w.container.setAlpha(active ? 1 : 0);
+      this.setWidgetVisible(w, active);
       if (!active) continue;
 
-      this.drawBar(w, Math.min(1, soul / this.cfg.cost));
+      const chargeFrac = Math.min(1, soul / this.cfg.cost);
+      this.drawBar(w, chargeFrac);
+      this.updateChargeWake(w, chargeFrac);
 
       const ready = soul >= this.cfg.cost && hasTarget;
       if (ready && w.state === "charging") {
@@ -283,6 +296,30 @@ export class OneShotInvoker<E> {
       BAR_H,
       BAR_H / 2,
     );
+  }
+
+  private setWidgetVisible(w: Widget, visible: boolean): void {
+    w.container.setAlpha(visible ? 1 : 0);
+    if (visible) {
+      if (!w.wasVisible && w.state !== "spent") this.pulseCard(w, "enter");
+      w.wasVisible = true;
+    } else {
+      w.wasVisible = false;
+      w.lastChargeTier = -1;
+    }
+  }
+
+  private updateChargeWake(w: Widget, frac: number): void {
+    if (w.state !== "charging") return;
+    const tier = Math.floor(frac * 4);
+    if (w.lastChargeTier < 0) {
+      w.lastChargeTier = tier;
+      return;
+    }
+    if (tier > w.lastChargeTier && tier < 4) {
+      this.pulseCard(w, "charge");
+    }
+    w.lastChargeTier = tier;
   }
 
   // ── state transitions ────────────────────────────────────────────────────────
@@ -309,6 +346,7 @@ export class OneShotInvoker<E> {
       onComplete: () => this.fire(w),
     });
     this.cfg.typingInput.register(w.target);
+    this.pulseCard(w, "ready");
 
     // A soft pulse on the title so "it's ready" reads at a glance.
     w.pulse?.stop();
@@ -345,26 +383,35 @@ export class OneShotInvoker<E> {
     w.placeholder.setAlpha(1);
   }
 
-  private pulseCard(w: Widget, kind: "claim" | "typing"): void {
+  private pulseCard(w: Widget, kind: CardWakeKind): void {
     const now = this.cfg.scene.time.now;
     if (kind === "typing" && now - w.lastCardPulseAt < 90) return;
     w.lastCardPulseAt = now;
 
-    const cardW = this.compact ? this.barW + 30 : this.barW + 90;
-    const cardH = this.compact ? 70 : 92;
-    const pulse = this.cfg.scene.add.graphics().setAlpha(kind === "claim" ? 0.62 : 0.42);
-    pulse.fillStyle(PALETTE_HEX.ember, kind === "claim" ? 0.055 : 0.035);
-    pulse.fillRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 8);
-    pulse.lineStyle(kind === "claim" ? 2 : 1, PALETTE_HEX.ember, kind === "claim" ? 0.58 : 0.36);
-    pulse.strokeRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 8);
+    const strong = kind === "claim" || kind === "ready" || kind === "spent";
+    const color =
+      kind === "enter" || kind === "charge" ? UI_HEX.brass : PALETTE_HEX.ember;
+    const pulse = this.cfg.scene.add.graphics().setAlpha(strong ? 0.62 : 0.42);
+    pulse.fillStyle(color, strong ? 0.055 : 0.035);
+    pulse.fillRoundedRect(-w.cardW / 2, -w.cardH / 2, w.cardW, w.cardH, 8);
+    pulse.lineStyle(strong ? 2 : 1, color, strong ? 0.58 : 0.36);
+    pulse.strokeRoundedRect(-w.cardW / 2, -w.cardH / 2, w.cardW, w.cardH, 8);
+    if (kind === "charge" || kind === "ready" || kind === "spent") {
+      const railY = this.barY + BAR_H / 2;
+      pulse.lineStyle(strong ? 2 : 1, color, strong ? 0.62 : 0.4);
+      pulse.beginPath();
+      pulse.moveTo(-this.barW / 2, railY);
+      pulse.lineTo(this.barW / 2, railY);
+      pulse.strokePath();
+    }
     w.container.addAt(pulse, this.compact ? 1 : 0);
 
     this.cfg.scene.tweens.add({
       targets: pulse,
       alpha: 0,
-      scaleX: kind === "claim" ? 1.045 : 1.025,
-      scaleY: kind === "claim" ? 1.085 : 1.05,
-      duration: kind === "claim" ? 260 : 180,
+      scaleX: strong ? 1.045 : 1.025,
+      scaleY: strong ? 1.085 : 1.05,
+      duration: strong ? 260 : 180,
       ease: "Sine.easeOut",
       onComplete: () => pulse.destroy(),
     });
@@ -423,6 +470,7 @@ export class OneShotInvoker<E> {
     w.titleText.setColor(PALETTE.dim).setAlpha(0.7);
     w.barFill.clear();
     w.barBg.clear();
+    this.pulseCard(w, "spent");
     this.cfg.announce?.(inv.spentCue);
   }
 }

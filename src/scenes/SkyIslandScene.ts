@@ -1684,11 +1684,12 @@ export class SkyIslandScene extends Phaser.Scene {
     this.setNarrator(RIDDLE_1_DISPLAY, "Scholar-Spirit");
     this.band.setObjective("Answer the Scholar-Spirit's riddle.");
     this.time.delayedCall(1200, () => {
+      const pos = this.scholarBossWordPosition(BOSS_PHASE1_ANSWER);
       const target = this.makeScholarBossWord({
         scene: this,
         word: BOSS_PHASE1_ANSWER,
-        x: this.scale.width / 2,
-        y: this.scale.height / 2 - 40,
+        x: pos.x,
+        y: pos.y,
         fontSize: 44,
         onComplete: () => {
           playChime();
@@ -1711,11 +1712,12 @@ export class SkyIslandScene extends Phaser.Scene {
     this.setNarrator(RIDDLE_2_DISPLAY, "Scholar-Spirit");
     this.band.setObjective("Answer the second riddle.");
     this.time.delayedCall(1200, () => {
+      const pos = this.scholarBossWordPosition(BOSS_PHASE2_ANSWER);
       const target = this.makeScholarBossWord({
         scene: this,
         word: BOSS_PHASE2_ANSWER,
-        x: this.scale.width / 2,
-        y: this.scale.height / 2 - 40,
+        x: pos.x,
+        y: pos.y,
         fontSize: 44,
         onComplete: () => {
           playChime();
@@ -1753,11 +1755,12 @@ export class SkyIslandScene extends Phaser.Scene {
       // runner but driven by cursor position at quarter-sentence milestones.
       const totalChars = BOSS_PHASE3_ANSWER.length;
       let lastFadeBand = 0;
+      const pos = this.scholarBossWordPosition(BOSS_PHASE3_ANSWER);
       const target = this.makeScholarBossWord({
         scene: this,
         word: BOSS_PHASE3_ANSWER,
-        x: this.scale.width / 2,
-        y: this.scale.height / 2 - 40,
+        x: pos.x,
+        y: pos.y,
         fontSize: 44,
         onComplete: () => {
           playChime();
@@ -1790,6 +1793,17 @@ export class SkyIslandScene extends Phaser.Scene {
       this.typingInput.register(target);
       this.activeTargets.push(target);
     });
+  }
+
+  private scholarBossWordPosition(word: string): { x: number; y: number } {
+    const body = this.bossContainer;
+    if (!body?.scene) return { x: this.scale.width / 2, y: this.scale.height / 2 - 40 };
+
+    const long = word.length > 18;
+    return {
+      x: Phaser.Math.Clamp(body.x, long ? 430 : 330, this.scale.width - (long ? 430 : 330)),
+      y: Phaser.Math.Clamp(body.y + (long ? 158 : 138), 300, this.scale.height - 430),
+    };
   }
 
   private onBossDefeated(): void {

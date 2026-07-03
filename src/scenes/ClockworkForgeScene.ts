@@ -2352,7 +2352,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private catwalkWordPosition(idx: number): { x: number; y: number } {
     const cueX = this.catwalkCueX(idx);
-    if (idx === 0) return { x: cueX - 116, y: CATWALK_Y - 72 };
+    if (idx === 0) return { x: cueX - 28, y: CATWALK_Y - 78 };
     if (idx === 1) return { x: cueX + 176, y: CATWALK_Y - 118 };
     return { x: cueX + 126, y: CATWALK_Y - 76 };
   }
@@ -2409,20 +2409,36 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private drawLooseGrateCue(x: number): Phaser.GameObjects.Container {
-    const c = this.add.container(x, CATWALK_Y + 13).setDepth(-2).setAlpha(0);
+    const c = this.add.container(x, CATWALK_Y + 9).setDepth(-2).setAlpha(0);
     const g = this.add.graphics();
-    g.fillStyle(0x120e0b, 0.34);
-    g.fillEllipse(0, 18, 136, 20);
-    g.fillStyle(0x211813, 0.94);
-    g.fillRoundedRect(-66, -12, 132, 26, 4);
-    g.lineStyle(2, 0x5a4632, 0.62);
-    g.strokeRoundedRect(-66, -12, 132, 26, 4);
-    g.lineStyle(3, 0x3a2e24, 0.9);
-    for (const gx of [-44, -22, 0, 22, 44]) {
-      g.lineBetween(gx, -10, gx + 10, 12);
+    g.fillStyle(0x070504, 0.4);
+    g.fillEllipse(0, 22, 188, 24);
+    g.fillStyle(0x17100d, 0.96);
+    g.fillRoundedRect(-92, -17, 184, 36, 5);
+    g.fillStyle(0x2c2118, 0.96);
+    g.fillRoundedRect(-86, -13, 172, 25, 4);
+    g.lineStyle(3, 0x6c5238, 0.72);
+    g.strokeRoundedRect(-92, -17, 184, 36, 5);
+    g.lineStyle(4, 0x15100d, 0.86);
+    for (const gx of [-66, -42, -18, 6, 30, 54]) {
+      g.lineBetween(gx, -13, gx + 13, 14);
     }
-    g.lineStyle(2, PALETTE_HEX.ember, 0.42);
-    g.lineBetween(-56, 13, 58, 13);
+    g.lineStyle(2, 0x8d6b45, 0.42);
+    g.lineBetween(-82, -2, 76, -8);
+    g.lineBetween(-76, 14, 80, 14);
+    g.fillStyle(PALETTE_HEX.ember, 0.2);
+    g.fillEllipse(40, 12, 84, 10);
+    g.lineStyle(3, PALETTE_HEX.ember, 0.52);
+    g.lineBetween(-76, 17, 82, 17);
+    g.fillStyle(0xb98554, 0.54);
+    g.fillCircle(-66, 0, 3);
+    g.fillCircle(72, -4, 3);
+    g.fillCircle(-34, 10, 2.4);
+    g.fillCircle(36, 7, 2.4);
+    g.lineStyle(3, 0x9a744a, 0.62);
+    g.lineBetween(58, -17, 98, -27);
+    g.lineStyle(2, 0xf0c074, 0.34);
+    g.lineBetween(60, -20, 94, -28);
     c.add(g);
     this.tweens.add({
       targets: c,

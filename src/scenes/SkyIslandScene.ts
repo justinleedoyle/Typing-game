@@ -751,11 +751,11 @@ export class SkyIslandScene extends Phaser.Scene {
 
     switch (beat) {
       case "balance":
-        return { x: cue.x, y: cue.y - 112 };
+        return { x: cue.x - 250, y: cue.y - 92 };
       case "lantern":
-        return { x: cue.x, y: cue.y - 150 };
+        return { x: cue.x + 214, y: cue.y - 122 };
       case "stepping":
-        return { x: cue.x, y: cue.y - 118 };
+        return { x: cue.x + 250, y: cue.y - 96 };
     }
   }
 

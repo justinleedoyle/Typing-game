@@ -645,11 +645,12 @@ export class HauntedWoodScene extends Phaser.Scene {
       const beat = beats[i];
       if (!beat) return;
       this.showPathCue(i);
+      const wordPos = this.pathWordPosition(i);
       const target = this.makeWord({
         scene: this,
         word: beat.word,
-        x: this.scale.width / 2,
-        y: this.scale.height / 2,
+        x: wordPos.x,
+        y: wordPos.y,
         fontSize: 40,
         onClaim: () => {
           playWrenFocus(this.wrenSprite);
@@ -671,6 +672,14 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.activeTargets.push(target);
     };
     advance();
+  }
+
+  private pathWordPosition(idx: number): { x: number; y: number } {
+    const cue = this.pathCue;
+    if (!cue?.scene) return { x: this.scale.width / 2, y: this.scale.height / 2 };
+    if (idx === 0) return { x: cue.x - 214, y: cue.y - 92 };
+    if (idx === 1) return { x: cue.x + 204, y: cue.y - 76 };
+    return { x: cue.x + 214, y: cue.y - 124 };
   }
 
   private showPathCue(idx: number): void {

@@ -216,6 +216,8 @@ export class SkyIslandScene extends Phaser.Scene {
    *  also cleaned up on SHUTDOWN as a safety net. */
   private ettaSprite: Phaser.GameObjects.Image | null = null;
   private ettaWordAnchors: WordBodyAnchorHandle[] = [];
+  private ettaBookCue: Phaser.GameObjects.Container | null = null;
+  private ettaBookWordAnchors: WordBodyAnchorHandle[] = [];
   private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
   private beaconFlameCue: Phaser.GameObjects.Container | null = null;
   private kindAnswerCue: Phaser.GameObjects.Container | null = null;
@@ -275,6 +277,8 @@ export class SkyIslandScene extends Phaser.Scene {
     this.ettaDone = false;
     this.ettaSprite = null;
     this.ettaWordAnchors = [];
+    this.ettaBookCue = null;
+    this.ettaBookWordAnchors = [];
     this.forkChoiceWordAnchors = [];
     this.beaconFlameCue = null;
     this.kindAnswerCue = null;
@@ -468,6 +472,7 @@ export class SkyIslandScene extends Phaser.Scene {
       this.clearSkyForkCues();
       this.dismissRevisitMemoryCue(false);
       this.clearEttaWordAnchors();
+      this.clearEttaBookCue();
       this.ettaSprite?.destroy();
       this.ettaSprite = null;
     });
@@ -1375,11 +1380,12 @@ export class SkyIslandScene extends Phaser.Scene {
   private startEttaHelp(nextTempleIdx: number): void {
     this.setNarrator("You approach the book. Scholar Etta holds her breath.");
     this.time.delayedCall(1200, () => {
-      const liftTarget = this.makeEttaWord({
+      const bookCue = this.showEttaBookCue();
+      const liftTarget = this.makeEttaBookWord({
         scene: this,
         word: ETTA_CHAIN_1,
-        x: this.scale.width / 2,
-        y: this.scale.height / 2,
+        x: bookCue.x + 110,
+        y: bookCue.y - 132,
         fontSize: 38,
         onComplete: () => {
           playChime();
@@ -1389,11 +1395,11 @@ export class SkyIslandScene extends Phaser.Scene {
           this.clearActiveTargets();
           this.setNarrator("The book is heavier than it looks. Old paper, dense with writing.");
           this.time.delayedCall(1400, () => {
-            const placeTarget = this.makeEttaWord({
+            const placeTarget = this.makeEttaBookWord({
               scene: this,
               word: ETTA_CHAIN_2,
-              x: this.scale.width / 2,
-              y: this.scale.height / 2,
+              x: bookCue.x + 110,
+              y: bookCue.y - 132,
               fontSize: 38,
               onComplete: () => {
                 playChime();
@@ -1410,6 +1416,7 @@ export class SkyIslandScene extends Phaser.Scene {
                 this.setNarrator(
                   "Scholar Etta's Last Volume — a page appears in the Almanac.",
                 );
+                this.clearEttaBookCue(true);
                 this.hideEtta();
                 this.time.delayedCall(2200, () => this.startTemple(nextTempleIdx));
               },
@@ -1454,10 +1461,103 @@ export class SkyIslandScene extends Phaser.Scene {
     const sprite = this.ettaSprite;
     if (!sprite) return;
     this.clearEttaWordAnchors();
+    this.clearEttaBookCue(true);
     this.ettaSprite = null;
     fadeOutStagedSprite(this, sprite, {
       durationMs: 620,
       ease: "Sine.easeIn",
+    });
+  }
+
+  private showEttaBookCue(): Phaser.GameObjects.Container {
+    if (this.ettaBookCue?.scene) return this.ettaBookCue;
+
+    const c = this.add.container(760, 806).setDepth(43).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 150, 20, { y: 16, alpha: 0.18 }));
+
+    const g = this.add.graphics();
+    g.fillStyle(0x2d2119, 0.84);
+    g.fillRoundedRect(-62, -30, 124, 42, 8);
+    g.fillStyle(0x5f4731, 0.94);
+    g.fillRoundedRect(-56, -42, 112, 58, 8);
+    g.lineStyle(2, PALETTE_HEX.brass, 0.52);
+    g.strokeRoundedRect(-56, -42, 112, 58, 8);
+    g.lineStyle(1.5, 0xf3ead2, 0.34);
+    g.lineBetween(0, -38, 0, 12);
+    g.lineBetween(-42, -22, -10, -18);
+    g.lineBetween(10, -18, 42, -22);
+    g.fillStyle(PALETTE_HEX.brass, 0.42);
+    g.fillCircle(0, -12, 8);
+    g.fillStyle(0xf3ead2, 0.18);
+    g.fillEllipse(-26, -17, 34, 8);
+    g.fillEllipse(28, -17, 34, 8);
+    c.add(g);
+
+    addContainerWake(this, c, {
+      kind: "mote",
+      intervalMs: 420,
+      spreadX: 34,
+      spreadY: 12,
+      offsetY: -34,
+      alpha: 0.22,
+      size: 3.2,
+      depth: 42,
+      driftY: -42,
+      durationMs: 980,
+    });
+
+    this.tweens.add({
+      targets: c,
+      alpha: 0.9,
+      y: 788,
+      duration: 620,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (c.scene) addIdleBreath(this, c, { dy: -3, durationMs: 2400 });
+      },
+    });
+
+    this.ettaBookCue = c;
+    return c;
+  }
+
+  private pulseEttaBookCue(complete = false): void {
+    const cue = this.ettaBookCue;
+    if (!cue?.scene) return;
+    playBodyImpact(this, cue, {
+      kind: "mote",
+      color: PALETTE_HEX.brass,
+      offsetY: -26,
+      depth: 58,
+      ringRadius: complete ? 48 : 30,
+      count: complete ? 10 : 6,
+    });
+    playActorAttention(this, cue, {
+      tint: PALETTE_HEX.brass,
+      scale: complete ? 1.03 : 1.018,
+      durationMs: complete ? 220 : 160,
+    });
+  }
+
+  private clearEttaBookCue(fade = false): void {
+    this.clearEttaBookWordAnchors();
+    const cue = this.ettaBookCue;
+    this.ettaBookCue = null;
+    if (!cue?.scene) return;
+    this.tweens.killTweensOf(cue);
+    if (!fade) {
+      cue.destroy();
+      return;
+    }
+    this.tweens.add({
+      targets: cue,
+      y: cue.y - 14,
+      alpha: 0,
+      duration: 520,
+      ease: "Sine.easeIn",
+      onComplete: () => {
+        if (cue.scene) cue.destroy();
+      },
     });
   }
 
@@ -2676,6 +2776,78 @@ export class SkyIslandScene extends Phaser.Scene {
     return target;
   }
 
+  private makeEttaBookWord(opts: TextWordTargetOptions): TextWordTarget {
+    const body = this.ettaBookCue;
+    if (!body?.scene) return this.makeEttaWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.ettaBookWordAnchors.indexOf(anchor);
+      if (idx >= 0) this.ettaBookWordAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.brass,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          body.x,
+          body.y - 26,
+          { color: PALETTE_HEX.brass, depth: 58 },
+        );
+        this.pulseEttaBookCue(false);
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, body, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: -26,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, body, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: -26,
+          depth: 58,
+          ringRadius: 48,
+          count: 10,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      body,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.brass,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -26,
+        targetOffsetY: 24,
+      },
+    );
+    this.ettaBookWordAnchors.push(anchor);
+    body.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
   private makeSkyForkWord(
     body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined,
     opts: TextWordTargetOptions,
@@ -3097,6 +3269,11 @@ export class SkyIslandScene extends Phaser.Scene {
     this.ettaWordAnchors = [];
   }
 
+  private clearEttaBookWordAnchors(): void {
+    for (const anchor of this.ettaBookWordAnchors) anchor.destroy();
+    this.ettaBookWordAnchors = [];
+  }
+
   private clearForkChoiceWordAnchors(): void {
     for (const anchor of this.forkChoiceWordAnchors) anchor.destroy();
     this.forkChoiceWordAnchors = [];
@@ -3111,6 +3288,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.clearBossWordAnchors();
     this.clearPathWordAnchors();
     this.clearEttaWordAnchors();
+    this.clearEttaBookWordAnchors();
     this.clearForkChoiceWordAnchors();
     this.clearLanternMothWordAnchors();
     this.dismissRevisitMemoryCue(false);

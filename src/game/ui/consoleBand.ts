@@ -179,6 +179,7 @@ export class ConsoleBand {
       colors.textColor ?? "",
     ].join("\n");
     const changed = readoutKey !== this.renderedReadoutKey;
+    if (!changed && this.objectiveContainer.visible) return;
     this.objectiveLabel.setText(label);
     this.objectiveLabel.setColor(colors.labelColor ?? "#a59b89");
     this.objectiveText.setColor(colors.textColor ?? "#f3ead2");

@@ -75,6 +75,12 @@ interface BattleSceneData {
 
 const WAVE_CANDLES = 3;
 const WAVE_CHARGES = 2;
+const WALL_WARD = {
+  x: 960,
+  y: 824,
+  width: 900,
+  height: 76,
+} as const;
 
 const BATTLE_WORD_BANK = [
   "hold", "stand", "speak", "word", "voice", "again",
@@ -417,6 +423,8 @@ export class GreatBattleScene extends Phaser.Scene {
   // HUD
   private candleGroup!: Phaser.GameObjects.Container;
   private chargeGroup!: Phaser.GameObjects.Container;
+  private wallWard?: Phaser.GameObjects.Container;
+  private wallWardFlames: Phaser.GameObjects.Graphics[] = [];
   private drawnCandles: number | null = null;
   private drawnCharges: number | null = null;
   private candles = WAVE_CANDLES;
@@ -497,6 +505,8 @@ export class GreatBattleScene extends Phaser.Scene {
     this.currentWaveIdx = -1;
     this.candles = WAVE_CANDLES;
     this.charges = WAVE_CHARGES;
+    this.wallWard = undefined;
+    this.wallWardFlames = [];
     this.runOver = false;
     this.waveCandleLost = false;
     this.phase2Round1Words = [];
@@ -610,6 +620,7 @@ export class GreatBattleScene extends Phaser.Scene {
       minDurationMs: 4200,
       maxDurationMs: 9800,
     });
+    this.drawWallWard();
 
     // UI cohesion — the console band. The finale has no heart/soul HUD; its candle
     // (fail-state) + spell-charge meters dock into the band, with Runa at the portrait
@@ -947,6 +958,92 @@ export class GreatBattleScene extends Phaser.Scene {
 
   // ─── HUD ────────────────────────────────────────────────────────────────────
 
+  private drawWallWard(): void {
+    this.wallWard?.destroy();
+    this.wallWardFlames = [];
+
+    const ward = this.add
+      .container(WALL_WARD.x, WALL_WARD.y)
+      .setDepth(2)
+      .setAlpha(0.64);
+    const base = this.add.graphics();
+    base.lineStyle(2, UI_HEX.brass, 0.16);
+    base.strokeEllipse(0, 0, WALL_WARD.width, WALL_WARD.height);
+    base.lineStyle(1, 0x8b6ad8, 0.12);
+    base.strokeEllipse(0, 0, WALL_WARD.width * 0.74, WALL_WARD.height * 0.64);
+    base.lineStyle(1, UI_HEX.brass, 0.22);
+    base.lineBetween(-WALL_WARD.width / 2 + 72, 0, WALL_WARD.width / 2 - 72, 0);
+
+    for (let i = -3; i <= 3; i++) {
+      base.lineStyle(1, UI_HEX.brass, i === 0 ? 0.24 : 0.13);
+      base.lineBetween(i * 92, -10, i * 92, 10);
+    }
+
+    ward.add(base);
+
+    for (let i = 0; i < WAVE_CANDLES; i++) {
+      const flame = this.add.graphics().setPosition((i - 1) * 58, -2);
+      this.wallWardFlames.push(flame);
+      ward.add(flame);
+    }
+
+    this.wallWard = ward;
+    this.redrawWallWardCandles();
+  }
+
+  private redrawWallWardCandles(): void {
+    for (let i = 0; i < this.wallWardFlames.length; i++) {
+      const flame = this.wallWardFlames[i]!;
+      const lit = i < this.candles;
+      flame.clear();
+      flame.lineStyle(1, lit ? 0xf5e3a2 : 0x8a8275, lit ? 0.36 : 0.16);
+      flame.strokeCircle(0, 0, lit ? 13 : 10);
+      flame.fillStyle(lit ? 0xf2be68 : 0x3a342a, lit ? 0.2 : 0.12);
+      flame.fillEllipse(0, -1, lit ? 22 : 16, lit ? 28 : 18);
+      if (lit) {
+        flame.fillStyle(0xffe5a0, 0.44);
+        flame.fillEllipse(0, -5, 9, 18);
+      } else {
+        flame.lineStyle(1, 0x5c5548, 0.22);
+        flame.lineBetween(-6, -5, 6, 5);
+      }
+    }
+  }
+
+  private playWallWardPulse(
+    mode: "arrival" | "wave" | "breach" | "clean" | "hold",
+  ): void {
+    if (!this.wallWard?.active) return;
+
+    const color = mode === "breach"
+      ? 0xb34b45
+      : mode === "clean"
+        ? 0xf5e3a2
+        : mode === "arrival"
+          ? 0x8b6ad8
+          : UI_HEX.brass;
+    const impactKind: AmbientKind = mode === "breach" ? "ash" : "mote";
+
+    pulseUiObject(this, this.wallWard, {
+      scale: mode === "breach" ? 1.055 : 1.025,
+      durationMs: mode === "breach" ? 320 : 240,
+    });
+    playSceneEventPulse(this, {
+      kind: impactKind,
+      color,
+      x: WALL_WARD.x,
+      y: WALL_WARD.y,
+      depth: 6,
+      durationMs: mode === "breach" ? 580 : 460,
+      ringWidth: mode === "breach" ? WALL_WARD.width * 0.88 : WALL_WARD.width * 0.72,
+      ringHeight: mode === "breach" ? WALL_WARD.height * 1.45 : WALL_WARD.height,
+      count: mode === "breach" ? 12 : 8,
+      alpha: mode === "breach" ? 0.12 : 0.075,
+      spreadX: WALL_WARD.width * 0.32,
+      spreadY: mode === "breach" ? 42 : 28,
+    });
+  }
+
   private redrawCandles(): void {
     const previous = this.drawnCandles;
     this.candleGroup.removeAll(true);
@@ -975,6 +1072,7 @@ export class GreatBattleScene extends Phaser.Scene {
       pulseUiObject(this, this.candleGroup, { scale: 1.14 });
     }
     this.drawnCandles = this.candles;
+    this.redrawWallWardCandles();
   }
 
   private redrawCharges(): void {
@@ -1008,6 +1106,7 @@ export class GreatBattleScene extends Phaser.Scene {
     if (this.runOver) return;
     this.candles = candleAfterHit(this.candles);
     this.redrawCandles();
+    this.playWallWardPulse("breach");
     if (this.candles <= 0) {
       this.runLossEnding();
     }
@@ -1110,6 +1209,7 @@ export class GreatBattleScene extends Phaser.Scene {
       count: 16,
       alpha: 0.11,
     });
+    this.playWallWardPulse("arrival");
 
     // Build wave queue from cleared realms
     this.waveQueue = [];
@@ -1183,6 +1283,7 @@ export class GreatBattleScene extends Phaser.Scene {
       count: 12,
       alpha: 0.1,
     });
+    this.playWallWardPulse("wave");
 
     let words = pickAdaptiveWords(
       waveDef.bank as readonly string[],
@@ -1506,7 +1607,12 @@ export class GreatBattleScene extends Phaser.Scene {
     if (!this.waveCandleLost) {
       const before = this.candles;
       this.candles = candleAfterCleanWave(this.candles, WAVE_CANDLES);
-      if (this.candles !== before) this.redrawCandles();
+      if (this.candles !== before) {
+        this.redrawCandles();
+        this.playWallWardPulse("clean");
+      } else {
+        this.playWallWardPulse("hold");
+      }
     }
 
     if (satchel.includes(waveDef.companionId)) {

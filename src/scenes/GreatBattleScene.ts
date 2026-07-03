@@ -92,6 +92,8 @@ const BATTLE_WORD_BANK = [
 // before it lands (uncountered facets only). "Tune on live build."
 const FACET_CHALLENGE_MS = 6000;
 const FINALE_ENEMY_WORD_ATTACH_DELAY_MS = 140;
+const FINALE_ENEMY_WORD_OFFSET_Y = -88;
+const FINALE_ENEMY_ANCHOR_SOURCE_OFFSET_Y = -54;
 
 // Per-facet narration ids. Kept as string literals here (not built dynamically)
 // so the sayResolution test's id-shaped-token scan over the scene source can
@@ -214,14 +216,19 @@ function finaleEnemyArtForRealm(realmId: string): FinaleEnemyArtSpec {
     case "winter-mountain":
       return {
         textureKey: "finale-wolf-pack",
-        height: 112,
-        shadowWidth: 156,
-        shadowHeight: 28,
+        height: 124,
+        shadowWidth: 176,
+        shadowHeight: 30,
         shadowY: 42,
-        shadowAlpha: 0.38,
+        shadowAlpha: 0.44,
         spriteY: -2,
-        alpha: 0.92,
+        alpha: 1,
         flipX: true,
+        glowColor: PALETTE_HEX.frost,
+        glowAlpha: 0.09,
+        glowY: -2,
+        glowWidth: 190,
+        glowHeight: 82,
       };
     case "sunken-bell":
       return {
@@ -1507,7 +1514,7 @@ export class GreatBattleScene extends Phaser.Scene {
       scene: this,
       word: enemy.word,
       x: enemy.x,
-      y: enemy.graphic.y + waveDef.baseY - 60,
+      y: enemy.graphic.y + waveDef.baseY + FINALE_ENEMY_WORD_OFFSET_Y,
       fontSize: 34,
       onClaim: () =>
         playClaimLine(
@@ -1515,14 +1522,14 @@ export class GreatBattleScene extends Phaser.Scene {
           this.scale.width / 2,
           this.scale.height - 250,
           enemy.x + enemy.graphic.x,
-          enemy.graphic.y + enemy.y - 60,
+          enemy.graphic.y + enemy.y + FINALE_ENEMY_WORD_OFFSET_Y,
           { color: finaleClaimColorForRealm(waveDef.realmId) },
         ),
       onAdvance: () =>
         playBodyTypePulse(this, enemy.graphic, {
           ...finaleTypedPulseForRealm(waveDef.realmId),
           offsetX: enemy.x,
-          offsetY: enemy.y - 60,
+          offsetY: enemy.y + FINALE_ENEMY_WORD_OFFSET_Y,
           depth: 6,
         }),
       onComplete: () => this.defeatEnemy(enemy),
@@ -1541,7 +1548,7 @@ export class GreatBattleScene extends Phaser.Scene {
         alpha: 0.16,
         depth: 5,
         sourceOffsetX: enemy.x,
-        sourceOffsetY: enemy.y - 44,
+        sourceOffsetY: enemy.y + FINALE_ENEMY_ANCHOR_SOURCE_OFFSET_Y,
         targetOffsetY: 24,
       },
     );
@@ -1562,7 +1569,9 @@ export class GreatBattleScene extends Phaser.Scene {
       ease: "Linear",
       onUpdate: () => {
         enemy.target?.setAnchorX(enemy.x + enemy.graphic.x);
-        enemy.target?.setAnchorY(enemy.graphic.y + enemy.y - 60);
+        enemy.target?.setAnchorY(
+          enemy.graphic.y + enemy.y + FINALE_ENEMY_WORD_OFFSET_Y,
+        );
       },
       onComplete: () => {
         enemy.advanceTween = null;

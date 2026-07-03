@@ -188,7 +188,32 @@ export class OpeningScene extends Phaser.Scene {
   /** Beat 1 — Narrator intro, 3 s delay, no input. */
   private beat1(): void {
     this.narration.say("opening_beat1_intro");
+    this.playStudyPrelude();
     this.time.delayedCall(3000, () => this.beat2());
+  }
+
+  private playStudyPrelude(): void {
+    const beats: Array<{
+      delay: number;
+      point: StudyResponsePoint;
+      scale: number;
+      alpha: number;
+      flecks: number;
+    }> = [
+      { delay: 520, point: STUDY_RESPONSE.name, scale: 1.35, alpha: 0.28, flecks: 4 },
+      { delay: 1320, point: STUDY_RESPONSE.typewriter, scale: 1.45, alpha: 0.32, flecks: 5 },
+      { delay: 2140, point: STUDY_RESPONSE.portal, scale: 1.28, alpha: 0.24, flecks: 4 },
+    ];
+    for (const beat of beats) {
+      this.time.delayedCall(beat.delay, () => {
+        this.playStudyPulse(beat.point, {
+          scale: beat.scale,
+          alpha: beat.alpha,
+          flecks: beat.flecks,
+          durationMs: 640,
+        });
+      });
+    }
   }
 
   /** Beat 2 — Runa descends the staircase (2 s). Branches forward: if Wren's

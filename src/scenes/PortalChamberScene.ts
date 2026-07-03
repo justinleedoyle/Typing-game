@@ -170,6 +170,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private activeZone: Zone = "portals";
   private openingUtilityScene = false;
   private enteringGreatBattle = false;
+  private restartingNewGame = false;
 
   constructor() {
     super("PortalChamberScene");
@@ -192,6 +193,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.activeZone = "portals";
     this.openingUtilityScene = false;
     this.enteringGreatBattle = false;
+    this.restartingNewGame = false;
   }
 
   preload(): void {
@@ -2275,6 +2277,11 @@ export class PortalChamberScene extends Phaser.Scene {
   // ─── New Game+ ────────────────────────────────────────────────────────────
 
   private startNewGame(): void {
+    if (this.restartingNewGame) return;
+    this.restartingNewGame = true;
+    playChime();
+    this.setHint("");
+    this.narration.clear();
     // Preserve keystroke calibration so adaptive word selection carries over.
     const oldStats = this.store.get().keyStats;
     const oldName = this.store.get().profileName;
@@ -2288,10 +2295,94 @@ export class PortalChamberScene extends Phaser.Scene {
       s.profileName = oldName;
       s.keyStats = oldStats;
     });
-    this.cameras.main.fadeOut(700, 10, 8, 15);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.start("OpeningScene", { store: this.store });
+    this.playBeginAgainWake();
+    this.time.delayedCall(320, () => {
+      this.cameras.main.fadeOut(720, 10, 8, 15);
+      this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+        this.scene.start("OpeningScene", { store: this.store });
+      });
     });
+  }
+
+  private playBeginAgainWake(): void {
+    const cx = HUB_STATIONS.portalFloor.x;
+    const cy = HUB_STATIONS.portalFloor.y - 268;
+    const wash = this.add.graphics().setDepth(6).setAlpha(0);
+    wash.fillStyle(0x0b0a0f, 0.22);
+    wash.fillRect(0, 0, this.scale.width, this.scale.height);
+    this.tweens.add({
+      targets: wash,
+      alpha: 0.18,
+      duration: 120,
+      hold: 180,
+      yoyo: true,
+      ease: "Sine.easeInOut",
+      onComplete: () => wash.destroy(),
+    });
+
+    const seal = this.add.container(cx, cy).setDepth(12).setAlpha(0.76);
+    const g = this.add.graphics();
+    g.fillStyle(UI_HEX.brass, 0.075);
+    g.fillEllipse(0, 0, 420, 132);
+    g.lineStyle(2, UI_HEX.brass, 0.6);
+    g.strokeEllipse(0, 0, 430, 132);
+    g.lineStyle(1, UI_HEX.parchment, 0.42);
+    g.strokeEllipse(0, 0, 250, 74);
+    g.lineBetween(-120, 0, 120, 0);
+    g.lineBetween(0, -34, 0, 34);
+    seal.add(g);
+    seal.add(
+      cornerTicks(this, 330, 98, {
+        inset: 4,
+        size: 12,
+        width: 2,
+      }),
+    );
+
+    this.tweens.add({
+      targets: seal,
+      alpha: 0,
+      scaleX: 0.72,
+      scaleY: 1.08,
+      duration: 520,
+      ease: "Sine.easeInOut",
+      onComplete: () => seal.destroy(),
+    });
+
+    for (let i = 0; i < 10; i += 1) {
+      const side = i % 2 === 0 ? -1 : 1;
+      const startX = cx + side * (48 + (i % 4) * 18);
+      const startY = cy + Math.sin(i) * 22;
+      const fleck = this.add.graphics().setPosition(startX, startY).setDepth(13).setAlpha(0.72);
+      fleck.fillStyle(i % 3 === 0 ? UI_HEX.parchment : UI_HEX.brass, 0.78);
+      fleck.fillCircle(0, 0, 2.3 + (i % 3) * 0.7);
+      this.tweens.add({
+        targets: fleck,
+        x: cx + side * (12 + i),
+        y: cy - 34 - i * 3,
+        alpha: 0,
+        scaleX: 0.3,
+        scaleY: 0.3,
+        duration: 300 + i * 18,
+        delay: i * 12,
+        ease: "Sine.easeIn",
+        onComplete: () => fleck.destroy(),
+      });
+    }
+
+    if (this.wrenContainer?.active) {
+      const startX = this.wrenContainer.x;
+      const startY = this.wrenContainer.y;
+      this.tweens.killTweensOf(this.wrenContainer);
+      this.tweens.add({
+        targets: this.wrenContainer,
+        x: startX + (cx - startX) * 0.04,
+        y: startY - 8,
+        alpha: 0.9,
+        duration: 320,
+        ease: "Sine.easeInOut",
+      });
+    }
   }
 
   // ─── Wren character ───────────────────────────────────────────────────────

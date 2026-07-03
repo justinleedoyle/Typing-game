@@ -1865,11 +1865,17 @@ export class SkyIslandScene extends Phaser.Scene {
     this.tetherThreadCue = null;
     this.setNarrator("You speak to what remains of the spirit.");
     this.time.delayedCall(1400, () => {
+      const pos = this.skyOwnedWordPosition(
+        this.kindAnswerCue,
+        -56,
+        "you kept the light",
+        { side: "right" },
+      );
       const t = this.makeSkyForkWord(this.kindAnswerCue, {
         scene: this,
         word: "you kept the light",
-        x: this.scale.width / 2,
-        y: this.scale.height / 2,
+        x: pos.x,
+        y: pos.y,
         fontSize: 36,
         onComplete: () => {
           playChime();
@@ -1916,11 +1922,23 @@ export class SkyIslandScene extends Phaser.Scene {
       );
       this.showLanternMothCompanion();
       this.time.delayedCall(1200, () => {
+        const takePos = this.skyOwnedWordPosition(
+          this.lanternMothCompanion,
+          -54,
+          "take her with you",
+          { side: "left" },
+        );
+        const letGoPos = this.skyOwnedWordPosition(
+          this.lanternMothCompanion,
+          -54,
+          "let her go",
+          { side: "right" },
+        );
         const takeTarget = this.makeLanternMothWord({
           scene: this,
           word: "take her with you",
-          x: this.scale.width / 2 - 300,
-          y: this.scale.height - 340,
+          x: takePos.x,
+          y: takePos.y,
           frame: "banner",
           fontSize: 32,
           onComplete: () => {
@@ -1941,8 +1959,8 @@ export class SkyIslandScene extends Phaser.Scene {
         const letGoTarget = this.makeLanternMothWord({
           scene: this,
           word: "let her go",
-          x: this.scale.width / 2 + 300,
-          y: this.scale.height - 340,
+          x: letGoPos.x,
+          y: letGoPos.y,
           frame: "banner",
           fontSize: 32,
           onComplete: () => {
@@ -2467,6 +2485,29 @@ export class SkyIslandScene extends Phaser.Scene {
 
   // ─── Shared utilities ─────────────────────────────────────────────────────
 
+  private skyOwnedWordPosition(
+    body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined,
+    sourceOffsetY: number,
+    word: string,
+    opts: { side?: "left" | "right"; lift?: number } = {},
+  ): { x: number; y: number } {
+    const width = this.scale.width;
+    const height = this.scale.height;
+    if (!body?.scene) return { x: width / 2, y: height / 2 };
+
+    const long = word.length > 16;
+    const side =
+      opts.side === "left" ? -1 : opts.side === "right" ? 1 : body.x < width / 2 ? 1 : -1;
+    const lateral = long ? 220 : 180;
+    const xInset = long ? 420 : 300;
+    const lift = opts.lift ?? (long ? 116 : 102);
+
+    return {
+      x: Phaser.Math.Clamp(body.x + side * lateral, xInset, width - xInset),
+      y: Phaser.Math.Clamp(body.y + sourceOffsetY - lift, 280, height - 410),
+    };
+  }
+
   private runPassageChain(
     passages: string[],
     narratorLines: string[],
@@ -2483,11 +2524,15 @@ export class SkyIslandScene extends Phaser.Scene {
         this.time.delayedCall(1400, onDone);
         return;
       }
+      const word = passages[step] ?? "";
+      const ownerBody = owner?.body?.scene ? owner.body : this.ettaSprite;
+      const sourceOffsetY = owner?.body?.scene ? (owner.sourceOffsetY ?? -48) : -120;
+      const pos = this.skyOwnedWordPosition(ownerBody, sourceOffsetY, word);
       const opts: TextWordTargetOptions = {
         scene: this,
-        word: passages[step] ?? "",
-        x: this.scale.width / 2,
-        y: this.scale.height / 2,
+        word,
+        x: pos.x,
+        y: pos.y,
         fontSize: 36,
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {

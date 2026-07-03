@@ -396,6 +396,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.oneShotInvoker?.destroy();
       this.oneShotInvoker = null;
       this.mistTimer?.remove();
+      if (this.wrenContainer?.scene) this.tweens.killTweensOf(this.wrenContainer);
       this.compassGlyphs.forEach((g) => g.destroy());
       this.compassGlyphs = [];
       this.clearWoodForkCues();
@@ -625,6 +626,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.narration.say("wood_intro_arrival");
     this.band.setObjective("Type the path words to reach the lantern in the trees.");
     this.showPathCue(0);
+    this.time.delayedCall(760, () => this.stageWrenAtPathEntrance());
     this.time.delayedCall(2800, () => this.startPathExploration());
   }
 
@@ -639,7 +641,8 @@ export class HauntedWoodScene extends Phaser.Scene {
     const advance = (): void => {
       if (i >= beats.length) {
         this.dismissPathCue();
-        this.time.delayedCall(800, () => this.startIngaNPC());
+        this.resetWrenToWoodStage();
+        this.time.delayedCall(860, () => this.startIngaNPC());
         return;
       }
       const beat = beats[i];
@@ -653,7 +656,11 @@ export class HauntedWoodScene extends Phaser.Scene {
         y: wordPos.y,
         fontSize: 40,
         onClaim: () => {
-          playWrenFocus(this.wrenSprite);
+          const destination = this.pathWrenPosition(i);
+          playWrenFocus(this.wrenSprite, {
+            faceLeft: destination.x < this.wrenContainer.x,
+          });
+          this.walkWrenToPathBeat(i);
           this.pulsePathCue(false);
         },
         onComplete: () => {
@@ -680,6 +687,73 @@ export class HauntedWoodScene extends Phaser.Scene {
     if (idx === 0) return { x: cue.x - 214, y: cue.y - 92 };
     if (idx === 1) return { x: cue.x + 204, y: cue.y - 76 };
     return { x: cue.x + 214, y: cue.y - 124 };
+  }
+
+  private pathWrenPosition(idx: number): { x: number; y: number } {
+    const cue = this.pathCue;
+    if (!cue?.scene) return { x: WREN_X, y: WREN_Y };
+    if (idx === 0) return { x: cue.x - 92, y: WREN_Y - 10 };
+    if (idx === 1) return { x: cue.x + 18, y: WREN_Y - 18 };
+    return { x: cue.x + 98, y: WREN_Y - 6 };
+  }
+
+  private stageWrenAtPathEntrance(): void {
+    const cue = this.pathCue;
+    if (!cue?.scene) return;
+    this.moveWrenTo(cue.x - 32, WREN_Y - 8, {
+      durationMs: 820,
+      quiet: true,
+    });
+  }
+
+  private walkWrenToPathBeat(idx: number): void {
+    const destination = this.pathWrenPosition(idx);
+    this.moveWrenTo(destination.x, destination.y, {
+      durationMs: idx === 1 ? 620 : 560,
+      ringWidth: idx === 1 ? 170 : 220,
+    });
+  }
+
+  private resetWrenToWoodStage(): void {
+    this.moveWrenTo(WREN_X, WREN_Y, {
+      durationMs: 620,
+      quiet: true,
+    });
+  }
+
+  private moveWrenTo(
+    x: number,
+    y: number,
+    opts: { durationMs?: number; ringWidth?: number; quiet?: boolean } = {},
+  ): void {
+    if (!this.wrenContainer?.scene) return;
+    this.tweens.killTweensOf(this.wrenContainer);
+    this.tweens.add({
+      targets: this.wrenContainer,
+      x,
+      y,
+      duration: opts.durationMs ?? 560,
+      ease: "Sine.easeInOut",
+      onComplete: () => {
+        if (!this.wrenContainer?.scene) return;
+        addIdleBreath(this, this.wrenContainer, { dy: -4, durationMs: 2300 });
+      },
+    });
+    if (opts.quiet) return;
+    playSceneEventPulse(this, {
+      kind: "mist",
+      color: 0xa7d8a2,
+      x,
+      y: y - 24,
+      depth: -0.2,
+      durationMs: 560,
+      ringWidth: opts.ringWidth ?? 210,
+      ringHeight: 56,
+      count: 7,
+      alpha: 0.09,
+      spreadX: 72,
+      spreadY: 22,
+    });
   }
 
   private showPathCue(idx: number): void {

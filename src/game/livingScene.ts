@@ -273,6 +273,22 @@ export interface SceneEventPulseOptions {
   spreadY?: number;
 }
 
+export interface TrueNameSealOptions {
+  x?: number;
+  y?: number;
+  color: number;
+  kind?: AmbientKind;
+  depth?: number;
+  radius?: number;
+  alpha?: number;
+  entranceMs?: number;
+}
+
+export interface DismissTrueNameSealOptions {
+  durationMs?: number;
+  riseY?: number;
+}
+
 const typedBodyPulseTimes = new WeakMap<object, number>();
 
 /** Local ellipse shadow for feet-anchored sprites inside a container. */
@@ -720,6 +736,98 @@ export function playSceneEventPulse(
       onComplete: () => particle.destroy(),
     });
   }
+}
+
+/** Small in-world source for true-name / realm-seal passages. It gives final
+ *  passage words a physical origin in the painted scene instead of leaving a
+ *  bare sentence centered over the backdrop. */
+export function stageTrueNameSeal(
+  scene: Phaser.Scene,
+  opts: TrueNameSealOptions,
+): Phaser.GameObjects.Container {
+  const x = opts.x ?? scene.scale.width / 2;
+  const y = opts.y ?? scene.scale.height / 2 + 92;
+  const color = opts.color;
+  const radius = opts.radius ?? 54;
+  const depth = opts.depth ?? 42;
+  const seal = scene.add.container(x, y + 16).setDepth(depth).setAlpha(0);
+
+  const shadow = addLocalGroundShadow(scene, radius * 2.4, radius * 0.38, {
+    y: radius * 0.56,
+    alpha: 0.18,
+  });
+  seal.add(shadow);
+
+  const g = scene.add.graphics();
+  g.fillStyle(0x070504, 0.2);
+  g.fillEllipse(0, 6, radius * 1.72, radius * 0.72);
+  g.lineStyle(3, color, 0.58);
+  g.strokeCircle(0, -2, radius);
+  g.lineStyle(1.5, color, 0.34);
+  g.strokeCircle(0, -2, radius * 0.68);
+  g.lineStyle(1.5, color, 0.24);
+  g.lineBetween(-radius * 0.62, -2, radius * 0.62, -2);
+  g.lineBetween(0, -radius * 0.62 - 2, 0, radius * 0.62 - 2);
+  g.fillStyle(color, 0.42);
+  g.fillCircle(0, -2, radius * 0.12);
+  seal.add(g);
+
+  addContainerWake(scene, seal, {
+    kind: opts.kind ?? "mote",
+    intervalMs: 360,
+    spreadX: radius * 0.92,
+    spreadY: radius * 0.48,
+    color,
+    alpha: 0.32,
+    size: 3.4,
+    depth: depth + 1,
+    driftX: 12,
+    driftY: -24,
+    durationMs: 820,
+  });
+
+  scene.tweens.add({
+    targets: seal,
+    y,
+    alpha: opts.alpha ?? 0.82,
+    duration: opts.entranceMs ?? 420,
+    ease: "Sine.easeOut",
+    onComplete: () => {
+      if (!seal.scene) return;
+      addIdleBreath(scene, seal, { dy: -4, durationMs: 2600 });
+    },
+  });
+
+  playBodyImpact(scene, seal, {
+    kind: opts.kind ?? "mote",
+    color,
+    offsetY: -2,
+    depth: depth + 1,
+    ringRadius: radius * 0.72,
+    count: 8,
+    durationMs: 380,
+  });
+
+  return seal;
+}
+
+export function dismissTrueNameSeal(
+  scene: Phaser.Scene,
+  seal: Phaser.GameObjects.Container | null | undefined,
+  opts: DismissTrueNameSealOptions = {},
+): void {
+  if (!seal?.scene) return;
+  scene.tweens.killTweensOf(seal);
+  scene.tweens.add({
+    targets: seal,
+    alpha: 0,
+    y: seal.y + (opts.riseY ?? 18),
+    duration: opts.durationMs ?? 260,
+    ease: "Sine.easeIn",
+    onComplete: () => {
+      if (seal.scene) seal.destroy();
+    },
+  });
 }
 
 /** Typed combat impact at the enemy/body location, not just at the word. This

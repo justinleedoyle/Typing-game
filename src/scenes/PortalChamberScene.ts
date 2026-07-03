@@ -1245,11 +1245,46 @@ export class PortalChamberScene extends Phaser.Scene {
       if (isNext) {
         this.drawArchStatusPlaque(arch, "open passage", "", "next");
       } else if (isCleared) {
-        this.drawArchStatusPlaque(arch, "stamped", "", "cleared");
+        this.drawArchStateSeal(arch, "cleared");
       } else if (isLocked) {
-        this.drawArchStatusPlaque(arch, arch.label, "sealed", "locked");
+        this.drawArchStateSeal(arch, "locked");
       }
     });
+  }
+
+  private drawArchStateSeal(
+    arch: ArchSpec,
+    tone: "cleared" | "locked",
+  ): void {
+    const x = arch.x;
+    const y = arch.baseY + 34;
+    const cleared = tone === "cleared";
+    const color = cleared ? UI_HEX.brass : 0x4a4352;
+    const alpha = cleared ? 0.42 : 0.24;
+    const g = this.add.graphics().setDepth(-1);
+
+    g.fillStyle(UI_HEX.panel, alpha * 0.72);
+    g.fillCircle(x, y, cleared ? 18 : 16);
+    g.lineStyle(1.5, color, alpha + 0.18);
+    g.strokeCircle(x, y, cleared ? 18 : 16);
+    g.lineStyle(1, color, alpha * 0.78);
+    g.strokeCircle(x, y, cleared ? 12 : 10);
+
+    if (cleared) {
+      g.lineStyle(2, color, alpha + 0.28);
+      g.beginPath();
+      g.moveTo(x - 8, y + 1);
+      g.lineTo(x - 2, y + 7);
+      g.lineTo(x + 10, y - 8);
+      g.strokePath();
+      return;
+    }
+
+    g.lineStyle(2, color, alpha + 0.16);
+    g.strokeRoundedRect(x - 8, y - 2, 16, 13, 3);
+    g.beginPath();
+    g.arc(x, y - 2, 8, Math.PI, Math.PI * 2);
+    g.strokePath();
   }
 
   private drawArchStatusPlaque(

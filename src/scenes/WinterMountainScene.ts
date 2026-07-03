@@ -819,16 +819,29 @@ export class WinterMountainScene extends Phaser.Scene {
       cue.add(ice);
     } else {
       const branch = this.add.graphics().setAngle(7);
-      branch.lineStyle(8, 0x2a3426, 0.92);
-      branch.lineBetween(-138, 0, 138, 0);
-      branch.lineStyle(4, 0x445338, 0.88);
-      branch.lineBetween(-80, -4, -44, -38);
-      branch.lineBetween(-16, 0, 28, -34);
-      branch.lineBetween(60, 2, 94, 34);
-      branch.fillStyle(0xe8f0f8, 0.78);
-      branch.fillEllipse(-82, -8, 38, 12);
-      branch.fillEllipse(10, -8, 46, 13);
-      branch.fillEllipse(70, 10, 34, 11);
+      branch.lineStyle(18, 0x10160f, 0.5);
+      branch.lineBetween(-214, 10, 196, 0);
+      branch.lineStyle(13, 0x20291f, 0.98);
+      branch.lineBetween(-216, 2, 202, -4);
+      branch.lineStyle(6, 0x52613f, 0.92);
+      branch.lineBetween(-154, -3, -102, -54);
+      branch.lineBetween(-62, -1, -12, -50);
+      branch.lineBetween(54, -2, 104, 44);
+      branch.lineBetween(130, -4, 164, -40);
+      branch.lineStyle(2, 0xc7d4bc, 0.32);
+      branch.lineBetween(-198, -8, 176, -12);
+      branch.fillStyle(0xe8f0f8, 0.9);
+      branch.fillEllipse(-164, -12, 66, 17);
+      branch.fillEllipse(-42, -14, 72, 17);
+      branch.fillEllipse(72, -14, 62, 15);
+      branch.fillEllipse(152, 1, 44, 12);
+      branch.fillStyle(0xb8c9d5, 0.38);
+      branch.fillEllipse(-196, 8, 44, 11);
+      branch.fillEllipse(194, 2, 38, 10);
+      branch.fillStyle(0xeff8ff, 0.42);
+      branch.fillCircle(-116, -3, 5);
+      branch.fillCircle(12, -8, 4);
+      branch.fillCircle(116, -7, 4);
       cue.add(branch);
     }
 
@@ -845,14 +858,17 @@ export class WinterMountainScene extends Phaser.Scene {
   private riverCuePosition(beat: (typeof RIVER_BEATS)[number]): { x: number; y: number } {
     if (beat === "lift") return { x: this.scale.width / 2 - 250, y: 846 };
     if (beat === "step") return { x: this.scale.width / 2 + 84, y: 836 };
-    return { x: this.scale.width / 2 + 18, y: 748 };
+    return { x: this.scale.width / 2 + 82, y: 652 };
   }
 
   private riverWordPosition(beat: (typeof RIVER_BEATS)[number]): { x: number; y: number } {
     const cue = this.riverCuePosition(beat);
+    if (beat === "duck") {
+      return { x: cue.x - 184, y: cue.y - 72 };
+    }
     return {
       x: cue.x,
-      y: cue.y - (beat === "duck" ? 122 : 126),
+      y: cue.y - 126,
     };
   }
 

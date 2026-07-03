@@ -1671,11 +1671,12 @@ export class SunkenBellScene extends Phaser.Scene {
     let remaining = words.length;
 
     words.forEach((word, i) => {
+      const pos = this.wardenWordPosition(wardenSprite, word, i, words.length);
       const target = this.makeWardenWord(wardenSprite, {
         scene: this,
         word,
-        x: this.scale.width / 2 - 200 + i * 200,
-        y: 400,
+        x: pos.x,
+        y: pos.y,
         fontSize: 36,
         onComplete: () => {
           remaining -= 1;
@@ -1724,11 +1725,12 @@ export class SunkenBellScene extends Phaser.Scene {
 
     this.time.delayedCall(800, () => {
       phrases.forEach((word, i) => {
+        const pos = this.wardenWordPosition(wardenSprite, word, i, phrases.length);
         const target = this.makeWardenWord(wardenSprite, {
           scene: this,
           word,
-          x: this.scale.width / 2 - 260 + i * 260,
-          y: 380,
+          x: pos.x,
+          y: pos.y,
           fontSize: 34,
           onComplete: () => {
             remaining -= 1;
@@ -1790,11 +1792,12 @@ export class SunkenBellScene extends Phaser.Scene {
       if (word === undefined) return;
 
       let completed = false;
+      const pos = this.wardenWordPosition(wardenSprite, word);
       const target = this.makeWardenWord(wardenSprite, {
         scene: this,
         word,
-        x: this.scale.width / 2,
-        y: this.scale.height / 2,
+        x: pos.x,
+        y: pos.y,
         fontSize: 40,
         onComplete: () => {
           completed = true;
@@ -1825,6 +1828,26 @@ export class SunkenBellScene extends Phaser.Scene {
     };
 
     this.beatClock.onNextBeat(advanceWord);
+  }
+
+  private wardenWordPosition(
+    wardenSprite: Phaser.GameObjects.Image,
+    word: string,
+    index = 0,
+    total = 1,
+  ): { x: number; y: number } {
+    const long = word.length > 12;
+    const spacing = long ? 300 : 220;
+    const spread = (total - 1) * spacing;
+    const xInset = long ? 360 : 300;
+    return {
+      x: Phaser.Math.Clamp(
+        wardenSprite.x - spread / 2 + index * spacing,
+        xInset,
+        this.scale.width - xInset,
+      ),
+      y: Phaser.Math.Clamp(wardenSprite.y - (long ? 250 : 232), 280, this.scale.height - 430),
+    };
   }
 
   private olinPassageWordPosition(): { x: number; y: number } {

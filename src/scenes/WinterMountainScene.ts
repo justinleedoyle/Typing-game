@@ -1808,8 +1808,15 @@ export class WinterMountainScene extends Phaser.Scene {
   private startWoundedFox(nextWave: number): void {
     this.narration.say("winter_fox_intro");
     this.band.setObjective("Choose how Wren answers the wounded fox.");
+    this.showFoxCompanion({
+      x: this.scale.width / 2,
+      y: 820,
+      startX: this.scale.width / 2 - 110,
+      height: 118,
+      shadowWidth: 96,
+    });
 
-    const kindTarget = this.makeWord({
+    const kindTarget = this.makeFoxWord({
       scene: this,
       word: "i mean no harm",
       x: this.scale.width / 2 - 320,
@@ -1826,11 +1833,12 @@ export class WinterMountainScene extends Phaser.Scene {
         });
         this.narration.say("winter_fox_spared_ear");
         this.band.setObjective("The fox watches from the trees; ready for the next wave.");
+        this.time.delayedCall(1200, () => this.dismissFoxCompanion(1120, 830));
         this.time.delayedCall(2200, () => this.startWave(nextWave));
       },
     });
 
-    const hurtTarget = this.makeWord({
+    const hurtTarget = this.makeFoxWord({
       scene: this,
       word: "i don't have time",
       x: this.scale.width / 2 + 320,
@@ -1842,6 +1850,7 @@ export class WinterMountainScene extends Phaser.Scene {
         this.foxSpared = false;
         this.narration.say("winter_fox_dismissed");
         this.band.setObjective("The trail quiets; ready for the next wave.");
+        this.dismissFoxCompanion(780, 840);
         this.time.delayedCall(1800, () => this.startWave(nextWave));
       },
     });
@@ -2376,16 +2385,26 @@ export class WinterMountainScene extends Phaser.Scene {
     this.activeTargets.push(whisperTarget, letGoTarget);
   }
 
-  private showFoxCompanion(): void {
+  private showFoxCompanion(
+    opts: {
+      x?: number;
+      y?: number;
+      startX?: number;
+      startY?: number;
+      height?: number;
+      shadowWidth?: number;
+    } = {},
+  ): void {
     if (this.foxCompanion?.scene) return;
     this.foxCompanion = stageCompanionCameo(this, {
       textureKey: "winter-companion-snow-fox",
-      startX: 610,
-      x: 700,
-      y: 830,
-      height: 108,
+      startX: opts.startX ?? 610,
+      startY: opts.startY,
+      x: opts.x ?? 700,
+      y: opts.y ?? 830,
+      height: opts.height ?? 108,
       depth: 43,
-      shadowWidth: 88,
+      shadowWidth: opts.shadowWidth ?? 88,
       shadowHeight: 16,
       shadowAlpha: 0.24,
       breathDy: -3,

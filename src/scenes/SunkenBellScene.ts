@@ -124,7 +124,7 @@ const WARDEN_Y = 610;
 const DESCENT_LANTERN_WORDS = ["swim", "glow", "breathe"] as const;
 const DESCENT_LANTERN_POSITIONS = [
   { x: 400, y: 600 },
-  { x: 960, y: 680 },
+  { x: 1120, y: 650 },
   { x: 1520, y: 600 },
 ] as const;
 
@@ -1021,7 +1021,7 @@ export class SunkenBellScene extends Phaser.Scene {
           lit += 1;
           if (lit >= DESCENT_LANTERN_WORDS.length) {
             this.time.delayedCall(320, () => {
-              this.swimWrenTowardDescentLantern(1, () => {
+              this.swimWrenToX(WREN_X, () => {
                 this.resetWrenToFront();
                 this.time.delayedCall(360, () => this.startOlinNPC());
               });
@@ -1038,7 +1038,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private descentLanternWordPosition(index: number): { x: number; y: number } {
     const pos = DESCENT_LANTERN_POSITIONS[index];
     if (!pos) return { x: WREN_X, y: WREN_Y - 180 };
-    if (index === 1) return { x: pos.x + 154, y: pos.y - 72 };
+    if (index === 1) return { x: pos.x, y: pos.y - 86 };
     return { x: pos.x, y: pos.y - 60 };
   }
 
@@ -1047,18 +1047,21 @@ export class SunkenBellScene extends Phaser.Scene {
     if (!pos) return WREN_X;
     if (index === 0) return pos.x + 128;
     if (index === 2) return pos.x - 128;
-    return pos.x;
+    return pos.x - 122;
   }
 
   private swimWrenTowardDescentLantern(
     index: number,
     onComplete?: () => void,
   ): void {
+    this.swimWrenToX(this.descentLanternWrenX(index), onComplete);
+  }
+
+  private swimWrenToX(x: number, onComplete?: () => void): void {
     if (!this.wrenContainer?.scene) {
       onComplete?.();
       return;
     }
-    const x = this.descentLanternWrenX(index);
     const distance = Math.abs(this.wrenContainer.x - x);
     if (distance < 4) {
       onComplete?.();
@@ -1100,37 +1103,41 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private drawDescentLantern(x: number, y: number, index: number): DescentLantern {
-    const container = this.add.container(x, y).setDepth(-1).setAlpha(0);
+    const centerLantern = index === 1;
+    const container = this.add
+      .container(x, y)
+      .setDepth(centerLantern ? 1 : -1)
+      .setAlpha(0);
 
     const tether = this.add.graphics();
-    tether.lineStyle(1.5, 0x7daebc, 0.32);
+    tether.lineStyle(1.5, 0x7daebc, centerLantern ? 0.42 : 0.32);
     tether.lineBetween(0, -92, 0, -36);
-    tether.lineStyle(1, 0xf3ead2, 0.22);
+    tether.lineStyle(1, 0xf3ead2, centerLantern ? 0.3 : 0.22);
     tether.lineBetween(-18, -34, 18, -34);
     container.add(tether);
 
-    const glow = this.add.graphics().setAlpha(0.58);
-    glow.fillStyle(0x74d5df, 0.08);
-    glow.fillEllipse(0, 4, 106, 118);
-    glow.lineStyle(2, 0x74d5df, 0.13);
-    glow.strokeEllipse(0, 4, 88, 102);
+    const glow = this.add.graphics().setAlpha(centerLantern ? 0.74 : 0.58);
+    glow.fillStyle(0x74d5df, centerLantern ? 0.13 : 0.08);
+    glow.fillEllipse(0, 4, centerLantern ? 132 : 106, centerLantern ? 138 : 118);
+    glow.lineStyle(2, 0x74d5df, centerLantern ? 0.22 : 0.13);
+    glow.strokeEllipse(0, 4, centerLantern ? 110 : 88, centerLantern ? 118 : 102);
     container.add(glow);
 
     const body = this.add.graphics();
-    body.fillStyle(0x203a46, 0.86);
+    body.fillStyle(0x203a46, centerLantern ? 0.94 : 0.86);
     body.fillRoundedRect(-22, -30, 44, 64, 17);
-    body.lineStyle(2, 0xf3ead2, 0.54);
+    body.lineStyle(2, 0xf3ead2, centerLantern ? 0.72 : 0.54);
     body.strokeRoundedRect(-22, -30, 44, 64, 17);
-    body.lineStyle(1, 0x7daebc, 0.48);
+    body.lineStyle(1, 0x7daebc, centerLantern ? 0.62 : 0.48);
     body.lineBetween(-12, -20, -12, 24);
     body.lineBetween(12, -20, 12, 24);
     container.add(body);
 
-    const flame = this.add.graphics().setAlpha(0.72);
-    flame.fillStyle(0xc9a14a, 0.45);
-    flame.fillEllipse(0, 4, 24, 36);
-    flame.fillStyle(0xf3ead2, 0.72);
-    flame.fillEllipse(0, 2, 10, 20);
+    const flame = this.add.graphics().setAlpha(centerLantern ? 0.88 : 0.72);
+    flame.fillStyle(0xc9a14a, centerLantern ? 0.58 : 0.45);
+    flame.fillEllipse(0, 4, centerLantern ? 30 : 24, centerLantern ? 42 : 36);
+    flame.fillStyle(0xf3ead2, centerLantern ? 0.84 : 0.72);
+    flame.fillEllipse(0, 2, centerLantern ? 12 : 10, centerLantern ? 24 : 20);
     container.add(flame);
 
     for (let bubbleIdx = 0; bubbleIdx < 3; bubbleIdx += 1) {

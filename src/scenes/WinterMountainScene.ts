@@ -778,9 +778,9 @@ export class WinterMountainScene extends Phaser.Scene {
     this.riverCueBeat = beat;
 
     if (beat !== "duck") {
-      cue.add(addLocalGroundShadow(this, beat === "lift" ? 180 : 150, 20, {
-        y: 10,
-        alpha: 0.2,
+      cue.add(addLocalGroundShadow(this, beat === "lift" ? 180 : 210, 22, {
+        y: beat === "step" ? 18 : 10,
+        alpha: beat === "step" ? 0.26 : 0.2,
       }));
     }
 
@@ -801,14 +801,21 @@ export class WinterMountainScene extends Phaser.Scene {
       cue.add(snowcap);
     } else if (beat === "step") {
       const ice = this.add.graphics();
-      ice.fillStyle(0xaed6ee, 0.18);
-      ice.fillEllipse(0, 0, 166, 58);
-      ice.lineStyle(2, 0xd5ecff, 0.34);
-      ice.strokeEllipse(0, 0, 150, 48);
-      ice.lineStyle(1.5, 0xd5ecff, 0.42);
-      ice.lineBetween(-54, -4, -20, 8);
-      ice.lineBetween(-16, 6, 18, -8);
-      ice.lineBetween(20, -8, 52, 6);
+      ice.fillStyle(0x213d54, 0.22);
+      ice.fillEllipse(0, 4, 214, 72);
+      ice.fillStyle(0xaed6ee, 0.32);
+      ice.fillEllipse(0, 0, 196, 62);
+      ice.lineStyle(3, 0xd5ecff, 0.5);
+      ice.strokeEllipse(0, 0, 178, 52);
+      ice.lineStyle(2, 0xf2fbff, 0.28);
+      ice.strokeEllipse(-16, -2, 116, 32);
+      ice.lineStyle(2, 0xd5ecff, 0.58);
+      ice.lineBetween(-72, -4, -34, 10);
+      ice.lineBetween(-28, 8, 10, -10);
+      ice.lineBetween(14, -10, 58, 8);
+      ice.lineStyle(1.5, 0xffffff, 0.38);
+      ice.lineBetween(-76, -16, -50, -22);
+      ice.lineBetween(48, -18, 82, -10);
       cue.add(ice);
     } else {
       const branch = this.add.graphics().setAngle(7);
@@ -837,7 +844,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private riverCuePosition(beat: (typeof RIVER_BEATS)[number]): { x: number; y: number } {
     if (beat === "lift") return { x: this.scale.width / 2 - 250, y: 846 };
-    if (beat === "step") return { x: this.scale.width / 2 + 84, y: 858 };
+    if (beat === "step") return { x: this.scale.width / 2 + 84, y: 836 };
     return { x: this.scale.width / 2 + 18, y: 748 };
   }
 
@@ -852,7 +859,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private trailWrenPosition(beat: (typeof RIVER_BEATS)[number]): { x: number; y: number } {
     const cue = this.riverCuePosition(beat);
     if (beat === "lift") return { x: cue.x - 92, y: 882 };
-    if (beat === "step") return { x: cue.x - 12, y: 878 };
+    if (beat === "step") return { x: cue.x - 12, y: 856 };
     return { x: cue.x + 82, y: 872 };
   }
 

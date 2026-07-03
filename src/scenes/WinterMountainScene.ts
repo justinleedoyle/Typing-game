@@ -48,6 +48,7 @@ import {
   stageCompanionCameo,
   stageTrueNameSeal,
   dismissTrueNameSeal,
+  dismissStagedCue,
   type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
@@ -1006,21 +1007,109 @@ export class WinterMountainScene extends Phaser.Scene {
     if (this.combatCandlesActive) return;
     this.narration.say("winter_kindle_prompt");
     this.band.setObjective("Type kindle before the cold takes a candle.");
+    const cue = this.add
+      .container(this.wrenContainer.x + 124, this.wrenContainer.y - 132)
+      .setDepth(42)
+      .setAlpha(0);
+    cue.add(addLocalGroundShadow(this, 104, 16, { y: 28, alpha: 0.18 }));
+    const g = this.add.graphics();
+    g.lineStyle(3, PALETTE_HEX.dim, 0.5);
+    g.lineBetween(-32, 22, 34, 8);
+    g.lineBetween(-26, 8, 28, 22);
+    g.fillStyle(PALETTE_HEX.ember, 0.58);
+    g.fillEllipse(0, 2, 26, 54);
+    g.fillStyle(0xf3ead2, 0.68);
+    g.fillEllipse(0, 8, 11, 28);
+    cue.add(g);
+    addContainerWake(this, cue, {
+      kind: "ember",
+      intervalMs: 300,
+      spreadX: 30,
+      spreadY: 18,
+      color: PALETTE_HEX.ember,
+      alpha: 0.32,
+      size: 3.2,
+      depth: 43,
+      driftX: 10,
+      driftY: -28,
+      durationMs: 820,
+    });
+    this.tweens.add({
+      targets: cue,
+      alpha: 0.86,
+      y: cue.y - 10,
+      duration: 360,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (cue.scene) addIdleBreath(this, cue, { dy: -3, durationMs: 2400 });
+      },
+    });
+    let cueAnchor: WordBodyAnchorHandle | null = null;
+    const releaseCueAnchor = (): void => {
+      cueAnchor?.destroy();
+      cueAnchor = null;
+    };
     const target = this.makeWord({
       scene: this,
       word: "kindle",
-      x: this.scale.width / 2,
-      y: this.scale.height / 2,
+      x: cue.x,
+      y: cue.y - 86,
       fontSize: 40,
-      onClaim: () => playWrenFocus(this.wrenSprite),
+      burstColor: PALETTE_HEX.ember,
+      onClaim: () => {
+        playWrenFocus(this.wrenSprite);
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          cue.x,
+          cue.y + 4,
+          { color: PALETTE_HEX.ember, depth: 58 },
+        );
+        playActorAttention(this, cue, {
+          scale: 1.028,
+          durationMs: 180,
+        });
+      },
+      onAdvance: () =>
+        playBodyTypePulse(this, cue, {
+          kind: "ember",
+          color: PALETTE_HEX.ember,
+          offsetY: 2,
+          depth: 58,
+          ringRadius: 22,
+        }),
       onComplete: () => {
+        releaseCueAnchor();
         this.playWrenTrailAction();
+        playBodyImpact(this, cue, {
+          kind: "ember",
+          color: PALETTE_HEX.ember,
+          offsetY: 2,
+          depth: 58,
+          ringRadius: 44,
+          count: 10,
+        });
+        dismissStagedCue(this, cue);
         playChime();
         this.restoreCandles();
         this.narration.say("winter_kindle_steady");
         this.time.delayedCall(1800, () => this.transitionToAct2());
       },
     });
+    cueAnchor = attachWordBodyAnchor(
+      this,
+      cue,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.ember,
+        alpha: 0.2,
+        depth: 43,
+        sourceOffsetY: 2,
+        targetOffsetY: 24,
+      },
+    );
+    cue.once(Phaser.GameObjects.Events.DESTROY, releaseCueAnchor);
     this.typingInput.register(target);
     this.activeTargets.push(target);
   }

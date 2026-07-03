@@ -289,6 +289,8 @@ export interface DismissTrueNameSealOptions {
   riseY?: number;
 }
 
+export type DismissStagedCueOptions = DismissTrueNameSealOptions;
+
 const typedBodyPulseTimes = new WeakMap<object, number>();
 
 /** Local ellipse shadow for feet-anchored sprites inside a container. */
@@ -815,6 +817,14 @@ export function dismissTrueNameSeal(
   scene: Phaser.Scene,
   seal: Phaser.GameObjects.Container | null | undefined,
   opts: DismissTrueNameSealOptions = {},
+): void {
+  dismissStagedCue(scene, seal, opts);
+}
+
+export function dismissStagedCue(
+  scene: Phaser.Scene,
+  seal: Phaser.GameObjects.Container | null | undefined,
+  opts: DismissStagedCueOptions = {},
 ): void {
   if (!seal?.scene) return;
   scene.tweens.killTweensOf(seal);

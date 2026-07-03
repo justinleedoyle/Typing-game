@@ -870,13 +870,21 @@ export class SkyIslandScene extends Phaser.Scene {
     this.time.delayedCall(2000, () => {
       this.setNarrator(LIGHTER_LINE_1, "Lantern-Lighter");
       this.time.delayedCall(600, () => {
+        let replyAnchor: WordBodyAnchorHandle | null = null;
+        const releaseReplyAnchor = (): void => {
+          replyAnchor?.destroy();
+          replyAnchor = null;
+        };
         const t = this.makeWord({
           scene: this,
           word: WREN_RESPONSE,
-          x: this.scale.width / 2,
-          y: this.scale.height / 2,
+          x: this.wrenContainer.x,
+          y: this.wrenContainer.y - 154,
           fontSize: 36,
+          onClaim: () => playWrenFocus(this.wrenSprite),
           onComplete: () => {
+            releaseReplyAnchor();
+            playWrenAction(this.wrenSprite);
             playChime();
             this.clearActiveTargets();
             this.setNarrator(LIGHTER_LINE_2, "Lantern-Lighter");
@@ -886,6 +894,19 @@ export class SkyIslandScene extends Phaser.Scene {
             });
           },
         });
+        replyAnchor = attachWordBodyAnchor(
+          this,
+          this.wrenContainer,
+          () => ({ x: t.getAnchorX(), y: t.getAnchorY() }),
+          {
+            color: PALETTE_HEX.brass,
+            alpha: 0.17,
+            depth: 43,
+            sourceOffsetY: -112,
+            targetOffsetY: 24,
+          },
+        );
+        this.wrenContainer.once(Phaser.GameObjects.Events.DESTROY, releaseReplyAnchor);
         this.typingInput.register(t);
         this.activeTargets.push(t);
       });

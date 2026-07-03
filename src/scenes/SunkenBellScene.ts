@@ -47,6 +47,7 @@ import {
   stageCompanionCameo,
   stageTrueNameSeal,
   dismissTrueNameSeal,
+  dismissStagedCue,
   type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import { pickAdaptiveWords, SUNKEN_BELL_WORD_BANK } from "../game/wordBank";
@@ -1362,13 +1363,93 @@ export class SunkenBellScene extends Phaser.Scene {
     // (which has its own tempo + de-sync stakes, not the breath economy).
     this.setBreathActive(false);
     this.setNarrator("A room off the nave. Something on a stand.");
+    const cue = this.add
+      .container(this.scale.width / 2, this.scale.height - 390)
+      .setDepth(42)
+      .setAlpha(0);
+    cue.add(addLocalGroundShadow(this, 130, 18, { y: 68, alpha: 0.18 }));
+    const g = this.add.graphics();
+    g.lineStyle(3, BELL_BURST_COLOR, 0.42);
+    g.strokeRoundedRect(-58, -42, 116, 70, 10);
+    g.lineStyle(2, PALETTE_HEX.brass, 0.38);
+    g.lineBetween(-34, 28, -54, 72);
+    g.lineBetween(34, 28, 54, 72);
+    g.lineBetween(-46, 72, 46, 72);
+    g.fillStyle(BELL_BURST_COLOR, 0.18);
+    g.fillRoundedRect(-50, -34, 100, 54, 8);
+    g.lineStyle(1.5, 0xf3ead2, 0.3);
+    g.lineBetween(-32, -16, 32, -16);
+    g.lineBetween(-26, 0, 28, 0);
+    cue.add(g);
+    addContainerWake(this, cue, {
+      kind: "bubble",
+      intervalMs: 360,
+      spreadX: 52,
+      spreadY: 30,
+      color: BELL_BURST_COLOR,
+      alpha: 0.26,
+      size: 3,
+      depth: 43,
+      driftX: 10,
+      driftY: -30,
+      durationMs: 880,
+    });
+    this.tweens.add({
+      targets: cue,
+      alpha: 0.86,
+      y: cue.y - 10,
+      duration: 360,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (cue.scene) addIdleBreath(this, cue, { dy: -3, durationMs: 2600 });
+      },
+    });
+    let cueAnchor: WordBodyAnchorHandle | null = null;
+    const releaseCueAnchor = (): void => {
+      cueAnchor?.destroy();
+      cueAnchor = null;
+    };
     const target = this.makeWord({
       scene: this,
       word: "read it",
-      x: this.scale.width / 2,
-      y: this.scale.height - 340,
+      x: cue.x,
+      y: cue.y - 92,
       fontSize: 36,
+      burstColor: BELL_BURST_COLOR,
+      onClaim: () => {
+        playWrenFocus(this.wrenSprite);
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          cue.x,
+          cue.y - 8,
+          { color: BELL_BURST_COLOR, depth: 58 },
+        );
+        playActorAttention(this, cue, {
+          scale: 1.024,
+          durationMs: 180,
+        });
+      },
+      onAdvance: () =>
+        playBodyTypePulse(this, cue, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -8,
+          depth: 58,
+          ringRadius: 24,
+        }),
       onComplete: () => {
+        releaseCueAnchor();
+        playBodyImpact(this, cue, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          offsetY: -8,
+          depth: 58,
+          ringRadius: 48,
+          count: 10,
+        });
+        dismissStagedCue(this, cue);
         this.clearActiveTargets();
         this.store.update((s) => {
           if (!s.almanacLore.includes("old-olins-memory")) {
@@ -1379,6 +1460,19 @@ export class SunkenBellScene extends Phaser.Scene {
         this.time.delayedCall(800, () => this.startFork1());
       },
     });
+    cueAnchor = attachWordBodyAnchor(
+      this,
+      cue,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: BELL_BURST_COLOR,
+        alpha: 0.2,
+        depth: 43,
+        sourceOffsetY: -8,
+        targetOffsetY: 24,
+      },
+    );
+    cue.once(Phaser.GameObjects.Events.DESTROY, releaseCueAnchor);
     this.typingInput.register(target);
     this.activeTargets.push(target);
   }

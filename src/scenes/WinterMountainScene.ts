@@ -506,6 +506,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
       this.coldDecayTimer?.remove();
+      if (this.wrenContainer?.scene) this.tweens.killTweensOf(this.wrenContainer);
       this.riverCue = null;
       this.dismissRevisitMemoryCue(false);
       this.clearWinterForkCues();
@@ -717,6 +718,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.narration.say("winter_intro_arrival");
     this.band.setObjective("Type each trail word to move through the pass.");
     this.showRiverCue("lift");
+    this.time.delayedCall(520, () => this.stageWrenAtTrailEntrance());
     this.time.delayedCall(2600, () => this.runRiverBeats(0));
   }
 
@@ -724,7 +726,11 @@ export class WinterMountainScene extends Phaser.Scene {
   private runRiverBeats(idx: number): void {
     if (idx >= RIVER_BEATS.length) {
       this.dismissRiverCue();
-      this.time.delayedCall(800, () => this.startHeldur());
+      this.resetWrenToWinterStage();
+      this.time.delayedCall(900, () => {
+        setWrenPose(this.wrenSprite, "front");
+        this.startHeldur();
+      });
       return;
     }
     const beat = RIVER_BEATS[idx];
@@ -743,7 +749,11 @@ export class WinterMountainScene extends Phaser.Scene {
       y: wordPos.y,
       fontSize: 42,
       onClaim: () => {
-        playWrenFocus(this.wrenSprite);
+        const destination = this.trailWrenPosition(beat);
+        playWrenFocus(this.wrenSprite, {
+          faceLeft: destination.x < this.wrenContainer.x,
+        });
+        this.walkWrenToTrailBeat(beat);
         this.pulseRiverCue(false);
       },
       onComplete: () => {
@@ -837,6 +847,72 @@ export class WinterMountainScene extends Phaser.Scene {
       x: cue.x,
       y: cue.y - (beat === "duck" ? 122 : 126),
     };
+  }
+
+  private trailWrenPosition(beat: (typeof RIVER_BEATS)[number]): { x: number; y: number } {
+    const cue = this.riverCuePosition(beat);
+    if (beat === "lift") return { x: cue.x - 92, y: 882 };
+    if (beat === "step") return { x: cue.x - 12, y: 878 };
+    return { x: cue.x + 82, y: 872 };
+  }
+
+  private stageWrenAtTrailEntrance(): void {
+    const cue = this.riverCue;
+    if (!cue?.scene) return;
+    this.moveWrenTo(cue.x - 150, 884, {
+      durationMs: 780,
+      quiet: true,
+    });
+  }
+
+  private walkWrenToTrailBeat(beat: (typeof RIVER_BEATS)[number]): void {
+    const destination = this.trailWrenPosition(beat);
+    this.moveWrenTo(destination.x, destination.y, {
+      durationMs: beat === "step" ? 620 : 560,
+      ringWidth: beat === "duck" ? 160 : 220,
+    });
+  }
+
+  private resetWrenToWinterStage(): void {
+    this.moveWrenTo(this.scale.width / 2, 880, {
+      durationMs: 620,
+      quiet: true,
+    });
+  }
+
+  private moveWrenTo(
+    x: number,
+    y: number,
+    opts: { durationMs?: number; ringWidth?: number; quiet?: boolean } = {},
+  ): void {
+    if (!this.wrenContainer?.scene) return;
+    this.tweens.killTweensOf(this.wrenContainer);
+    this.tweens.add({
+      targets: this.wrenContainer,
+      x,
+      y,
+      duration: opts.durationMs ?? 560,
+      ease: "Sine.easeInOut",
+      onComplete: () => {
+        if (!this.wrenContainer?.scene) return;
+        addIdleBreath(this, this.wrenContainer, { dy: -4, durationMs: 2100 });
+      },
+    });
+    if (opts.quiet) return;
+    playSceneEventPulse(this, {
+      kind: "snow",
+      color: PALETTE_HEX.frost,
+      x,
+      y: y - 30,
+      depth: -0.2,
+      durationMs: 540,
+      ringWidth: opts.ringWidth ?? 210,
+      ringHeight: 58,
+      count: 7,
+      alpha: 0.1,
+      spreadX: 82,
+      spreadY: 24,
+    });
   }
 
   private attachRiverCueWordAnchor(target: TextWordTarget): void {

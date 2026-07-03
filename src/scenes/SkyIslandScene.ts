@@ -56,6 +56,8 @@ import {
   stageContainerEntrance,
   stageAnchoredSprite,
   stageCompanionCameo,
+  stageTrueNameSeal,
+  dismissTrueNameSeal,
   type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import {
@@ -1894,13 +1896,60 @@ export class SkyIslandScene extends Phaser.Scene {
     this.clearActiveTargets();
     this.narration.say("sky_truename_intro");
     this.time.delayedCall(1800, () => {
+      const sealY = this.scale.height / 2 + 104;
+      const seal = stageTrueNameSeal(this, {
+        color: PALETTE_HEX.brass,
+        kind: "mote",
+        y: sealY,
+        depth: 42,
+      });
+      let sealAnchor: WordBodyAnchorHandle | null = null;
+      const releaseSealAnchor = (): void => {
+        sealAnchor?.destroy();
+        sealAnchor = null;
+      };
       const target = this.makeWord({
         scene: this,
         word: TRUE_NAME_PASSAGE,
         x: this.scale.width / 2,
-        y: this.scale.height / 2,
+        y: sealY - 118,
         fontSize: 28,
+        burstColor: PALETTE_HEX.brass,
+        onClaim: () => {
+          playWrenFocus(this.wrenSprite);
+          playClaimLine(
+            this,
+            this.wrenContainer.x,
+            this.wrenContainer.y - 112,
+            seal.x,
+            seal.y - 8,
+            { color: PALETTE_HEX.brass, depth: 58 },
+          );
+          playActorAttention(this, seal, {
+            tint: PALETTE_HEX.brass,
+            scale: 1.024,
+            durationMs: 180,
+          });
+        },
+        onAdvance: () =>
+          playBodyTypePulse(this, seal, {
+            kind: "mote",
+            color: PALETTE_HEX.brass,
+            offsetY: -8,
+            depth: 58,
+            ringRadius: 24,
+          }),
         onComplete: () => {
+          releaseSealAnchor();
+          playBodyImpact(this, seal, {
+            kind: "mote",
+            color: PALETTE_HEX.brass,
+            offsetY: -8,
+            depth: 58,
+            ringRadius: 54,
+            count: 12,
+          });
+          dismissTrueNameSeal(this, seal);
           playChime();
           // Almanac lore page 5 — the Sky-Island's true name.
           this.store.update((s) => {
@@ -1911,6 +1960,19 @@ export class SkyIslandScene extends Phaser.Scene {
           this.time.delayedCall(800, () => this.startEnding());
         },
       });
+      sealAnchor = attachWordBodyAnchor(
+        this,
+        seal,
+        () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+        {
+          color: PALETTE_HEX.brass,
+          alpha: 0.2,
+          depth: 43,
+          sourceOffsetY: -12,
+          targetOffsetY: 24,
+        },
+      );
+      seal.once(Phaser.GameObjects.Events.DESTROY, releaseSealAnchor);
       this.typingInput.register(target);
       this.activeTargets.push(target);
     });

@@ -46,6 +46,8 @@ import {
   stageContainerEntrance,
   stageAnchoredSprite,
   stageCompanionCameo,
+  stageTrueNameSeal,
+  dismissTrueNameSeal,
   type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import { pickAdaptiveWords, WINTER_WORD_BANK } from "../game/wordBank";
@@ -2330,13 +2332,22 @@ export class WinterMountainScene extends Phaser.Scene {
     this.narration.say("winter_truename_intro");
     this.band.setObjective("Type the true-name passage to settle the mountain.");
     this.time.delayedCall(900, () => {
+      const sealY = this.scale.height / 2 + 116;
+      const seal = stageTrueNameSeal(this, {
+        color: PALETTE_HEX.frost,
+        kind: "snow",
+        y: sealY,
+        depth: 42,
+      });
       this.runPassageChain(
         [...TRUE_NAME_LINES],
         [...TRUE_NAME_REACTIONS],
         () => {
+          dismissTrueNameSeal(this, seal);
           playChime();
           this.time.delayedCall(600, () => this.startEnding());
         },
+        seal,
       );
     });
   }
@@ -2392,6 +2403,7 @@ export class WinterMountainScene extends Phaser.Scene {
     passages: string[],
     narratorLines: string[],
     onDone: () => void,
+    trueNameSeal?: Phaser.GameObjects.Container,
   ): void {
     let step = 0;
 
@@ -2400,18 +2412,62 @@ export class WinterMountainScene extends Phaser.Scene {
         this.time.delayedCall(900, onDone);
         return;
       }
+      let trueNameAnchor: WordBodyAnchorHandle | null = null;
+      const releaseTrueNameAnchor = (): void => {
+        trueNameAnchor?.destroy();
+        trueNameAnchor = null;
+      };
       const target = this.makeWord({
         scene: this,
         word: passages[step],
-        x: this.scale.width / 2,
-        y: this.scale.height / 2,
+        x: trueNameSeal?.x ?? this.scale.width / 2,
+        y: trueNameSeal ? trueNameSeal.y - 118 : this.scale.height / 2,
         fontSize: 36,
-        onClaim: () => playWrenFocus(this.wrenSprite),
-        onComplete: () => {
-          playWrenAction(this.wrenSprite);
-          playActorAttention(this, this.huntressSprite, {
+        burstColor: trueNameSeal ? PALETTE_HEX.frost : undefined,
+        onClaim: () => {
+          playWrenFocus(this.wrenSprite);
+          if (!trueNameSeal?.scene) return;
+          playClaimLine(
+            this,
+            this.wrenContainer.x,
+            this.wrenContainer.y - 112,
+            trueNameSeal.x,
+            trueNameSeal.y - 8,
+            { color: PALETTE_HEX.frost, depth: 58 },
+          );
+          playActorAttention(this, trueNameSeal, {
             tint: PALETTE_HEX.frost,
+            scale: 1.024,
+            durationMs: 180,
           });
+        },
+        onAdvance: () => {
+          if (!trueNameSeal?.scene) return;
+          playBodyTypePulse(this, trueNameSeal, {
+            kind: "snow",
+            color: PALETTE_HEX.frost,
+            offsetY: -8,
+            depth: 58,
+            ringRadius: 24,
+          });
+        },
+        onComplete: () => {
+          releaseTrueNameAnchor();
+          playWrenAction(this.wrenSprite);
+          if (trueNameSeal?.scene) {
+            playBodyImpact(this, trueNameSeal, {
+              kind: "snow",
+              color: PALETTE_HEX.frost,
+              offsetY: -8,
+              depth: 58,
+              ringRadius: 54,
+              count: 12,
+            });
+          } else {
+            playActorAttention(this, this.huntressSprite, {
+              tint: PALETTE_HEX.frost,
+            });
+          }
           playBodyImpact(this, this.wrenContainer, {
             kind: "snow",
             color: PALETTE_HEX.frost,
@@ -2425,6 +2481,21 @@ export class WinterMountainScene extends Phaser.Scene {
           this.time.delayedCall(900, advance);
         },
       });
+      if (trueNameSeal?.scene) {
+        trueNameAnchor = attachWordBodyAnchor(
+          this,
+          trueNameSeal,
+          () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+          {
+            color: PALETTE_HEX.frost,
+            alpha: 0.2,
+            depth: 43,
+            sourceOffsetY: -12,
+            targetOffsetY: 24,
+          },
+        );
+        trueNameSeal.once(Phaser.GameObjects.Events.DESTROY, releaseTrueNameAnchor);
+      }
       this.typingInput.register(target);
       this.activeTargets.push(target);
     };

@@ -45,6 +45,8 @@ import {
   stageContainerEntrance,
   stageAnchoredSprite,
   stageCompanionCameo,
+  stageTrueNameSeal,
+  dismissTrueNameSeal,
   type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import { pickAdaptiveWords, SUNKEN_BELL_WORD_BANK } from "../game/wordBank";
@@ -1946,18 +1948,78 @@ export class SunkenBellScene extends Phaser.Scene {
     this.narration.say("sunken_truename_intro");
     this.time.delayedCall(800, () => {
       const trueName = "the bell remembers. the deep listens. the kingdom holds.";
+      const sealY = this.scale.height / 2 + 118;
+      const seal = stageTrueNameSeal(this, {
+        color: BELL_BURST_COLOR,
+        kind: "bubble",
+        y: sealY,
+        depth: 42,
+      });
+      let sealAnchor: WordBodyAnchorHandle | null = null;
+      const releaseSealAnchor = (): void => {
+        sealAnchor?.destroy();
+        sealAnchor = null;
+      };
       const target = this.makeWord({
         scene: this,
         word: trueName,
         x: this.scale.width / 2,
-        y: this.scale.height / 2,
+        y: sealY - 118,
         fontSize: 28,
+        burstColor: BELL_BURST_COLOR,
+        onClaim: () => {
+          playWrenFocus(this.wrenSprite);
+          playClaimLine(
+            this,
+            this.wrenContainer.x,
+            this.wrenContainer.y - 112,
+            seal.x,
+            seal.y - 8,
+            { color: BELL_BURST_COLOR, depth: 58 },
+          );
+          playActorAttention(this, seal, {
+            tint: BELL_BURST_COLOR,
+            scale: 1.024,
+            durationMs: 180,
+          });
+        },
+        onAdvance: () =>
+          playBodyTypePulse(this, seal, {
+            kind: "bubble",
+            color: BELL_BURST_COLOR,
+            offsetY: -8,
+            depth: 58,
+            ringRadius: 24,
+          }),
         onComplete: () => {
+          releaseSealAnchor();
+          playBodyImpact(this, seal, {
+            kind: "bubble",
+            color: BELL_BURST_COLOR,
+            offsetY: -8,
+            depth: 58,
+            ringRadius: 54,
+            count: 12,
+          });
+          dismissTrueNameSeal(this, seal);
           this.clearActiveTargets();
           playChime();
           this.time.delayedCall(600, () => this.startEnding());
         },
       });
+      sealAnchor = attachWordBodyAnchor(
+        this,
+        seal,
+        () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+        {
+          color: BELL_BURST_COLOR,
+          alpha: 0.2,
+          depth: 43,
+          sourceOffsetY: -12,
+          targetOffsetY: 24,
+        },
+      );
+      seal.once(Phaser.GameObjects.Events.DESTROY, releaseSealAnchor);
       this.typingInput.register(target);
       this.activeTargets.push(target);
     });

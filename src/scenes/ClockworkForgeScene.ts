@@ -53,6 +53,8 @@ import {
   stageContainerEntrance,
   stageAnchoredSprite,
   stageCompanionCameo,
+  stageTrueNameSeal,
+  dismissTrueNameSeal,
   type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import { pickAdaptiveWords, FORGE_COMMAND_BANK } from "../game/wordBank";
@@ -1786,6 +1788,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private startTrueNamePassage(): void {
     this.clearActiveTargets();
     this.narration.say("forge_truename_intro");
+    const sealY = this.scale.height - 318;
+    const seal = stageTrueNameSeal(this, {
+      color: PALETTE_HEX.ember,
+      kind: "ember",
+      y: sealY,
+      depth: 42,
+    });
 
     const passages = [
       "the forge breathes.",
@@ -1794,6 +1803,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     ];
 
     this.runPassageChain(passages, ["", "", ""], () => {
+      dismissTrueNameSeal(this, seal);
       // Almanac lore page 5 — the Forge's true name, stamped at the end of
       // the realm's true-name passage.
       this.store.update((s) => {
@@ -1802,7 +1812,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         }
       });
       this.time.delayedCall(1000, () => this.startEnding());
-    });
+    }, "none", seal);
   }
 
   private startEnding(): void {
@@ -2070,6 +2080,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     narratorLines: string[],
     onDone: () => void,
     owner: ForgePassageOwner = "forn",
+    trueNameSeal?: Phaser.GameObjects.Container,
   ): void {
     let step = 0;
 
@@ -2085,18 +2096,62 @@ export class ClockworkForgeScene extends Phaser.Scene {
         advance();
         return;
       }
+      let trueNameAnchor: WordBodyAnchorHandle | null = null;
+      const releaseTrueNameAnchor = (): void => {
+        trueNameAnchor?.destroy();
+        trueNameAnchor = null;
+      };
       const opts: TextWordTargetOptions = {
         scene: this,
         word,
-        x: this.scale.width / 2,
-        y: this.scale.height - 340,
+        x: trueNameSeal?.x ?? this.scale.width / 2,
+        y: trueNameSeal ? trueNameSeal.y - 118 : this.scale.height - 340,
         fontSize: 36,
-        onClaim: () => playWrenFocus(this.wrenSprite),
-        onComplete: () => {
-          playWrenAction(this.wrenSprite);
-          playActorAttention(this, this.fornSprite, {
+        burstColor: trueNameSeal ? PALETTE_HEX.ember : undefined,
+        onClaim: () => {
+          playWrenFocus(this.wrenSprite);
+          if (!trueNameSeal?.scene) return;
+          playClaimLine(
+            this,
+            this.wrenContainer.x,
+            this.wrenContainer.y - 112,
+            trueNameSeal.x,
+            trueNameSeal.y - 8,
+            { color: PALETTE_HEX.ember, depth: 58 },
+          );
+          playActorAttention(this, trueNameSeal, {
             tint: PALETTE_HEX.ember,
+            scale: 1.024,
+            durationMs: 180,
           });
+        },
+        onAdvance: () => {
+          if (!trueNameSeal?.scene) return;
+          playBodyTypePulse(this, trueNameSeal, {
+            kind: "ember",
+            color: PALETTE_HEX.ember,
+            offsetY: -8,
+            depth: 58,
+            ringRadius: 24,
+          });
+        },
+        onComplete: () => {
+          releaseTrueNameAnchor();
+          playWrenAction(this.wrenSprite);
+          if (trueNameSeal?.scene) {
+            playBodyImpact(this, trueNameSeal, {
+              kind: "ember",
+              color: PALETTE_HEX.ember,
+              offsetY: -8,
+              depth: 58,
+              ringRadius: 54,
+              count: 12,
+            });
+          } else {
+            playActorAttention(this, this.fornSprite, {
+              tint: PALETTE_HEX.ember,
+            });
+          }
           playBodyImpact(this, this.wrenContainer, {
             kind: "ember",
             color: PALETTE_HEX.ember,
@@ -2111,19 +2166,38 @@ export class ClockworkForgeScene extends Phaser.Scene {
           this.time.delayedCall(line ? 1400 : 400, advance);
         },
       };
-      const target =
-        owner === "apprentices"
-          ? this.makeForgeChoiceWord(this.apprenticeCue, opts, {
-              sourceOffsetY: -68,
-            })
-          : owner === "peaceful-order"
-            ? this.makeForgeChoiceWord(this.standDownCue, opts, {
-                color: PALETTE_HEX.brass,
-                sourceOffsetY: -54,
-              })
-            : owner === "none"
-              ? this.makeWord(opts)
-              : this.makeFornWord(opts);
+      let target: TextWordTarget;
+      if (trueNameSeal) {
+        target = this.makeWord(opts);
+      } else if (owner === "apprentices") {
+        target = this.makeForgeChoiceWord(this.apprenticeCue, opts, {
+          sourceOffsetY: -68,
+        });
+      } else if (owner === "peaceful-order") {
+        target = this.makeForgeChoiceWord(this.standDownCue, opts, {
+          color: PALETTE_HEX.brass,
+          sourceOffsetY: -54,
+        });
+      } else if (owner === "none") {
+        target = this.makeWord(opts);
+      } else {
+        target = this.makeFornWord(opts);
+      }
+      if (trueNameSeal?.scene) {
+        trueNameAnchor = attachWordBodyAnchor(
+          this,
+          trueNameSeal,
+          () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+          {
+            color: PALETTE_HEX.ember,
+            alpha: 0.2,
+            depth: 43,
+            sourceOffsetY: -12,
+            targetOffsetY: 24,
+          },
+        );
+        trueNameSeal.once(Phaser.GameObjects.Events.DESTROY, releaseTrueNameAnchor);
+      }
       this.typingInput.register(target);
       this.activeTargets.push(target);
     };

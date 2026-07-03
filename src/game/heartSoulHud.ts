@@ -68,7 +68,8 @@ export class HeartSoulHud {
   private lowHeartLastFiredMs = -Infinity;
   private soulLabel!: Phaser.GameObjects.Text;
   private comboText!: Phaser.GameObjects.Text;
-  private comboTier = 0;
+  private comboTier = -1;
+  private comboVisible = false;
   private pulseMs = 0;
   private readonly updateHandler: (time: number, delta: number) => void;
 
@@ -238,19 +239,36 @@ export class HeartSoulHud {
   private tickCombo(): void {
     const combo = this.opts.getCombo?.() ?? 0;
     if (combo < COMBO_SHOW_MIN) {
-      if (this.comboText.alpha > 0) this.comboText.setAlpha(0);
+      if (this.comboVisible || this.comboText.alpha > 0) {
+        this.scene.tweens.killTweensOf(this.comboText);
+        this.comboText.setAlpha(0).setScale(1);
+      }
       this.comboTier = -1;
+      this.comboVisible = false;
       return;
     }
     this.comboText.setText(`×${combo}`);
     this.comboText.setColor(combo >= COMBO_HOT ? PALETTE.ember : PALETTE.brass);
-    this.comboText.setAlpha(1);
-    // Pop the flourish when the streak first appears or climbs a fill tier.
     const tier = comboTierOf(combo);
+    if (!this.comboVisible) {
+      this.comboVisible = true;
+      this.comboTier = tier;
+      this.scene.tweens.killTweensOf(this.comboText);
+      this.comboText.setAlpha(0).setScale(1.2);
+      this.scene.tweens.add({
+        targets: this.comboText,
+        alpha: 1,
+        scale: 1,
+        duration: 220,
+        ease: "Sine.easeOut",
+      });
+      return;
+    }
+    // Pop the flourish when the visible streak climbs a fill tier.
     if (tier > this.comboTier) {
       this.comboTier = tier;
       this.scene.tweens.killTweensOf(this.comboText);
-      this.comboText.setScale(1.35);
+      this.comboText.setAlpha(1).setScale(1.35);
       this.scene.tweens.add({
         targets: this.comboText,
         scale: 1,

@@ -1832,11 +1832,15 @@ export class HauntedWoodScene extends Phaser.Scene {
       }
       const step = steps[idx];
       if (!step) return;
+      const ownerWordPos =
+        owner?.body?.scene && !owner.ghostKing
+          ? this.ownerPassageWordPosition(owner.body, owner.sourceOffsetY)
+          : null;
       const opts: TextWordTargetOptions = {
         scene: this,
         word: step.word,
-        x: this.scale.width / 2,
-        y: this.scale.height - 340,
+        x: ownerWordPos?.x ?? this.scale.width / 2,
+        y: ownerWordPos?.y ?? this.scale.height - 340,
         fontSize: 36,
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
@@ -1865,6 +1869,16 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.activeTargets.push(target);
     };
     advance();
+  }
+
+  private ownerPassageWordPosition(
+    body: Phaser.GameObjects.Container | Phaser.GameObjects.Image,
+    sourceOffsetY = -48,
+  ): { x: number; y: number } {
+    const side = body.x < this.scale.width / 2 ? 1 : -1;
+    const x = Math.max(330, Math.min(this.scale.width - 330, body.x + side * 185));
+    const y = Math.max(330, Math.min(this.scale.height - 360, body.y + sourceOffsetY - 92));
+    return { x, y };
   }
 
   // ─── Input ────────────────────────────────────────────────────────────────

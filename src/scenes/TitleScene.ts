@@ -12,6 +12,10 @@ import {
 } from "../game/saveState";
 import openingBackdrop from "../../art/references/opening-typewriter-study-clean.png";
 
+const TITLE_TYPEWRITER = { x: 790, y: 740 } as const;
+const TITLE_PORTAL = { x: 1510, y: 610 } as const;
+const TITLE_PORTAL_BLUE = 0x9fd7ff;
+
 export class TitleScene extends Phaser.Scene {
   private prompt!: Phaser.GameObjects.Text;
   private promptPlate?: Phaser.GameObjects.Graphics;
@@ -253,19 +257,100 @@ export class TitleScene extends Phaser.Scene {
       typeof location !== "undefined" ? location.search : "",
     );
     if (dev.unlock && this.store) this.store.update(applyDevUnlock);
-    this.cameras.main.fadeOut(600, 11, 10, 15);
-    this.cameras.main.once(
-      Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-      () => {
-        if (dev.realmSceneKey) {
-          this.scene.start(dev.realmSceneKey, {
-            store: this.store,
-            revisit: false,
-          });
-          return;
-        }
-        this.scene.start("PortalChamberScene", { store: this.store });
-      },
-    );
+    this.playTitleDepartureWake();
+    this.time.delayedCall(240, () => {
+      this.cameras.main.fadeOut(640, 11, 10, 15);
+      this.cameras.main.once(
+        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+        () => {
+          if (dev.realmSceneKey) {
+            this.scene.start(dev.realmSceneKey, {
+              store: this.store,
+              revisit: false,
+            });
+            return;
+          }
+          this.scene.start("PortalChamberScene", { store: this.store });
+        },
+      );
+    });
+  }
+
+  private playTitleDepartureWake(): void {
+    const wash = this.add.graphics().setDepth(5).setAlpha(0);
+    wash.fillStyle(0x0b0a0f, 0.2);
+    wash.fillRect(0, 0, this.scale.width, this.scale.height);
+    this.tweens.add({
+      targets: wash,
+      alpha: 0.16,
+      duration: 110,
+      hold: 160,
+      yoyo: true,
+      ease: "Sine.easeInOut",
+      onComplete: () => wash.destroy(),
+    });
+
+    const portalX = TITLE_PORTAL.x;
+    const portalY = TITLE_PORTAL.y;
+    for (let i = 0; i < 3; i += 1) {
+      const ring = this.add
+        .graphics()
+        .setPosition(portalX, portalY)
+        .setDepth(6 + i * 0.1)
+        .setAlpha(0.66 - i * 0.1);
+      ring.lineStyle(2, i === 1 ? UI_HEX.brass : TITLE_PORTAL_BLUE, 0.62 - i * 0.08);
+      ring.strokeEllipse(0, 0, 150 + i * 54, 230 + i * 72);
+      ring.fillStyle(TITLE_PORTAL_BLUE, 0.026);
+      ring.fillEllipse(0, 0, 170 + i * 50, 250 + i * 72);
+      ring.setScale(0.74 + i * 0.08);
+
+      this.tweens.add({
+        targets: ring,
+        alpha: 0,
+        scaleX: 1.22 + i * 0.08,
+        scaleY: 1.14 + i * 0.06,
+        duration: 520,
+        delay: i * 56,
+        ease: "Sine.easeOut",
+        onComplete: () => ring.destroy(),
+      });
+    }
+
+    this.playTitleDepartureFlecks(TITLE_TYPEWRITER.x, TITLE_TYPEWRITER.y, portalX, portalY, 7, 0);
+    this.playTitleDepartureFlecks(this.prompt.x, this.prompt.y - 18, portalX, portalY, 6, 70);
+  }
+
+  private playTitleDepartureFlecks(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    count: number,
+    delayMs: number,
+  ): void {
+    const colors = [UI_HEX.brass, TITLE_PORTAL_BLUE, UI_HEX.parchment];
+    for (let i = 0; i < count; i += 1) {
+      const angle = (i / count) * Math.PI * 2;
+      const startX = fromX + Math.cos(angle) * Phaser.Math.Between(10, 34);
+      const startY = fromY + Math.sin(angle) * Phaser.Math.Between(8, 24);
+      const targetX = toX + Math.cos(angle + 0.7) * Phaser.Math.Between(28, 70);
+      const targetY = toY + Math.sin(angle + 0.7) * Phaser.Math.Between(36, 92);
+      const fleck = this.add.graphics().setPosition(startX, startY).setDepth(7).setAlpha(0.7);
+      fleck.fillStyle(colors[i % colors.length], 0.76);
+      fleck.fillCircle(0, 0, 2.2 + (i % 3) * 0.8);
+
+      this.tweens.add({
+        targets: fleck,
+        x: targetX,
+        y: targetY,
+        alpha: 0,
+        scaleX: 0.32,
+        scaleY: 0.32,
+        duration: 320 + i * 18,
+        delay: delayMs + i * 14,
+        ease: "Sine.easeIn",
+        onComplete: () => fleck.destroy(),
+      });
+    }
   }
 }

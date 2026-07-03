@@ -37,6 +37,7 @@ const SATCHEL_LABEL_Y = 34;
 const TILE = 36;
 const TILE_GAP = 8;
 const TILE_Y = MID_Y + 6;
+const SATCHEL_WAKE_DELAY_MS = 180;
 // One-shot card slots
 const ONESHOT_X0 = 1010;
 const ONESHOT_DX = 250;
@@ -431,19 +432,74 @@ export class ConsoleBand {
       const icon = satchelIconFor(id);
       return icon !== null && scene.textures.exists(icon.key);
     });
+    if (drawable.length > 0) {
+      this.playSatchelRowWake(drawable.length);
+    }
     drawable.forEach((id, i) => {
       const x = SATCHEL_X + i * (TILE + TILE_GAP);
+      const iconContainer = scene.add
+        .container(x + TILE / 2, TILE_Y)
+        .setAlpha(0)
+        .setScale(0.92);
       const tile = scene.add.graphics();
       tile.fillStyle(0x0f0c08, 1);
-      tile.fillRoundedRect(x, TILE_Y - TILE / 2, TILE, TILE, 5);
+      tile.fillRoundedRect(-TILE / 2, -TILE / 2, TILE, TILE, 5);
       tile.lineStyle(1, UI_HEX.frame, 0.9);
-      tile.strokeRoundedRect(x, TILE_Y - TILE / 2, TILE, TILE, 5);
-      this.container.add(tile);
+      tile.strokeRoundedRect(-TILE / 2, -TILE / 2, TILE, TILE, 5);
+      iconContainer.add(tile);
 
       const icon = satchelIconFor(id)!;
-      const img = scene.add.image(x + TILE / 2, TILE_Y, icon.key);
+      const img = scene.add.image(0, 0, icon.key);
       img.setScale(Math.min((TILE - 6) / img.width, (TILE - 6) / img.height));
-      this.container.add(img);
+      iconContainer.add(img);
+      this.container.add(iconContainer);
+
+      scene.tweens.add({
+        targets: iconContainer,
+        alpha: 1,
+        scaleX: 1,
+        scaleY: 1,
+        delay: SATCHEL_WAKE_DELAY_MS + i * 65,
+        duration: 220,
+        ease: "Back.easeOut",
+      });
+    });
+  }
+
+  private playSatchelRowWake(count: number): void {
+    const rowW = count * TILE + Math.max(0, count - 1) * TILE_GAP;
+    const wake = this.scene.add.graphics().setAlpha(0);
+    wake.fillStyle(UI_HEX.brass, 0.08);
+    wake.fillRoundedRect(
+      SATCHEL_X - 8,
+      TILE_Y - TILE / 2 - 8,
+      rowW + 16,
+      TILE + 16,
+      8,
+    );
+    wake.lineStyle(1, UI_HEX.brass, 0.36);
+    wake.strokeRoundedRect(
+      SATCHEL_X - 8,
+      TILE_Y - TILE / 2 - 8,
+      rowW + 16,
+      TILE + 16,
+      8,
+    );
+    wake.lineStyle(1, UI_HEX.parchment, 0.22);
+    wake.beginPath();
+    wake.moveTo(SATCHEL_X, TILE_Y + TILE / 2 + 10);
+    wake.lineTo(SATCHEL_X + rowW, TILE_Y + TILE / 2 + 10);
+    wake.strokePath();
+    this.container.add(wake);
+
+    this.scene.tweens.add({
+      targets: wake,
+      alpha: { from: 0.54, to: 0 },
+      scaleX: 1.02,
+      duration: 640,
+      delay: SATCHEL_WAKE_DELAY_MS,
+      ease: "Sine.easeOut",
+      onComplete: () => wake.destroy(),
     });
   }
 

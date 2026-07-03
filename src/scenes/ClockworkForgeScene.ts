@@ -733,11 +733,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // Spawn a tutorial golem that doesn't advance
     const tutorialGolem = this.spawnStaticGolem(860, FLOOR_Y, false);
 
+    const wordPos = this.staticGolemWordPosition(tutorialGolem, "turn");
     const target = this.makeStaticGolemWord(tutorialGolem, {
       scene: this,
       word: "turn",
-      x: this.scale.width / 2,
-      y: this.scale.height - 340,
+      x: wordPos.x,
+      y: wordPos.y,
       fontSize: 36,
       onComplete: () => {
         this.golemTurnHead(tutorialGolem);
@@ -759,11 +760,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
       "Old Gregor",
     );
 
+    const wordPos = this.staticGolemWordPosition(tutorialGolem, "TURN");
     const target = this.makeStaticGolemWord(tutorialGolem, {
       scene: this,
       word: "TURN",
-      x: this.scale.width / 2,
-      y: this.scale.height - 340,
+      x: wordPos.x,
+      y: wordPos.y,
       fontSize: 36,
       // Capital tutorial: must actually be typed with Shift now.
       caseSensitive: true,
@@ -804,6 +806,15 @@ export class ClockworkForgeScene extends Phaser.Scene {
     });
     this.typingInput.register(target);
     this.activeTargets.push(target);
+  }
+
+  private staticGolemWordPosition(golem: StaticGolem, word: string): { x: number; y: number } {
+    const side = golem.container.x < this.scale.width / 2 ? 1 : -1;
+    const lateral = word.length > 8 ? 220 : 190;
+    return {
+      x: Phaser.Math.Clamp(golem.container.x + side * lateral, 330, this.scale.width - 330),
+      y: Phaser.Math.Clamp(golem.container.y - 132, 300, this.scale.height - 390),
+    };
   }
 
   private startTutorialGolemFight(): void {

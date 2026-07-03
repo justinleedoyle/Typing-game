@@ -67,6 +67,7 @@ import {
   playWrenFocus,
   playWrenHurt,
   preloadWren,
+  setWrenPose,
 } from "../game/wren";
 import { showAlmanacStampCard } from "../game/ui/almanacStamp";
 import { ConsoleBand } from "../game/ui/consoleBand";
@@ -312,7 +313,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     });
     this.drawForgeGlow();
     this.drawCatwalk();
-    this.drawWren(this.scale.width / 2, CATWALK_Y + 20);
+    this.drawWren(this.catwalkWrenX(0), CATWALK_Y + 20);
     playSceneEventPulse(this, {
       kind: "ember",
       color: PALETTE_HEX.ember,
@@ -635,36 +636,48 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private startAct1Arrival(): void {
     this.narration.say("forge_intro_arrival");
     this.band.setObjective("Type each catwalk word to reach Gregor's station.");
-    this.showCatwalkCue(0, this.scale.width / 2 - 300);
+    this.showCatwalkCue(0, this.catwalkCueX(0));
     this.time.delayedCall(2600, () => this.startCatwalkBeats(0));
   }
 
   private startCatwalkBeats(idx: number): void {
     if (idx >= CATWALK_WORDS.length) {
       this.dismissCatwalkCue();
-      this.time.delayedCall(1000, () => this.startGregorConversation());
+      this.walkWrenAlongCatwalk(this.scale.width / 2, () => {
+        this.resetWrenToFront();
+        this.time.delayedCall(420, () => this.startGregorConversation());
+      });
       return;
     }
     const word = CATWALK_WORDS[idx];
     const narration = CATWALK_NARRATIONS[idx];
-    const x = this.scale.width / 2 + (idx - 1) * 300;
-    this.showCatwalkCue(idx, x);
+    const cueX = this.catwalkCueX(idx);
+    const wordPos = this.catwalkWordPosition(idx);
+    this.walkWrenAlongCatwalk(this.catwalkWrenX(idx));
+    this.showCatwalkCue(idx, cueX);
     const target = this.makeWord({
       scene: this,
       word,
-      x,
-      y: CATWALK_Y - 70,
+      x: wordPos.x,
+      y: wordPos.y,
       depth: 40,
       fontSize: 34,
       onClaim: () => {
-        playWrenFocus(this.wrenSprite, { faceLeft: x < this.wrenContainer.x });
+        playWrenFocus(this.wrenSprite, {
+          faceLeft: wordPos.x < this.wrenContainer.x,
+        });
         this.pulseCatwalkCue(false);
       },
       onComplete: () => {
-        playWrenAction(this.wrenSprite, { faceLeft: x < this.wrenContainer.x });
+        playWrenAction(this.wrenSprite, {
+          faceLeft: wordPos.x < this.wrenContainer.x,
+        });
         this.releaseCatwalkCueWordAnchor();
         this.pulseCatwalkCue(true);
         this.setNarrator(narration);
+        if (idx < CATWALK_WORDS.length - 1) {
+          this.walkWrenAlongCatwalk(this.catwalkWrenX(idx + 1));
+        }
         this.time.delayedCall(1400, () => this.startCatwalkBeats(idx + 1));
       },
     });
@@ -689,11 +702,15 @@ export class ClockworkForgeScene extends Phaser.Scene {
       replyAnchor?.destroy();
       replyAnchor = null;
     };
+    const replyPos = {
+      x: this.wrenContainer.x - 170,
+      y: this.wrenContainer.y - 154,
+    };
     const reply1 = this.makeWord({
       scene: this,
       word: "i know.",
-      x: this.wrenContainer.x,
-      y: this.wrenContainer.y - 154,
+      x: replyPos.x,
+      y: replyPos.y,
       fontSize: 36,
       onClaim: () => playWrenFocus(this.wrenSprite),
       onComplete: () => {
@@ -2322,6 +2339,55 @@ export class ClockworkForgeScene extends Phaser.Scene {
     advance();
   }
 
+  private catwalkCueX(idx: number): number {
+    return this.scale.width / 2 + (idx - 1) * 260;
+  }
+
+  private catwalkWrenX(idx: number): number {
+    const cueX = this.catwalkCueX(idx);
+    if (idx === 0) return cueX + 112;
+    if (idx === 2) return cueX - 112;
+    return cueX;
+  }
+
+  private catwalkWordPosition(idx: number): { x: number; y: number } {
+    const cueX = this.catwalkCueX(idx);
+    if (idx === 0) return { x: cueX - 116, y: CATWALK_Y - 72 };
+    if (idx === 1) return { x: cueX + 176, y: CATWALK_Y - 118 };
+    return { x: cueX + 126, y: CATWALK_Y - 76 };
+  }
+
+  private walkWrenAlongCatwalk(x: number, onComplete?: () => void): void {
+    if (!this.wrenContainer?.scene) {
+      onComplete?.();
+      return;
+    }
+    const distance = Math.abs(this.wrenContainer.x - x);
+    if (distance < 4) {
+      onComplete?.();
+      return;
+    }
+    playActorAttention(this, this.wrenContainer, {
+      scale: 1.012,
+      durationMs: 220,
+    });
+    this.tweens.add({
+      targets: this.wrenContainer,
+      x,
+      duration: Phaser.Math.Clamp(distance * 2.2, 280, 620),
+      ease: "Sine.easeInOut",
+      onComplete,
+    });
+  }
+
+  private resetWrenToFront(): void {
+    if (!this.wrenSprite?.scene) return;
+    this.tweens.killTweensOf(this.wrenSprite);
+    setWrenPose(this.wrenSprite, "front");
+    this.wrenSprite.x = 0;
+    this.wrenSprite.y = 0;
+  }
+
   private showCatwalkCue(idx: number, x: number): void {
     if (this.catwalkCue?.scene && this.catwalkCueIndex === idx) return;
     this.dismissCatwalkCue(false);
@@ -3239,6 +3305,28 @@ export class ClockworkForgeScene extends Phaser.Scene {
     g.fillRect(0, top, w, 3);
     g.fillStyle(0x120e0b, 1); // dark underline at the deck's bottom
     g.fillRect(0, top + 31, w, 3);
+    // Local plates/rivets at the three obstacle beats keep the catwalk from
+    // reading as a flat UI stripe and give Wren clear places to step through.
+    const plateXs = [
+      this.catwalkCueX(0),
+      this.catwalkWrenX(0),
+      this.catwalkCueX(1),
+      this.catwalkCueX(2),
+      this.catwalkWrenX(2),
+      this.scale.width / 2,
+    ];
+    for (const px of plateXs) {
+      g.fillStyle(0x120e0b, 0.22);
+      g.fillEllipse(px, top + 22, 118, 12);
+      g.fillStyle(0x6a5038, 0.24);
+      g.fillRoundedRect(px - 76, top + 5, 152, 5, 3);
+      g.lineStyle(1.5, 0x7d6043, 0.24);
+      g.lineBetween(px - 84, top + 2, px - 84, top + 31);
+      g.lineBetween(px + 84, top + 2, px + 84, top + 31);
+      g.fillStyle(PALETTE_HEX.ember, 0.2);
+      g.fillCircle(px - 54, top + 18, 2.3);
+      g.fillCircle(px + 54, top + 18, 2.3);
+    }
     // Soft cast shadow under the deck.
     g.fillStyle(0x000000, 0.3);
     g.fillRect(0, top + 34, w, 12);

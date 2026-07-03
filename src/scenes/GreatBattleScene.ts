@@ -731,6 +731,53 @@ export class GreatBattleScene extends Phaser.Scene {
     return new TextWordTarget({ outline: true, depth: 6, ...opts });
   }
 
+  private lordDuelWordPosition(
+    index: number,
+    total: number,
+    y = 500,
+  ): { x: number; y: number } {
+    const cx = this.quietLordContainer?.x ?? this.scale.width / 2;
+
+    if (total >= 3) {
+      const lane = Math.max(0, Math.min(2, index));
+      const offsets = [-360, 0, 360];
+      return {
+        x: cx + offsets[lane]!,
+        y: y + (lane === 1 ? -44 : 18),
+      };
+    }
+
+    if (total === 2) {
+      return { x: cx + (index === 0 ? -250 : 250), y };
+    }
+
+    return { x: cx + (index % 2 === 0 ? 235 : -235), y };
+  }
+
+  private facetDefenseWordPosition(facet: Facet): { x: number; y: number } {
+    const cx = this.facetSigil?.x ?? this.scale.width / 2;
+    const cy = this.facetSigil?.y ?? 300;
+    const offsets: Record<FacetId, { dx: number; dy: number }> = {
+      cold: { dx: -260, dy: 210 },
+      toll: { dx: 260, dy: 210 },
+      armor: { dx: -230, dy: 165 },
+      light: { dx: 230, dy: 165 },
+      grief: { dx: 0, dy: 250 },
+    };
+    const offset = offsets[facet.id];
+    return { x: cx + offset.dx, y: cy + offset.dy };
+  }
+
+  private finalPhraseWordPosition(index: number): { x: number; y: number } {
+    const cx = this.againText?.x ?? this.scale.width / 2;
+    const cy = this.againText?.y ?? 300;
+    const offsets = [-225, 225, 0];
+    return {
+      x: cx + offsets[index % offsets.length]!,
+      y: cy + 232 + (index % 2) * 30,
+    };
+  }
+
   /** Phase-2 boss words are attacks against the Quiet Lord, not free UI text. */
   private makeLordWord(
     opts: TextWordTargetOptions,
@@ -1973,6 +2020,7 @@ export class GreatBattleScene extends Phaser.Scene {
     };
 
     let target!: TextWordTarget;
+    const wordPos = this.facetDefenseWordPosition(facet);
     const timer = this.time.delayedCall(FACET_CHALLENGE_MS, () => {
       if (resolved) return;
       resolved = true;
@@ -1992,16 +2040,16 @@ export class GreatBattleScene extends Phaser.Scene {
     target = this.makeWord({
       scene: this,
       word: facet.defenseWord,
-      x: this.scale.width / 2,
-      y: 500,
+      x: wordPos.x,
+      y: wordPos.y,
       fontSize: 46,
       onClaim: () =>
         playClaimLine(
           this,
           this.scale.width / 2,
           this.scale.height - 250,
-          this.scale.width / 2,
-          500,
+          wordPos.x,
+          wordPos.y,
           { color: UI_HEX.brass, depth: 6 },
         ),
       onAdvance: () =>
@@ -2302,11 +2350,12 @@ export class GreatBattleScene extends Phaser.Scene {
     }
     const word = words[idx]!;
     this.band.setObjective(`Counter ${idx + 1}/${words.length}: type ${word}.`);
+    const wordPos = this.lordDuelWordPosition(idx, words.length, 500);
     const target = this.makeLordWord({
       scene: this,
       word,
-      x: this.scale.width / 2,
-      y: 500,
+      x: wordPos.x,
+      y: wordPos.y,
       fontSize: 44,
       onComplete: () => {
         playChime();
@@ -2344,11 +2393,12 @@ export class GreatBattleScene extends Phaser.Scene {
       this.tetherCordBindUsed = true;
       this.showRelicNotice("finale_relic_tether_cord");
       this.band.setObjective("Type bound while the tether-cord holds him.");
+      const wordPos = this.lordDuelWordPosition(0, 1, 492);
       const bindTarget = this.makeLordWord({
         scene: this,
         word: "bound",
-        x: this.scale.width / 2,
-        y: 500,
+        x: wordPos.x,
+        y: wordPos.y,
         fontSize: 44,
         onComplete: () => {
           playChime();
@@ -2421,21 +2471,15 @@ export class GreatBattleScene extends Phaser.Scene {
     );
     this.phase2Round1Words = round1Words;
 
-    const xPositions = [
-      this.scale.width * 0.25,
-      this.scale.width * 0.5,
-      this.scale.width * 0.75,
-    ];
-
     let remaining = 3;
     for (let i = 0; i < 3; i++) {
       const word = round1Words[i]!;
-      const x = xPositions[i]!;
+      const wordPos = this.lordDuelWordPosition(i, 3, 518);
       const target = this.makeLordWord({
         scene: this,
         word,
-        x,
-        y: 520,
+        x: wordPos.x,
+        y: wordPos.y,
         fontSize: 40,
         onComplete: () => {
           playChime();
@@ -2479,11 +2523,12 @@ export class GreatBattleScene extends Phaser.Scene {
     // Flash the screen briefly (light corridor effect)
     this.cameras.main.flash(400, 160, 220, 255, false);
     this.time.delayedCall(500, () => {
+      const wordPos = { x: this.scale.width * 0.64, y: 560 };
       const bonusTarget = this.makeLordWord({
         scene: this,
         word: "light",
-        x: this.scale.width / 2,
-        y: 480,
+        x: wordPos.x,
+        y: wordPos.y,
         fontSize: 40,
         onComplete: () => {
           playChime();
@@ -2617,11 +2662,12 @@ export class GreatBattleScene extends Phaser.Scene {
 
     this.cameras.main.shake(240, 0.004);
 
+    const wordPos = this.lordDuelWordPosition(1, 2, 480);
     const defenseTarget = this.makeLordWord({
       scene: this,
       word: "hold",
-      x: this.scale.width / 2,
-      y: 500,
+      x: wordPos.x,
+      y: wordPos.y,
       fontSize: 48,
       onComplete: () => {
         playChime();
@@ -2716,21 +2762,15 @@ export class GreatBattleScene extends Phaser.Scene {
       this.store.get().keyStats,
     );
 
-    const xPositions = [
-      this.scale.width * 0.25,
-      this.scale.width * 0.5,
-      this.scale.width * 0.75,
-    ];
-
     let remaining = 3;
     for (let i = 0; i < 3; i++) {
       const word = round2Words[i]!;
-      const x = xPositions[i]!;
+      const wordPos = this.lordDuelWordPosition(i, 3, 518);
       const target = this.makeLordWord({
         scene: this,
         word,
-        x,
-        y: 520,
+        x: wordPos.x,
+        y: wordPos.y,
         fontSize: 40,
         onComplete: () => {
           playChime();
@@ -2832,11 +2872,12 @@ export class GreatBattleScene extends Phaser.Scene {
     this.setNarrator(`${lead}  ${word}`);
     this.band.setObjective("Mind the capitals in the Quiet Lord's word.");
 
+    const wordPos = this.lordDuelWordPosition(idx, words.length, 520);
     const target = this.makeLordWord({
       scene: this,
       word,
-      x: this.scale.width / 2,
-      y: 520,
+      x: wordPos.x,
+      y: wordPos.y,
       fontSize: 52,
       caseSensitive: true,
       onMiss: this.isKindnessDuel ? () => this.chargeKindnessMiss() : undefined,
@@ -2950,11 +2991,12 @@ export class GreatBattleScene extends Phaser.Scene {
     const word = words[idx]!;
     this.band.setObjective(`Final phrase ${idx + 1}/${words.length}: type ${word}.`);
 
+    const wordPos = this.finalPhraseWordPosition(idx);
     const target = this.makeFinalPhraseWord({
       scene: this,
       word,
-      x: this.scale.width / 2,
-      y: 540,
+      x: wordPos.x,
+      y: wordPos.y,
       fontSize: 44,
       onComplete: () => {
         // Cancel any pending brass-songbird stall timer for this word

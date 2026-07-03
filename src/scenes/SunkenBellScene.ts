@@ -120,6 +120,12 @@ const AURLAND_SPRITE_HEIGHT = 360;
 // the values the procedural drawWarden baked in.
 const WARDEN_X = 1400;
 const WARDEN_Y = 610;
+const DESCENT_LANTERN_WORDS = ["swim", "glow", "breathe"] as const;
+const DESCENT_LANTERN_POSITIONS = [
+  { x: 400, y: 600 },
+  { x: 960, y: 680 },
+  { x: 1520, y: 600 },
+] as const;
 
 export class SunkenBellScene extends Phaser.Scene {
   private store!: SaveStore;
@@ -133,6 +139,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private aurlandWordAnchors: WordBodyAnchorHandle[] = [];
   private glassFishWordAnchors: WordBodyAnchorHandle[] = [];
   private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
+  private descentLanterns: DescentLantern[] = [];
   private descentLanternWordAnchors: WordBodyAnchorHandle[] = [];
   private revisitMemoryCue: Phaser.GameObjects.Container | null = null;
   private revisitMemoryWordAnchor: WordBodyAnchorHandle | null = null;
@@ -208,6 +215,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.aurlandWordAnchors = [];
     this.glassFishWordAnchors = [];
     this.forkChoiceWordAnchors = [];
+    this.descentLanterns = [];
     this.descentLanternWordAnchors = [];
     this.revisitMemoryCue = null;
     this.revisitMemoryWordAnchor = null;
@@ -418,6 +426,8 @@ export class SunkenBellScene extends Phaser.Scene {
       this.ambientHandle?.stop();
       this.clearBellForkCues();
       this.clearAurlandWordAnchors();
+      this.descentLanterns.forEach((lantern) => lantern.container.destroy());
+      this.descentLanterns = [];
       this.dismissRevisitMemoryCue(false);
       this.olinImage?.destroy();
       this.olinImage = undefined;
@@ -918,26 +928,19 @@ export class SunkenBellScene extends Phaser.Scene {
     // called at the end of Olin's exchange.
     this.narration.say("sunken_intro_arrival");
     this.band.setObjective("Light the descent lanterns before the bell teaches its rhythm.");
+    this.showDescentLanterns();
     this.time.delayedCall(2500, () => this.startDescent());
   }
 
   // ─── Act 1: The Descent (lanterns) ────────────────────────────────────────
 
   private startDescent(): void {
-    const lanternWords = ["swim", "glow", "breathe"];
-    const lanternPositions = [
-      { x: 400, y: 600 },
-      { x: 960, y: 680 },
-      { x: 1520, y: 600 },
-    ];
-
     let lit = 0;
 
-    lanternWords.forEach((word, i) => {
-      const pos = lanternPositions[i];
-      if (!pos) return;
-
-      const lantern = this.drawDescentLantern(pos.x, pos.y, i);
+    DESCENT_LANTERN_WORDS.forEach((word, i) => {
+      const pos = DESCENT_LANTERN_POSITIONS[i];
+      const lantern = this.showDescentLantern(i);
+      if (!pos || !lantern) return;
       let lanternAnchor: WordBodyAnchorHandle | null = null;
       const releaseLanternAnchor = (): void => {
         if (!lanternAnchor) return;
@@ -960,7 +963,7 @@ export class SunkenBellScene extends Phaser.Scene {
           releaseLanternAnchor();
           this.lightDescentLantern(lantern);
           lit += 1;
-          if (lit >= lanternWords.length) {
+          if (lit >= DESCENT_LANTERN_WORDS.length) {
             this.time.delayedCall(800, () => this.startOlinNPC());
           }
         },
@@ -969,6 +972,20 @@ export class SunkenBellScene extends Phaser.Scene {
       this.typingInput.register(target);
       this.activeTargets.push(target);
     });
+  }
+
+  private showDescentLanterns(): void {
+    DESCENT_LANTERN_POSITIONS.forEach((_, i) => this.showDescentLantern(i));
+  }
+
+  private showDescentLantern(index: number): DescentLantern | null {
+    const existing = this.descentLanterns[index];
+    if (existing?.container.scene) return existing;
+    const pos = DESCENT_LANTERN_POSITIONS[index];
+    if (!pos) return null;
+    const lantern = this.drawDescentLantern(pos.x, pos.y, index);
+    this.descentLanterns[index] = lantern;
+    return lantern;
   }
 
   private drawDescentLantern(x: number, y: number, index: number): DescentLantern {

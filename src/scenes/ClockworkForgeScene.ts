@@ -173,6 +173,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
   private catwalkCue: Phaser.GameObjects.Container | null = null;
+  private catwalkCueIndex: number | null = null;
   private catwalkCueWordAnchor: WordBodyAnchorHandle | null = null;
   private revisitMemoryCue: Phaser.GameObjects.Container | null = null;
   private revisitMemoryWordAnchor: WordBodyAnchorHandle | null = null;
@@ -231,6 +232,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.fornWordAnchors = [];
     this.forkChoiceWordAnchors = [];
     this.catwalkCue = null;
+    this.catwalkCueIndex = null;
     this.catwalkCueWordAnchor = null;
     this.revisitMemoryCue = null;
     this.revisitMemoryWordAnchor = null;
@@ -416,6 +418,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.releaseCatwalkCueWordAnchor();
       this.catwalkCue?.destroy();
       this.catwalkCue = null;
+      this.catwalkCueIndex = null;
       this.dismissRevisitMemoryCue(false);
       this.clearFornWordAnchors();
       this.clearForkChoiceWordAnchors();
@@ -632,6 +635,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private startAct1Arrival(): void {
     this.narration.say("forge_intro_arrival");
     this.band.setObjective("Type each catwalk word to reach Gregor's station.");
+    this.showCatwalkCue(0, this.scale.width / 2 - 300);
     this.time.delayedCall(2600, () => this.startCatwalkBeats(0));
   }
 
@@ -2319,6 +2323,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private showCatwalkCue(idx: number, x: number): void {
+    if (this.catwalkCue?.scene && this.catwalkCueIndex === idx) return;
     this.dismissCatwalkCue(false);
     const cue =
       idx === 0
@@ -2327,6 +2332,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
           ? this.drawSteamPipeCue(x)
           : this.drawRailGripCue(x);
     this.catwalkCue = cue;
+    this.catwalkCueIndex = idx;
     this.tweens.add({
       targets: cue,
       alpha: 0.86,
@@ -2441,9 +2447,11 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const cue = this.catwalkCue;
     if (!cue?.scene) {
       this.catwalkCue = null;
+      this.catwalkCueIndex = null;
       return;
     }
     this.catwalkCue = null;
+    this.catwalkCueIndex = null;
     this.tweens.killTweensOf(cue);
     for (const child of cue.list) this.tweens.killTweensOf(child);
     if (!animate) {

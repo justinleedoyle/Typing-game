@@ -115,6 +115,7 @@ export class AlmanacScene extends Phaser.Scene {
   private closeTarget?: TextWordTarget;
   private navAnchorReleases: Array<() => void> = [];
   private navTypingPulseTimes = new Map<string, number>();
+  private pageWakeIndex = 0;
   private closing = false;
 
   constructor() {
@@ -128,6 +129,7 @@ export class AlmanacScene extends Phaser.Scene {
     this.pageStack = [];
     this.navAnchorReleases = [];
     this.navTypingPulseTimes.clear();
+    this.pageWakeIndex = 0;
     this.closing = false;
   }
 
@@ -250,6 +252,7 @@ export class AlmanacScene extends Phaser.Scene {
   private renderCurrentPage(): void {
     for (const t of this.pageTexts) t.destroy();
     this.pageTexts = [];
+    this.pageWakeIndex = 0;
 
     const entry = this.pageStack[this.currentPage];
     if (!entry || entry.kind === "overview") {
@@ -592,7 +595,8 @@ export class AlmanacScene extends Phaser.Scene {
 
     // Quiet Lord fragment — same scratched-out visual as the boss-defeat
     // reveal and the mid-realm intrusion (§5.5.10): cream serif with a dark
-    // quill cross-out stroke. Static on the page — no animation.
+    // quill cross-out stroke. It gets the same one-shot page-settle as the
+    // surrounding text, with no looping animation.
     this.addPageText(
       RIGHT_PAGE_X,
       TOP_TEXT_Y + 360,
@@ -614,6 +618,9 @@ export class AlmanacScene extends Phaser.Scene {
           depth: 10,
         });
       this.pageTexts.push(fragText, fragStroke);
+      const delayMs = this.nextPageWakeDelay();
+      this.stagePageObject(fragText, delayMs);
+      this.stagePageObject(fragStroke, delayMs);
     } else {
       this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 410, "...quiet, for now", {
         fontSize: "26px",
@@ -649,6 +656,7 @@ export class AlmanacScene extends Phaser.Scene {
       const img = this.add.image(x + 17, y + 14, icon.key).setOrigin(0.5, 0.5);
       img.setScale(34 / Math.max(1, img.height));
       this.pageTexts.push(img);
+      this.stagePageObject(img, this.nextPageWakeDelay(), { offsetY: 5 });
       this.addPageText(x + 46, y, name, { fontSize: "26px", color: PAGE_INK });
     } else {
       this.addPageText(x, y, `•  ${name}`, {
@@ -673,6 +681,40 @@ export class AlmanacScene extends Phaser.Scene {
       t.setOrigin(0.5, 0);
     }
     this.pageTexts.push(t);
+    this.stagePageObject(t, this.nextPageWakeDelay());
+  }
+
+  private nextPageWakeDelay(): number {
+    const delay = 35 + Math.min(this.pageWakeIndex, 14) * 18;
+    this.pageWakeIndex += 1;
+    return delay;
+  }
+
+  private stagePageObject(
+    object: Phaser.GameObjects.GameObject,
+    delayMs: number,
+    opts: { offsetY?: number } = {},
+  ): void {
+    const item = object as Phaser.GameObjects.GameObject & {
+      y: number;
+      setAlpha: (value: number) => typeof object;
+      setY: (value: number) => typeof object;
+    };
+    if (typeof item.y !== "number" || !item.setAlpha || !item.setY) return;
+
+    const baseY = item.y;
+    item.setAlpha(0);
+    item.setY(baseY + (opts.offsetY ?? 8));
+    this.time.delayedCall(delayMs, () => {
+      if (!object.scene) return;
+      this.tweens.add({
+        targets: item,
+        alpha: 1,
+        y: baseY,
+        duration: 220,
+        ease: "Sine.easeOut",
+      });
+    });
   }
 
   private placeNavigationTargets(): void {

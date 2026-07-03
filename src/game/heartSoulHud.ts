@@ -163,9 +163,12 @@ export class HeartSoulHud {
       this.container.add([heart, soul]);
     }
 
+    const baseY = this.container.y;
+    this.container.setY(baseY + 6);
     scene.tweens.add({
       targets: this.container,
       alpha: 1,
+      y: baseY,
       duration: 600,
       delay: 200,
       ease: "Sine.easeOut",

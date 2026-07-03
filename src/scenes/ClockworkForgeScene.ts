@@ -2353,7 +2353,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private catwalkWordPosition(idx: number): { x: number; y: number } {
     const cueX = this.catwalkCueX(idx);
     if (idx === 0) return { x: cueX - 28, y: CATWALK_Y - 78 };
-    if (idx === 1) return { x: cueX + 176, y: CATWALK_Y - 118 };
+    if (idx === 1) return { x: cueX + 128, y: CATWALK_Y - 124 };
     return { x: cueX + 126, y: CATWALK_Y - 76 };
   }
 
@@ -2452,26 +2452,42 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private drawSteamPipeCue(x: number): Phaser.GameObjects.Container {
-    const c = this.add.container(x, CATWALK_Y - 32).setDepth(-2).setAlpha(0);
+    const c = this.add.container(x, CATWALK_Y - 36).setDepth(-2).setAlpha(0);
     const pipe = this.add.graphics();
-    pipe.lineStyle(10, 0x1a1411, 0.94);
-    pipe.lineBetween(-92, -78, 92, -78);
-    pipe.lineStyle(4, 0x584331, 0.58);
-    pipe.lineBetween(-88, -84, 88, -84);
+    pipe.lineStyle(18, 0x090706, 0.46);
+    pipe.lineBetween(-142, -86, 124, -86);
+    pipe.lineStyle(14, 0x1a1411, 0.96);
+    pipe.lineBetween(-140, -84, 126, -84);
+    pipe.lineStyle(5, 0x6f5338, 0.68);
+    pipe.lineBetween(-132, -92, 118, -92);
     pipe.fillStyle(0x2a211b, 1);
-    pipe.fillRoundedRect(-20, -88, 40, 24, 6);
+    pipe.fillRoundedRect(54, -102, 62, 33, 7);
+    pipe.fillStyle(0x0d0907, 0.94);
+    pipe.fillRoundedRect(70, -78, 38, 19, 6);
+    pipe.lineStyle(3, 0x8b6843, 0.55);
+    pipe.strokeRoundedRect(54, -102, 62, 33, 7);
+    pipe.fillStyle(PALETTE_HEX.ember, 0.18);
+    pipe.fillEllipse(88, -62, 66, 13);
+    pipe.lineStyle(2, 0xf0c074, 0.42);
+    pipe.strokeEllipse(88, -68, 42, 18);
     c.add(pipe);
     const steam = this.add.graphics();
-    steam.fillStyle(0xd7c3a1, 0.14);
-    steam.fillEllipse(0, -36, 54, 96);
-    steam.fillEllipse(-18, -10, 32, 58);
-    steam.fillEllipse(24, 6, 38, 72);
+    steam.fillStyle(0xf3dfbd, 0.32);
+    steam.fillEllipse(96, -20, 82, 126);
+    steam.fillStyle(0xd7c3a1, 0.24);
+    steam.fillEllipse(68, 8, 48, 82);
+    steam.fillEllipse(124, 12, 54, 92);
+    steam.fillStyle(0xffffff, 0.16);
+    steam.fillEllipse(98, -44, 50, 78);
+    steam.lineStyle(2, 0xf5d195, 0.28);
+    steam.lineBetween(82, -70, 72, 38);
+    steam.lineBetween(112, -66, 128, 42);
     c.add(steam);
     this.tweens.add({
       targets: steam,
-      y: -10,
-      scaleY: 1.12,
-      alpha: 0.58,
+      y: -12,
+      scaleY: 1.16,
+      alpha: 0.72,
       duration: 760,
       yoyo: true,
       repeat: -1,
@@ -2554,7 +2570,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const cue = this.catwalkCue;
     if (!cue?.scene) return;
     this.releaseCatwalkCueWordAnchor();
-    const sourceOffsetY = idx === 1 ? -36 : -8;
+    const sourceOffsetY = idx === 1 ? -54 : -8;
     this.catwalkCueWordAnchor = attachWordBodyAnchor(
       this,
       cue,

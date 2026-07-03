@@ -168,6 +168,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private showPortalRevisits = false;
   private hubArrival: HubArrivalSource | null = null;
   private activeZone: Zone = "portals";
+  private openingUtilityScene = false;
 
   constructor() {
     super("PortalChamberScene");
@@ -188,6 +189,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.portalTypingPulseTimes = new Map();
     this.showPortalRevisits = false;
     this.activeZone = "portals";
+    this.openingUtilityScene = false;
   }
 
   preload(): void {
@@ -628,13 +630,10 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private enterSettings(): void {
-    this.cameras.main.fadeOut(400, 10, 8, 15);
-    this.cameras.main.once(
-      Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-      () => {
-        this.scene.start("SettingsScene", { store: this.store });
-      },
-    );
+    this.openUtilityScene("SettingsScene", HUB_STATIONS.account, {
+      kind: "ledger",
+      pulseStation: false,
+    });
   }
 
   // ─── Desk zone ────────────────────────────────────────────────────────────
@@ -1092,12 +1091,11 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private openAlmanac(): void {
-    playChime();
-    this.cameras.main.fadeOut(350, 11, 10, 15);
-    this.cameras.main.once(
-      Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-      () => this.scene.start("AlmanacScene", { store: this.store }),
-    );
+    this.openUtilityScene("AlmanacScene", HUB_STATIONS.almanac, {
+      kind: "book",
+      includeRuna: true,
+      playChime: true,
+    });
   }
 
   // ─── Input ────────────────────────────────────────────────────────────────
@@ -1911,6 +1909,92 @@ export class PortalChamberScene extends Phaser.Scene {
       });
     }
     if (includeRuna) this.playRunaAttention();
+  }
+
+  private openUtilityScene(
+    sceneKey: "AlmanacScene" | "SettingsScene",
+    station: StationSpec,
+    opts: {
+      kind: "book" | "ledger";
+      includeRuna?: boolean;
+      playChime?: boolean;
+      pulseStation?: boolean;
+    },
+  ): void {
+    if (this.openingUtilityScene) return;
+    this.openingUtilityScene = true;
+    if (opts.playChime) playChime();
+    this.setHint("");
+    this.playHubActorAction(station.x, opts.includeRuna === true);
+    if (opts.pulseStation !== false) this.pulseStation(station);
+    this.playUtilityStationExitWake(station, opts.kind);
+    this.time.delayedCall(210, () => {
+      this.cameras.main.fadeOut(430, 11, 10, 15);
+      this.cameras.main.once(
+        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+        () => this.scene.start(sceneKey, { store: this.store }),
+      );
+    });
+  }
+
+  private playUtilityStationExitWake(station: StationSpec, kind: "book" | "ledger"): void {
+    const width = station.width + (kind === "book" ? 36 : 24);
+    const height = station.height + (kind === "book" ? 26 : 20);
+    const frame = this.add.container(station.x, station.y).setDepth(12).setAlpha(0.64);
+    const g = this.add.graphics();
+    g.fillStyle(UI_HEX.panel, 0.12);
+    g.fillRoundedRect(-width / 2, -height / 2, width, height, 9);
+    g.lineStyle(2, UI_HEX.brass, 0.62);
+    g.strokeRoundedRect(-width / 2, -height / 2, width, height, 9);
+    g.lineStyle(1, UI_HEX.parchment, 0.26);
+    if (kind === "book") {
+      g.lineBetween(0, -height / 2 + 9, 0, height / 2 - 9);
+      g.lineBetween(-width / 2 + 18, -height / 2 + 14, -width / 2 + 18, height / 2 - 14);
+      g.lineBetween(width / 2 - 18, -height / 2 + 14, width / 2 - 18, height / 2 - 14);
+    } else {
+      for (const y of [-height * 0.22, 0, height * 0.22]) {
+        g.lineBetween(-width / 2 + 20, y, width / 2 - 20, y);
+      }
+    }
+    frame.add(g);
+    frame.add(
+      cornerTicks(this, width, height, {
+        inset: 5,
+        size: 10,
+        width: 2,
+      }),
+    );
+
+    this.tweens.add({
+      targets: frame,
+      alpha: 0,
+      scaleX: 0.92,
+      scaleY: 1.08,
+      duration: 390,
+      ease: "Sine.easeInOut",
+      onComplete: () => frame.destroy(),
+    });
+
+    for (let i = 0; i < 9; i += 1) {
+      const side = i % 2 === 0 ? -1 : 1;
+      const fromX = station.x + side * (station.width * 0.18 + (i % 3) * 8);
+      const fromY = station.y - station.height * 0.12 + (i % 3) * 7;
+      const fleck = this.add.graphics().setPosition(fromX, fromY).setDepth(13).setAlpha(0.72);
+      fleck.fillStyle(i % 3 === 0 ? UI_HEX.parchment : UI_HEX.brass, 0.74);
+      fleck.fillCircle(0, 0, 2.2 + (i % 3) * 0.6);
+      this.tweens.add({
+        targets: fleck,
+        x: station.x + side * (18 + i * 2),
+        y: station.y - station.height * 1.18 - i * 3,
+        alpha: 0,
+        scaleX: 0.35,
+        scaleY: 0.35,
+        duration: 290 + i * 16,
+        delay: i * 12,
+        ease: "Sine.easeIn",
+        onComplete: () => fleck.destroy(),
+      });
+    }
   }
 
   private playRunaAttention(): void {

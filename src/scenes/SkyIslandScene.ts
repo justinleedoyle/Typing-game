@@ -760,7 +760,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
     switch (beat) {
       case "balance":
-        return { x: cue.x - 250, y: cue.y - 92 };
+        return { x: cue.x - 178, y: cue.y - 150 };
       case "lantern":
         return { x: cue.x + 214, y: cue.y - 122 };
       case "stepping":
@@ -843,30 +843,47 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private drawBalanceBridgeCue(): Phaser.GameObjects.Container {
-    const c = this.add.container(this.scale.width / 2 - 52, 802).setDepth(-1).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 276, 24, { y: 24, alpha: 0.12 }));
+    const c = this.add.container(this.scale.width / 2 - 92, 796).setDepth(-1).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 336, 30, { y: 34, alpha: 0.16 }));
+
+    const air = this.add.graphics();
+    air.lineStyle(2, 0xf3ead2, 0.16);
+    air.lineBetween(-178, 30, -92, 50);
+    air.lineBetween(-92, 50, 18, 22);
+    air.lineBetween(18, 22, 96, 6);
+    air.lineBetween(96, 6, 186, 20);
+    air.lineStyle(1.5, PALETTE_HEX.brass, 0.12);
+    air.lineBetween(-156, 38, -108, 47);
+    air.lineBetween(92, 10, 146, 18);
+    c.add(air);
+
     const rocks = this.add.graphics().setAngle(-3);
-    rocks.fillStyle(0x3f4850, 0.5);
-    rocks.fillEllipse(-138, 14, 92, 34);
-    rocks.fillEllipse(138, 18, 104, 38);
-    rocks.lineStyle(1.5, 0xd6c386, 0.12);
-    rocks.strokeEllipse(-138, 14, 76, 22);
-    rocks.strokeEllipse(138, 18, 82, 24);
+    rocks.fillStyle(0x46515c, 0.66);
+    rocks.fillEllipse(-156, 18, 122, 46);
+    rocks.fillEllipse(156, 22, 130, 50);
+    rocks.fillStyle(0x6d765f, 0.44);
+    rocks.fillEllipse(-158, 6, 66, 16);
+    rocks.fillEllipse(158, 9, 72, 18);
+    rocks.lineStyle(2, 0xd6c386, 0.2);
+    rocks.strokeEllipse(-156, 18, 100, 30);
+    rocks.strokeEllipse(156, 22, 104, 32);
     c.add(rocks);
 
     const bridge = this.add.graphics().setAngle(-3);
-    bridge.fillStyle(0x6b5c45, 0.66);
-    bridge.fillRoundedRect(-132, -16, 264, 32, 12);
-    bridge.lineStyle(2, 0xd6c386, 0.22);
-    bridge.strokeRoundedRect(-132, -16, 264, 32, 12);
-    bridge.fillStyle(0x9b8a6a, 0.58);
-    bridge.fillRoundedRect(-118, -9, 64, 11, 6);
-    bridge.fillRoundedRect(-34, -12, 62, 12, 6);
-    bridge.fillRoundedRect(52, -8, 60, 11, 6);
-    bridge.lineStyle(1.5, 0xf3ead2, 0.14);
-    bridge.lineBetween(-118, -18, -94, 17);
-    bridge.lineBetween(-18, -19, 3, 18);
-    bridge.lineBetween(86, -17, 106, 18);
+    bridge.fillStyle(0x56493a, 0.82);
+    bridge.fillRoundedRect(-156, -18, 312, 38, 14);
+    bridge.lineStyle(2.5, 0xd6c386, 0.36);
+    bridge.strokeRoundedRect(-156, -18, 312, 38, 14);
+    bridge.lineStyle(2, 0xf3ead2, 0.16);
+    bridge.lineBetween(-148, -5, 148, -8);
+    bridge.fillStyle(0x9b8a6a, 0.72);
+    bridge.fillRoundedRect(-134, -10, 70, 14, 6);
+    bridge.fillRoundedRect(-46, -13, 72, 15, 6);
+    bridge.fillRoundedRect(46, -9, 74, 14, 6);
+    bridge.lineStyle(1.5, 0xf3ead2, 0.2);
+    bridge.lineBetween(-132, -20, -106, 20);
+    bridge.lineBetween(-28, -21, -4, 22);
+    bridge.lineBetween(82, -19, 104, 20);
     c.add(bridge);
     return c;
   }

@@ -143,6 +143,8 @@ export class TextWordTarget implements WordTarget {
   private altClaimed = false;
   private danger = 0;
   private suffixMasked = false;
+  private bannerW = 0;
+  private bannerH = 0;
   // Tier 4 `unseal`: number of cursor-resets to PARDON (keep progress) before
   // the target resets for real. `resetForgivenPending` collapses the two
   // resetCursor() calls a single miss triggers (the target's own resetOnMiss +
@@ -194,6 +196,8 @@ export class TextWordTarget implements WordTarget {
       this.container.setSize(this.remainingText.width, this.remainingText.height);
       const w = this.remainingText.width + BANNER_PAD_X;
       const h = this.remainingText.height + BANNER_PAD_Y;
+      this.bannerW = w;
+      this.bannerH = h;
       const plate = opts.scene.add.graphics();
       plate.fillStyle(UI_HEX.panel, 0.85);
       plate.fillRoundedRect(-w / 2, -h / 2, w, h, 9);
@@ -342,6 +346,7 @@ export class TextWordTarget implements WordTarget {
     this.spellClaimed = mods.spell;
     this.altClaimed = mods.alt;
     this.playClaimPulse();
+    this.playBannerWake(false);
     if (mods.alt) {
       // Alt = wild — brass tint reads as electric, distinct from ember spell.
       this.typedText.setColor(PALETTE.brass);
@@ -382,6 +387,7 @@ export class TextWordTarget implements WordTarget {
         { color: burstColor ?? PALETTE_HEX.brass },
       );
     }
+    this.playBannerWake(true);
 
     this.opts.scene.tweens.add({
       targets: this.container,
@@ -464,6 +470,42 @@ export class TextWordTarget implements WordTarget {
       scaleY: 1,
       duration: 180,
       ease: "Back.easeOut",
+    });
+  }
+
+  private playBannerWake(stronger: boolean): void {
+    if (this.opts.frame !== "banner" || this.bannerW <= 0 || this.bannerH <= 0) {
+      return;
+    }
+    const wake = this.opts.scene.add.graphics().setAlpha(stronger ? 0.74 : 0.58);
+    wake.lineStyle(2, UI_HEX.brass, stronger ? 0.72 : 0.52);
+    wake.strokeRoundedRect(
+      -this.bannerW / 2 - 4,
+      -this.bannerH / 2 - 4,
+      this.bannerW + 8,
+      this.bannerH + 8,
+      10,
+    );
+    wake.fillStyle(
+      stronger ? UI_HEX.parchment : UI_HEX.brass,
+      stronger ? 0.14 : 0.09,
+    );
+    wake.fillRoundedRect(
+      -this.bannerW / 2 + 6,
+      -this.bannerH / 2 + 5,
+      this.bannerW - 12,
+      5,
+      3,
+    );
+    this.container.addAt(wake, 1);
+    this.opts.scene.tweens.add({
+      targets: wake,
+      alpha: 0,
+      scaleX: stronger ? 1.055 : 1.025,
+      scaleY: stronger ? 1.12 : 1.07,
+      duration: stronger ? 360 : 280,
+      ease: "Sine.easeOut",
+      onComplete: () => wake.destroy(),
     });
   }
 

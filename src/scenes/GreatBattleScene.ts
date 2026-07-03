@@ -7,7 +7,7 @@ import { playPeriodSnapSting } from "../audio/quietLordSting";
 import { getRunaLine } from "../audio/runaLines";
 import { NarrationManager } from "../game/narrationManager";
 import { ConsoleBand } from "../game/ui/consoleBand";
-import { UI_HEX } from "../game/ui/uiTheme";
+import { cornerTicks, UI_HEX } from "../game/ui/uiTheme";
 import { flashDamageVignette } from "../game/vfx";
 import { flashQuietLordFragment } from "../game/quietLordIntrusion";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -3286,6 +3286,30 @@ export class GreatBattleScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(0x0b0a0f);
     this.cameras.main.fadeIn(500, 11, 10, 15);
 
+    const plateW = 880;
+    const plateH = 460;
+    const plate = this.add
+      .container(this.scale.width / 2, 378)
+      .setDepth(1)
+      .setAlpha(0);
+    const bg = this.add.graphics();
+    bg.fillStyle(UI_HEX.panel, 0.72);
+    bg.fillRoundedRect(-plateW / 2, -plateH / 2, plateW, plateH, 10);
+    bg.lineStyle(3, UI_HEX.brass, 0.76);
+    bg.strokeRoundedRect(-plateW / 2, -plateH / 2, plateW, plateH, 10);
+    bg.lineStyle(1, UI_HEX.parchment, 0.18);
+    bg.strokeRoundedRect(-plateW / 2 + 12, -plateH / 2 + 12, plateW - 24, plateH - 24, 8);
+    bg.lineStyle(1, UI_HEX.brass, 0.32);
+    bg.lineBetween(-plateW / 2 + 72, -76, plateW / 2 - 72, -76);
+    plate.add(bg);
+    plate.add(cornerTicks(this, plateW, plateH, { inset: 12, size: 20, width: 3 }));
+    this.tweens.add({
+      targets: plate,
+      alpha: 1,
+      duration: 700,
+      ease: "Sine.easeOut",
+    });
+
     const lines: Array<{
       text: string;
       y: number;
@@ -3332,7 +3356,8 @@ export class GreatBattleScene extends Phaser.Scene {
           align: "center",
         })
         .setOrigin(0.5)
-        .setAlpha(0);
+        .setAlpha(0)
+        .setDepth(2);
 
       this.tweens.add({
         targets: txt,
@@ -3357,7 +3382,8 @@ export class GreatBattleScene extends Phaser.Scene {
         },
       )
       .setOrigin(0.5)
-      .setAlpha(0);
+      .setAlpha(0)
+      .setDepth(2);
 
     this.tweens.add({
       targets: pressAny,

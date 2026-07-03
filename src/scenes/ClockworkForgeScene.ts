@@ -680,14 +680,37 @@ export class ClockworkForgeScene extends Phaser.Scene {
     );
 
     // First exchange: Wren types "i know."
+    let replyAnchor: WordBodyAnchorHandle | null = null;
+    const releaseReplyAnchor = (): void => {
+      replyAnchor?.destroy();
+      replyAnchor = null;
+    };
     const reply1 = this.makeWord({
       scene: this,
       word: "i know.",
-      x: this.scale.width / 2,
-      y: this.scale.height - 340,
+      x: this.wrenContainer.x,
+      y: this.wrenContainer.y - 154,
       fontSize: 36,
-      onComplete: () => this.gregorStep2(),
+      onClaim: () => playWrenFocus(this.wrenSprite),
+      onComplete: () => {
+        releaseReplyAnchor();
+        playWrenAction(this.wrenSprite);
+        this.gregorStep2();
+      },
     });
+    replyAnchor = attachWordBodyAnchor(
+      this,
+      this.wrenContainer,
+      () => ({ x: reply1.getAnchorX(), y: reply1.getAnchorY() }),
+      {
+        color: PALETTE_HEX.ember,
+        alpha: 0.17,
+        depth: 43,
+        sourceOffsetY: -112,
+        targetOffsetY: 24,
+      },
+    );
+    this.wrenContainer.once(Phaser.GameObjects.Events.DESTROY, releaseReplyAnchor);
     this.typingInput.register(reply1);
     this.activeTargets.push(reply1);
   }

@@ -1125,11 +1125,12 @@ export class SunkenBellScene extends Phaser.Scene {
 
     this.setNarrator("tell me your name, child.", "Old Olin");
     this.time.delayedCall(600, () => {
+      const namePos = this.olinPassageWordPosition();
       const nameTarget = this.makeOlinWord({
         scene: this,
         word: "wren",
-        x: this.scale.width / 2,
-        y: this.scale.height - 340,
+        x: namePos.x,
+        y: namePos.y,
         fontSize: 40,
         onComplete: () => {
           this.clearActiveTargets();
@@ -1143,11 +1144,12 @@ export class SunkenBellScene extends Phaser.Scene {
               "Old Olin",
             );
             this.time.delayedCall(800, () => {
+              const teachPos = this.olinPassageWordPosition();
               const teachTarget = this.makeOlinWord({
                 scene: this,
                 word: "teach me",
-                x: this.scale.width / 2,
-                y: this.scale.height - 340,
+                x: teachPos.x,
+                y: teachPos.y,
                 fontSize: 40,
                 onComplete: () => {
                   this.clearActiveTargets();
@@ -1815,6 +1817,16 @@ export class SunkenBellScene extends Phaser.Scene {
     };
 
     this.beatClock.onNextBeat(advanceWord);
+  }
+
+  private olinPassageWordPosition(): { x: number; y: number } {
+    const olin = this.olinImage;
+    if (!olin?.scene) return { x: this.scale.width / 2, y: this.scale.height - 340 };
+    const bounds = olin.getBounds();
+    return {
+      x: Math.max(330, Math.min(this.scale.width - 330, bounds.right + 170)),
+      y: Math.max(330, Math.min(this.scale.height - 360, bounds.top + 66)),
+    };
   }
 
   private onWardenDefeated(): void {

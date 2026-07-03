@@ -1409,11 +1409,14 @@ export class HauntedWoodScene extends Phaser.Scene {
       }
       const word = words[idx];
       if (word === undefined) return;
+      const wordPos = this.ownerPassageWordPosition(this.ghostKingBody, -30, {
+        side: "left",
+      });
       const target = this.makeGhostKingWord({
         scene: this,
         word,
-        x: this.scale.width / 2,
-        y: this.scale.height / 2,
+        x: wordPos.x,
+        y: wordPos.y,
         fontSize: 48,
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {

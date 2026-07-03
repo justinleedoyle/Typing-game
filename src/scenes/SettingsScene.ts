@@ -312,6 +312,7 @@ export class SettingsScene extends Phaser.Scene {
     rowRule.lineTo(ROW_X + 420, y + 58);
     rowRule.strokePath();
     this.rowTexts.push(rowRule);
+    this.stageLedgerObject(rowRule, 35 + index * 34, { offsetY: 5 });
 
     const labelText = this.add
       .text(ROW_X + LABEL_OFFSET_X, y, label, {
@@ -321,6 +322,7 @@ export class SettingsScene extends Phaser.Scene {
       })
       .setOrigin(0, 0.5);
     this.rowTexts.push(labelText);
+    this.stageLedgerObject(labelText, 50 + index * 34);
 
     const valueText = this.add
       .text(ROW_X + VALUE_OFFSET_X, y, value, {
@@ -331,6 +333,7 @@ export class SettingsScene extends Phaser.Scene {
       })
       .setOrigin(0, 0.5);
     this.rowTexts.push(valueText);
+    this.stageLedgerObject(valueText, 65 + index * 34);
   }
 
   private drawAction(
@@ -580,6 +583,36 @@ export class SettingsScene extends Phaser.Scene {
       .setOrigin(0.5, 0.5)
       .setAlpha(0.58);
     this.rowTexts.push(hint);
+    this.stageLedgerObject(hint, 95 + index * 34, { offsetY: 6 });
+  }
+
+  private stageLedgerObject(
+    object: Phaser.GameObjects.GameObject,
+    delayMs: number,
+    opts: { offsetY?: number } = {},
+  ): void {
+    const item = object as Phaser.GameObjects.GameObject & {
+      alpha: number;
+      y: number;
+      setAlpha: (value: number) => typeof object;
+      setY: (value: number) => typeof object;
+    };
+    if (typeof item.y !== "number" || !item.setAlpha || !item.setY) return;
+
+    const baseY = item.y;
+    const finalAlpha = item.alpha;
+    item.setAlpha(0);
+    item.setY(baseY + (opts.offsetY ?? 8));
+    this.time.delayedCall(delayMs, () => {
+      if (!object.scene) return;
+      this.tweens.add({
+        targets: item,
+        alpha: finalAlpha,
+        y: baseY,
+        duration: 220,
+        ease: "Sine.easeOut",
+      });
+    });
   }
 
   // ─── Actions ────────────────────────────────────────────────────────────────
@@ -632,6 +665,8 @@ export class SettingsScene extends Phaser.Scene {
       size: 14,
       width: 2,
     }).setPosition(panelX, panelY).setAlpha(0.56);
+    this.stageLedgerObject(this.renamePanel, 35, { offsetY: 5 });
+    this.stageLedgerObject(this.renamePanelCorners, 45, { offsetY: 5 });
 
     this.renamePrompt = this.add
       .text(this.scale.width / 2, 380, "Type a new name.", {
@@ -641,6 +676,7 @@ export class SettingsScene extends Phaser.Scene {
         fontStyle: "italic",
       })
       .setOrigin(0.5);
+    this.stageLedgerObject(this.renamePrompt, 65);
 
     this.renameFieldPlate = this.add.graphics();
     this.renameFieldPlate.fillStyle(UI_HEX.parchment, 0.94);
@@ -659,6 +695,7 @@ export class SettingsScene extends Phaser.Scene {
       78,
       8,
     );
+    this.stageLedgerObject(this.renameFieldPlate, 85, { offsetY: 6 });
 
     this.renameField = this.add
       .text(this.scale.width / 2, 460, this.renameBuffer || " ", {
@@ -667,6 +704,7 @@ export class SettingsScene extends Phaser.Scene {
         color: UI_CSS.ink,
       })
       .setOrigin(0.5);
+    this.stageLedgerObject(this.renameField, 105);
 
     this.renameHint = this.add
       .text(
@@ -681,6 +719,7 @@ export class SettingsScene extends Phaser.Scene {
         },
       )
       .setOrigin(0.5);
+    this.stageLedgerObject(this.renameHint, 130);
     this.pulseFocusBox(panelX, panelY, panelW + 54, panelH + 42);
   }
 
@@ -822,6 +861,10 @@ export class SettingsScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.rowTexts.push(panel, corners, title, warning);
+    this.stageLedgerObject(panel, 35, { offsetY: 5 });
+    this.stageLedgerObject(corners, 45, { offsetY: 5 });
+    this.stageLedgerObject(title, 65);
+    this.stageLedgerObject(warning, 90);
   }
 
   private performReset(): void {

@@ -3368,14 +3368,58 @@ export class GreatBattleScene extends Phaser.Scene {
       onComplete: () => {
         if (!this.creditsKeyListenerAdded) {
           this.creditsKeyListenerAdded = true;
-          this.input.keyboard?.once("keydown", () => {
-            this.scene.start("PortalChamberScene", {
-              store: this.store,
-              arrival: "great-battle",
-            });
-          });
+          this.input.keyboard?.once("keydown", () => this.returnFromCredits());
         }
       },
+    });
+  }
+
+  private returnFromCredits(): void {
+    const cx = this.scale.width / 2;
+    const cy = 560;
+    playSceneEventPulse(this, {
+      kind: "mote",
+      color: UI_HEX.brass,
+      x: cx,
+      y: cy,
+      depth: 12,
+      durationMs: 620,
+      ringWidth: 520,
+      ringHeight: 150,
+      count: 12,
+      alpha: 0.12,
+      spreadX: 220,
+      spreadY: 56,
+    });
+
+    const seal = this.add.graphics().setPosition(cx, cy).setDepth(11).setAlpha(0.7);
+    seal.lineStyle(2, UI_HEX.brass, 0.58);
+    seal.strokeEllipse(0, 0, 260, 74);
+    seal.lineStyle(1, 0x8b6ad8, 0.42);
+    seal.strokeEllipse(0, 0, 180, 48);
+    seal.fillStyle(UI_HEX.brass, 0.035);
+    seal.fillEllipse(0, 0, 260, 74);
+    this.tweens.add({
+      targets: seal,
+      alpha: 0,
+      scaleX: 1.32,
+      scaleY: 1.18,
+      duration: 540,
+      ease: "Sine.easeOut",
+      onComplete: () => seal.destroy(),
+    });
+
+    this.time.delayedCall(160, () => {
+      this.cameras.main.fadeOut(560, 11, 10, 15);
+      this.cameras.main.once(
+        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+        () => {
+          this.scene.start("PortalChamberScene", {
+            store: this.store,
+            arrival: "great-battle",
+          });
+        },
+      );
     });
   }
 

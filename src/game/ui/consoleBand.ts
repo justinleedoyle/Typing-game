@@ -38,6 +38,7 @@ const TILE = 36;
 const TILE_GAP = 8;
 const TILE_Y = MID_Y + 6;
 const SATCHEL_WAKE_DELAY_MS = 180;
+const BAND_ENTRY_WAKE_DELAY_MS = 90;
 // One-shot card slots
 const ONESHOT_X0 = 1010;
 const ONESHOT_DX = 250;
@@ -117,6 +118,7 @@ export class ConsoleBand {
     this.setPortrait(opts.portraitKey, opts.portraitName);
     this.drawSatchel(scene, opts.passiveIconIds ?? [], opts.satchelLabel ?? "satchel");
     this.drawObjectiveReadout(scene, W);
+    this.playBandEntryWake();
 
     this.satchelAnchor = { x: SATCHEL_X, y: top + TILE_Y };
     this.metersAnchor = { x: METERS_RIGHT, y: top + METERS_CY };
@@ -350,6 +352,48 @@ export class ConsoleBand {
     b.beginPath(); b.moveTo(m, m + s); b.lineTo(m, m); b.lineTo(m + s, m); b.strokePath();
     b.beginPath(); b.moveTo(W - m - s, m); b.lineTo(W - m, m); b.lineTo(W - m, m + s); b.strokePath();
     this.container.add(b);
+  }
+
+  private playBandEntryWake(): void {
+    const rail = this.scene.add.graphics().setAlpha(0);
+    rail.fillStyle(UI_HEX.brass, 0.3);
+    rail.fillRect(0, 0, this.bandWidth, 3);
+    rail.fillStyle(UI_HEX.brass, 0.08);
+    rail.fillRect(0, 3, this.bandWidth, 18);
+    rail.lineStyle(1, UI_HEX.parchment, 0.2);
+    rail.beginPath();
+    rail.moveTo(PAD, MID_Y + 14);
+    rail.lineTo(this.bandWidth - PAD, MID_Y + 14);
+    rail.strokePath();
+    this.container.add(rail);
+
+    const brackets = this.scene.add.graphics().setAlpha(0);
+    brackets.lineStyle(2, UI_HEX.brass, 0.56);
+    const size = 18;
+    const inset = 10;
+    brackets.beginPath();
+    brackets.moveTo(inset, inset + size);
+    brackets.lineTo(inset, inset);
+    brackets.lineTo(inset + size, inset);
+    brackets.strokePath();
+    brackets.beginPath();
+    brackets.moveTo(this.bandWidth - inset - size, inset);
+    brackets.lineTo(this.bandWidth - inset, inset);
+    brackets.lineTo(this.bandWidth - inset, inset + size);
+    brackets.strokePath();
+    this.container.add(brackets);
+
+    this.scene.tweens.add({
+      targets: [rail, brackets],
+      alpha: { from: 0.72, to: 0 },
+      delay: BAND_ENTRY_WAKE_DELAY_MS,
+      duration: 680,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        rail.destroy();
+        brackets.destroy();
+      },
+    });
   }
 
   private drawPortraitFrame(scene: Phaser.Scene): void {

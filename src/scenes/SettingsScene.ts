@@ -70,6 +70,7 @@ export class SettingsScene extends Phaser.Scene {
   private menuAnchorReleases: Array<() => void> = [];
   private focusMarks: Phaser.GameObjects.GameObject[] = [];
   private uiTypingPulseTimes = new Map<string, number>();
+  private closing = false;
 
   // Rename mode owns its own UI separate from the static rows.
   private renameBuffer = "";
@@ -96,6 +97,7 @@ export class SettingsScene extends Phaser.Scene {
     this.menuAnchorReleases = [];
     this.focusMarks = [];
     this.uiTypingPulseTimes.clear();
+    this.closing = false;
     this.renameBuffer = "";
   }
 
@@ -513,6 +515,45 @@ export class SettingsScene extends Phaser.Scene {
     });
   }
 
+  private playSettingsExitWake(): void {
+    const frame = this.add.graphics().setDepth(22).setAlpha(0.46);
+    frame.setPosition(PANEL_X, PANEL_Y);
+    frame.fillStyle(UI_HEX.panel, 0.12);
+    frame.fillRoundedRect(-PANEL_W / 2 - 8, -PANEL_H / 2 - 8, PANEL_W + 16, PANEL_H + 16, 16);
+    frame.lineStyle(2, UI_HEX.brass, 0.5);
+    frame.strokeRoundedRect(-PANEL_W / 2 - 8, -PANEL_H / 2 - 8, PANEL_W + 16, PANEL_H + 16, 16);
+
+    this.tweens.add({
+      targets: frame,
+      alpha: 0,
+      scaleX: 0.965,
+      scaleY: 1.018,
+      duration: 420,
+      ease: "Sine.easeInOut",
+      onComplete: () => frame.destroy(),
+    });
+
+    for (let i = 0; i < 5; i += 1) {
+      this.time.delayedCall(i * 28, () => {
+        const y = ROW_START_Y + i * ROW_SPACING + 28;
+        const lane = this.add.graphics().setDepth(23).setAlpha(0.4).setPosition(ROW_X + 30, y);
+        lane.fillStyle(UI_HEX.brass, 0.035);
+        lane.fillRoundedRect(-470, -38, 940, i === 0 ? 92 : 74, 10);
+        lane.lineStyle(1, UI_HEX.brass, 0.28);
+        lane.strokeRoundedRect(-470, -38, 940, i === 0 ? 92 : 74, 10);
+        this.tweens.add({
+          targets: lane,
+          alpha: 0,
+          scaleX: 0.78,
+          scaleY: 1.04,
+          duration: 260,
+          ease: "Sine.easeIn",
+          onComplete: () => lane.destroy(),
+        });
+      });
+    }
+  }
+
   /** Dim sub-hint under the Difficulty row that surfaces the otherwise-hidden
    *  in-game shortcut. Cycling here works too, but players had no way to learn
    *  about Ctrl+Shift+P, which works from any playing scene. Tracked in
@@ -803,14 +844,20 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   private handleBack(): void {
+    if (this.closing) return;
+    this.closing = true;
     playChime();
-    this.cameras.main.fadeOut(350, 11, 10, 15);
-    this.cameras.main.once(
-      Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-      () => {
-        this.scene.start(this.returnTo, { store: this.store });
-      },
-    );
+    this.clearMenu();
+    this.playSettingsExitWake();
+    this.time.delayedCall(220, () => {
+      this.cameras.main.fadeOut(430, 11, 10, 15);
+      this.cameras.main.once(
+        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+        () => {
+          this.scene.start(this.returnTo, { store: this.store });
+        },
+      );
+    });
   }
 
   // ─── Input ──────────────────────────────────────────────────────────────────

@@ -169,6 +169,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private groveLightCue: Phaser.GameObjects.Container | null = null;
   private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
   private pathCue: Phaser.GameObjects.Container | null = null;
+  private pathCueIndex: number | null = null;
   private pathCueWordAnchor: WordBodyAnchorHandle | null = null;
   private revisitMemoryCue: Phaser.GameObjects.Container | null = null;
   private revisitMemoryWordAnchor: WordBodyAnchorHandle | null = null;
@@ -208,6 +209,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.revisitMemoryCue = null;
     this.revisitMemoryWordAnchor = null;
     this.pathCue = null;
+    this.pathCueIndex = null;
     this.pathCueWordAnchor = null;
     this.ingaFigure = null;
     this.ingaWordAnchors = [];
@@ -400,6 +402,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.shrineFigure = null;
       this.releasePathCueWordAnchor();
       this.pathCue = null;
+      this.pathCueIndex = null;
       this.dismissRevisitMemoryCue(false);
       this.clearIngaWordAnchors();
       this.ingaFigure = null;
@@ -621,6 +624,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private startArrival(): void {
     this.narration.say("wood_intro_arrival");
     this.band.setObjective("Type the path words to reach the lantern in the trees.");
+    this.showPathCue(0);
     this.time.delayedCall(2800, () => this.startPathExploration());
   }
 
@@ -670,6 +674,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private showPathCue(idx: number): void {
+    if (this.pathCue?.scene && this.pathCueIndex === idx) return;
     this.dismissPathCue(false);
     const cue =
       idx === 0
@@ -678,6 +683,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           ? this.drawCanopyPathCue()
           : this.drawLanternPostCue();
     this.pathCue = cue;
+    this.pathCueIndex = idx;
     this.tweens.add({
       targets: cue,
       alpha: 0.82,
@@ -805,9 +811,11 @@ export class HauntedWoodScene extends Phaser.Scene {
     const cue = this.pathCue;
     if (!cue?.scene) {
       this.pathCue = null;
+      this.pathCueIndex = null;
       return;
     }
     this.pathCue = null;
+    this.pathCueIndex = null;
     this.tweens.killTweensOf(cue);
     if (!animate) {
       cue.destroy();

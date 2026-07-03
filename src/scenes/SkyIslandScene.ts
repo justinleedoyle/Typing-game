@@ -250,6 +250,7 @@ export class SkyIslandScene extends Phaser.Scene {
   // Forge), both acting on the scrolling banners. Null until create().
   private oneShotInvoker: OneShotInvoker<ScrollingPhrase> | null = null;
   private pathCue: Phaser.GameObjects.Container | null = null;
+  private pathCueBeat: (typeof PATH_BEATS)[number] | null = null;
   private pathWordAnchors: WordBodyAnchorHandle[] = [];
   private revisitMemoryCue: Phaser.GameObjects.Container | null = null;
   private revisitMemoryWordAnchor: WordBodyAnchorHandle | null = null;
@@ -269,6 +270,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.activePhrases = [];
     this.oneShotInvoker = null;
     this.pathCue = null;
+    this.pathCueBeat = null;
     this.pathWordAnchors = [];
     this.revisitMemoryCue = null;
     this.revisitMemoryWordAnchor = null;
@@ -465,6 +467,7 @@ export class SkyIslandScene extends Phaser.Scene {
       this.oneShotInvoker = null;
       this.bossRingTween?.stop();
       this.pathCue = null;
+      this.pathCueBeat = null;
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
       this.templeLanterns.forEach((g) => g.destroy());
@@ -680,6 +683,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private startAct1(): void {
     this.narration.say("sky_intro_arrival");
     this.band.setObjective("Type each path word to cross the floating stones.");
+    this.showPathCue("balance");
     this.time.delayedCall(2800, () => this.runPathBeats(0));
   }
 
@@ -721,6 +725,7 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private showPathCue(beat: (typeof PATH_BEATS)[number]): void {
+    if (this.pathCue?.scene && this.pathCueBeat === beat) return;
     this.dismissPathCue(false);
     const cue =
       beat === "balance"
@@ -729,6 +734,7 @@ export class SkyIslandScene extends Phaser.Scene {
           ? this.drawPathLanternCue()
           : this.drawSteppingStonesCue();
     this.pathCue = cue;
+    this.pathCueBeat = beat;
     this.tweens.add({
       targets: cue,
       alpha: 0.88,
@@ -849,9 +855,11 @@ export class SkyIslandScene extends Phaser.Scene {
     this.clearPathWordAnchors();
     if (!cue?.scene) {
       this.pathCue = null;
+      this.pathCueBeat = null;
       return;
     }
     this.pathCue = null;
+    this.pathCueBeat = null;
     this.tweens.killTweensOf(cue);
     if (!animate) {
       cue.destroy();

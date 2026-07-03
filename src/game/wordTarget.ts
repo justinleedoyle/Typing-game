@@ -435,6 +435,36 @@ export class TextWordTarget implements WordTarget {
     this.container.setAlpha(alpha);
   }
 
+  /** Short entrance motion for targets that are created by a room/surface
+   *  state change. This keeps controls from popping on top of a painted scene
+   *  while preserving immediate keyboard registration. */
+  playEntryWake(opts: {
+    delayMs?: number;
+    durationMs?: number;
+    offsetY?: number;
+  } = {}): void {
+    const delayMs = opts.delayMs ?? 0;
+    const durationMs = opts.durationMs ?? 220;
+    const offsetY = opts.offsetY ?? 12;
+    const baseY = this.container.y;
+    this.container.setAlpha(0);
+    this.container.setY(baseY + offsetY);
+    this.container.setScale(0.98);
+
+    this.opts.scene.time.delayedCall(delayMs, () => {
+      if (!this.container.scene) return;
+      this.opts.scene.tweens.add({
+        targets: this.container,
+        alpha: 1,
+        y: baseY,
+        scaleX: 1,
+        scaleY: 1,
+        duration: durationMs,
+        ease: "Sine.easeOut",
+      });
+    });
+  }
+
   setCandidate(candidate: boolean): void {
     this.candidate = candidate;
     this.applyDim();

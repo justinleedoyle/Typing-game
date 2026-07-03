@@ -83,6 +83,8 @@ interface WinterSceneData {
   revisit?: boolean;
 }
 
+type WinterPassageOwner = "huntress" | "firefly" | "cairn" | "pelt" | "none";
+
 // Wolves (and the Pack-Leader boss) are now the shared MovingWordEnemy. The boss
 // is tracked separately (this.boss) so the pack-vs-boss gate and its body-sprite
 // ward flash stay legible.
@@ -1919,6 +1921,7 @@ export class WinterMountainScene extends Phaser.Scene {
           this.fadeOutHuntress();
           this.time.delayedCall(600, () => this.startWave(nextWave));
         },
+        "huntress",
       );
     });
   }
@@ -1970,6 +1973,7 @@ export class WinterMountainScene extends Phaser.Scene {
           this.dismissFireflyCue();
           this.startWave(nextWave);
         },
+        "firefly",
       );
     });
   }
@@ -2196,6 +2200,7 @@ export class WinterMountainScene extends Phaser.Scene {
             this.clearWinterForkCues();
             this.startFoxGate();
           },
+          "cairn",
         );
       },
     }, { kind: "snow", color: PALETTE_HEX.frost, sourceOffsetY: -42 });
@@ -2221,6 +2226,7 @@ export class WinterMountainScene extends Phaser.Scene {
             this.clearWinterForkCues();
             this.startFoxGate();
           },
+          "pelt",
         );
       },
     }, { kind: "snow", color: PALETTE_HEX.frost, sourceOffsetY: -38 });
@@ -2455,6 +2461,7 @@ export class WinterMountainScene extends Phaser.Scene {
           playChime();
           this.time.delayedCall(600, () => this.startEnding());
         },
+        "none",
         seal,
       );
     });
@@ -2507,10 +2514,63 @@ export class WinterMountainScene extends Phaser.Scene {
   /**
    * Run an alternating sequence: typed passage → narrator line → … → onDone.
    */
+  private winterPassageOwnerBinding(owner: WinterPassageOwner): {
+    body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined;
+    vfx: { kind: "snow" | "mote"; color: number; sourceOffsetY: number };
+  } | null {
+    if (owner === "huntress") {
+      return {
+        body: this.huntressSprite,
+        vfx: { kind: "snow", color: PALETTE_HEX.frost, sourceOffsetY: -150 },
+      };
+    }
+    if (owner === "firefly") {
+      return {
+        body: this.fireflyCue,
+        vfx: { kind: "mote", color: PALETTE_HEX.brass, sourceOffsetY: -34 },
+      };
+    }
+    if (owner === "cairn") {
+      return {
+        body: this.cairnCue,
+        vfx: { kind: "snow", color: PALETTE_HEX.frost, sourceOffsetY: -42 },
+      };
+    }
+    if (owner === "pelt") {
+      return {
+        body: this.peltCue,
+        vfx: { kind: "snow", color: PALETTE_HEX.frost, sourceOffsetY: -38 },
+      };
+    }
+    return null;
+  }
+
+  private winterPassageWordPosition(
+    body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined,
+    sourceOffsetY: number,
+    word: string,
+  ): { x: number; y: number } {
+    const width = this.scale.width;
+    const height = this.scale.height;
+    if (!body?.scene) return { x: width / 2, y: height / 2 };
+
+    const long = word.length > 16;
+    const side = body.x < width / 2 ? 1 : -1;
+    const lateral = long ? 220 : 180;
+    const xInset = long ? 420 : 300;
+    const lift = long ? 116 : 102;
+
+    return {
+      x: Phaser.Math.Clamp(body.x + side * lateral, xInset, width - xInset),
+      y: Phaser.Math.Clamp(body.y + sourceOffsetY - lift, 280, height - 410),
+    };
+  }
+
   private runPassageChain(
     passages: string[],
     narratorLines: string[],
     onDone: () => void,
+    owner: WinterPassageOwner = "none",
     trueNameSeal?: Phaser.GameObjects.Container,
   ): void {
     let step = 0;
@@ -2525,11 +2585,23 @@ export class WinterMountainScene extends Phaser.Scene {
         trueNameAnchor?.destroy();
         trueNameAnchor = null;
       };
-      const target = this.makeWord({
+      const word = passages[step];
+      if (!word) return;
+      const ownerBinding = trueNameSeal ? null : this.winterPassageOwnerBinding(owner);
+      const pos = trueNameSeal
+        ? { x: trueNameSeal.x, y: trueNameSeal.y - 118 }
+        : ownerBinding
+          ? this.winterPassageWordPosition(
+              ownerBinding.body,
+              ownerBinding.vfx.sourceOffsetY,
+              word,
+            )
+          : { x: this.scale.width / 2, y: this.scale.height / 2 };
+      const opts: TextWordTargetOptions = {
         scene: this,
-        word: passages[step],
-        x: trueNameSeal?.x ?? this.scale.width / 2,
-        y: trueNameSeal ? trueNameSeal.y - 118 : this.scale.height / 2,
+        word,
+        x: pos.x,
+        y: pos.y,
         fontSize: 36,
         burstColor: trueNameSeal ? PALETTE_HEX.frost : undefined,
         onClaim: () => {
@@ -2588,7 +2660,11 @@ export class WinterMountainScene extends Phaser.Scene {
           this.setNarrator(narratorLines[step - 1] ?? "");
           this.time.delayedCall(900, advance);
         },
-      });
+      };
+      const target =
+        ownerBinding && !trueNameSeal
+          ? this.makeWinterForkWord(ownerBinding.body, opts, ownerBinding.vfx)
+          : this.makeWord(opts);
       if (trueNameSeal?.scene) {
         trueNameAnchor = attachWordBodyAnchor(
           this,

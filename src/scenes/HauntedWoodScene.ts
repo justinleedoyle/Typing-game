@@ -684,7 +684,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private pathWordPosition(idx: number): { x: number; y: number } {
     const cue = this.pathCue;
     if (!cue?.scene) return { x: this.scale.width / 2, y: this.scale.height / 2 };
-    if (idx === 0) return { x: cue.x - 214, y: cue.y - 92 };
+    if (idx === 0) return { x: cue.x - 132, y: cue.y - 118 };
     if (idx === 1) return { x: cue.x + 204, y: cue.y - 76 };
     return { x: cue.x + 214, y: cue.y - 124 };
   }
@@ -769,7 +769,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.pathCueIndex = idx;
     this.tweens.add({
       targets: cue,
-      alpha: 0.82,
+      alpha: idx === 0 ? 0.96 : 0.82,
       y: cue.y - 7,
       duration: 400,
       ease: "Sine.easeOut",
@@ -778,10 +778,12 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private drawRootPathCue(): Phaser.GameObjects.Container {
-    const c = this.add.container(this.scale.width / 2 - 72, 820).setDepth(-1).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 230, 20, { y: 14, alpha: 0.14 }));
+    const c = this.add.container(this.scale.width / 2 - 112, 818).setDepth(1).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 270, 24, { y: 18, alpha: 0.2 }));
     const roots = this.add.graphics();
-    roots.lineStyle(9, 0x1f241b, 0.86);
+    roots.fillStyle(0x8fb086, 0.13);
+    roots.fillEllipse(-12, 10, 286, 54);
+    roots.lineStyle(13, 0x171b14, 0.92);
     roots.beginPath();
     roots.moveTo(-120, 12);
     roots.lineTo(-88, -2);
@@ -791,7 +793,17 @@ export class HauntedWoodScene extends Phaser.Scene {
     roots.lineTo(78, 22);
     roots.lineTo(128, 2);
     roots.strokePath();
-    roots.lineStyle(5, 0x344030, 0.74);
+    roots.lineStyle(8, 0x2d3828, 0.92);
+    roots.beginPath();
+    roots.moveTo(-118, 10);
+    roots.lineTo(-86, -4);
+    roots.lineTo(-52, -18);
+    roots.lineTo(-12, 0);
+    roots.lineTo(34, 22);
+    roots.lineTo(78, 20);
+    roots.lineTo(126, 0);
+    roots.strokePath();
+    roots.lineStyle(4, 0x647457, 0.48);
     roots.beginPath();
     roots.moveTo(-86, 6);
     roots.lineTo(-38, 16);
@@ -803,9 +815,18 @@ export class HauntedWoodScene extends Phaser.Scene {
     roots.lineTo(48, -8);
     roots.lineTo(92, 18);
     roots.strokePath();
-    roots.fillStyle(0xd7ded8, 0.16);
-    roots.fillEllipse(-28, -6, 66, 13);
-    roots.fillEllipse(64, 8, 70, 14);
+    roots.lineStyle(2, 0xd7ded8, 0.28);
+    roots.lineBetween(-100, -2, -66, -14);
+    roots.lineBetween(-20, 2, 14, 16);
+    roots.lineBetween(58, 14, 102, 2);
+    roots.fillStyle(0xd7ded8, 0.2);
+    roots.fillEllipse(-68, -5, 58, 12);
+    roots.fillEllipse(18, 10, 58, 12);
+    roots.fillEllipse(82, 3, 60, 13);
+    roots.fillStyle(0xa7d8a2, 0.22);
+    roots.fillCircle(-122, 9, 4);
+    roots.fillCircle(-106, 19, 3);
+    roots.fillCircle(120, 11, 4);
     c.add(roots);
     return c;
   }
@@ -918,7 +939,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     const cue = this.pathCue;
     if (!cue?.scene) return;
     this.releasePathCueWordAnchor();
-    const sourceOffsetY = idx === 1 ? -34 : idx === 2 ? -76 : -18;
+    const sourceOffsetY = idx === 1 ? -34 : idx === 2 ? -76 : -44;
     this.pathCueWordAnchor = attachWordBodyAnchor(
       this,
       cue,

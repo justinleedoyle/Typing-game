@@ -2354,7 +2354,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const cueX = this.catwalkCueX(idx);
     if (idx === 0) return { x: cueX - 28, y: CATWALK_Y - 78 };
     if (idx === 1) return { x: cueX + 128, y: CATWALK_Y - 124 };
-    return { x: cueX + 126, y: CATWALK_Y - 76 };
+    return { x: cueX + 74, y: CATWALK_Y - 92 };
   }
 
   private walkWrenAlongCatwalk(x: number, onComplete?: () => void): void {
@@ -2497,24 +2497,51 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private drawRailGripCue(x: number): Phaser.GameObjects.Container {
-    const c = this.add.container(x, CATWALK_Y - 2).setDepth(-2).setAlpha(0);
+    const c = this.add.container(x, CATWALK_Y - 6).setDepth(-2).setAlpha(0);
     const g = this.add.graphics();
-    g.fillStyle(0x120e0b, 0.3);
-    g.fillEllipse(0, 40, 150, 22);
-    g.lineStyle(7, 0x201711, 0.95);
-    g.lineBetween(-82, -48, -82, 28);
-    g.lineBetween(82, -48, 82, 28);
-    g.lineStyle(6, 0x33261c, 0.9);
-    g.lineBetween(-92, -46, 92, -38);
-    g.lineStyle(3, 0x6a5038, 0.54);
-    g.lineBetween(-84, -52, 82, -44);
-    g.fillStyle(PALETTE_HEX.ember, 0.16);
-    g.fillEllipse(68, -40, 42, 16);
+    g.fillStyle(0x070504, 0.38);
+    g.fillEllipse(2, 42, 218, 24);
+    g.lineStyle(16, 0x090706, 0.44);
+    g.lineBetween(-116, -54, 124, -43);
+    g.lineStyle(12, 0x1a120d, 0.98);
+    g.lineBetween(-112, -52, 126, -42);
+    g.lineStyle(5, 0x6b5036, 0.82);
+    g.lineBetween(-106, -58, 118, -48);
+    g.lineStyle(3, 0xf0c074, 0.2);
+    g.lineBetween(-76, -62, 16, -58);
+
+    g.lineStyle(11, 0x140f0b, 0.98);
+    g.lineBetween(-94, -52, -94, 32);
+    g.lineBetween(94, -44, 94, 32);
+    g.lineStyle(4, 0x5e4631, 0.75);
+    g.lineBetween(-100, -48, -100, 26);
+    g.lineBetween(88, -41, 88, 28);
+
+    g.lineStyle(6, 0x2e2118, 0.84);
+    g.lineBetween(-86, -16, 88, -8);
+    g.lineStyle(2, 0x7e5d3b, 0.36);
+    g.lineBetween(-82, -20, 84, -12);
+
+    g.fillStyle(0x241810, 0.96);
+    g.fillRoundedRect(48, -63, 60, 28, 6);
+    g.lineStyle(3, 0x8a6541, 0.58);
+    g.strokeRoundedRect(48, -63, 60, 28, 6);
+    g.fillStyle(PALETTE_HEX.ember, 0.26);
+    g.fillCircle(62, -49, 3.5);
+    g.fillCircle(94, -47, 3.5);
+
+    g.lineStyle(2, PALETTE_HEX.ember, 0.34);
+    g.lineBetween(134, -60, 150, -66);
+    g.lineBetween(132, -45, 153, -43);
+    g.lineBetween(132, -30, 148, -24);
+    g.fillStyle(PALETTE_HEX.ember, 0.17);
+    g.fillEllipse(74, -48, 84, 18);
     c.add(g);
     this.tweens.add({
       targets: c,
-      x: x + 5,
-      duration: 120,
+      x: x + 7,
+      rotation: { from: -0.006, to: 0.008 },
+      duration: 115,
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
@@ -2570,7 +2597,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const cue = this.catwalkCue;
     if (!cue?.scene) return;
     this.releaseCatwalkCueWordAnchor();
-    const sourceOffsetY = idx === 1 ? -54 : -8;
+    const sourceOffsetY = idx === 1 ? -54 : idx === 2 ? -50 : -8;
     this.catwalkCueWordAnchor = attachWordBodyAnchor(
       this,
       cue,

@@ -8,6 +8,7 @@ import { assert, assertEqual, suite } from "./_assert";
 import {
   parseDevTarget,
   applyDevUnlock,
+  DEV_SCENE_KEYS,
   REALM_SCENE_KEYS,
 } from "../src/game/devUnlock";
 import type { SaveState } from "../src/game/saveState";
@@ -39,7 +40,7 @@ await suite("parseDevTarget: only triggers on ?dev", () => {
   );
 });
 
-await suite("parseDevTarget: ?dev=<realm> resolves the scene-key jump", () => {
+await suite("parseDevTarget: ?dev=<target> resolves the scene-key jump", () => {
   assertEqual(
     parseDevTarget("?dev=clockwork-forge"),
     { unlock: true, realmSceneKey: "ClockworkForgeScene" },
@@ -51,12 +52,17 @@ await suite("parseDevTarget: ?dev=<realm> resolves the scene-key jump", () => {
     "valid realm → jump",
   );
   assertEqual(
+    parseDevTarget("?dev=great-battle"),
+    { unlock: true, realmSceneKey: "GreatBattleScene" },
+    "finale target → jump",
+  );
+  assertEqual(
     parseDevTarget("?dev=not-a-realm"),
     { unlock: true, realmSceneKey: null },
     "unknown realm → unlock but no jump (falls through to hub)",
   );
-  // Every mapped realm id resolves to a registered-looking scene key.
-  for (const [id, key] of Object.entries(REALM_SCENE_KEYS)) {
+  // Every mapped dev target resolves to a registered-looking scene key.
+  for (const [id, key] of Object.entries(DEV_SCENE_KEYS)) {
     assertEqual(
       parseDevTarget(`?dev=${id}`).realmSceneKey,
       key,
@@ -71,6 +77,10 @@ await suite("applyDevUnlock: clears every realm + fills the satchel", () => {
   for (const id of Object.keys(REALM_SCENE_KEYS)) {
     assert(s.realms[id]?.cleared === true, `${id} cleared`);
   }
+  assert(
+    s.realms["great-battle"]?.cleared !== true,
+    "finale is not pre-cleared by the unlock",
+  );
   assertEqual(
     new Set(s.satchel).size,
     Object.keys(RELICS).length,

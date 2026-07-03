@@ -779,16 +779,15 @@ const SUNKEN_LINES: readonly RunaLine[] = [
 // same rule that left Sunken's `sunken_olin_intro` unwired. They are kept here
 // as a record of the beat and a candidate for a future inserted Runa line.
 //
-// `forge_intro_arrival` retains the scene's `Runa: "…"` caption styling verbatim
-// (Forge predates the prefix-less narration style); the speaker tag is stripped
-// at voice-generation time. Harmonizing caption style is a §5.5.8 prose-pass job.
+// `forge_intro_arrival` used to preserve the scene's old `Runa: "…"` caption
+// styling, but the speaker-aware narration card now provides that label.
 
 const FORGE_LINES: readonly RunaLine[] = [
   {
     id: "forge_intro_arrival",
     scene: "forge",
     trigger: "ClockworkForgeScene.startAct1Arrival() — scene opens in the heat (wired)",
-    text: "Runa: \"Wren. The air here bites. Brass and iron. Something older underneath.\"",
+    text: "Wren. The air here bites. Brass and iron. Something older underneath.",
     tone: "reading",
     isNew: true,
   },

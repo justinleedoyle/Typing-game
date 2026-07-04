@@ -406,6 +406,7 @@ function finaleTypedPulseForRealm(realmId: string): {
 
 interface Enemy {
   graphic: Phaser.GameObjects.Container;
+  body: Phaser.GameObjects.Container;
   target: TextWordTarget | null;
   wordAnchor: WordBodyAnchorHandle | null;
   advanceTween: Phaser.Tweens.Tween | null;
@@ -1189,11 +1190,12 @@ export class GreatBattleScene extends Phaser.Scene {
     enemy.arrivalTimer = null;
     enemy.wordAnchor?.destroy();
     enemy.wordAnchor = null;
-    this.tweens.killTweensOf(enemy.graphic);
+    this.stopFinaleEnemyMotion(enemy);
     if (enemy.target) {
       this.typingInput.unregister(enemy.target);
       const idx = this.activeTargets.indexOf(enemy.target);
       if (idx >= 0) this.activeTargets.splice(idx, 1);
+      enemy.target.destroy();
       enemy.target = null;
     }
     this.cameras.main.shake(180, 0.006);
@@ -1203,8 +1205,8 @@ export class GreatBattleScene extends Phaser.Scene {
     playBodyImpact(this, enemy.graphic, {
       kind: wake.kind,
       color: wake.color,
-      offsetX: enemy.x,
-      offsetY: enemy.y + 34,
+      offsetX: enemy.body.x,
+      offsetY: enemy.body.y + 34,
       depth: 48,
       ringRadius: 58,
     });
@@ -1431,7 +1433,8 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private spawnEnemy(waveDef: WaveDef, x: number, word: string, waveIdx: number): void {
-    const graphic = this.drawFinaleEnemyBody(waveDef.realmId, x, waveDef.baseY)
+    const enemyArt = this.drawFinaleEnemyBody(waveDef.realmId, x, waveDef.baseY);
+    const graphic = enemyArt.container
       .setDepth(3)
       .setAlpha(0);
     addContainerWake(this, graphic, {
@@ -1444,6 +1447,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
     const enemy: Enemy = {
       graphic,
+      body: enemyArt.body,
       target: null,
       wordAnchor: null,
       advanceTween: null,
@@ -1472,7 +1476,7 @@ export class GreatBattleScene extends Phaser.Scene {
       },
     });
     this.tweens.add({
-      targets: graphic,
+      targets: enemy.body,
       scaleX: { from: 0.98, to: 1.03 },
       scaleY: { from: 1, to: 0.97 },
       duration: 1300 + Math.abs(laneOffset) * 10,
@@ -1488,8 +1492,8 @@ export class GreatBattleScene extends Phaser.Scene {
     playBodyImpact(this, enemy.graphic, {
       kind: wake.kind,
       color: wake.color,
-      offsetX: enemy.x,
-      offsetY: enemy.y - 12,
+      offsetX: enemy.body.x,
+      offsetY: enemy.body.y - 12,
       depth: 6,
       ringRadius: 34,
       count: 7,
@@ -1514,23 +1518,23 @@ export class GreatBattleScene extends Phaser.Scene {
     const target = this.makeWord({
       scene: this,
       word: enemy.word,
-      x: enemy.x,
-      y: enemy.graphic.y + waveDef.baseY + FINALE_ENEMY_WORD_OFFSET_Y,
+      x: enemy.graphic.x + enemy.body.x,
+      y: enemy.graphic.y + enemy.body.y + FINALE_ENEMY_WORD_OFFSET_Y,
       fontSize: 34,
       onClaim: () =>
         playClaimLine(
           this,
           this.scale.width / 2,
           this.scale.height - 250,
-          enemy.x + enemy.graphic.x,
-          enemy.graphic.y + enemy.y + FINALE_ENEMY_WORD_OFFSET_Y,
+          enemy.graphic.x + enemy.body.x,
+          enemy.graphic.y + enemy.body.y + FINALE_ENEMY_WORD_OFFSET_Y,
           { color: finaleClaimColorForRealm(waveDef.realmId) },
         ),
       onAdvance: () =>
         playBodyTypePulse(this, enemy.graphic, {
           ...finaleTypedPulseForRealm(waveDef.realmId),
-          offsetX: enemy.x,
-          offsetY: enemy.y + FINALE_ENEMY_WORD_OFFSET_Y,
+          offsetX: enemy.body.x,
+          offsetY: enemy.body.y + FINALE_ENEMY_WORD_OFFSET_Y,
           depth: 6,
         }),
       onComplete: () => this.defeatEnemy(enemy),
@@ -1548,8 +1552,8 @@ export class GreatBattleScene extends Phaser.Scene {
         color: finaleClaimColorForRealm(waveDef.realmId),
         alpha: 0.16,
         depth: 5,
-        sourceOffsetX: enemy.x,
-        sourceOffsetY: enemy.y + FINALE_ENEMY_ANCHOR_SOURCE_OFFSET_Y,
+        sourceOffsetX: enemy.body.x,
+        sourceOffsetY: enemy.body.y + FINALE_ENEMY_ANCHOR_SOURCE_OFFSET_Y,
         targetOffsetY: 24,
       },
     );
@@ -1563,15 +1567,16 @@ export class GreatBattleScene extends Phaser.Scene {
     // before the enemy is defeated, the line is breached → a candle is snuffed
     // (the fail-state stake). untethered-wind buys more time to clear it.
     const advanceDuration = 12000 * (1 / this.untetheredWindSlowMult);
+    this.startFinaleEnemyGait(enemy);
     enemy.advanceTween = this.tweens.add({
       targets: enemy.graphic,
       y: `+=${80}`,
       duration: advanceDuration,
       ease: "Linear",
       onUpdate: () => {
-        enemy.target?.setAnchorX(enemy.x + enemy.graphic.x);
+        enemy.target?.setAnchorX(enemy.graphic.x + enemy.body.x);
         enemy.target?.setAnchorY(
-          enemy.graphic.y + enemy.y + FINALE_ENEMY_WORD_OFFSET_Y,
+          enemy.graphic.y + enemy.body.y + FINALE_ENEMY_WORD_OFFSET_Y,
         );
       },
       onComplete: () => {
@@ -1581,16 +1586,85 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
+  private startFinaleEnemyGait(enemy: Enemy): void {
+    const body = enemy.body;
+    this.tweens.killTweensOf(body);
+    body.setScale(1).setAngle(0);
+
+    const dir = body.x < this.scale.width / 2 ? 1 : -1;
+    const homeX = body.x;
+    const homeY = body.y;
+
+    if (enemy.realmId === "winter-mountain") {
+      this.tweens.add({
+        targets: body,
+        x: homeX + dir * 10,
+        y: homeY - 4,
+        angle: dir * -1.8,
+        duration: 360,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.easeInOut",
+      });
+      return;
+    }
+
+    if (enemy.realmId === "clockwork-forge") {
+      this.tweens.add({
+        targets: body,
+        x: homeX + dir * 5,
+        y: homeY - 2,
+        angle: dir * -0.9,
+        duration: 430,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.easeInOut",
+      });
+      return;
+    }
+
+    const floatMs =
+      enemy.realmId === "sky-island"
+        ? 760
+        : enemy.realmId === "sunken-bell"
+          ? 900
+          : 820;
+    const lift =
+      enemy.realmId === "sky-island"
+        ? -14
+        : enemy.realmId === "sunken-bell"
+          ? -10
+          : -8;
+
+    this.tweens.add({
+      targets: body,
+      x: homeX + dir * (enemy.realmId === "sky-island" ? 9 : 6),
+      y: homeY + lift,
+      angle: dir * (enemy.realmId === "sky-island" ? 2.2 : 1.2),
+      duration: floatMs,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  private stopFinaleEnemyMotion(enemy: Enemy): void {
+    this.tweens.killTweensOf(enemy.graphic);
+    this.tweens.killTweensOf(enemy.body);
+  }
+
   private drawFinaleEnemyBody(
     realmId: string,
     x: number,
     y: number,
-  ): Phaser.GameObjects.Container {
+  ): { container: Phaser.GameObjects.Container; body: Phaser.GameObjects.Container } {
     const c = this.add.container(0, 0);
     const spec = finaleEnemyArtForRealm(realmId);
-    c.add(addLocalGroundShadow(this, spec.shadowWidth, spec.shadowHeight, {
-      x,
-      y: y + spec.shadowY,
+    const body = this.add.container(x, y);
+    c.add(body);
+
+    body.add(addLocalGroundShadow(this, spec.shadowWidth, spec.shadowHeight, {
+      y: spec.shadowY,
       alpha: spec.shadowAlpha,
     }));
 
@@ -1598,21 +1672,21 @@ export class GreatBattleScene extends Phaser.Scene {
       const glow = this.add.graphics();
       glow.fillStyle(spec.glowColor, spec.glowAlpha ?? 0.14);
       glow.fillEllipse(
-        x,
-        y + (spec.glowY ?? 0),
+        0,
+        spec.glowY ?? 0,
         spec.glowWidth ?? 92,
         spec.glowHeight ?? 92,
       );
-      c.add(glow);
+      body.add(glow);
     }
 
-    const sprite = this.add.image(x, y + spec.spriteY, spec.textureKey);
+    const sprite = this.add.image(0, spec.spriteY, spec.textureKey);
     sprite.setScale(spec.height / sprite.height);
     if (spec.tint) sprite.setTint(spec.tint);
     if (spec.alpha !== undefined) sprite.setAlpha(spec.alpha);
     if (spec.flipX) sprite.setFlipX(true);
-    c.add(sprite);
-    return c;
+    body.add(sprite);
+    return { container: c, body };
   }
 
   private defeatEnemy(enemy: Enemy): void {
@@ -1625,19 +1699,21 @@ export class GreatBattleScene extends Phaser.Scene {
     enemy.arrivalTimer = null;
     enemy.wordAnchor?.destroy();
     enemy.wordAnchor = null;
-    this.tweens.killTweensOf(enemy.graphic);
+    this.stopFinaleEnemyMotion(enemy);
     const wake = finaleWakeForRealm(enemy.realmId);
     playBodyImpact(this, enemy.graphic, {
       kind: wake.kind,
       color: wake.color,
-      offsetX: enemy.x,
-      offsetY: enemy.y - 10,
+      offsetX: enemy.body.x,
+      offsetY: enemy.body.y - 10,
       depth: 48,
     });
     if (enemy.target) {
+      const target = enemy.target;
       this.typingInput.unregister(enemy.target);
       const idx = this.activeTargets.indexOf(enemy.target);
       if (idx >= 0) this.activeTargets.splice(idx, 1);
+      if (!target.isComplete()) target.destroy();
       enemy.target = null;
     }
     this.tweens.add({

@@ -273,7 +273,6 @@ export class SettingsScene extends Phaser.Scene {
 
     this.drawRow(0, "Difficulty", difficultyLabel(state.difficulty));
     this.drawAction(0, "difficulty", () => this.handleDifficulty());
-    this.drawDifficultyHint(0);
 
     this.drawRow(1, "Sound", state.audioLevel);
     this.drawAction(1, "sound", () => this.handleSound());
@@ -418,15 +417,13 @@ export class SettingsScene extends Phaser.Scene {
 
   private pulseMenuRow(index: number): void {
     const y = ROW_START_Y + index * ROW_SPACING;
-    const h = index === 0 ? 112 : 92;
-    this.pulseFocusBox(ROW_X + 30, y + 28, 940, h);
+    this.pulseFocusBox(ROW_X + 30, y + 28, 940, 92);
   }
 
   private pulseMenuRowTyping(index: number): void {
     if (!this.shouldPlayTypingPulse(`row-${index}`)) return;
     const y = ROW_START_Y + index * ROW_SPACING;
-    const h = index === 0 ? 112 : 92;
-    this.pulseTypingBox(ROW_X + 30, y + 28, 940, h);
+    this.pulseTypingBox(ROW_X + 30, y + 28, 940, 92);
   }
 
   private shouldPlayTypingPulse(key: string): boolean {
@@ -516,7 +513,7 @@ export class SettingsScene extends Phaser.Scene {
             ROW_X + 30,
             ROW_START_Y + i * ROW_SPACING + 28,
             940,
-            i === 0 ? 112 : 92,
+            92,
           );
         });
       }
@@ -560,30 +557,6 @@ export class SettingsScene extends Phaser.Scene {
         });
       });
     }
-  }
-
-  /** Dim sub-hint under the Difficulty row that surfaces the otherwise-hidden
-   *  in-game shortcut. Cycling here works too, but players had no way to learn
-   *  about Ctrl+Shift+P, which works from any playing scene. Tracked in
-   *  `rowTexts` so it's torn down and redrawn with the rest of the menu. */
-  private drawDifficultyHint(index: number): void {
-    const y = ROW_START_Y + index * ROW_SPACING + ACTION_OFFSET_Y + 30;
-    const hint = this.add
-      .text(
-        ROW_X,
-        y,
-        "Forgiving → Standard → Purist. Also Ctrl+Shift+P while playing.",
-        {
-          fontFamily: SERIF,
-          fontSize: "20px",
-          color: UI_CSS.cream,
-          fontStyle: "italic",
-        },
-      )
-      .setOrigin(0.5, 0.5)
-      .setAlpha(0.58);
-    this.rowTexts.push(hint);
-    this.stageLedgerObject(hint, 95 + index * 34, { offsetY: 6 });
   }
 
   private stageLedgerObject(

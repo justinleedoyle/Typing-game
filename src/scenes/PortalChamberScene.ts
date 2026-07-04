@@ -747,19 +747,20 @@ export class PortalChamberScene extends Phaser.Scene {
 
     const isFinal = full === "Again.";
     const scar = this.add.graphics().setDepth(-0.55).setAlpha(0);
-    const x = HUB_STATIONS.portalFloor.x;
-    const y = HUB_STATIONS.portalFloor.y - 342;
-    const scarWidth = isFinal ? 230 : 176;
+    const x = HUB_STATIONS.portalFloor.x - 138;
+    const y = HUB_STATIONS.portalFloor.y - 56;
+    const scarWidth = isFinal ? 168 : 136;
     const t = this.add
       .text(x, y - 2, "", {
         fontFamily: SERIF,
-        fontSize: isFinal ? "28px" : "26px",
+        fontSize: isFinal ? "20px" : "18px",
         fontStyle: "italic",
         color: isFinal ? PALETTE.brass : "#9c83d8",
         align: "center",
       })
       .setOrigin(0.5)
       .setAlpha(0)
+      .setRotation(-0.02)
       .setDepth(-0.45);
     this.drawFragmentScar(scar, x, y, scarWidth, isFinal);
 
@@ -773,13 +774,13 @@ export class PortalChamberScene extends Phaser.Scene {
         t.setAlpha(1);
         this.tweens.add({
           targets: t,
-          alpha: isFinal ? 0.5 : 0.42,
+          alpha: isFinal ? 0.34 : 0.3,
           duration: 700,
           ease: "Sine.easeOut",
         });
         this.tweens.add({
           targets: scar,
-          alpha: isFinal ? 0.5 : 0.34,
+          alpha: isFinal ? 0.34 : 0.26,
           duration: 700,
           ease: "Sine.easeOut",
         });
@@ -787,7 +788,7 @@ export class PortalChamberScene extends Phaser.Scene {
           this.time.delayedCall(800, () => {
             this.tweens.add({
               targets: t,
-              alpha: { from: 0.5, to: 0.26 },
+              alpha: { from: 0.34, to: 0.18 },
               duration: 2400,
               yoyo: true,
               repeat: -1,
@@ -795,7 +796,7 @@ export class PortalChamberScene extends Phaser.Scene {
             });
             this.tweens.add({
               targets: scar,
-              alpha: { from: 0.5, to: 0.24 },
+              alpha: { from: 0.34, to: 0.16 },
               duration: 2400,
               yoyo: true,
               repeat: -1,
@@ -823,25 +824,28 @@ export class PortalChamberScene extends Phaser.Scene {
     g.clear();
     const stroke = isFinal ? UI_HEX.brass : 0x9c83d8;
     const half = width / 2;
-    g.lineStyle(2, stroke, isFinal ? 0.42 : 0.28);
+    g.lineStyle(1, stroke, isFinal ? 0.3 : 0.22);
     g.beginPath();
-    g.moveTo(x - half, y + 17);
+    g.moveTo(x - half, y + 12);
     g.lineTo(x - half * 0.58, y + 8);
-    g.lineTo(x - half * 0.18, y + 15);
-    g.lineTo(x + half * 0.2, y + 7);
-    g.lineTo(x + half * 0.62, y + 14);
+    g.lineTo(x - half * 0.16, y + 11);
+    g.lineTo(x + half * 0.24, y + 7);
+    g.lineTo(x + half * 0.64, y + 10);
     g.lineTo(x + half, y + 6);
     g.strokePath();
-    g.lineStyle(1, stroke, isFinal ? 0.26 : 0.18);
+    g.lineStyle(1, stroke, isFinal ? 0.18 : 0.12);
     g.beginPath();
-    g.moveTo(x - half * 0.8, y - 16);
-    g.lineTo(x - half * 0.36, y - 9);
-    g.lineTo(x + half * 0.05, y - 15);
-    g.lineTo(x + half * 0.52, y - 8);
-    g.lineTo(x + half * 0.84, y - 13);
+    g.moveTo(x - half * 0.72, y - 11);
+    g.lineTo(x - half * 0.32, y - 8);
+    g.lineTo(x + half * 0.05, y - 11);
+    g.lineTo(x + half * 0.5, y - 7);
+    g.lineTo(x + half * 0.78, y - 10);
     g.strokePath();
-    g.fillStyle(stroke, isFinal ? 0.12 : 0.08);
-    g.fillEllipse(x, y + 3, width * 0.84, 36);
+    g.lineStyle(1, stroke, isFinal ? 0.22 : 0.14);
+    g.strokeEllipse(x, y + 7, width * 0.9, 20);
+    g.fillStyle(stroke, isFinal ? 0.1 : 0.06);
+    g.fillCircle(x - half * 0.96, y + 10, 2);
+    g.fillCircle(x + half * 0.96, y + 5, 2);
   }
 
   /** Returns the current state of the accumulating Quiet Lord fragment.

@@ -78,8 +78,8 @@ const WAVE_CHARGES = 2;
 const WALL_WARD = {
   x: 960,
   y: 824,
-  width: 900,
-  height: 76,
+  width: 960,
+  height: 88,
 } as const;
 
 const BATTLE_WORD_BANK = [
@@ -984,24 +984,33 @@ export class GreatBattleScene extends Phaser.Scene {
     const ward = this.add
       .container(WALL_WARD.x, WALL_WARD.y)
       .setDepth(2)
-      .setAlpha(0.64);
+      .setAlpha(0.76);
     const base = this.add.graphics();
-    base.lineStyle(2, UI_HEX.brass, 0.16);
-    base.strokeEllipse(0, 0, WALL_WARD.width, WALL_WARD.height);
-    base.lineStyle(1, 0x8b6ad8, 0.12);
-    base.strokeEllipse(0, 0, WALL_WARD.width * 0.74, WALL_WARD.height * 0.64);
-    base.lineStyle(1, UI_HEX.brass, 0.22);
-    base.lineBetween(-WALL_WARD.width / 2 + 72, 0, WALL_WARD.width / 2 - 72, 0);
+    base.fillStyle(0x15100d, 0.28);
+    base.fillEllipse(0, 23, WALL_WARD.width * 0.9, 28);
+    base.fillStyle(UI_HEX.panel, 0.22);
+    base.fillRoundedRect(-WALL_WARD.width / 2 + 74, 5, WALL_WARD.width - 148, 18, 8);
+    base.lineStyle(2, UI_HEX.brass, 0.3);
+    base.strokeRoundedRect(-WALL_WARD.width / 2 + 74, 5, WALL_WARD.width - 148, 18, 8);
+    base.lineStyle(1, 0x8b6ad8, 0.18);
+    base.lineBetween(-WALL_WARD.width / 2 + 116, 14, WALL_WARD.width / 2 - 116, 14);
+    base.lineStyle(1, UI_HEX.brass, 0.18);
+    base.strokeEllipse(0, 12, WALL_WARD.width * 0.74, WALL_WARD.height * 0.56);
 
-    for (let i = -3; i <= 3; i++) {
-      base.lineStyle(1, UI_HEX.brass, i === 0 ? 0.24 : 0.13);
-      base.lineBetween(i * 92, -10, i * 92, 10);
+    for (let i = -4; i <= 4; i++) {
+      const tickX = i * 92;
+      base.lineStyle(1, UI_HEX.brass, i === 0 ? 0.34 : 0.2);
+      base.lineBetween(tickX, 5, tickX, 23);
+      if (Math.abs(i) <= 2) {
+        base.fillStyle(0x8b6ad8, i === 0 ? 0.16 : 0.09);
+        base.fillCircle(tickX, 14, i === 0 ? 5 : 3);
+      }
     }
 
     ward.add(base);
 
     for (let i = 0; i < WAVE_CANDLES; i++) {
-      const flame = this.add.graphics().setPosition((i - 1) * 58, -2);
+      const flame = this.add.graphics().setPosition((i - 1) * 92, 4);
       this.wallWardFlames.push(flame);
       ward.add(flame);
     }
@@ -1015,16 +1024,29 @@ export class GreatBattleScene extends Phaser.Scene {
       const flame = this.wallWardFlames[i]!;
       const lit = i < this.candles;
       flame.clear();
-      flame.lineStyle(1, lit ? 0xf5e3a2 : 0x8a8275, lit ? 0.36 : 0.16);
-      flame.strokeCircle(0, 0, lit ? 13 : 10);
-      flame.fillStyle(lit ? 0xf2be68 : 0x3a342a, lit ? 0.2 : 0.12);
-      flame.fillEllipse(0, -1, lit ? 22 : 16, lit ? 28 : 18);
+      flame.fillStyle(0x0b0908, 0.34);
+      flame.fillEllipse(0, 25, 42, 12);
+      flame.fillStyle(UI_HEX.panel, 0.48);
+      flame.fillRoundedRect(-19, 5, 38, 14, 5);
+      flame.lineStyle(1, UI_HEX.brass, lit ? 0.42 : 0.22);
+      flame.strokeRoundedRect(-19, 5, 38, 14, 5);
+      flame.lineStyle(2, lit ? UI_HEX.brass : 0x746957, lit ? 0.44 : 0.24);
+      flame.lineBetween(-13, 5, -5, -3);
+      flame.lineBetween(13, 5, 5, -3);
+      flame.fillStyle(lit ? 0xe8dcb5 : 0x4a4236, lit ? 0.9 : 0.56);
+      flame.fillRoundedRect(-5, -20, 10, 25, 3);
+      flame.fillStyle(0x1f170f, lit ? 0.9 : 0.6);
+      flame.fillRect(-1, -26, 2, 7);
       if (lit) {
+        flame.fillStyle(0xf2be68, 0.18);
+        flame.fillEllipse(0, -30, 32, 42);
+        flame.fillStyle(PALETTE_HEX.ember, 0.78);
+        flame.fillEllipse(0, -34, 11, 21);
         flame.fillStyle(0xffe5a0, 0.44);
-        flame.fillEllipse(0, -5, 9, 18);
+        flame.fillEllipse(0, -37, 6, 13);
       } else {
-        flame.lineStyle(1, 0x5c5548, 0.22);
-        flame.lineBetween(-6, -5, 6, 5);
+        flame.lineStyle(1, 0x746957, 0.3);
+        flame.lineBetween(-8, -23, 8, -14);
       }
     }
   }

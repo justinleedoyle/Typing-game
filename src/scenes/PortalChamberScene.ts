@@ -434,10 +434,9 @@ export class PortalChamberScene extends Phaser.Scene {
           scene: this,
           word: "defend hearthward",
           x: this.scale.width / 2,
-          y: 460,
+          y: HUB_STATIONS.portalFloor.y - 420,
           fontSize: 42,
           outline: true,
-          frame: "banner",
           onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),
           onAdvance: () => this.pulseStationTyping(HUB_STATIONS.portalFloor),
           onComplete: () => {
@@ -459,10 +458,9 @@ export class PortalChamberScene extends Phaser.Scene {
           scene: this,
           word: "begin again",
           x: this.scale.width / 2,
-          y: 460,
+          y: HUB_STATIONS.portalFloor.y - 420,
           fontSize: 38,
           outline: true,
-          frame: "banner",
           onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),
           onAdvance: () => this.pulseStationTyping(HUB_STATIONS.portalFloor),
           onComplete: () => {

@@ -47,11 +47,17 @@ import {
   playClaimLine,
   playSceneEventPulse,
   pulseUiObject,
+  stageContainerEntrance,
   stageCompanionCameo,
   type AmbientKind,
   type ContainerWakeOptions,
   type WordBodyAnchorHandle,
 } from "../game/livingScene";
+import {
+  makeWrenSprite,
+  playWrenHurt,
+  preloadWren,
+} from "../game/wren";
 import greatBattleBackdrop from "../../art/references/great-battle-clean.png";
 import runaPortrait from "../../art/runa/runa-front.png";
 import finaleWolfSprite from "../../art/wolf/wolf-pack.png";
@@ -434,6 +440,8 @@ export class GreatBattleScene extends Phaser.Scene {
   private chargeGroup!: Phaser.GameObjects.Container;
   private wallWard?: Phaser.GameObjects.Container;
   private wallWardFlames: Phaser.GameObjects.Graphics[] = [];
+  private wrenDefender?: Phaser.GameObjects.Container;
+  private wrenDefenderSprite?: Phaser.GameObjects.Image;
   private drawnCandles: number | null = null;
   private drawnCharges: number | null = null;
   private candles = WAVE_CANDLES;
@@ -516,6 +524,8 @@ export class GreatBattleScene extends Phaser.Scene {
     this.charges = WAVE_CHARGES;
     this.wallWard = undefined;
     this.wallWardFlames = [];
+    this.wrenDefender = undefined;
+    this.wrenDefenderSprite = undefined;
     this.runOver = false;
     this.waveCandleLost = false;
     this.phase2Round1Words = [];
@@ -558,6 +568,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.load.image("finale-companion-lantern-moth", lanternMothSprite);
     this.load.image("finale-companion-wisp-cat", wispCatSprite);
     preloadQuietLord(this);
+    preloadWren(this);
   }
 
   create(): void {
@@ -630,6 +641,7 @@ export class GreatBattleScene extends Phaser.Scene {
       maxDurationMs: 9800,
     });
     this.drawWallWard();
+    this.drawWrenDefender();
 
     // UI cohesion — the console band. The finale has no heart/soul HUD; its candle
     // (fail-state) + spell-charge meters dock into the band, with Runa at the portrait
@@ -725,6 +737,7 @@ export class GreatBattleScene extends Phaser.Scene {
   private onShutdown(): void {
     this.typingInput.reset();
     this.clearTargetAnchors();
+    this.dismissWrenDefender(0);
     this.input.keyboard?.off("keydown", this.onKeyDown, this);
     this.ambientHandle?.stop();
     this.clearFacetSigil(false);
@@ -1069,6 +1082,7 @@ export class GreatBattleScene extends Phaser.Scene {
       scale: mode === "breach" ? 1.055 : 1.025,
       durationMs: mode === "breach" ? 320 : 240,
     });
+    this.pulseWrenDefender(mode);
     playSceneEventPulse(this, {
       kind: impactKind,
       color,
@@ -1099,6 +1113,89 @@ export class GreatBattleScene extends Phaser.Scene {
       duration: durationMs,
       ease: "Sine.easeIn",
       onComplete: () => ward.destroy(),
+    });
+    this.dismissWrenDefender(durationMs);
+  }
+
+  private drawWrenDefender(): void {
+    this.dismissWrenDefender(0);
+
+    const c = this.add
+      .container(WALL_WARD.x, WALL_WARD.y + 10)
+      .setDepth(1.8)
+      .setAlpha(0);
+    c.add(addLocalGroundShadow(this, 122, 22, { y: 5, alpha: 0.34 }));
+
+    const sprite = makeWrenSprite(this);
+    const displayHeight = 204;
+    const scale = displayHeight / sprite.height;
+    sprite.setScale(scale);
+    sprite.setTint(0xe5e0d4);
+    c.add(sprite);
+
+    this.wrenDefender = c;
+    this.wrenDefenderSprite = sprite;
+
+    stageContainerEntrance(this, c, {
+      breathDy: -3,
+      breathMs: 2400,
+    });
+    addContainerWake(this, c, {
+      kind: "ash",
+      intervalMs: 420,
+      spreadX: 42,
+      spreadY: 8,
+      alpha: 0.12,
+      size: 3,
+      driftX: 58,
+      driftY: -42,
+      durationMs: 1100,
+      depth: 4,
+      offsetY: -72,
+    });
+  }
+
+  private pulseWrenDefender(mode: "arrival" | "wave" | "breach" | "clean" | "hold"): void {
+    const defender = this.wrenDefender;
+    if (!defender?.scene) return;
+    if (mode === "breach") {
+      if (this.wrenDefenderSprite?.scene) {
+        playWrenHurt(this.wrenDefenderSprite, { knockX: 0 });
+      }
+      playBodyImpact(this, defender, {
+        kind: "ash",
+        color: 0xb34b45,
+        offsetY: -88,
+        depth: 7,
+        ringRadius: 34,
+        count: 8,
+        durationMs: 420,
+      });
+      return;
+    }
+    playActorAttention(this, defender, {
+      scale: mode === "clean" ? 1.028 : 1.015,
+      durationMs: mode === "clean" ? 260 : 190,
+    });
+  }
+
+  private dismissWrenDefender(durationMs = 420): void {
+    const defender = this.wrenDefender;
+    this.wrenDefender = undefined;
+    this.wrenDefenderSprite = undefined;
+    if (!defender?.scene) return;
+    this.tweens.killTweensOf(defender);
+    if (durationMs <= 0) {
+      defender.destroy();
+      return;
+    }
+    this.tweens.add({
+      targets: defender,
+      alpha: 0,
+      y: defender.y + 18,
+      duration: durationMs,
+      ease: "Sine.easeIn",
+      onComplete: () => defender.destroy(),
     });
   }
 

@@ -1799,16 +1799,7 @@ export class GreatBattleScene extends Phaser.Scene {
       body.add(glow);
     }
 
-    if (realmId === "winter-mountain") {
-      const footing = this.add.graphics();
-      footing.fillStyle(0xbfd3e4, 0.06);
-      footing.fillEllipse(10, 70, 208, 12);
-      footing.lineStyle(2, 0xe6f3ff, 0.08);
-      footing.lineBetween(-98, 62, -50, 60);
-      footing.lineBetween(-18, 61, 32, 60);
-      footing.lineBetween(78, 62, 116, 60);
-      body.add(footing);
-    }
+    this.addFinaleEnemyContactMark(realmId, body);
 
     const sprite = this.add.image(0, spec.spriteY, spec.textureKey);
     sprite.setScale(spec.height / sprite.height);
@@ -1817,6 +1808,81 @@ export class GreatBattleScene extends Phaser.Scene {
     if (spec.flipX) sprite.setFlipX(true);
     body.add(sprite);
     return { container: c, body };
+  }
+
+  private addFinaleEnemyContactMark(
+    realmId: string,
+    body: Phaser.GameObjects.Container,
+  ): void {
+    const footing = this.add.graphics();
+
+    if (realmId === "winter-mountain") {
+      footing.fillStyle(0xbfd3e4, 0.06);
+      footing.fillEllipse(10, 70, 208, 12);
+      footing.lineStyle(2, 0xe6f3ff, 0.08);
+      footing.lineBetween(-98, 62, -50, 60);
+      footing.lineBetween(-18, 61, 32, 60);
+      footing.lineBetween(78, 62, 116, 60);
+      body.add(footing);
+      return;
+    }
+
+    if (realmId === "sunken-bell") {
+      footing.fillStyle(0x173846, 0.14);
+      footing.fillEllipse(0, 43, 102, 15);
+      footing.lineStyle(1, 0xa7d2dd, 0.18);
+      footing.strokeEllipse(-10, 39, 66, 8);
+      footing.strokeEllipse(18, 45, 52, 7);
+      footing.lineStyle(1, 0x4ab8d6, 0.12);
+      footing.lineBetween(-44, 40, -20, 38);
+      footing.lineBetween(28, 42, 52, 40);
+      body.add(footing);
+      return;
+    }
+
+    if (realmId === "clockwork-forge") {
+      footing.fillStyle(0x241610, 0.2);
+      footing.fillEllipse(0, 50, 148, 25);
+      footing.lineStyle(2, PALETTE_HEX.ember, 0.13);
+      footing.lineBetween(-54, 43, -20, 48);
+      footing.lineBetween(-16, 48, 24, 44);
+      footing.lineBetween(30, 47, 66, 50);
+      footing.fillStyle(PALETTE_HEX.brass, 0.16);
+      footing.fillCircle(-42, 45, 2.4);
+      footing.fillCircle(48, 47, 2.2);
+      body.add(footing);
+      return;
+    }
+
+    if (realmId === "sky-island") {
+      footing.fillStyle(0xf5c842, 0.06);
+      footing.fillEllipse(0, 47, 118, 14);
+      footing.lineStyle(1, 0xffe6a6, 0.15);
+      footing.lineBetween(-46, 42, -20, 44);
+      footing.lineBetween(-14, 45, 18, 42);
+      footing.lineBetween(24, 43, 52, 45);
+      footing.fillStyle(0xffe6a6, 0.14);
+      footing.fillCircle(-30, 42, 2);
+      footing.fillCircle(34, 43, 1.8);
+      body.add(footing);
+      return;
+    }
+
+    if (realmId === "haunted-wood") {
+      footing.fillStyle(0x141a13, 0.2);
+      footing.fillEllipse(0, 46, 108, 18);
+      footing.lineStyle(2, 0x9fb69a, 0.11);
+      footing.lineBetween(-48, 42, -20, 45);
+      footing.lineBetween(-22, 45, 6, 41);
+      footing.lineBetween(8, 42, 44, 46);
+      footing.fillStyle(0xd8e2cf, 0.08);
+      footing.fillCircle(-34, 40, 2.5);
+      footing.fillCircle(38, 44, 2);
+      body.add(footing);
+      return;
+    }
+
+    footing.destroy();
   }
 
   private defeatEnemy(enemy: Enemy): void {

@@ -459,15 +459,14 @@ export class PortalChamberScene extends Phaser.Scene {
     } else {
       this.registerNavTarget(
         "old paths",
-        this.scale.width / 2,
-        552,
+        HUB_STATIONS.portalFloor.x - 170,
+        HUB_STATIONS.portalFloor.y - 120,
         () => {
           this.showPortalRevisits = true;
           this.enterZone("portals", false);
         },
         {
-          fontSize: 20,
-          frame: "banner",
+          fontSize: 18,
           priority: -1,
           stationPulse: HUB_STATIONS.portalFloor,
           entryDelayMs: 130,
@@ -1682,7 +1681,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.portalFloor.width,
       HUB_STATIONS.portalFloor.height,
       "portal floor",
-      { alpha: 0.22 },
+      { alpha: 0.2, labelAlpha: 0 },
     );
     this.drawStationPlaque(
       HUB_STATIONS.shelf.x,

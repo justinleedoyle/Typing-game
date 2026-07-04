@@ -3706,38 +3706,8 @@ export class SkyIslandScene extends Phaser.Scene {
   // ─── Drawing ──────────────────────────────────────────────────────────────
 
   private drawTempleStones(): void {
-    const g = this.add.graphics().setDepth(-8).setAlpha(0.56);
-    const drawRuin = (x: number, height: number, tilt: number): void => {
-      g.save();
-      g.translateCanvas(x, 848);
-      g.rotateCanvas(Phaser.Math.DegToRad(tilt));
-      g.fillStyle(0x33414b, 0.34);
-      g.fillRoundedRect(-18, -height, 36, height, 6);
-      g.fillStyle(0x63707a, 0.24);
-      g.fillRoundedRect(-26, -height - 15, 52, 18, 6);
-      g.lineStyle(1.5, 0xd6c386, 0.08);
-      g.lineBetween(-11, -height + 22, 11, -height + 10);
-      g.lineBetween(-10, -height + 72, 12, -height + 58);
-      g.restore();
-    };
-
-    for (const [x, height, tilt] of [
-      [170, 128, -2],
-      [352, 158, 1.5],
-      [545, 104, -1],
-      [1378, 116, 1],
-      [1572, 154, -1.5],
-      [1754, 128, 2],
-    ] as const) {
-      drawRuin(x, height, tilt);
-    }
-
-    g.lineStyle(8, 0x33414b, 0.18);
-    g.lineBetween(126, 688, 600, 668);
-    g.lineBetween(1326, 672, 1812, 692);
-    g.lineStyle(2, 0xd6c386, 0.07);
-    g.lineBetween(138, 684, 584, 666);
-    g.lineBetween(1340, 670, 1798, 688);
+    // The painted Sky backdrop already carries the edge ruins and posts. Extra
+    // procedural stones read as translucent UI bars during the opener.
   }
 
   /** Phaser update tick. Drives per-frame lantern blur on active phrases —

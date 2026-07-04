@@ -162,6 +162,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private stationWordAnchorReleases: Array<() => void> = [];
   private persistentStationWordAnchorReleases: Array<() => void> = [];
   private shelfDisplayObjects: Phaser.GameObjects.GameObject[] = [];
+  private accountDisplayObjects: Phaser.GameObjects.GameObject[] = [];
   private portalFloorCallGlow?: Phaser.GameObjects.Container;
   private stationTypingPulseTimes = new WeakMap<StationSpec, number>();
   private portalTypingPulseTimes = new Map<string, number>();
@@ -189,6 +190,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.stationWordAnchorReleases = [];
     this.persistentStationWordAnchorReleases = [];
     this.shelfDisplayObjects = [];
+    this.accountDisplayObjects = [];
     this.portalFloorCallGlow = undefined;
     this.stationTypingPulseTimes = new WeakMap();
     this.portalTypingPulseTimes = new Map();
@@ -290,7 +292,6 @@ export class PortalChamberScene extends Phaser.Scene {
 
     // Persistent (non-zone) targets.
     this.addAlmanacTarget();
-    void this.renderAccountStatus();
 
     // Enter the portals zone initially.
     this.enterZone("portals", false);
@@ -333,6 +334,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.stationWordAnchorReleases = [];
     this.portalFloorCallGlow?.destroy();
     this.portalFloorCallGlow = undefined;
+    this.clearAccountDisplay();
     for (const t of this.zoneTargets) {
       this.typingInput.unregister(t);
       t.destroy();
@@ -1199,8 +1201,11 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private async renderAccountStatus(): Promise<void> {
+    const zoneAtRequest = this.activeZone;
     const name = await currentUserDisplayName();
-    this.add
+    if (zoneAtRequest !== "account" || this.activeZone !== "account") return;
+
+    const status = this.add
       .text(ACCOUNT_PANEL.x, ACCOUNT_PANEL.statusY, name ? `signed in as ${name}` : "local save", {
         fontFamily: SERIF,
         fontSize: "15px",
@@ -1211,11 +1216,21 @@ export class PortalChamberScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(1);
+    this.accountDisplayObjects.push(status);
+  }
+
+  private clearAccountDisplay(): void {
+    for (const obj of this.accountDisplayObjects) {
+      this.tweens.killTweensOf(obj);
+      obj.destroy();
+    }
+    this.accountDisplayObjects = [];
   }
 
   private registerAccountZoneTargets(): void {
     this.narration.clear();
     this.setHint("account station  ·  type settings, sign in/out, or portals");
+    void this.renderAccountStatus();
     this.registerNavTarget(
       "settings",
       ACCOUNT_PANEL.x,
@@ -1720,7 +1735,7 @@ export class PortalChamberScene extends Phaser.Scene {
       "account",
       {
         alpha: 0.28,
-        labelAlpha: 0.5,
+        labelAlpha: 0,
       },
     );
   }

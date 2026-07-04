@@ -96,7 +96,7 @@ const REALM_SEQUENCE = ARCHES.map((a) => a.id);
 // Wren's X position when standing in each zone — aligned to the painted
 // desk (left), portal floor (centre) and display cabinet (right).
 const ZONE_X: Record<Zone, number> = {
-  desk:    330,
+  desk:    300,
   portals: 990,
   shelf:   1660,
   account: 1660,
@@ -121,8 +121,8 @@ const ACCOUNT_PANEL = {
   settingsY: 128,
 } as const;
 const HUB_STATIONS = {
-  desk: { x: 420, y: 956, width: 300, height: 52 },
-  almanac: { x: 245, y: 760, width: 230, height: 54 },
+  desk: { x: 360, y: 838, width: 270, height: 70 },
+  almanac: { x: 190, y: 734, width: 210, height: 50 },
   portalFloor: { x: 960, y: 962, width: 330, height: 46 },
   shelf: { x: 1740, y: 854, width: 290, height: 58 },
   account: {
@@ -476,11 +476,17 @@ export class PortalChamberScene extends Phaser.Scene {
     }
 
     // Zone navigation (away from portals).
-    this.registerNavTarget("runa", 420, 908, () => this.enterZone("desk"), {
-      fontSize: 23,
-      stationPulse: HUB_STATIONS.desk,
-      entryDelayMs: 110,
-    });
+    this.registerNavTarget(
+      "runa",
+      HUB_STATIONS.desk.x - 18,
+      HUB_STATIONS.desk.y + 8,
+      () => this.enterZone("desk"),
+      {
+        fontSize: 22,
+        stationPulse: HUB_STATIONS.desk,
+        entryDelayMs: 110,
+      },
+    );
     this.registerNavTarget("shelf", 1740, 842, () => this.enterZone("shelf"), {
       fontSize: 23,
       stationPulse: HUB_STATIONS.shelf,
@@ -1152,7 +1158,7 @@ export class PortalChamberScene extends Phaser.Scene {
       scene: this,
       word: "almanac",
       x: HUB_STATIONS.almanac.x,
-      y: HUB_STATIONS.almanac.y + 4,
+      y: HUB_STATIONS.almanac.y + 3,
       fontSize: 22,
       priority: -1,
       outline: true,
@@ -1660,6 +1666,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.desk.width,
       HUB_STATIONS.desk.height,
       "runa's desk",
+      { alpha: 0.24, labelAlpha: 0 },
     );
     this.drawStationPlaque(
       HUB_STATIONS.almanac.x,

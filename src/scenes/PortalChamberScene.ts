@@ -119,6 +119,14 @@ const SHELF_STATION = {
   summaryY: 536,
   targetY: 592,
 } as const;
+const RUNA_DESK_STATION = {
+  x: 274,
+  y: 788,
+  width: 152,
+  height: 48,
+  targetX: 274,
+  targetY: 791,
+} as const;
 const ACCOUNT_PANEL = {
   x: 1788,
   y: 238,
@@ -136,7 +144,12 @@ const ACCOUNT_STATION = {
   height: 58,
 } as const;
 const HUB_STATIONS = {
-  desk: { x: 360, y: 838, width: 270, height: 70 },
+  desk: {
+    x: RUNA_DESK_STATION.x,
+    y: RUNA_DESK_STATION.y,
+    width: RUNA_DESK_STATION.width,
+    height: RUNA_DESK_STATION.height,
+  },
   almanac: { x: 190, y: 734, width: 210, height: 50 },
   portalFloor: { x: 960, y: 962, width: 330, height: 46 },
   shelf: {
@@ -502,11 +515,11 @@ export class PortalChamberScene extends Phaser.Scene {
     // Zone navigation (away from portals).
     this.registerNavTarget(
       "runa",
-      HUB_STATIONS.desk.x - 18,
-      HUB_STATIONS.desk.y + 8,
+      RUNA_DESK_STATION.targetX,
+      RUNA_DESK_STATION.targetY,
       () => this.enterZone("desk"),
       {
-        fontSize: 22,
+        fontSize: 21,
         stationPulse: HUB_STATIONS.desk,
         entryDelayMs: 110,
       },

@@ -67,6 +67,26 @@ await suite("parseDevTarget: ?dev=<target> resolves the scene-key jump", () => {
     "bare finale route → jump with temporary empty loadout",
   );
   assertEqual(
+    parseDevTarget("?dev=great-battle&loadout=bare&wave=sunken-bell"),
+    {
+      unlock: true,
+      realmSceneKey: "GreatBattleScene",
+      loadout: "bare",
+      finaleWaveRealmId: "sunken-bell",
+    },
+    "bare finale route can jump directly to a single realm echo wave",
+  );
+  assertEqual(
+    parseDevTarget("?dev=great-battle&loadout=bare&wave=not-a-realm"),
+    { unlock: true, realmSceneKey: "GreatBattleScene", loadout: "bare" },
+    "unknown finale wave selectors are ignored",
+  );
+  assertEqual(
+    parseDevTarget("?dev=sunken-bell&wave=clockwork-forge"),
+    { unlock: true, realmSceneKey: "SunkenBellScene" },
+    "wave selector only applies to direct finale jumps",
+  );
+  assertEqual(
     parseDevTarget("?dev=great-battle&loadout=full"),
     { unlock: true, realmSceneKey: "GreatBattleScene" },
     "unknown loadout values keep the standard full-satchel behavior",

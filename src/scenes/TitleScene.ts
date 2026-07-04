@@ -360,6 +360,7 @@ export class TitleScene extends Phaser.Scene {
             this.scene.start(dev.realmSceneKey, {
               store: this.store,
               revisit: false,
+              devWaveRealmId: dev.finaleWaveRealmId,
             });
             return;
           }

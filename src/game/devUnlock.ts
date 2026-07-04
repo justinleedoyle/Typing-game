@@ -9,10 +9,17 @@
 //                           companion art are reachable in one hop).
 //   ?dev=great-battle     → the same unlock, then jump STRAIGHT into the finale
 //                           without marking the finale already cleared.
+//   ?dev=great-battle&loadout=bare
+//                         → unlock the finale route with an EMPTY satchel for
+//                           screenshot/feel-tuning passes where relic/ally auto-
+//                           clears would otherwise remove later waves too fast.
+//                           TitleScene keeps this variant in-memory only so it
+//                           never wipes the player's real saved satchel.
 //
 // The unlock writes to the real save (tied to the player's login), so once you've
-// loaded ?dev once, everything stays unlocked in normal play too. The jump is a
-// per-load navigation shortcut (not persisted).
+// loaded ?dev once, everything stays unlocked in normal play too. The bare-loadout
+// variant is the exception: it is temporary and per-load. The jump is a per-load
+// navigation shortcut (not persisted).
 
 import { RELICS } from "./relics";
 import type { SaveState } from "./saveState";
@@ -37,6 +44,8 @@ export interface DevTarget {
   readonly unlock: boolean;
   /** Set when `?dev=<target>` names a dev entry point — jump straight into it. */
   readonly realmSceneKey: string | null;
+  /** Optional temporary loadout override for screenshot/feel-tuning routes. */
+  readonly loadout?: "bare";
 }
 
 /** Parse the dev intent from a URL query string (location.search). Pure. */
@@ -44,13 +53,20 @@ export function parseDevTarget(search: string): DevTarget {
   const params = new URLSearchParams(search);
   if (!params.has("dev")) return { unlock: false, realmSceneKey: null };
   const realm = params.get("dev") ?? "";
-  return { unlock: true, realmSceneKey: DEV_SCENE_KEYS[realm] ?? null };
+  return {
+    unlock: true,
+    realmSceneKey: DEV_SCENE_KEYS[realm] ?? null,
+    ...(params.get("loadout") === "bare" ? { loadout: "bare" as const } : {}),
+  };
 }
 
 /** Mutate a save into the fully-unlocked dev state: every realm cleared + every
  *  relic (incl. companions) in the satchel. In-place to match SaveStore.update;
  *  preserves any existing RealmProgress fields (choices, intrusion flags). */
-export function applyDevUnlock(s: SaveState): void {
+export function applyDevUnlock(
+  s: SaveState,
+  opts: { satchel?: "full" | "empty" } = {},
+): void {
   // The full `?dev` shortcut is meant to land in the hub, not replay the
   // opening cinematic on a fresh profile. This is the same gate the opening
   // sets after the typewriter/doorway beat completes.
@@ -60,6 +76,10 @@ export function applyDevUnlock(s: SaveState): void {
     s.realms[id] = existing
       ? { ...existing, cleared: true }
       : { cleared: true, choices: {} };
+  }
+  if (opts.satchel === "empty") {
+    s.satchel = [];
+    return;
   }
   const owned = new Set(s.satchel);
   for (const id of Object.keys(RELICS)) owned.add(id);

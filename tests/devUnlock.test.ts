@@ -61,6 +61,16 @@ await suite("parseDevTarget: ?dev=<target> resolves the scene-key jump", () => {
     { unlock: true, realmSceneKey: null },
     "unknown realm → unlock but no jump (falls through to hub)",
   );
+  assertEqual(
+    parseDevTarget("?dev=great-battle&loadout=bare"),
+    { unlock: true, realmSceneKey: "GreatBattleScene", loadout: "bare" },
+    "bare finale route → jump with temporary empty loadout",
+  );
+  assertEqual(
+    parseDevTarget("?dev=great-battle&loadout=full"),
+    { unlock: true, realmSceneKey: "GreatBattleScene" },
+    "unknown loadout values keep the standard full-satchel behavior",
+  );
   // Every mapped dev target resolves to a registered-looking scene key.
   for (const [id, key] of Object.entries(DEV_SCENE_KEYS)) {
     assertEqual(
@@ -90,6 +100,17 @@ await suite("applyDevUnlock: clears every realm + fills the satchel", () => {
   for (const id of Object.keys(RELICS)) {
     assert(s.satchel.includes(id), `satchel has ${id}`);
   }
+});
+
+await suite("applyDevUnlock: can intentionally leave the satchel empty", () => {
+  const s = freshSave();
+  s.satchel = ["bells-tongue"];
+  applyDevUnlock(s, { satchel: "empty" });
+  assert(s.typewriterAwakened === true, "opening gate still completes");
+  for (const id of Object.keys(REALM_SCENE_KEYS)) {
+    assert(s.realms[id]?.cleared === true, `${id} cleared`);
+  }
+  assertEqual(s.satchel, [], "temporary bare route has no relic/companion loadout");
 });
 
 await suite("applyDevUnlock: preserves existing progress + dedupes satchel", () => {

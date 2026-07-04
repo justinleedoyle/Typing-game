@@ -9,6 +9,7 @@ import {
   SaveStore,
   SyncedBackend,
   type SaveBackend,
+  type SaveState,
 } from "../game/saveState";
 import openingBackdrop from "../../art/references/opening-typewriter-study-clean.png";
 
@@ -336,11 +337,19 @@ export class TitleScene extends Phaser.Scene {
     this.store = await this.storePromise;
     // Dev unlock (opt-in via ?dev) — unlock every realm + fill the satchel, and
     // with ?dev=<target> jump straight into a realm or the finale. For art +
-    // feel-tuning; a no-op in normal play. The unlock persists to the cloud save.
+    // feel-tuning; a no-op in normal play. The standard unlock persists to the
+    // cloud save; loadout=bare uses a temporary in-memory store so it cannot wipe
+    // the player's real satchel.
     const dev = parseDevTarget(
       typeof location !== "undefined" ? location.search : "",
     );
-    if (dev.unlock && this.store) this.store.update(applyDevUnlock);
+    if (dev.unlock && this.store) {
+      if (dev.loadout === "bare") {
+        this.store = this.createBareDevStore(this.store);
+      } else {
+        this.store.update(applyDevUnlock);
+      }
+    }
     this.playTitleDepartureWake();
     this.time.delayedCall(240, () => {
       this.cameras.main.fadeOut(640, 11, 10, 15);
@@ -358,6 +367,19 @@ export class TitleScene extends Phaser.Scene {
         },
       );
     });
+  }
+
+  private createBareDevStore(source: SaveStore): SaveStore {
+    const state = JSON.parse(JSON.stringify(source.get())) as SaveState;
+    applyDevUnlock(state, { satchel: "empty" });
+    const backend: SaveBackend = {
+      load: async () => state,
+      save: async () => {
+        // Intentionally transient: this route is for visual/feel-tuning passes
+        // where the full satchel would auto-clear finale waves before inspection.
+      },
+    };
+    return new SaveStore(backend, state);
   }
 
   private playTitleDepartureWake(): void {

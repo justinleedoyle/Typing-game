@@ -89,7 +89,11 @@ interface HauntedWoodSceneData {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const WREN_X = 960;
-const WREN_Y = 860;
+const WREN_Y = 826;
+const WOOD_PATH_STAGE_Y = 826;
+const WOOD_ROOT_CUE_Y = 792;
+const WOOD_CANOPY_CUE_Y = 674;
+const WOOD_LANTERN_CUE_Y = 782;
 const GHOST_KNOCKBACK_PAUSE_MS = 1800;
 
 // Ghost advance durations (ms). Words with punctuation chars are faster.
@@ -691,16 +695,16 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private pathWrenPosition(idx: number): { x: number; y: number } {
     const cue = this.pathCue;
-    if (!cue?.scene) return { x: WREN_X, y: WREN_Y };
-    if (idx === 0) return { x: cue.x - 92, y: WREN_Y - 10 };
-    if (idx === 1) return { x: cue.x + 18, y: WREN_Y - 18 };
-    return { x: cue.x + 98, y: WREN_Y - 6 };
+    if (!cue?.scene) return { x: WREN_X, y: WOOD_PATH_STAGE_Y };
+    if (idx === 0) return { x: cue.x - 72, y: WOOD_PATH_STAGE_Y };
+    if (idx === 1) return { x: cue.x - 24, y: WOOD_PATH_STAGE_Y - 10 };
+    return { x: cue.x + 54, y: WOOD_PATH_STAGE_Y - 2 };
   }
 
   private stageWrenAtPathEntrance(): void {
     const cue = this.pathCue;
     if (!cue?.scene) return;
-    this.moveWrenTo(cue.x - 32, WREN_Y - 8, {
+    this.moveWrenTo(cue.x - 232, WOOD_PATH_STAGE_Y + 4, {
       durationMs: 820,
       quiet: true,
     });
@@ -778,7 +782,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private drawRootPathCue(): Phaser.GameObjects.Container {
-    const c = this.add.container(this.scale.width / 2 - 112, 818).setDepth(1).setAlpha(0);
+    const c = this.add.container(this.scale.width / 2 - 22, WOOD_ROOT_CUE_Y).setDepth(1).setAlpha(0);
     c.add(addLocalGroundShadow(this, 270, 24, { y: 18, alpha: 0.2 }));
     const roots = this.add.graphics();
     roots.fillStyle(0x8fb086, 0.13);
@@ -832,7 +836,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private drawCanopyPathCue(): Phaser.GameObjects.Container {
-    const c = this.add.container(this.scale.width / 2 + 36, 690).setDepth(-1).setAlpha(0);
+    const c = this.add.container(this.scale.width / 2 + 46, WOOD_CANOPY_CUE_Y).setDepth(-1).setAlpha(0);
     const mist = this.add.graphics();
     mist.fillStyle(0xd7ded8, 0.12);
     mist.fillEllipse(0, 32, 190, 48);
@@ -862,7 +866,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private drawLanternPostCue(): Phaser.GameObjects.Container {
-    const c = this.add.container(this.scale.width / 2 + 96, 806).setDepth(-1).setAlpha(0);
+    const c = this.add.container(this.scale.width / 2 + 142, WOOD_LANTERN_CUE_Y).setDepth(-1).setAlpha(0);
     c.add(addLocalGroundShadow(this, 90, 18, { y: 18, alpha: 0.16 }));
     const post = this.add.graphics();
     post.lineStyle(4, 0x2f2a23, 0.9);
@@ -1852,12 +1856,15 @@ export class HauntedWoodScene extends Phaser.Scene {
    *  the first ghost spawn. Idempotent — repeat calls do nothing. */
   private ensureCompassDrawn(): void {
     if (this.compassGlyphs.length > 0) return;
-    const RADIUS = 140;
+    const RADIUS_X = 150;
+    const RADIUS_Y = 104;
+    const compassCenterY = WREN_Y - 84;
     const positions: Array<{ dir: WoodDirection; x: number; y: number }> = [
-      { dir: "north", x: WREN_X, y: WREN_Y - RADIUS },
-      { dir: "south", x: WREN_X, y: WREN_Y + RADIUS - 30 },
-      { dir: "east", x: WREN_X + RADIUS, y: WREN_Y - 20 },
-      { dir: "west", x: WREN_X - RADIUS, y: WREN_Y - 20 },
+      { dir: "north", x: WREN_X, y: compassCenterY - RADIUS_Y },
+      // Keep the south mark in the painted scene instead of under the console.
+      { dir: "south", x: WREN_X, y: compassCenterY + RADIUS_Y },
+      { dir: "east", x: WREN_X + RADIUS_X, y: compassCenterY },
+      { dir: "west", x: WREN_X - RADIUS_X, y: compassCenterY },
     ];
     for (const p of positions) {
       const glyph = this.add

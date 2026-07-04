@@ -15,6 +15,10 @@
 //                           clears would otherwise remove later waves too fast.
 //                           TitleScene keeps this variant in-memory only so it
 //                           never wipes the player's real saved satchel.
+//   ?dev=great-battle&loadout=bare&wave=sunken-bell
+//                         → jump straight to a single finale Phase-1 realm echo
+//                           for screenshot tuning, without typing through prior
+//                           waves. Valid wave ids are the five realm ids below.
 //
 // The unlock writes to the real save (tied to the player's login), so once you've
 // loaded ?dev once, everything stays unlocked in normal play too. The bare-loadout
@@ -46,6 +50,8 @@ export interface DevTarget {
   readonly realmSceneKey: string | null;
   /** Optional temporary loadout override for screenshot/feel-tuning routes. */
   readonly loadout?: "bare";
+  /** Optional direct finale Phase-1 wave selector for screenshot/feel tuning. */
+  readonly finaleWaveRealmId?: string;
 }
 
 /** Parse the dev intent from a URL query string (location.search). Pure. */
@@ -53,10 +59,16 @@ export function parseDevTarget(search: string): DevTarget {
   const params = new URLSearchParams(search);
   if (!params.has("dev")) return { unlock: false, realmSceneKey: null };
   const realm = params.get("dev") ?? "";
+  const wave = params.get("wave") ?? "";
+  const finaleWaveRealmId =
+    realm === "great-battle" && Object.hasOwn(REALM_SCENE_KEYS, wave)
+      ? wave
+      : null;
   return {
     unlock: true,
     realmSceneKey: DEV_SCENE_KEYS[realm] ?? null,
     ...(params.get("loadout") === "bare" ? { loadout: "bare" as const } : {}),
+    ...(finaleWaveRealmId ? { finaleWaveRealmId } : {}),
   };
 }
 

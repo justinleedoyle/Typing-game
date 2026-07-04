@@ -75,6 +75,7 @@ import wispCatSprite from "../../art/companions/wisp-cat.png";
 
 interface BattleSceneData {
   store: SaveStore;
+  devWaveRealmId?: string;
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -429,6 +430,7 @@ interface Enemy {
 
 export class GreatBattleScene extends Phaser.Scene {
   private store!: SaveStore;
+  private devWaveRealmId?: string;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
   private band!: ConsoleBand;
@@ -515,6 +517,9 @@ export class GreatBattleScene extends Phaser.Scene {
 
   init(data: BattleSceneData): void {
     this.store = data.store;
+    this.devWaveRealmId = WAVE_DEFS.some((wave) => wave.realmId === data.devWaveRealmId)
+      ? data.devWaveRealmId
+      : undefined;
     this.activeTargets = [];
     this.targetAnchors = new Map();
     this.enemies = [];
@@ -1404,6 +1409,11 @@ export class GreatBattleScene extends Phaser.Scene {
       if (state.realms[waveDef.realmId]?.cleared) {
         this.waveQueue.push(waveDef);
       }
+    }
+    if (this.devWaveRealmId) {
+      this.waveQueue = this.waveQueue.filter(
+        (waveDef) => waveDef.realmId === this.devWaveRealmId,
+      );
     }
 
     // §5.5.11 — Zero allies: Walked Alone tone — no chorus, quiet music

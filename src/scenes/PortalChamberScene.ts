@@ -122,7 +122,7 @@ const ACCOUNT_PANEL = {
 } as const;
 const HUB_STATIONS = {
   desk: { x: 420, y: 956, width: 300, height: 52 },
-  almanac: { x: 230, y: 1030, width: 230, height: 44 },
+  almanac: { x: 245, y: 760, width: 230, height: 54 },
   portalFloor: { x: 960, y: 962, width: 330, height: 46 },
   shelf: { x: 1740, y: 854, width: 290, height: 58 },
   account: {
@@ -1151,8 +1151,8 @@ export class PortalChamberScene extends Phaser.Scene {
     const target = new TextWordTarget({
       scene: this,
       word: "almanac",
-      x: 230,
-      y: 1030,
+      x: HUB_STATIONS.almanac.x,
+      y: HUB_STATIONS.almanac.y + 4,
       fontSize: 22,
       priority: -1,
       outline: true,

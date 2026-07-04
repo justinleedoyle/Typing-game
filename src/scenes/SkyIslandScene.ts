@@ -127,7 +127,10 @@ interface LanternSpirit {
 /** Path exploration words: traversal moments */
 const PATH_BEATS = ["balance", "lantern", "stepping"] as const;
 const SKY_WREN_STAGE_X = 960;
-const SKY_WREN_STAGE_Y = 900;
+const SKY_WREN_STAGE_Y = 826;
+const SKY_BALANCE_CUE_Y = 776;
+const SKY_LANTERN_CUE_Y = 748;
+const SKY_STEPPING_CUE_Y = 788;
 
 /** Lantern-Lighter typed conversation */
 const LIGHTER_LINE_1 =
@@ -381,7 +384,7 @@ export class SkyIslandScene extends Phaser.Scene {
     });
     this.drawTempleStones();
     this.drawAmbientLanterns();
-    this.wrenContainer = this.drawWren(this.scale.width / 2, 900);
+    this.wrenContainer = this.drawWren(this.scale.width / 2, SKY_WREN_STAGE_Y);
     playSceneEventPulse(this, {
       kind: "mote",
       color: 0xf2cc65,
@@ -776,7 +779,7 @@ export class SkyIslandScene extends Phaser.Scene {
       case "balance":
         return { x: cue.x - 112, y: cue.y + 56 };
       case "lantern":
-        return { x: cue.x + 18, y: cue.y + 108 };
+        return { x: cue.x + 18, y: cue.y + 86 };
       case "stepping":
         return { x: cue.x + 138, y: cue.y + 34 };
     }
@@ -785,7 +788,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private stageWrenAtPathEntrance(): void {
     const cue = this.pathCue;
     if (!cue?.scene) return;
-    this.moveWrenTo(cue.x - 36, cue.y + 76, {
+    this.moveWrenTo(cue.x - 36, cue.y + 60, {
       durationMs: 840,
       quiet: true,
     });
@@ -843,7 +846,7 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private drawBalanceBridgeCue(): Phaser.GameObjects.Container {
-    const c = this.add.container(this.scale.width / 2 - 92, 796).setDepth(-1).setAlpha(0);
+    const c = this.add.container(this.scale.width / 2 - 92, SKY_BALANCE_CUE_Y).setDepth(-1).setAlpha(0);
     c.add(addLocalGroundShadow(this, 426, 32, { y: 35, alpha: 0.18 }));
 
     const air = this.add.graphics();
@@ -934,7 +937,7 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private drawPathLanternCue(): Phaser.GameObjects.Container {
-    const c = this.add.container(this.scale.width / 2 + 22, 748).setDepth(-1).setAlpha(0);
+    const c = this.add.container(this.scale.width / 2 + 22, SKY_LANTERN_CUE_Y).setDepth(-1).setAlpha(0);
     const cord = this.add.graphics();
     cord.lineStyle(1.5, 0x8a7060, 0.54);
     cord.lineBetween(0, -104, 0, -34);
@@ -971,7 +974,7 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private drawSteppingStonesCue(): Phaser.GameObjects.Container {
-    const c = this.add.container(this.scale.width / 2 + 36, 820).setDepth(-1).setAlpha(0);
+    const c = this.add.container(this.scale.width / 2 + 36, SKY_STEPPING_CUE_Y).setDepth(-1).setAlpha(0);
     c.add(addLocalGroundShadow(this, 390, 30, { x: 34, y: 24, alpha: 0.13 }));
     const stones = this.add.graphics();
     const stoneSpecs = [

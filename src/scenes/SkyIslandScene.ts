@@ -760,9 +760,9 @@ export class SkyIslandScene extends Phaser.Scene {
 
     switch (beat) {
       case "balance":
-        return { x: cue.x - 178, y: cue.y - 150 };
+        return { x: cue.x - 238, y: cue.y - 118 };
       case "lantern":
-        return { x: cue.x + 214, y: cue.y - 122 };
+        return { x: cue.x + 100, y: cue.y - 108 };
       case "stepping":
         return { x: cue.x + 250, y: cue.y - 96 };
     }
@@ -844,39 +844,84 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private drawBalanceBridgeCue(): Phaser.GameObjects.Container {
     const c = this.add.container(this.scale.width / 2 - 92, 796).setDepth(-1).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 336, 30, { y: 34, alpha: 0.16 }));
+    c.add(addLocalGroundShadow(this, 426, 32, { y: 35, alpha: 0.18 }));
 
     const air = this.add.graphics();
     air.lineStyle(2, 0xf3ead2, 0.16);
+    air.lineBetween(-270, 42, -178, 30);
     air.lineBetween(-178, 30, -92, 50);
     air.lineBetween(-92, 50, 18, 22);
     air.lineBetween(18, 22, 96, 6);
     air.lineBetween(96, 6, 186, 20);
     air.lineStyle(1.5, PALETTE_HEX.brass, 0.12);
+    air.lineBetween(-250, 40, -194, 33);
     air.lineBetween(-156, 38, -108, 47);
     air.lineBetween(92, 10, 146, 18);
     c.add(air);
 
     const rocks = this.add.graphics().setAngle(-3);
-    rocks.fillStyle(0x46515c, 0.66);
+    rocks.fillStyle(0x303943, 0.72);
+    rocks.fillEllipse(-252, 32, 104, 38);
+    rocks.fillStyle(0x46515c, 0.72);
     rocks.fillEllipse(-156, 18, 122, 46);
     rocks.fillEllipse(156, 22, 130, 50);
-    rocks.fillStyle(0x6d765f, 0.44);
+    rocks.fillStyle(0x7a8267, 0.5);
+    rocks.fillEllipse(-252, 22, 56, 14);
     rocks.fillEllipse(-158, 6, 66, 16);
     rocks.fillEllipse(158, 9, 72, 18);
-    rocks.lineStyle(2, 0xd6c386, 0.2);
+    rocks.lineStyle(2, 0xd6c386, 0.24);
+    rocks.strokeEllipse(-252, 32, 82, 26);
     rocks.strokeEllipse(-156, 18, 100, 30);
     rocks.strokeEllipse(156, 22, 104, 32);
     c.add(rocks);
 
+    const landing = this.add.graphics().setAngle(-4);
+    landing.fillStyle(0x1f241f, 0.48);
+    landing.fillEllipse(-244, -44, 146, 34);
+    landing.fillStyle(0x596150, 0.86);
+    landing.fillEllipse(-244, -58, 122, 34);
+    landing.fillStyle(0x85906f, 0.38);
+    landing.fillEllipse(-260, -66, 52, 12);
+    landing.lineStyle(3, 0xd6c386, 0.32);
+    landing.strokeEllipse(-244, -58, 106, 25);
+    landing.lineStyle(4, 0x2b2318, 0.84);
+    landing.lineBetween(-306, -72, -184, -70);
+    landing.lineStyle(2, PALETTE_HEX.brass, 0.34);
+    landing.lineBetween(-300, -80, -190, -78);
+    landing.lineStyle(5, 0x2b2318, 0.9);
+    landing.lineBetween(-308, -82, -300, -38);
+    landing.lineBetween(-184, -80, -190, -38);
+    landing.fillStyle(PALETTE_HEX.brass, 0.36);
+    landing.fillCircle(-304, -82, 3.5);
+    landing.fillCircle(-186, -80, 3.5);
+    c.add(landing);
+
+    const entrance = this.add.graphics().setAngle(-5);
+    entrance.lineStyle(9, 0x231b14, 0.94);
+    entrance.lineBetween(-270, -4, -146, -13);
+    entrance.lineStyle(4, 0xd6c386, 0.42);
+    entrance.lineBetween(-264, -11, -150, -18);
+    entrance.fillStyle(0x6f604a, 0.8);
+    entrance.fillRoundedRect(-268, -15, 44, 18, 7);
+    entrance.fillRoundedRect(-218, -18, 50, 19, 7);
+    entrance.fillStyle(0xf3ead2, 0.16);
+    entrance.fillCircle(-252, -8, 3);
+    entrance.fillCircle(-188, -12, 3);
+    entrance.lineStyle(2, PALETTE_HEX.brass, 0.26);
+    entrance.lineBetween(-282, -28, -264, -13);
+    entrance.lineBetween(-144, -30, -158, -15);
+    c.add(entrance);
+
     const bridge = this.add.graphics().setAngle(-3);
-    bridge.fillStyle(0x56493a, 0.82);
+    bridge.fillStyle(0x332a21, 0.42);
+    bridge.fillRoundedRect(-160, -10, 320, 44, 16);
+    bridge.fillStyle(0x56493a, 0.9);
     bridge.fillRoundedRect(-156, -18, 312, 38, 14);
-    bridge.lineStyle(2.5, 0xd6c386, 0.36);
+    bridge.lineStyle(3, 0xd6c386, 0.42);
     bridge.strokeRoundedRect(-156, -18, 312, 38, 14);
-    bridge.lineStyle(2, 0xf3ead2, 0.16);
+    bridge.lineStyle(2.5, 0xf3ead2, 0.2);
     bridge.lineBetween(-148, -5, 148, -8);
-    bridge.fillStyle(0x9b8a6a, 0.72);
+    bridge.fillStyle(0x9b8a6a, 0.78);
     bridge.fillRoundedRect(-134, -10, 70, 14, 6);
     bridge.fillRoundedRect(-46, -13, 72, 15, 6);
     bridge.fillRoundedRect(46, -9, 74, 14, 6);
@@ -2842,12 +2887,14 @@ export class SkyIslandScene extends Phaser.Scene {
       ...opts,
       burstColor: opts.burstColor ?? PALETTE_HEX.brass,
       onClaim: (mods) => {
+        const sourceOffsetX = this.pathCueBeat === "balance" ? -244 : 0;
+        const sourceOffsetY = this.pathCueBeat === "balance" ? -62 : -16;
         playClaimLine(
           this,
           this.wrenContainer.x,
           this.wrenContainer.y - 112,
-          cue.x,
-          cue.y - 16,
+          cue.x + sourceOffsetX,
+          cue.y + sourceOffsetY,
           { color: PALETTE_HEX.brass, depth: 58 },
         );
         playActorAttention(this, cue, {
@@ -2889,7 +2936,8 @@ export class SkyIslandScene extends Phaser.Scene {
         color: PALETTE_HEX.brass,
         alpha: 0.18,
         depth: 44,
-        sourceOffsetY: -18,
+        sourceOffsetX: this.pathCueBeat === "balance" ? -244 : 0,
+        sourceOffsetY: this.pathCueBeat === "balance" ? -62 : -18,
         targetOffsetY: 24,
       },
     );

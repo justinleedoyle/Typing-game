@@ -161,6 +161,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private portalWordAnchors: WordBodyAnchorHandle[] = [];
   private stationWordAnchorReleases: Array<() => void> = [];
   private persistentStationWordAnchorReleases: Array<() => void> = [];
+  private shelfDisplayObjects: Phaser.GameObjects.GameObject[] = [];
   private portalFloorCallGlow?: Phaser.GameObjects.Container;
   private stationTypingPulseTimes = new WeakMap<StationSpec, number>();
   private portalTypingPulseTimes = new Map<string, number>();
@@ -187,6 +188,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.portalWordAnchors = [];
     this.stationWordAnchorReleases = [];
     this.persistentStationWordAnchorReleases = [];
+    this.shelfDisplayObjects = [];
     this.portalFloorCallGlow = undefined;
     this.stationTypingPulseTimes = new WeakMap();
     this.portalTypingPulseTimes = new Map();
@@ -230,7 +232,7 @@ export class PortalChamberScene extends Phaser.Scene {
 
     this.drawRoom();
     this.drawRuna();
-    this.drawDisplayShelf();
+    this.drawDisplayShelf(false);
     for (const arch of ARCHES) {
       this.drawArch(arch);
     }
@@ -311,6 +313,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private enterZone(zone: Zone, animate = true): void {
     this.activeZone = zone;
     this.clearZoneTargets();
+    this.drawDisplayShelf(zone === "shelf");
     this.walkWrenTo(ZONE_X[zone], animate);
 
     if (zone === "portals") this.registerPortalZoneTargets();
@@ -2275,11 +2278,17 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   /** Relic icons displayed on the painted cabinet shelves (far right). */
-  private drawDisplayShelf(): void {
+  private drawDisplayShelf(expanded: boolean): void {
     const items = this.store.get().satchel;
+    this.clearShelfDisplay();
 
     if (items.length === 0) {
       this.drawShelfEmptyPlate();
+      return;
+    }
+
+    if (!expanded) {
+      this.drawShelfSummaryPlate(items.length);
       return;
     }
 
@@ -2292,6 +2301,7 @@ export class PortalChamberScene extends Phaser.Scene {
       const ix = SHELF_GRID.startX + (i % SHELF_GRID.cols) * SHELF_GRID.colGap;
       const iy = SHELF_GRID.startY + Math.floor(i / SHELF_GRID.cols) * SHELF_GRID.rowGap;
       const tile = this.add.container(ix, iy).setDepth(1).setAlpha(0.9);
+      this.shelfDisplayObjects.push(tile);
       const tileBg = this.add.graphics();
       const half = SHELF_GRID.tileSize / 2;
       tileBg.fillStyle(UI_HEX.panel, 0.42);
@@ -2326,18 +2336,27 @@ export class PortalChamberScene extends Phaser.Scene {
     });
   }
 
+  private clearShelfDisplay(): void {
+    for (const obj of this.shelfDisplayObjects) {
+      this.tweens.killTweensOf(obj);
+      obj.destroy();
+    }
+    this.shelfDisplayObjects = [];
+  }
+
   private drawShelfEmptyPlate(): void {
     const width = 180;
     const height = 42;
     const x = 1740;
     const y = 535;
     const plate = this.add.graphics().setDepth(0);
+    this.shelfDisplayObjects.push(plate);
     plate.fillStyle(UI_HEX.panel, 0.34);
     plate.fillRoundedRect(x - width / 2, y - height / 2, width, height, 8);
     plate.lineStyle(1, UI_HEX.brass, 0.34);
     plate.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 8);
 
-    this.add
+    const label = this.add
       .text(x, y, "nothing yet", {
         fontFamily: SERIF,
         fontSize: "17px",
@@ -2346,6 +2365,45 @@ export class PortalChamberScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(1);
+    this.shelfDisplayObjects.push(label);
+  }
+
+  private drawShelfSummaryPlate(itemCount: number): void {
+    const width = 188;
+    const height = 62;
+    const x = 1740;
+    const y = 535;
+    const plate = this.add.graphics().setDepth(0);
+    this.shelfDisplayObjects.push(plate);
+    plate.fillStyle(UI_HEX.panel, 0.24);
+    plate.fillRoundedRect(x - width / 2, y - height / 2, width, height, 9);
+    plate.lineStyle(1, UI_HEX.brass, 0.28);
+    plate.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 9);
+    plate.lineStyle(1, UI_HEX.brass, 0.18);
+    plate.lineBetween(x - width / 2 + 20, y + 3, x + width / 2 - 20, y + 3);
+
+    const count = this.add
+      .text(x, y - 11, `${itemCount}`, {
+        fontFamily: SERIF,
+        fontSize: "28px",
+        color: "#d6c087",
+      })
+      .setOrigin(0.5)
+      .setAlpha(0.72)
+      .setDepth(1);
+    const label = this.add
+      .text(x, y + 17, "keepsakes", {
+        fontFamily: SERIF,
+        fontSize: "14px",
+        fontStyle: "italic",
+        color: "#8f8161",
+      })
+      .setOrigin(0.5)
+      .setAlpha(0.68)
+      .setDepth(1);
+    this.shelfDisplayObjects.push(count, label);
+
+    addIdleBreath(this, count, { dy: -1.5, durationMs: 2200, delayMs: 200 });
   }
 
   private drawShelfGridBacker(itemCount: number): void {
@@ -2355,6 +2413,7 @@ export class PortalChamberScene extends Phaser.Scene {
     const x = SHELF_GRID.startX + ((SHELF_GRID.cols - 1) * SHELF_GRID.colGap) / 2;
     const y = SHELF_GRID.startY + ((rows - 1) * SHELF_GRID.rowGap) / 2;
     const backer = this.add.graphics().setDepth(-1);
+    this.shelfDisplayObjects.push(backer);
     backer.fillStyle(UI_HEX.panel, 0.18);
     backer.fillRoundedRect(x - width / 2, y - height / 2, width, height, 10);
     backer.lineStyle(1, UI_HEX.brass, 0.22);

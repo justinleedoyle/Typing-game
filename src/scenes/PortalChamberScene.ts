@@ -111,6 +111,14 @@ const SHELF_GRID = {
   tileSize: 40,
   iconSize: 30,
 } as const;
+const SHELF_STATION = {
+  x: 1740,
+  y: 558,
+  width: 220,
+  height: 100,
+  summaryY: 536,
+  targetY: 592,
+} as const;
 const ACCOUNT_PANEL = {
   x: 1788,
   y: 238,
@@ -131,7 +139,12 @@ const HUB_STATIONS = {
   desk: { x: 360, y: 838, width: 270, height: 70 },
   almanac: { x: 190, y: 734, width: 210, height: 50 },
   portalFloor: { x: 960, y: 962, width: 330, height: 46 },
-  shelf: { x: 1740, y: 854, width: 290, height: 58 },
+  shelf: {
+    x: SHELF_STATION.x,
+    y: SHELF_STATION.y,
+    width: SHELF_STATION.width,
+    height: SHELF_STATION.height,
+  },
   account: {
     x: ACCOUNT_STATION.x,
     y: ACCOUNT_STATION.y,
@@ -498,11 +511,17 @@ export class PortalChamberScene extends Phaser.Scene {
         entryDelayMs: 110,
       },
     );
-    this.registerNavTarget("shelf", 1740, 842, () => this.enterZone("shelf"), {
-      fontSize: 23,
-      stationPulse: HUB_STATIONS.shelf,
-      entryDelayMs: 150,
-    });
+    this.registerNavTarget(
+      "shelf",
+      SHELF_STATION.x,
+      SHELF_STATION.targetY,
+      () => this.enterZone("shelf"),
+      {
+        fontSize: 21,
+        stationPulse: HUB_STATIONS.shelf,
+        entryDelayMs: 150,
+      },
+    );
     // Keep the first portal view quiet: one account station target reveals
     // settings/sign-in controls after the player intentionally focuses it.
     this.registerNavTarget(
@@ -2408,8 +2427,8 @@ export class PortalChamberScene extends Phaser.Scene {
   private drawShelfEmptyPlate(): void {
     const width = 180;
     const height = 42;
-    const x = 1740;
-    const y = 535;
+    const x = SHELF_STATION.x;
+    const y = SHELF_STATION.summaryY;
     const plate = this.add.graphics().setDepth(0);
     this.shelfDisplayObjects.push(plate);
     plate.fillStyle(UI_HEX.panel, 0.34);
@@ -2432,8 +2451,8 @@ export class PortalChamberScene extends Phaser.Scene {
   private drawShelfSummaryPlate(itemCount: number): void {
     const width = 188;
     const height = 62;
-    const x = 1740;
-    const y = 535;
+    const x = SHELF_STATION.x;
+    const y = SHELF_STATION.summaryY;
     const plate = this.add.graphics().setDepth(0);
     this.shelfDisplayObjects.push(plate);
     plate.fillStyle(UI_HEX.panel, 0.24);

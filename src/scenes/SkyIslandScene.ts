@@ -754,7 +754,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.pathCueBeat = beat;
     this.tweens.add({
       targets: cue,
-      alpha: 0.88,
+      alpha: beat === "balance" ? 0.97 : 0.88,
       y: cue.y - 8,
       duration: 380,
       ease: "Sine.easeOut",
@@ -879,36 +879,39 @@ export class SkyIslandScene extends Phaser.Scene {
     };
 
     const air = this.add.graphics();
-    air.lineStyle(2, 0xf3ead2, 0.06);
+    air.lineStyle(2, 0xf3ead2, 0.035);
     air.lineBetween(-270, 42, -178, 30);
     air.lineBetween(-178, 30, -92, 50);
     air.lineBetween(-92, 50, 18, 22);
     air.lineBetween(18, 22, 96, 6);
     air.lineBetween(96, 6, 186, 20);
-    air.lineStyle(1.5, PALETTE_HEX.brass, 0.06);
+    air.lineStyle(1.5, PALETTE_HEX.brass, 0.035);
     air.lineBetween(-250, 40, -194, 33);
     air.lineBetween(-156, 38, -108, 47);
     air.lineBetween(92, 10, 146, 18);
     c.add(air);
 
     const rocks = this.add.graphics().setAngle(-3);
-    rocks.fillStyle(0x303943, 0.82);
+    rocks.fillStyle(0x252a2b, 0.92);
     rocks.fillEllipse(-252, 32, 104, 38);
-    rocks.fillStyle(0x46515c, 0.82);
+    rocks.fillStyle(0x3d423e, 0.92);
     rocks.fillEllipse(-156, 18, 122, 46);
     rocks.fillEllipse(156, 22, 130, 50);
-    rocks.fillStyle(0x7a8267, 0.5);
+    rocks.fillStyle(0x6d7159, 0.34);
     rocks.fillEllipse(-252, 22, 56, 14);
     rocks.fillEllipse(-158, 6, 66, 16);
     rocks.fillEllipse(158, 9, 72, 18);
-    rocks.lineStyle(2, 0xd6c386, 0.24);
+    rocks.lineStyle(2, 0x181613, 0.34);
     rocks.strokeEllipse(-252, 32, 82, 26);
     rocks.strokeEllipse(-156, 18, 100, 30);
     rocks.strokeEllipse(156, 22, 104, 32);
+    rocks.lineStyle(1.5, 0xc7b886, 0.14);
+    rocks.lineBetween(-194, 6, -154, 14);
+    rocks.lineBetween(126, 14, 176, 8);
     c.add(rocks);
 
     const landing = this.add.graphics().setAngle(-4);
-    landing.fillStyle(0x1f241f, 0.48);
+    landing.fillStyle(0x151611, 0.62);
     landing.fillEllipse(-244, -44, 146, 34);
     drawStone(
       landing,
@@ -921,19 +924,22 @@ export class SkyIslandScene extends Phaser.Scene {
         { x: -258, y: -44 },
         { x: -310, y: -52 },
       ],
-      0x596150,
-      0.9,
-      0.34,
+      0x4b4e42,
+      1,
+      0.28,
       3,
+      0x222018,
     );
-    landing.fillStyle(0x85906f, 0.38);
+    landing.fillStyle(0x7b805f, 0.2);
     landing.fillEllipse(-260, -72, 52, 12);
     landing.lineStyle(1.5, 0x1e211d, 0.42);
     landing.lineBetween(-290, -63, -246, -70);
     landing.lineBetween(-230, -79, -204, -66);
+    landing.lineBetween(-276, -55, -236, -58);
+    landing.lineBetween(-246, -82, -214, -75);
     landing.lineStyle(4, 0x2b2318, 0.84);
     landing.lineBetween(-306, -72, -184, -70);
-    landing.lineStyle(2, PALETTE_HEX.brass, 0.34);
+    landing.lineStyle(2, PALETTE_HEX.brass, 0.2);
     landing.lineBetween(-300, -80, -190, -78);
     landing.lineStyle(5, 0x2b2318, 0.9);
     landing.lineBetween(-308, -82, -300, -38);
@@ -946,7 +952,7 @@ export class SkyIslandScene extends Phaser.Scene {
     const entrance = this.add.graphics().setAngle(-5);
     entrance.lineStyle(7, 0x221a13, 0.9);
     entrance.lineBetween(-280, 10, -140, -4);
-    entrance.lineStyle(2, PALETTE_HEX.brass, 0.16);
+    entrance.lineStyle(2, PALETTE_HEX.brass, 0.09);
     entrance.lineBetween(-282, -18, -142, -28);
     entrance.lineBetween(-282, 18, -142, 6);
     entrance.lineStyle(4, 0x2b2318, 0.88);
@@ -966,8 +972,11 @@ export class SkyIslandScene extends Phaser.Scene {
         { x: -202, y: 9 },
       ],
     ].forEach((points, i) =>
-      drawStone(entrance, points, i === 0 ? 0x69604d : 0x776b54, 0.92, 0.22, 1.5),
+      drawStone(entrance, points, i === 0 ? 0x514d3f : 0x5d5644, 1, 0.18, 1.5, 0x201b15),
     );
+    entrance.lineStyle(1.4, 0x1b1712, 0.34);
+    entrance.lineBetween(-250, -1, -230, 4);
+    entrance.lineBetween(-198, -10, -178, -5);
     c.add(entrance);
 
     const bridge = this.add.graphics().setAngle(-3);
@@ -977,13 +986,13 @@ export class SkyIslandScene extends Phaser.Scene {
       { x: 48, y: 50, w: 96, h: 22 },
       { x: 136, y: 47, w: 96, h: 22 },
     ].forEach((shadow) => {
-      bridge.fillStyle(0x201a14, 0.48);
+      bridge.fillStyle(0x17120f, 0.6);
       bridge.fillEllipse(shadow.x, shadow.y, shadow.w, shadow.h);
     });
-    bridge.lineStyle(3, 0x2b2318, 0.58);
+    bridge.lineStyle(3, 0x211b15, 0.58);
     bridge.lineBetween(-176, 35, 184, 12);
     bridge.lineBetween(-168, 71, 188, 48);
-    bridge.lineStyle(1.5, PALETTE_HEX.brass, 0.14);
+    bridge.lineStyle(1.5, PALETTE_HEX.brass, 0.08);
     bridge.lineBetween(-176, 29, 184, 6);
     const bridgeSlabs = [
       [
@@ -1027,18 +1036,22 @@ export class SkyIslandScene extends Phaser.Scene {
       drawStone(
         bridge,
         points,
-        i % 2 === 0 ? 0x505447 : 0x5d604f,
+        i % 2 === 0 ? 0x45473c : 0x514f41,
         1,
-        0.48,
+        0.36,
         2.5,
-        0x24241f,
+        0x201d18,
       );
       const midX = (points[1]!.x + points[3]!.x) / 2;
-      bridge.lineStyle(1.4, 0x211b15, 0.34);
+      bridge.lineStyle(1.4, 0x191611, 0.42);
       bridge.lineBetween(midX - 16, points[1]!.y + 17, midX + 13, points[4]!.y - 9);
-      bridge.fillStyle(0xf3ead2, 0.1);
+      bridge.fillStyle(0xf3ead2, 0.055);
       bridge.fillEllipse(midX - 9, points[1]!.y + 8, 32, 7);
     });
+    bridge.fillStyle(0x7d8061, 0.18);
+    bridge.fillEllipse(-136, 52, 28, 7);
+    bridge.fillEllipse(46, 55, 24, 6);
+    bridge.fillEllipse(142, 43, 26, 7);
     c.add(bridge);
     return c;
   }

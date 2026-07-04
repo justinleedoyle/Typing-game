@@ -241,16 +241,18 @@ function finaleEnemyArtForRealm(realmId: string): FinaleEnemyArtSpec {
     case "sunken-bell":
       return {
         textureKey: "finale-bell-ghost",
-        height: 106,
-        shadowWidth: 94,
-        shadowHeight: 20,
-        shadowY: 40,
-        shadowAlpha: 0.18,
-        spriteY: -4,
-        alpha: 0.74,
+        height: 124,
+        shadowWidth: 126,
+        shadowHeight: 24,
+        shadowY: 50,
+        shadowAlpha: 0.22,
+        spriteY: -8,
+        alpha: 0.8,
         glowColor: 0xa7d2dd,
-        glowAlpha: 0.12,
-        glowY: -2,
+        glowAlpha: 0.14,
+        glowY: -4,
+        glowWidth: 118,
+        glowHeight: 124,
       };
     case "clockwork-forge":
       return {
@@ -412,6 +414,7 @@ function finaleTypedPulseForRealm(realmId: string): {
 }
 
 function finaleEnemyWordOffsetForRealm(realmId: string): number {
+  if (realmId === "sunken-bell") return -100;
   return realmId === "clockwork-forge" ? -108 : FINALE_ENEMY_WORD_OFFSET_Y;
 }
 
@@ -1845,14 +1848,18 @@ export class GreatBattleScene extends Phaser.Scene {
     }
 
     if (realmId === "sunken-bell") {
-      footing.fillStyle(0x173846, 0.14);
-      footing.fillEllipse(0, 43, 102, 15);
-      footing.lineStyle(1, 0xa7d2dd, 0.18);
-      footing.strokeEllipse(-10, 39, 66, 8);
-      footing.strokeEllipse(18, 45, 52, 7);
-      footing.lineStyle(1, 0x4ab8d6, 0.12);
-      footing.lineBetween(-44, 40, -20, 38);
-      footing.lineBetween(28, 42, 52, 40);
+      footing.fillStyle(0x102c3a, 0.18);
+      footing.fillEllipse(0, 52, 136, 20);
+      footing.lineStyle(2, 0xa7d2dd, 0.2);
+      footing.strokeEllipse(-14, 47, 82, 10);
+      footing.strokeEllipse(20, 54, 68, 9);
+      footing.lineStyle(1, 0x4ab8d6, 0.16);
+      footing.lineBetween(-60, 48, -28, 45);
+      footing.lineBetween(-18, 54, 16, 50);
+      footing.lineBetween(32, 51, 68, 48);
+      footing.fillStyle(0xa7d2dd, 0.14);
+      footing.fillCircle(-42, 47, 2.2);
+      footing.fillCircle(46, 52, 2);
       body.add(footing);
       return;
     }

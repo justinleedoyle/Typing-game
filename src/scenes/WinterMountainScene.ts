@@ -786,27 +786,53 @@ export class WinterMountainScene extends Phaser.Scene {
     this.riverCueBeat = beat;
 
     if (beat !== "duck") {
-      cue.add(addLocalGroundShadow(this, beat === "lift" ? 180 : 210, 22, {
+      cue.add(addLocalGroundShadow(this, beat === "lift" ? 268 : 210, 22, {
         y: beat === "step" ? 18 : 10,
-        alpha: beat === "step" ? 0.26 : 0.2,
+        alpha: beat === "step" ? 0.26 : 0.23,
       }));
     }
 
     if (beat === "lift") {
-      const log = this.add.graphics().setAngle(-8);
-      log.fillStyle(0x33291f, 0.96);
-      log.fillRoundedRect(-88, -18, 176, 36, 18);
-      log.fillStyle(0x4b3929, 0.92);
-      log.fillRoundedRect(-82, -10, 164, 12, 8);
-      log.lineStyle(2, 0x8e785c, 0.32);
-      log.lineBetween(-64, -16, -48, 16);
-      log.lineBetween(10, -18, 30, 16);
-      log.lineBetween(66, -14, 78, 14);
+      const log = this.add.graphics().setAngle(-9);
+      log.fillStyle(0x1d1711, 0.92);
+      log.fillRoundedRect(-136, -20, 272, 40, 18);
+      log.fillStyle(0x3a2b1d, 0.98);
+      log.fillRoundedRect(-128, -17, 256, 34, 17);
+      log.fillStyle(0x5c432b, 0.86);
+      log.fillRoundedRect(-118, -9, 224, 10, 7);
+      log.fillStyle(0x2a1d13, 0.92);
+      log.fillEllipse(-132, 0, 38, 38);
+      log.fillStyle(0x6a4b2e, 0.68);
+      log.fillEllipse(-132, 0, 25, 25);
+      log.lineStyle(2, 0x2b1c12, 0.74);
+      log.strokeEllipse(-132, 0, 17, 17);
+      log.lineStyle(3, 0x8e785c, 0.24);
+      log.lineBetween(-82, -15, -64, 17);
+      log.lineBetween(-18, -17, 0, 17);
+      log.lineBetween(52, -16, 72, 15);
+      log.lineStyle(7, 0x302214, 0.96);
+      log.lineBetween(-58, -18, -28, -52);
+      log.lineBetween(72, 13, 104, 42);
+      log.lineStyle(3, 0x6d563a, 0.62);
+      log.lineBetween(-55, -22, -30, -48);
+      log.lineBetween(78, 12, 101, 37);
       cue.add(log);
-      const snowcap = this.add.graphics().setAngle(-8);
-      snowcap.fillStyle(0xe8f0f8, 0.78);
-      snowcap.fillRoundedRect(-70, -24, 118, 12, 8);
-      cue.add(snowcap);
+
+      const snow = this.add.graphics().setAngle(-9);
+      snow.fillStyle(0xf0f7ff, 0.9);
+      snow.fillEllipse(-82, -22, 82, 18);
+      snow.fillEllipse(-16, -24, 96, 19);
+      snow.fillEllipse(58, -23, 78, 17);
+      snow.fillEllipse(116, -16, 38, 13);
+      snow.fillStyle(0xbfd2df, 0.34);
+      snow.fillEllipse(-126, -14, 32, 9);
+      snow.fillEllipse(8, -11, 50, 8);
+      snow.fillEllipse(100, -8, 44, 8);
+      snow.lineStyle(1.5, 0xffffff, 0.38);
+      snow.lineBetween(-106, -27, -58, -29);
+      snow.lineBetween(-28, -31, 28, -31);
+      snow.lineBetween(42, -28, 86, -29);
+      cue.add(snow);
     } else if (beat === "step") {
       const ice = this.add.graphics();
       ice.fillStyle(0x213d54, 0.22);

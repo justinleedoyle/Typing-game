@@ -124,7 +124,7 @@ const HUB_STATIONS = {
   desk: { x: 420, y: 956, width: 300, height: 52 },
   almanac: { x: 230, y: 1030, width: 230, height: 44 },
   portalFloor: { x: 960, y: 962, width: 330, height: 46 },
-  shelf: { x: 1740, y: 978, width: 290, height: 52 },
+  shelf: { x: 1740, y: 854, width: 290, height: 58 },
   account: {
     x: ACCOUNT_PANEL.x,
     y: ACCOUNT_PANEL.y,
@@ -481,7 +481,7 @@ export class PortalChamberScene extends Phaser.Scene {
       stationPulse: HUB_STATIONS.desk,
       entryDelayMs: 110,
     });
-    this.registerNavTarget("shelf", 1740, 930, () => this.enterZone("shelf"), {
+    this.registerNavTarget("shelf", 1740, 842, () => this.enterZone("shelf"), {
       fontSize: 23,
       stationPulse: HUB_STATIONS.shelf,
       entryDelayMs: 150,
@@ -674,11 +674,13 @@ export class PortalChamberScene extends Phaser.Scene {
 
     if (items.length === 0) {
       this.setHint("your shelf is empty. bring something back from a realm.");
-    } else {
+    } else if (items.length <= 3) {
       const names = items
         .map((id) => RELICS[id]?.name ?? id)
         .join(" · ");
       this.setHint(`on your shelf: ${names}`);
+    } else {
+      this.setHint(`your shelf holds ${items.length} keepsakes. type almanac for the full record.`);
     }
 
     this.registerNavTarget(
@@ -1681,6 +1683,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.shelf.width,
       HUB_STATIONS.shelf.height,
       "your shelf",
+      { alpha: 0.26, labelAlpha: 0 },
     );
     this.drawStationPlaque(
       HUB_STATIONS.account.x,

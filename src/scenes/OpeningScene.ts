@@ -32,9 +32,10 @@ const NAME_TARGET = { x: 910, y: 640 };
 const TYPEWRITER_TARGET = { x: 790, y: 700 };
 const PORTAL_TARGET = { x: 1510, y: 610 };
 const STUDY_RESPONSE = {
-  name: { x: 960, y: 630, color: PALETTE_HEX.cream },
-  typewriter: { x: 790, y: 770, color: PALETTE_HEX.brass },
-  portal: { x: 1510, y: 610, color: PALETTE_HEX.frost },
+  identity: { ...IDENTITY_CHOICE_TARGET, color: PALETTE_HEX.cream },
+  name: { ...NAME_TARGET, color: PALETTE_HEX.cream },
+  typewriter: { ...TYPEWRITER_TARGET, color: PALETTE_HEX.brass },
+  portal: { ...PORTAL_TARGET, color: PALETTE_HEX.frost },
 } as const;
 type StudyResponsePoint = (typeof STUDY_RESPONSE)[keyof typeof STUDY_RESPONSE];
 interface PortalFleckPoint {
@@ -252,7 +253,7 @@ export class OpeningScene extends Phaser.Scene {
         s.wrenGender = gender;
       });
       playChime();
-      this.playStudyPulse(STUDY_RESPONSE.name);
+      this.playStudyPulse(STUDY_RESPONSE.identity);
       this.time.delayedCall(700, () => this.beat3());
     };
 
@@ -261,7 +262,7 @@ export class OpeningScene extends Phaser.Scene {
       x: IDENTITY_CHOICE_TARGET.x - 120,
       y: IDENTITY_CHOICE_TARGET.y,
       fontSize: 44,
-      response: STUDY_RESPONSE.name,
+      response: STUDY_RESPONSE.identity,
       onComplete: () => pick("boy"),
     });
     const girl = this.makeStudyTarget({
@@ -269,7 +270,7 @@ export class OpeningScene extends Phaser.Scene {
       x: IDENTITY_CHOICE_TARGET.x + 120,
       y: IDENTITY_CHOICE_TARGET.y,
       fontSize: 44,
-      response: STUDY_RESPONSE.name,
+      response: STUDY_RESPONSE.identity,
       onComplete: () => pick("girl"),
     });
     this.typingInput.register(boy);

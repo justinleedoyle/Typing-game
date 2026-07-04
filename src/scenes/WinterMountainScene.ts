@@ -912,7 +912,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private trailWrenPosition(beat: (typeof RIVER_BEATS)[number]): { x: number; y: number } {
     const cue = this.riverCuePosition(beat);
-    if (beat === "lift") return { x: cue.x - 92, y: WINTER_WREN_STAGE_Y + 2 };
+    if (beat === "lift") return { x: cue.x - 176, y: WINTER_WREN_STAGE_Y + 2 };
     if (beat === "step") return { x: cue.x - 12, y: WINTER_WREN_STAGE_Y - 10 };
     return { x: cue.x + 82, y: WINTER_WREN_STAGE_Y };
   }
@@ -920,7 +920,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private stageWrenAtTrailEntrance(): void {
     const cue = this.riverCue;
     if (!cue?.scene) return;
-    this.moveWrenTo(cue.x - 150, WINTER_WREN_STAGE_Y + 6, {
+    this.moveWrenTo(cue.x - 214, WINTER_WREN_STAGE_Y + 6, {
       durationMs: 780,
       quiet: true,
     });
@@ -1001,6 +1001,30 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private pulseRiverCue(completion: boolean): void {
     if (!this.riverCue?.scene) return;
+    if (this.riverCueBeat === "lift") {
+      this.tweens.add({
+        targets: this.riverCue,
+        x: this.riverCue.x + (completion ? 18 : 7),
+        angle: completion ? -3 : -1.2,
+        duration: completion ? 250 : 150,
+        yoyo: true,
+        ease: "Sine.easeOut",
+      });
+      playSceneEventPulse(this, {
+        kind: "snow",
+        color: PALETTE_HEX.frost,
+        x: this.riverCue.x + 52,
+        y: this.riverCue.y - 44,
+        depth: 9,
+        durationMs: completion ? 520 : 280,
+        ringWidth: completion ? 190 : 120,
+        ringHeight: completion ? 48 : 34,
+        count: completion ? 9 : 5,
+        alpha: completion ? 0.13 : 0.08,
+        spreadX: completion ? 96 : 58,
+        spreadY: completion ? 22 : 14,
+      });
+    }
     playActorAttention(this, this.riverCue, {
       scale: completion ? 1.035 : 1.018,
       durationMs: completion ? 260 : 180,

@@ -287,17 +287,19 @@ function finaleEnemyArtForRealm(realmId: string): FinaleEnemyArtSpec {
     case "haunted-wood":
       return {
         textureKey: "finale-wood-ghost",
-        height: 104,
-        shadowWidth: 96,
-        shadowHeight: 20,
-        shadowY: 42,
-        shadowAlpha: 0.2,
-        spriteY: -2,
-        alpha: 0.78,
+        height: 120,
+        shadowWidth: 128,
+        shadowHeight: 24,
+        shadowY: 50,
+        shadowAlpha: 0.24,
+        spriteY: -7,
+        alpha: 0.84,
         tint: 0xd8e2cf,
         glowColor: 0xd8e2cf,
-        glowAlpha: 0.1,
-        glowY: -4,
+        glowAlpha: 0.13,
+        glowY: -8,
+        glowWidth: 118,
+        glowHeight: 120,
       };
     default:
       return {
@@ -415,6 +417,7 @@ function finaleTypedPulseForRealm(realmId: string): {
 
 function finaleEnemyWordOffsetForRealm(realmId: string): number {
   if (realmId === "sunken-bell") return -100;
+  if (realmId === "haunted-wood") return -96;
   return realmId === "clockwork-forge" ? -108 : FINALE_ENEMY_WORD_OFFSET_Y;
 }
 
@@ -1899,15 +1902,22 @@ export class GreatBattleScene extends Phaser.Scene {
     }
 
     if (realmId === "haunted-wood") {
-      footing.fillStyle(0x141a13, 0.2);
-      footing.fillEllipse(0, 46, 108, 18);
-      footing.lineStyle(2, 0x9fb69a, 0.11);
-      footing.lineBetween(-48, 42, -20, 45);
-      footing.lineBetween(-22, 45, 6, 41);
-      footing.lineBetween(8, 42, 44, 46);
-      footing.fillStyle(0xd8e2cf, 0.08);
-      footing.fillCircle(-34, 40, 2.5);
-      footing.fillCircle(38, 44, 2);
+      footing.fillStyle(0x11180f, 0.24);
+      footing.fillEllipse(0, 52, 138, 24);
+      footing.fillStyle(0xd8e2cf, 0.07);
+      footing.fillEllipse(-12, 47, 94, 14);
+      footing.lineStyle(3, 0x6f8b68, 0.14);
+      footing.lineBetween(-62, 48, -30, 52);
+      footing.lineBetween(-36, 52, -4, 46);
+      footing.lineBetween(2, 47, 40, 53);
+      footing.lineBetween(32, 52, 68, 49);
+      footing.lineStyle(1, 0xd8e2cf, 0.12);
+      footing.lineBetween(-54, 43, -20, 39);
+      footing.lineBetween(20, 43, 56, 40);
+      footing.fillStyle(0xd8e2cf, 0.12);
+      footing.fillCircle(-44, 43, 2.8);
+      footing.fillCircle(44, 46, 2.4);
+      footing.fillCircle(6, 41, 1.8);
       body.add(footing);
       return;
     }

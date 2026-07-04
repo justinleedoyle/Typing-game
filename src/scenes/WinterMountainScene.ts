@@ -127,6 +127,11 @@ const WAVE_CANDLES = 3;
 // each). This is just how many pips the "thunder" row draws: SOUL_MAX/SPELL_COST.
 const WAVE_CHARGES = 2;
 const WOLF_KNOCKBACK_PAUSE_MS = 1500;
+// Keep Wren and the first trail obstacles planted in the painted snowfield,
+// not half-swallowed by the console band.
+const WINTER_WREN_STAGE_Y = 842;
+const WINTER_TRAIL_LIFT_Y = 808;
+const WINTER_TRAIL_STEP_Y = 806;
 
 // The Old One's true name is SPOKEN with its capitals — caseSensitive, so the
 // caps demand Shift (required typing, free). Starts lowercase so the claim
@@ -410,7 +415,10 @@ export class WinterMountainScene extends Phaser.Scene {
       minDurationMs: 4600,
       maxDurationMs: 9000,
     });
-    this.wrenContainer = this.drawWren(this.scale.width / 2, 880);
+    this.wrenContainer = this.drawWren(
+      this.scale.width / 2,
+      WINTER_WREN_STAGE_Y,
+    );
     playSceneEventPulse(this, {
       kind: "snow",
       color: PALETTE_HEX.frost,
@@ -856,8 +864,12 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private riverCuePosition(beat: (typeof RIVER_BEATS)[number]): { x: number; y: number } {
-    if (beat === "lift") return { x: this.scale.width / 2 - 250, y: 846 };
-    if (beat === "step") return { x: this.scale.width / 2 + 84, y: 836 };
+    if (beat === "lift") {
+      return { x: this.scale.width / 2 - 250, y: WINTER_TRAIL_LIFT_Y };
+    }
+    if (beat === "step") {
+      return { x: this.scale.width / 2 + 84, y: WINTER_TRAIL_STEP_Y };
+    }
     return { x: this.scale.width / 2 + 82, y: 652 };
   }
 
@@ -874,15 +886,15 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private trailWrenPosition(beat: (typeof RIVER_BEATS)[number]): { x: number; y: number } {
     const cue = this.riverCuePosition(beat);
-    if (beat === "lift") return { x: cue.x - 92, y: 882 };
-    if (beat === "step") return { x: cue.x - 12, y: 856 };
-    return { x: cue.x + 82, y: 872 };
+    if (beat === "lift") return { x: cue.x - 92, y: WINTER_WREN_STAGE_Y + 2 };
+    if (beat === "step") return { x: cue.x - 12, y: WINTER_WREN_STAGE_Y - 10 };
+    return { x: cue.x + 82, y: WINTER_WREN_STAGE_Y };
   }
 
   private stageWrenAtTrailEntrance(): void {
     const cue = this.riverCue;
     if (!cue?.scene) return;
-    this.moveWrenTo(cue.x - 150, 884, {
+    this.moveWrenTo(cue.x - 150, WINTER_WREN_STAGE_Y + 6, {
       durationMs: 780,
       quiet: true,
     });
@@ -897,7 +909,7 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private resetWrenToWinterStage(): void {
-    this.moveWrenTo(this.scale.width / 2, 880, {
+    this.moveWrenTo(this.scale.width / 2, WINTER_WREN_STAGE_Y, {
       durationMs: 620,
       quiet: true,
     });

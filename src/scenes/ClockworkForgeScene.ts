@@ -313,7 +313,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     });
     this.drawForgeGlow();
     this.drawCatwalk();
-    this.drawWren(this.catwalkWrenX(0), CATWALK_Y + 20);
+    this.drawWren(this.catwalkEntranceWrenX(), CATWALK_Y + 20);
     playSceneEventPulse(this, {
       kind: "ember",
       color: PALETTE_HEX.ember,
@@ -653,7 +653,6 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const narration = CATWALK_NARRATIONS[idx];
     const cueX = this.catwalkCueX(idx);
     const wordPos = this.catwalkWordPosition(idx);
-    this.walkWrenAlongCatwalk(this.catwalkWrenX(idx));
     this.showCatwalkCue(idx, cueX);
     const target = this.makeWord({
       scene: this,
@@ -666,6 +665,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         playWrenFocus(this.wrenSprite, {
           faceLeft: wordPos.x < this.wrenContainer.x,
         });
+        this.walkWrenAlongCatwalk(this.catwalkWrenX(idx));
         this.pulseCatwalkCue(false);
       },
       onComplete: () => {
@@ -675,9 +675,6 @@ export class ClockworkForgeScene extends Phaser.Scene {
         this.releaseCatwalkCueWordAnchor();
         this.pulseCatwalkCue(true);
         this.setNarrator(narration);
-        if (idx < CATWALK_WORDS.length - 1) {
-          this.walkWrenAlongCatwalk(this.catwalkWrenX(idx + 1));
-        }
         this.time.delayedCall(1400, () => this.startCatwalkBeats(idx + 1));
       },
     });
@@ -2341,6 +2338,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private catwalkCueX(idx: number): number {
     return this.scale.width / 2 + (idx - 1) * 260;
+  }
+
+  private catwalkEntranceWrenX(): number {
+    return this.catwalkCueX(0) - 178;
   }
 
   private catwalkWrenX(idx: number): number {

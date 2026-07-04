@@ -112,13 +112,20 @@ const SHELF_GRID = {
   iconSize: 30,
 } as const;
 const ACCOUNT_PANEL = {
-  x: 1812,
-  y: 84,
-  width: 220,
-  height: 126,
-  statusY: 38,
-  authY: 82,
-  settingsY: 128,
+  x: 1788,
+  y: 238,
+  width: 216,
+  height: 154,
+  statusY: 188,
+  authY: 228,
+  settingsY: 268,
+  portalsY: 308,
+} as const;
+const ACCOUNT_STATION = {
+  x: ACCOUNT_PANEL.x,
+  y: ACCOUNT_PANEL.authY,
+  width: 172,
+  height: 58,
 } as const;
 const HUB_STATIONS = {
   desk: { x: 360, y: 838, width: 270, height: 70 },
@@ -126,10 +133,10 @@ const HUB_STATIONS = {
   portalFloor: { x: 960, y: 962, width: 330, height: 46 },
   shelf: { x: 1740, y: 854, width: 290, height: 58 },
   account: {
-    x: ACCOUNT_PANEL.x,
-    y: ACCOUNT_PANEL.y,
-    width: ACCOUNT_PANEL.width,
-    height: ACCOUNT_PANEL.height,
+    x: ACCOUNT_STATION.x,
+    y: ACCOUNT_STATION.y,
+    width: ACCOUNT_STATION.width,
+    height: ACCOUNT_STATION.height,
   },
 } as const;
 
@@ -500,8 +507,8 @@ export class PortalChamberScene extends Phaser.Scene {
     // settings/sign-in controls after the player intentionally focuses it.
     this.registerNavTarget(
       "account",
-      ACCOUNT_PANEL.x,
-      ACCOUNT_PANEL.authY,
+      ACCOUNT_STATION.x,
+      ACCOUNT_STATION.y,
       () => this.enterZone("account"),
       {
         fontSize: 18,
@@ -1230,6 +1237,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private registerAccountZoneTargets(): void {
     this.narration.clear();
     this.setHint("account station  ·  type settings, sign in/out, or portals");
+    this.drawAccountStationPanel();
     void this.renderAccountStatus();
     this.registerNavTarget(
       "settings",
@@ -1245,7 +1253,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.registerNavTarget(
       "portals",
       ACCOUNT_PANEL.x,
-      ACCOUNT_PANEL.y + ACCOUNT_PANEL.height / 2 + 26,
+      ACCOUNT_PANEL.portalsY,
       () => this.enterZone("portals"),
       {
         fontSize: 18,
@@ -1290,6 +1298,44 @@ export class PortalChamberScene extends Phaser.Scene {
     this.typingInput.register(target);
     this.zoneTargets.push(target);
     this.stageHubTarget(target, 110);
+  }
+
+  private drawAccountStationPanel(): void {
+    const panel = this.add.graphics().setDepth(0);
+    panel.fillStyle(UI_HEX.panel, 0.26);
+    panel.fillRoundedRect(
+      ACCOUNT_PANEL.x - ACCOUNT_PANEL.width / 2,
+      ACCOUNT_PANEL.y - ACCOUNT_PANEL.height / 2,
+      ACCOUNT_PANEL.width,
+      ACCOUNT_PANEL.height,
+      9,
+    );
+    panel.lineStyle(1, UI_HEX.brass, 0.34);
+    panel.strokeRoundedRect(
+      ACCOUNT_PANEL.x - ACCOUNT_PANEL.width / 2,
+      ACCOUNT_PANEL.y - ACCOUNT_PANEL.height / 2,
+      ACCOUNT_PANEL.width,
+      ACCOUNT_PANEL.height,
+      9,
+    );
+    panel.lineStyle(1, UI_HEX.brass, 0.16);
+    panel.lineBetween(
+      ACCOUNT_PANEL.x - ACCOUNT_PANEL.width / 2 + 22,
+      ACCOUNT_PANEL.statusY + 19,
+      ACCOUNT_PANEL.x + ACCOUNT_PANEL.width / 2 - 22,
+      ACCOUNT_PANEL.statusY + 19,
+    );
+    this.accountDisplayObjects.push(panel);
+
+    const corners = cornerTicks(this, ACCOUNT_PANEL.width, ACCOUNT_PANEL.height, {
+      inset: 6,
+      size: 9,
+      width: 1,
+    })
+      .setPosition(ACCOUNT_PANEL.x, ACCOUNT_PANEL.y)
+      .setAlpha(0.38)
+      .setDepth(0.1);
+    this.accountDisplayObjects.push(corners);
   }
 
   private openAlmanac(): void {

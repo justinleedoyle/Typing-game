@@ -504,7 +504,6 @@ export class PortalChamberScene extends Phaser.Scene {
         {
           fontSize: 18,
           priority: -1,
-          stationPulse: HUB_STATIONS.portalFloor,
           entryDelayMs: 130,
         },
       );
@@ -857,6 +856,7 @@ export class PortalChamberScene extends Phaser.Scene {
     const cleared = REALMS.filter((id) => state.realms[id]?.cleared).length;
     if (cleared === 0) return "";
     if (cleared >= 5 && state.realms["great-battle"]?.cleared) return "Again.";
+    if (cleared >= 5) return "";
     return LETTERS[Math.min(cleared, LETTERS.length - 1)];
   }
 
@@ -1797,14 +1797,6 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.almanac.height,
       "almanac",
       { alpha: 0.28, labelAlpha: 0 },
-    );
-    this.drawStationPlaque(
-      HUB_STATIONS.portalFloor.x,
-      HUB_STATIONS.portalFloor.y,
-      HUB_STATIONS.portalFloor.width,
-      HUB_STATIONS.portalFloor.height,
-      "portal floor",
-      { alpha: 0.2, labelAlpha: 0 },
     );
     this.drawStationPlaque(
       HUB_STATIONS.shelf.x,

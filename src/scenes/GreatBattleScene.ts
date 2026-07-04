@@ -223,10 +223,10 @@ function finaleEnemyArtForRealm(realmId: string): FinaleEnemyArtSpec {
       return {
         textureKey: "finale-wolf-pack",
         height: 150,
-        shadowWidth: 216,
-        shadowHeight: 36,
-        shadowY: 42,
-        shadowAlpha: 0.52,
+        shadowWidth: 220,
+        shadowHeight: 18,
+        shadowY: 72,
+        shadowAlpha: 0.16,
         spriteY: -6,
         alpha: 0.98,
         tint: 0xdfeaff,
@@ -1797,6 +1797,17 @@ export class GreatBattleScene extends Phaser.Scene {
         spec.glowHeight ?? 92,
       );
       body.add(glow);
+    }
+
+    if (realmId === "winter-mountain") {
+      const footing = this.add.graphics();
+      footing.fillStyle(0xbfd3e4, 0.06);
+      footing.fillEllipse(10, 70, 208, 12);
+      footing.lineStyle(2, 0xe6f3ff, 0.08);
+      footing.lineBetween(-98, 62, -50, 60);
+      footing.lineBetween(-18, 61, 32, 60);
+      footing.lineBetween(78, 62, 116, 60);
+      body.add(footing);
     }
 
     const sprite = this.add.image(0, spec.spriteY, spec.textureKey);

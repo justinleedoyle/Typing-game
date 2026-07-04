@@ -27,10 +27,10 @@ interface OpeningSceneData {
   store: SaveStore;
 }
 
-// Where the typed words float — centered above the action, between Runa
-// on the left and the sibling on the right. Keeps the eye on the centre
-// of the screen rather than tucked over the typewriter.
-const TYPE_TARGET = { x: 960, y: 540 };
+const IDENTITY_CHOICE_TARGET = { x: 790, y: 650 };
+const NAME_TARGET = { x: 910, y: 640 };
+const TYPEWRITER_TARGET = { x: 790, y: 700 };
+const PORTAL_TARGET = { x: 1510, y: 610 };
 const STUDY_RESPONSE = {
   name: { x: 960, y: 630, color: PALETTE_HEX.cream },
   typewriter: { x: 790, y: 770, color: PALETTE_HEX.brass },
@@ -258,24 +258,24 @@ export class OpeningScene extends Phaser.Scene {
 
     const boy = this.makeStudyTarget({
       word: "boy",
-      x: TYPE_TARGET.x - 220,
-      y: TYPE_TARGET.y,
-      fontSize: 52,
+      x: IDENTITY_CHOICE_TARGET.x - 120,
+      y: IDENTITY_CHOICE_TARGET.y,
+      fontSize: 44,
       response: STUDY_RESPONSE.name,
       onComplete: () => pick("boy"),
     });
     const girl = this.makeStudyTarget({
       word: "girl",
-      x: TYPE_TARGET.x + 220,
-      y: TYPE_TARGET.y,
-      fontSize: 52,
+      x: IDENTITY_CHOICE_TARGET.x + 120,
+      y: IDENTITY_CHOICE_TARGET.y,
+      fontSize: 44,
       response: STUDY_RESPONSE.name,
       onComplete: () => pick("girl"),
     });
     this.typingInput.register(boy);
     this.typingInput.register(girl);
-    boy.playEntryWake({ delayMs: 70, durationMs: 240, offsetY: 12 });
-    girl.playEntryWake({ delayMs: 120, durationMs: 240, offsetY: 12 });
+    this.stageStudyTarget(boy);
+    this.time.delayedCall(50, () => this.stageStudyTarget(girl));
     this.beat2_5Targets = [boy, girl];
   }
 
@@ -300,9 +300,9 @@ export class OpeningScene extends Phaser.Scene {
 
     const target = this.makeStudyTarget({
       word: "Wren",
-      x: TYPE_TARGET.x,
-      y: TYPE_TARGET.y,
-      fontSize: 48,
+      x: NAME_TARGET.x,
+      y: NAME_TARGET.y,
+      fontSize: 44,
       response: STUDY_RESPONSE.name,
       onComplete: () => this.onBeat4Complete(),
     });
@@ -322,9 +322,9 @@ export class OpeningScene extends Phaser.Scene {
 
     const target = this.makeStudyTarget({
       word: "Bjarn",
-      x: TYPE_TARGET.x,
-      y: TYPE_TARGET.y,
-      fontSize: 48,
+      x: TYPEWRITER_TARGET.x,
+      y: TYPEWRITER_TARGET.y,
+      fontSize: 42,
       response: STUDY_RESPONSE.typewriter,
       onComplete: () => this.onBeat5Complete(),
     });
@@ -394,9 +394,9 @@ export class OpeningScene extends Phaser.Scene {
 
     const target = this.makeStudyTarget({
       word: "Winter Mountain",
-      x: TYPE_TARGET.x,
-      y: TYPE_TARGET.y,
-      fontSize: 44,
+      x: PORTAL_TARGET.x,
+      y: PORTAL_TARGET.y,
+      fontSize: 38,
       response: STUDY_RESPONSE.portal,
       onComplete: () => this.onBeat8Complete(),
     });

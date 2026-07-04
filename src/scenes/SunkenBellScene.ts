@@ -92,6 +92,7 @@ interface DescentLantern {
   glow: Phaser.GameObjects.Graphics;
   body: Phaser.GameObjects.Graphics;
   flame: Phaser.GameObjects.Graphics;
+  center: boolean;
 }
 
 // Choir ghosts are now the shared MovingWordEnemy. The splitting ghost is the
@@ -1110,10 +1111,18 @@ export class SunkenBellScene extends Phaser.Scene {
       .setAlpha(0);
 
     const tether = this.add.graphics();
-    tether.lineStyle(1.5, 0x7daebc, centerLantern ? 0.42 : 0.32);
-    tether.lineBetween(0, -92, 0, -36);
-    tether.lineStyle(1, 0xf3ead2, centerLantern ? 0.3 : 0.22);
-    tether.lineBetween(-18, -34, 18, -34);
+    const tetherDrop = centerLantern ? 176 : 148;
+    tether.lineStyle(1.5, 0x7daebc, centerLantern ? 0.48 : 0.34);
+    tether.lineBetween(0, -tetherDrop, 0, -38);
+    tether.lineStyle(1, 0xd7fbff, centerLantern ? 0.28 : 0.18);
+    for (let linkY = -tetherDrop + 18; linkY < -52; linkY += 24) {
+      tether.strokeEllipse(0, linkY, 8, 16);
+    }
+    tether.lineStyle(2, 0x8fb8bc, centerLantern ? 0.4 : 0.28);
+    tether.lineBetween(-28, -tetherDrop - 8, 28, -tetherDrop - 8);
+    tether.strokeCircle(0, -tetherDrop - 2, 7);
+    tether.lineStyle(1.3, 0xf3ead2, centerLantern ? 0.34 : 0.24);
+    tether.lineBetween(-22, -38, 22, -38);
     container.add(tether);
 
     const glow = this.add.graphics().setAlpha(centerLantern ? 0.74 : 0.58);
@@ -1124,13 +1133,7 @@ export class SunkenBellScene extends Phaser.Scene {
     container.add(glow);
 
     const body = this.add.graphics();
-    body.fillStyle(0x203a46, centerLantern ? 0.94 : 0.86);
-    body.fillRoundedRect(-22, -30, 44, 64, 17);
-    body.lineStyle(2, 0xf3ead2, centerLantern ? 0.72 : 0.54);
-    body.strokeRoundedRect(-22, -30, 44, 64, 17);
-    body.lineStyle(1, 0x7daebc, centerLantern ? 0.62 : 0.48);
-    body.lineBetween(-12, -20, -12, 24);
-    body.lineBetween(12, -20, 12, 24);
+    this.drawDescentLanternCage(body, false, centerLantern);
     container.add(body);
 
     const flame = this.add.graphics().setAlpha(centerLantern ? 0.88 : 0.72);
@@ -1182,19 +1185,56 @@ export class SunkenBellScene extends Phaser.Scene {
       ease: "Sine.easeInOut",
     });
 
-    return { container, glow, body, flame };
+    return { container, glow, body, flame, center: centerLantern };
+  }
+
+  private drawDescentLanternCage(
+    g: Phaser.GameObjects.Graphics,
+    lit: boolean,
+    centerLantern: boolean,
+  ): void {
+    g.clear();
+    const bodyAlpha = lit ? 0.96 : centerLantern ? 0.9 : 0.8;
+    const rimAlpha = lit ? 0.86 : centerLantern ? 0.68 : 0.48;
+    const cageWidth = centerLantern ? 48 : 42;
+    const shoulderWidth = cageWidth + 10;
+    const bottomY = centerLantern ? 44 : 40;
+    const cageColor = lit ? 0x274a52 : 0x203a46;
+
+    g.fillStyle(0x142833, bodyAlpha * 0.82);
+    g.fillEllipse(0, -31, shoulderWidth, 18);
+    g.lineStyle(2, 0xd7fbff, rimAlpha * 0.72);
+    g.strokeEllipse(0, -31, shoulderWidth, 18);
+
+    g.fillStyle(cageColor, bodyAlpha);
+    g.fillRoundedRect(-cageWidth / 2, -30, cageWidth, 58, 11);
+    g.fillTriangle(-cageWidth / 2 + 6, 22, cageWidth / 2 - 6, 22, 0, bottomY);
+
+    g.lineStyle(2, 0xf3ead2, rimAlpha);
+    g.strokeRoundedRect(-cageWidth / 2, -30, cageWidth, 58, 11);
+    g.beginPath();
+    g.moveTo(-cageWidth / 2 + 6, 22);
+    g.lineTo(cageWidth / 2 - 6, 22);
+    g.lineTo(0, bottomY);
+    g.closePath();
+    g.strokePath();
+
+    g.lineStyle(1, 0x9fdce7, lit ? 0.74 : centerLantern ? 0.56 : 0.42);
+    g.lineBetween(-12, -20, -12, 25);
+    g.lineBetween(0, -22, 0, bottomY - 5);
+    g.lineBetween(12, -20, 12, 25);
+
+    g.lineStyle(1.2, 0xf3ead2, lit ? 0.44 : 0.26);
+    g.lineBetween(-cageWidth / 2 + 5, -5, cageWidth / 2 - 5, -5);
+    g.lineBetween(-cageWidth / 2 + 7, 15, cageWidth / 2 - 7, 15);
+
+    g.fillStyle(0xd7fbff, lit ? 0.68 : 0.38);
+    g.fillCircle(0, bottomY + 2, centerLantern ? 3.8 : 3.2);
   }
 
   private lightDescentLantern(lantern: DescentLantern): void {
     this.tweens.killTweensOf([lantern.glow, lantern.flame]);
-    lantern.body.clear();
-    lantern.body.fillStyle(0x274a52, 0.95);
-    lantern.body.fillRoundedRect(-22, -30, 44, 64, 17);
-    lantern.body.lineStyle(2, 0xf3ead2, 0.86);
-    lantern.body.strokeRoundedRect(-22, -30, 44, 64, 17);
-    lantern.body.lineStyle(1, 0x9fdce7, 0.72);
-    lantern.body.lineBetween(-12, -20, -12, 24);
-    lantern.body.lineBetween(12, -20, 12, 24);
+    this.drawDescentLanternCage(lantern.body, true, lantern.center);
     lantern.glow.setAlpha(0.9).setScale(1.16);
     lantern.flame.setAlpha(1).setScale(1.18, 1.28);
     this.pulseDescentLantern(lantern, true);

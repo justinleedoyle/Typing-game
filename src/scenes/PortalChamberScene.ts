@@ -1788,7 +1788,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.desk.width,
       HUB_STATIONS.desk.height,
       "runa's desk",
-      { alpha: 0.24, labelAlpha: 0 },
+      { alpha: 0.025, labelAlpha: 0 },
     );
     this.drawStationPlaque(
       HUB_STATIONS.almanac.x,
@@ -1796,7 +1796,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.almanac.width,
       HUB_STATIONS.almanac.height,
       "almanac",
-      { alpha: 0.28, labelAlpha: 0 },
+      { alpha: 0.025, labelAlpha: 0 },
     );
     this.drawStationPlaque(
       HUB_STATIONS.shelf.x,
@@ -1804,7 +1804,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.shelf.width,
       HUB_STATIONS.shelf.height,
       "your shelf",
-      { alpha: 0.26, labelAlpha: 0 },
+      { alpha: 0.025, labelAlpha: 0 },
     );
     this.drawStationPlaque(
       HUB_STATIONS.account.x,
@@ -1813,7 +1813,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.account.height,
       "account",
       {
-        alpha: 0.28,
+        alpha: 0.025,
         labelAlpha: 0,
       },
     );
@@ -1831,12 +1831,12 @@ export class PortalChamberScene extends Phaser.Scene {
     const g = this.add.graphics().setDepth(-2);
     g.fillStyle(UI_HEX.panel, alpha);
     g.fillRoundedRect(x - width / 2, y - height / 2, width, height, 8);
-    g.lineStyle(1, UI_HEX.brass, alpha + 0.14);
+    g.lineStyle(1, UI_HEX.brass, Math.min(0.32, alpha + 0.06));
     g.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 8);
 
     cornerTicks(this, width, height, { inset: 5, size: 8, width: 1 })
       .setPosition(x, y)
-      .setAlpha(Math.min(0.6, alpha + 0.12))
+      .setAlpha(Math.min(0.48, alpha + 0.05))
       .setDepth(-1.9);
 
     if ((opts.labelAlpha ?? 0.72) <= 0) return;

@@ -255,15 +255,17 @@ function finaleEnemyArtForRealm(realmId: string): FinaleEnemyArtSpec {
     case "clockwork-forge":
       return {
         textureKey: "finale-forge-golem",
-        height: 124,
-        shadowWidth: 138,
-        shadowHeight: 28,
-        shadowY: 46,
-        shadowAlpha: 0.42,
-        spriteY: -8,
+        height: 152,
+        shadowWidth: 184,
+        shadowHeight: 36,
+        shadowY: 58,
+        shadowAlpha: 0.48,
+        spriteY: -13,
         glowColor: PALETTE_HEX.ember,
-        glowAlpha: 0.08,
-        glowY: -6,
+        glowAlpha: 0.1,
+        glowY: -8,
+        glowWidth: 142,
+        glowHeight: 124,
       };
     case "sky-island":
       return {
@@ -407,6 +409,10 @@ function finaleTypedPulseForRealm(realmId: string): {
     default:
       return { kind: "mist", color: 0xd8e2cf, ringRadius: 24 };
   }
+}
+
+function finaleEnemyWordOffsetForRealm(realmId: string): number {
+  return realmId === "clockwork-forge" ? -108 : FINALE_ENEMY_WORD_OFFSET_Y;
 }
 
 // ─── Enemy entity ──────────────────────────────────────────────────────────────
@@ -1644,11 +1650,12 @@ export class GreatBattleScene extends Phaser.Scene {
     // §5.5.11 — firefly-lantern: enemy word text rendered brighter via the
     // dawn-light overlay applied in startPhase1 (TextWordTarget doesn't expose
     // a per-instance color override; the overlay tints the whole battlefield).
+    const wordOffsetY = finaleEnemyWordOffsetForRealm(waveDef.realmId);
     const target = this.makeWord({
       scene: this,
       word: enemy.word,
       x: enemy.graphic.x + enemy.body.x,
-      y: enemy.graphic.y + enemy.body.y + FINALE_ENEMY_WORD_OFFSET_Y,
+      y: enemy.graphic.y + enemy.body.y + wordOffsetY,
       fontSize: 34,
       onClaim: () =>
         playClaimLine(
@@ -1656,14 +1663,14 @@ export class GreatBattleScene extends Phaser.Scene {
           this.scale.width / 2,
           this.scale.height - 250,
           enemy.graphic.x + enemy.body.x,
-          enemy.graphic.y + enemy.body.y + FINALE_ENEMY_WORD_OFFSET_Y,
+          enemy.graphic.y + enemy.body.y + wordOffsetY,
           { color: finaleClaimColorForRealm(waveDef.realmId) },
         ),
       onAdvance: () =>
         playBodyTypePulse(this, enemy.graphic, {
           ...finaleTypedPulseForRealm(waveDef.realmId),
           offsetX: enemy.body.x,
-          offsetY: enemy.body.y + FINALE_ENEMY_WORD_OFFSET_Y,
+          offsetY: enemy.body.y + wordOffsetY,
           depth: 6,
         }),
       onComplete: () => this.defeatEnemy(enemy),
@@ -1705,7 +1712,7 @@ export class GreatBattleScene extends Phaser.Scene {
       onUpdate: () => {
         enemy.target?.setAnchorX(enemy.graphic.x + enemy.body.x);
         enemy.target?.setAnchorY(
-          enemy.graphic.y + enemy.body.y + FINALE_ENEMY_WORD_OFFSET_Y,
+          enemy.graphic.y + enemy.body.y + finaleEnemyWordOffsetForRealm(enemy.realmId),
         );
       },
       onComplete: () => {
@@ -1851,15 +1858,21 @@ export class GreatBattleScene extends Phaser.Scene {
     }
 
     if (realmId === "clockwork-forge") {
-      footing.fillStyle(0x241610, 0.2);
-      footing.fillEllipse(0, 50, 148, 25);
-      footing.lineStyle(2, PALETTE_HEX.ember, 0.13);
-      footing.lineBetween(-54, 43, -20, 48);
-      footing.lineBetween(-16, 48, 24, 44);
-      footing.lineBetween(30, 47, 66, 50);
-      footing.fillStyle(PALETTE_HEX.brass, 0.16);
-      footing.fillCircle(-42, 45, 2.4);
-      footing.fillCircle(48, 47, 2.2);
+      footing.fillStyle(0x1d100c, 0.24);
+      footing.fillEllipse(0, 62, 194, 32);
+      footing.lineStyle(3, PALETTE_HEX.ember, 0.16);
+      footing.lineBetween(-76, 52, -36, 59);
+      footing.lineBetween(-28, 61, 20, 54);
+      footing.lineBetween(30, 57, 86, 63);
+      footing.lineStyle(2, PALETTE_HEX.brass, 0.11);
+      footing.lineBetween(-68, 66, -18, 69);
+      footing.lineBetween(26, 68, 78, 65);
+      footing.fillStyle(PALETTE_HEX.ember, 0.16);
+      footing.fillCircle(-58, 56, 3.2);
+      footing.fillCircle(62, 59, 3);
+      footing.fillStyle(PALETTE_HEX.brass, 0.14);
+      footing.fillCircle(-28, 62, 2.4);
+      footing.fillCircle(38, 64, 2.2);
       body.add(footing);
       return;
     }

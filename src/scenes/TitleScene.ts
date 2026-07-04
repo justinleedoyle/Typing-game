@@ -14,6 +14,7 @@ import openingBackdrop from "../../art/references/opening-typewriter-study-clean
 
 const TITLE_TYPEWRITER = { x: 790, y: 740 } as const;
 const TITLE_PROMPT = { x: 760, y: 744 } as const;
+const TITLE_PLATE = { x: 760, y: 528, width: 790, height: 214 } as const;
 const TITLE_PORTAL = { x: 1510, y: 610 } as const;
 const TITLE_PORTAL_BLUE = 0x9fd7ff;
 
@@ -95,7 +96,7 @@ export class TitleScene extends Phaser.Scene {
       maxDurationMs: 11800,
     });
 
-    const titleObjects = this.drawTitlePlate(width / 2, height / 2 - 54);
+    const titleObjects = this.drawTitlePlate(TITLE_PLATE.x, TITLE_PLATE.y);
     titleObjects.forEach((object, index) => {
       this.stageTitleObject(object, 90 + index * 45, {
         offsetY: index === 0 ? 8 : 12,
@@ -137,21 +138,39 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private drawTitlePlate(x: number, y: number): Phaser.GameObjects.GameObject[] {
-    const w = 1160;
-    const h = 220;
+    const w = TITLE_PLATE.width;
+    const h = TITLE_PLATE.height;
+    const shadow = this.add.graphics().setDepth(1);
+    shadow.fillStyle(0x000000, 0.2);
+    shadow.fillEllipse(x, y + h * 0.47, w * 0.86, h * 0.26);
+
     const plate = this.add.graphics().setDepth(2);
     plate.fillStyle(UI_HEX.parchment, 0.93);
     plate.fillRoundedRect(x - w / 2, y - h / 2, w, h, 12);
     plate.lineStyle(3, UI_HEX.frame, 0.92);
     plate.strokeRoundedRect(x - w / 2, y - h / 2, w, h, 12);
+    plate.lineStyle(1, UI_HEX.brass, 0.3);
+    plate.lineBetween(x - w / 2 + 34, y + 48, x + w / 2 - 34, y + 48);
+    plate.lineStyle(1, UI_HEX.frame, 0.12);
+    plate.lineBetween(x - w / 2 + 44, y - 66, x + w / 2 - 44, y - 66);
     const corners = cornerTicks(this, w, h, { inset: 10, size: 18, width: 3 })
       .setPosition(x, y)
       .setDepth(3);
 
-    const title = this.add
-      .text(x, y - 32, "The Portalwright's Almanac", {
+    const titleTop = this.add
+      .text(x, y - 50, "The Portalwright's", {
         fontFamily: SERIF,
-        fontSize: "78px",
+        fontSize: "56px",
+        color: UI_CSS.ink,
+        align: "center",
+      })
+      .setOrigin(0.5)
+      .setDepth(4);
+
+    const titleBottom = this.add
+      .text(x, y + 16, "Almanac", {
+        fontFamily: SERIF,
+        fontSize: "68px",
         color: UI_CSS.ink,
         align: "center",
       })
@@ -159,7 +178,7 @@ export class TitleScene extends Phaser.Scene {
       .setDepth(4);
 
     const subtitle = this.add
-      .text(x, y + 50, "a typing adventure", {
+      .text(x, y + 78, "a typing adventure", {
         fontFamily: SERIF,
         fontSize: "30px",
         fontStyle: "italic",
@@ -168,7 +187,7 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(4);
 
-    return [plate, corners, title, subtitle];
+    return [shadow, plate, corners, titleTop, titleBottom, subtitle];
   }
 
   private drawPromptPlate(prompt: Phaser.GameObjects.Text): Phaser.GameObjects.Graphics {
@@ -245,9 +264,8 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private playTitleStartPulse(): void {
-    const { width, height } = this.scale;
-    const titleX = width / 2;
-    const titleY = height / 2 - 54;
+    const titleX = TITLE_PLATE.x;
+    const titleY = TITLE_PLATE.y;
 
     const titlePulse = this.add
       .graphics()
@@ -255,7 +273,13 @@ export class TitleScene extends Phaser.Scene {
       .setDepth(5)
       .setAlpha(0.72);
     titlePulse.lineStyle(4, UI_HEX.brass, 0.7);
-    titlePulse.strokeRoundedRect(-610, -118, 1220, 236, 16);
+    titlePulse.strokeRoundedRect(
+      -TITLE_PLATE.width / 2 - 14,
+      -TITLE_PLATE.height / 2 - 12,
+      TITLE_PLATE.width + 28,
+      TITLE_PLATE.height + 24,
+      16,
+    );
 
     this.tweens.add({
       targets: titlePulse,

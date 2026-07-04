@@ -1468,7 +1468,12 @@ export class PortalChamberScene extends Phaser.Scene {
       const archMidY = spec.baseY - spec.height + spec.width / 2;
       const radius = spec.width / 2;
       if (glow) {
-        this.drawPortalGlow(glow, spec, PALETTE_HEX.brass, 0.42);
+        this.drawPortalGlow(
+          glow,
+          { ...spec, width: spec.width * 0.62, height: spec.height * 0.58 },
+          PALETTE_HEX.brass,
+          0.3,
+        );
         glow.setVisible(true);
       }
       g.lineStyle(2, PALETTE_HEX.brass, 0.35);
@@ -1477,7 +1482,8 @@ export class PortalChamberScene extends Phaser.Scene {
       g.strokePath();
       sprite.setVisible(true);
       sprite.setTint(PALETTE_HEX.brass);
-      sprite.setAlpha(0.55);
+      sprite.setAlpha(0.36);
+      sprite.setScale((spec.width * 0.7) / 168, (spec.height * 0.68) / 338);
       if (!sprite.anims.isPlaying) sprite.play("portal-spin");
       return;
     }
@@ -1488,6 +1494,7 @@ export class PortalChamberScene extends Phaser.Scene {
       glow.setVisible(true);
     }
     sprite.setVisible(true);
+    sprite.setScale(spec.width / 168, spec.height / 338);
     sprite.clearTint();
     sprite.setAlpha(1);
     if (!sprite.anims.isPlaying) sprite.play("portal-spin");

@@ -764,7 +764,7 @@ export class SkyIslandScene extends Phaser.Scene {
       case "lantern":
         return { x: cue.x + 100, y: cue.y - 108 };
       case "stepping":
-        return { x: cue.x + 250, y: cue.y - 96 };
+        return { x: cue.x + 206, y: cue.y - 100 };
     }
   }
 
@@ -778,7 +778,7 @@ export class SkyIslandScene extends Phaser.Scene {
       case "lantern":
         return { x: cue.x + 18, y: cue.y + 108 };
       case "stepping":
-        return { x: cue.x + 136, y: cue.y + 50 };
+        return { x: cue.x + 138, y: cue.y + 34 };
     }
   }
 
@@ -972,27 +972,44 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private drawSteppingStonesCue(): Phaser.GameObjects.Container {
     const c = this.add.container(this.scale.width / 2 + 36, 820).setDepth(-1).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 250, 24, { y: 20, alpha: 0.1 }));
+    c.add(addLocalGroundShadow(this, 390, 30, { x: 34, y: 24, alpha: 0.13 }));
     const stones = this.add.graphics();
     const stoneSpecs = [
-      { x: -102, y: 18, w: 78, h: 30 },
-      { x: -24, y: -6, w: 88, h: 34 },
-      { x: 74, y: 14, w: 76, h: 30 },
+      { x: -112, y: 22, w: 82, h: 32, tint: 0x565d50 },
+      { x: -36, y: -4, w: 94, h: 36, tint: 0x626b5a },
+      { x: 58, y: 12, w: 82, h: 32, tint: 0x596453 },
+      { x: 132, y: -14, w: 92, h: 36, tint: 0x69745e },
+      { x: 206, y: 4, w: 106, h: 40, tint: 0x737a65 },
     ];
     stoneSpecs.forEach((stone, i) => {
-      stones.fillStyle(i === 1 ? 0x6c725f : 0x565d50, 0.76);
+      stones.fillStyle(stone.tint, i === stoneSpecs.length - 1 ? 0.86 : 0.76);
       stones.fillEllipse(stone.x, stone.y, stone.w, stone.h);
-      stones.lineStyle(2, 0xd6c386, 0.18);
+      stones.lineStyle(
+        i === stoneSpecs.length - 1 ? 3 : 2,
+        0xd6c386,
+        i === stoneSpecs.length - 1 ? 0.28 : 0.18,
+      );
       stones.strokeEllipse(stone.x, stone.y, stone.w * 0.9, stone.h * 0.78);
       stones.fillStyle(0xf3ead2, 0.08);
       stones.fillEllipse(stone.x - 12, stone.y - 5, stone.w * 0.28, stone.h * 0.22);
     });
+    stones.lineStyle(2, 0xd6c386, 0.16);
+    stones.beginPath();
+    stones.moveTo(-76, 13);
+    stones.lineTo(-48, 0);
+    stones.lineTo(18, 7);
+    stones.lineTo(86, -4);
+    stones.lineTo(162, 0);
+    stones.strokePath();
+    stones.fillStyle(0xf5c842, 0.08);
+    stones.fillEllipse(206, 4, 146, 70);
     c.add(stones);
     return c;
   }
 
   private pulsePathCue(completion: boolean): void {
     if (!this.pathCue?.scene) return;
+    const sourceOffset = this.pathCueSourceOffset();
     playActorAttention(this, this.pathCue, {
       scale: completion ? 1.035 : 1.018,
       durationMs: completion ? 260 : 180,
@@ -1000,7 +1017,8 @@ export class SkyIslandScene extends Phaser.Scene {
     playBodyImpact(this, this.pathCue, {
       kind: "mote",
       color: PALETTE_HEX.brass,
-      offsetY: -12,
+      offsetX: sourceOffset.x,
+      offsetY: sourceOffset.y,
       depth: 12,
       ringRadius: completion ? 44 : 28,
       count: completion ? 9 : 5,
@@ -2887,14 +2905,13 @@ export class SkyIslandScene extends Phaser.Scene {
       ...opts,
       burstColor: opts.burstColor ?? PALETTE_HEX.brass,
       onClaim: (mods) => {
-        const sourceOffsetX = this.pathCueBeat === "balance" ? -244 : 0;
-        const sourceOffsetY = this.pathCueBeat === "balance" ? -62 : -16;
+        const sourceOffset = this.pathCueSourceOffset();
         playClaimLine(
           this,
           this.wrenContainer.x,
           this.wrenContainer.y - 112,
-          cue.x + sourceOffsetX,
-          cue.y + sourceOffsetY,
+          cue.x + sourceOffset.x,
+          cue.y + sourceOffset.y,
           { color: PALETTE_HEX.brass, depth: 58 },
         );
         playActorAttention(this, cue, {
@@ -2905,10 +2922,12 @@ export class SkyIslandScene extends Phaser.Scene {
         onClaim?.(mods);
       },
       onAdvance: (cursor, wordLength) => {
+        const sourceOffset = this.pathCueSourceOffset();
         playBodyTypePulse(this, cue, {
           kind: "mote",
           color: PALETTE_HEX.brass,
-          offsetY: -18,
+          offsetX: sourceOffset.x,
+          offsetY: sourceOffset.y,
           depth: 58,
           ringRadius: 28,
         });
@@ -2916,10 +2935,12 @@ export class SkyIslandScene extends Phaser.Scene {
       },
       onComplete: () => {
         releaseAnchor();
+        const sourceOffset = this.pathCueSourceOffset();
         playBodyImpact(this, cue, {
           kind: "mote",
           color: PALETTE_HEX.brass,
-          offsetY: -18,
+          offsetX: sourceOffset.x,
+          offsetY: sourceOffset.y,
           depth: 58,
           ringRadius: 48,
           count: 10,
@@ -2928,6 +2949,7 @@ export class SkyIslandScene extends Phaser.Scene {
       },
     });
 
+    const sourceOffset = this.pathCueSourceOffset();
     anchor = attachWordBodyAnchor(
       this,
       cue,
@@ -2936,14 +2958,27 @@ export class SkyIslandScene extends Phaser.Scene {
         color: PALETTE_HEX.brass,
         alpha: 0.18,
         depth: 44,
-        sourceOffsetX: this.pathCueBeat === "balance" ? -244 : 0,
-        sourceOffsetY: this.pathCueBeat === "balance" ? -62 : -18,
+        sourceOffsetX: sourceOffset.x,
+        sourceOffsetY: sourceOffset.y,
         targetOffsetY: 24,
       },
     );
     this.pathWordAnchors.push(anchor);
     cue.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
     return target;
+  }
+
+  private pathCueSourceOffset(): { x: number; y: number } {
+    switch (this.pathCueBeat) {
+      case "balance":
+        return { x: -244, y: -62 };
+      case "lantern":
+        return { x: 0, y: -18 };
+      case "stepping":
+        return { x: 206, y: 4 };
+      default:
+        return { x: 0, y: -18 };
+    }
   }
 
   private makeEttaWord(opts: TextWordTargetOptions): TextWordTarget {

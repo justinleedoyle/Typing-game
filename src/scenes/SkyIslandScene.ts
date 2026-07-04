@@ -257,6 +257,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private pathCue: Phaser.GameObjects.Container | null = null;
   private pathCueBeat: (typeof PATH_BEATS)[number] | null = null;
   private pathWordAnchors: WordBodyAnchorHandle[] = [];
+  private ambientLanterns: Phaser.GameObjects.Graphics[] = [];
   private revisitMemoryCue: Phaser.GameObjects.Container | null = null;
   private revisitMemoryWordAnchor: WordBodyAnchorHandle | null = null;
 
@@ -277,6 +278,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.pathCue = null;
     this.pathCueBeat = null;
     this.pathWordAnchors = [];
+    this.ambientLanterns = [];
     this.revisitMemoryCue = null;
     this.revisitMemoryWordAnchor = null;
     this.fork1Choice = null;
@@ -476,6 +478,7 @@ export class SkyIslandScene extends Phaser.Scene {
       this.pathCueBeat = null;
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
+      this.clearAmbientLanterns();
       this.templeLanterns.forEach((g) => g.destroy());
       this.templeLanterns = [];
       this.clearSkyForkCues();
@@ -689,6 +692,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private startAct1(): void {
     this.narration.say("sky_intro_arrival");
     this.band.setObjective("Type each path word to cross the floating stones.");
+    this.setAmbientLanternFieldAlpha(0.12, 520);
     this.showPathCue("balance");
     this.time.delayedCall(780, () => this.stageWrenAtPathEntrance());
     this.time.delayedCall(2800, () => this.runPathBeats(0));
@@ -699,6 +703,7 @@ export class SkyIslandScene extends Phaser.Scene {
     if (idx >= PATH_BEATS.length) {
       this.dismissPathCue();
       this.resetWrenToSkyStage();
+      this.setAmbientLanternFieldAlpha(0.42, 760);
       this.time.delayedCall(780, () => this.startLanternLighter());
       return;
     }
@@ -3677,7 +3682,9 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private drawAmbientLanterns(): void {
-    // Decorative background lanterns hanging at various heights
+    this.clearAmbientLanterns();
+    // Decorative background lanterns hanging at various heights. These stay
+    // behind the active path cue so the opener does not read as scattered UI.
     const lanternPositions = [
       { x: 240, y: 420 },
       { x: 480, y: 360 },
@@ -3693,21 +3700,23 @@ export class SkyIslandScene extends Phaser.Scene {
     ];
 
     lanternPositions.forEach(({ x, y }) => {
-      const g = this.add.graphics();
+      const g = this.add.graphics().setDepth(-4).setAlpha(0.42);
       // Hanging string
-      g.lineStyle(1, 0x8a7060, 0.6);
+      g.lineStyle(1, 0x8a7060, 0.34);
       g.beginPath();
-      g.moveTo(x, y - 24);
-      g.lineTo(x, y - 6);
+      g.moveTo(x, y - 36);
+      g.lineTo(x, y - 10);
       g.strokePath();
       // Glow halo
-      g.fillStyle(0xf5c842, 0.08);
-      g.fillEllipse(x, y, 70, 70);
+      g.fillStyle(0xf5c842, 0.045);
+      g.fillEllipse(x, y, 56, 58);
       // Lantern body
-      g.fillStyle(0xd49020, 0.55);
-      g.fillEllipse(x, y, 28, 38);
-      g.fillStyle(0xfdedb0, 0.65);
-      g.fillEllipse(x, y, 12, 16);
+      g.fillStyle(0xd49020, 0.3);
+      g.fillRoundedRect(x - 10, y - 15, 20, 30, 9);
+      g.lineStyle(1.4, 0xfdedb0, 0.24);
+      g.strokeRoundedRect(x - 10, y - 15, 20, 30, 9);
+      g.fillStyle(0xfdedb0, 0.42);
+      g.fillEllipse(x, y, 8, 13);
 
       // Gentle idle drift
       this.tweens.add({
@@ -3719,7 +3728,28 @@ export class SkyIslandScene extends Phaser.Scene {
         ease: "Sine.easeInOut",
         delay: Math.random() * 1000,
       });
+      this.ambientLanterns.push(g);
     });
+  }
+
+  private setAmbientLanternFieldAlpha(alpha: number, durationMs: number): void {
+    const lanterns = this.ambientLanterns.filter((g) => g.scene);
+    if (lanterns.length === 0) return;
+    this.tweens.add({
+      targets: lanterns,
+      alpha,
+      duration: durationMs,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  private clearAmbientLanterns(): void {
+    this.ambientLanterns.forEach((g) => {
+      if (!g.scene) return;
+      this.tweens.killTweensOf(g);
+      g.destroy();
+    });
+    this.ambientLanterns = [];
   }
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {

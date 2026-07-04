@@ -263,8 +263,8 @@ export class PortalChamberScene extends Phaser.Scene {
       },
     });
 
-    // Fragment display — shows the accumulating Quiet Lord word in the upper-
-    // centre of the room, growing one letter per realm cleared.
+    // Fragment display — shows the accumulating Quiet Lord word as a faint
+    // portal-seal inscription, growing one letter per realm cleared.
     this.drawFragment();
 
     this.typingInput = new TypingInputController(this.store);
@@ -704,20 +704,22 @@ export class PortalChamberScene extends Phaser.Scene {
     if (!full) return;
 
     const isFinal = full === "Again.";
-    const plate = this.add.graphics().setDepth(0).setAlpha(0);
-    const plateWidth = isFinal ? 190 : 154;
-    const plateHeight = 54;
+    const scar = this.add.graphics().setDepth(-0.55).setAlpha(0);
+    const x = HUB_STATIONS.portalFloor.x;
+    const y = HUB_STATIONS.portalFloor.y - 342;
+    const scarWidth = isFinal ? 230 : 176;
     const t = this.add
-      .text(this.scale.width / 2, 52, "", {
+      .text(x, y - 2, "", {
         fontFamily: SERIF,
-        fontSize: isFinal ? "40px" : "34px",
-        color: isFinal ? PALETTE.brass : "#7a5cba",
+        fontSize: isFinal ? "28px" : "26px",
+        fontStyle: "italic",
+        color: isFinal ? PALETTE.brass : "#9c83d8",
         align: "center",
       })
       .setOrigin(0.5)
       .setAlpha(0)
-      .setDepth(1);
-    this.drawFragmentPlate(plate, t.x, t.y, plateWidth, plateHeight, isFinal);
+      .setDepth(-0.45);
+    this.drawFragmentScar(scar, x, y, scarWidth, isFinal);
 
     let revealed = 0;
     const revealNext = (): void => {
@@ -728,16 +730,30 @@ export class PortalChamberScene extends Phaser.Scene {
       if (isLast) {
         t.setAlpha(1);
         this.tweens.add({
-          targets: [t, plate],
-          alpha: isFinal ? 0.9 : 0.6,
+          targets: t,
+          alpha: isFinal ? 0.5 : 0.42,
+          duration: 700,
+          ease: "Sine.easeOut",
+        });
+        this.tweens.add({
+          targets: scar,
+          alpha: isFinal ? 0.5 : 0.34,
           duration: 700,
           ease: "Sine.easeOut",
         });
         if (isFinal) {
           this.time.delayedCall(800, () => {
             this.tweens.add({
-              targets: [t, plate],
-              alpha: { from: 0.9, to: 0.4 },
+              targets: t,
+              alpha: { from: 0.5, to: 0.26 },
+              duration: 2400,
+              yoyo: true,
+              repeat: -1,
+              ease: "Sine.easeInOut",
+            });
+            this.tweens.add({
+              targets: scar,
+              alpha: { from: 0.5, to: 0.24 },
               duration: 2400,
               yoyo: true,
               repeat: -1,
@@ -746,8 +762,8 @@ export class PortalChamberScene extends Phaser.Scene {
           });
         }
       } else {
-        t.setAlpha(0.5);
-        plate.setAlpha(0.36);
+        t.setAlpha(0.3);
+        scar.setAlpha(0.2);
         this.time.delayedCall(120, revealNext);
       }
     };
@@ -755,33 +771,35 @@ export class PortalChamberScene extends Phaser.Scene {
     this.time.delayedCall(500, revealNext);
   }
 
-  private drawFragmentPlate(
+  private drawFragmentScar(
     g: Phaser.GameObjects.Graphics,
     x: number,
     y: number,
     width: number,
-    height: number,
     isFinal: boolean,
   ): void {
     g.clear();
-    const left = x - width / 2;
-    const top = y - height / 2;
-    const stroke = isFinal ? UI_HEX.brass : 0x7a5cba;
-    g.fillStyle(UI_HEX.panel, isFinal ? 0.48 : 0.34);
-    g.fillRoundedRect(left, top, width, height, 8);
-    g.lineStyle(1, stroke, isFinal ? 0.62 : 0.42);
-    g.strokeRoundedRect(left, top, width, height, 8);
-    g.lineStyle(2, stroke, isFinal ? 0.72 : 0.48);
-    const inset = 9;
-    const tick = 13;
-    g.lineBetween(left + inset, top + inset, left + inset + tick, top + inset);
-    g.lineBetween(left + inset, top + inset, left + inset, top + inset + tick);
-    g.lineBetween(left + width - inset, top + inset, left + width - inset - tick, top + inset);
-    g.lineBetween(left + width - inset, top + inset, left + width - inset, top + inset + tick);
-    g.lineBetween(left + inset, top + height - inset, left + inset + tick, top + height - inset);
-    g.lineBetween(left + inset, top + height - inset, left + inset, top + height - inset - tick);
-    g.lineBetween(left + width - inset, top + height - inset, left + width - inset - tick, top + height - inset);
-    g.lineBetween(left + width - inset, top + height - inset, left + width - inset, top + height - inset - tick);
+    const stroke = isFinal ? UI_HEX.brass : 0x9c83d8;
+    const half = width / 2;
+    g.lineStyle(2, stroke, isFinal ? 0.42 : 0.28);
+    g.beginPath();
+    g.moveTo(x - half, y + 17);
+    g.lineTo(x - half * 0.58, y + 8);
+    g.lineTo(x - half * 0.18, y + 15);
+    g.lineTo(x + half * 0.2, y + 7);
+    g.lineTo(x + half * 0.62, y + 14);
+    g.lineTo(x + half, y + 6);
+    g.strokePath();
+    g.lineStyle(1, stroke, isFinal ? 0.26 : 0.18);
+    g.beginPath();
+    g.moveTo(x - half * 0.8, y - 16);
+    g.lineTo(x - half * 0.36, y - 9);
+    g.lineTo(x + half * 0.05, y - 15);
+    g.lineTo(x + half * 0.52, y - 8);
+    g.lineTo(x + half * 0.84, y - 13);
+    g.strokePath();
+    g.fillStyle(stroke, isFinal ? 0.12 : 0.08);
+    g.fillEllipse(x, y + 3, width * 0.84, 36);
   }
 
   /** Returns the current state of the accumulating Quiet Lord fragment.

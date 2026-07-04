@@ -505,6 +505,7 @@ export class PortalChamberScene extends Phaser.Scene {
           fontSize: 18,
           priority: -1,
           entryDelayMs: 130,
+          idleAlpha: 0.42,
         },
       );
     }
@@ -516,9 +517,10 @@ export class PortalChamberScene extends Phaser.Scene {
       RUNA_DESK_STATION.targetY,
       () => this.enterZone("desk"),
       {
-        fontSize: 21,
+        fontSize: 19,
         stationPulse: HUB_STATIONS.desk,
         entryDelayMs: 110,
+        idleAlpha: 0.52,
       },
     );
     this.registerNavTarget(
@@ -527,9 +529,10 @@ export class PortalChamberScene extends Phaser.Scene {
       SHELF_STATION.targetY,
       () => this.enterZone("shelf"),
       {
-        fontSize: 21,
+        fontSize: 19,
         stationPulse: HUB_STATIONS.shelf,
         entryDelayMs: 150,
+        idleAlpha: 0.56,
       },
     );
     // Keep the first portal view quiet: one account station target reveals
@@ -540,9 +543,10 @@ export class PortalChamberScene extends Phaser.Scene {
       ACCOUNT_STATION.y,
       () => this.enterZone("account"),
       {
-        fontSize: 18,
+        fontSize: 17,
         stationPulse: HUB_STATIONS.account,
         entryDelayMs: 190,
+        idleAlpha: 0.44,
       },
     );
   }
@@ -871,6 +875,7 @@ export class PortalChamberScene extends Phaser.Scene {
       frame?: "banner";
       stationPulse?: StationSpec;
       entryDelayMs?: number;
+      idleAlpha?: number;
     } = {},
   ): void {
     let releaseAnchor = (): void => {};
@@ -883,6 +888,7 @@ export class PortalChamberScene extends Phaser.Scene {
       priority: opts.priority ?? -2,
       outline: true,
       frame: opts.frame,
+      idleAlpha: opts.idleAlpha,
       onClaim: () => {
         if (opts.stationPulse) this.focusStation(opts.stationPulse);
       },
@@ -896,7 +902,9 @@ export class PortalChamberScene extends Phaser.Scene {
       },
     });
     if (opts.stationPulse) {
-      releaseAnchor = this.attachStationWordAnchor(t, opts.stationPulse);
+      releaseAnchor = this.attachStationWordAnchor(t, opts.stationPulse, {
+        alpha: opts.idleAlpha !== undefined ? 0.07 : undefined,
+      });
     }
     this.typingInput.register(t);
     this.zoneTargets.push(t);
@@ -1222,9 +1230,10 @@ export class PortalChamberScene extends Phaser.Scene {
       word: "almanac",
       x: HUB_STATIONS.almanac.x,
       y: HUB_STATIONS.almanac.y + 3,
-      fontSize: 22,
+      fontSize: 20,
       priority: -1,
       outline: true,
+      idleAlpha: 0.6,
       onClaim: () => this.focusStation(HUB_STATIONS.almanac),
       onAdvance: () => this.pulseStationTyping(HUB_STATIONS.almanac),
       onComplete: () => {
@@ -1236,6 +1245,7 @@ export class PortalChamberScene extends Phaser.Scene {
     });
     releaseAnchor = this.attachStationWordAnchor(target, HUB_STATIONS.almanac, {
       persistent: true,
+      alpha: 0.07,
     });
     this.typingInput.register(target);
     this.stageHubTarget(target, 170);

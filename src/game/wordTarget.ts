@@ -81,6 +81,9 @@ export interface TextWordTargetOptions {
   /** UI-cohesion pass: draw a framed dark plate behind the word — used for choice
    *  "banners" so a fork reads as a pickable option, not bare floating text. */
   frame?: "banner";
+  /** Optional low-emphasis resting alpha. The word brightens while claimed or
+   *  candidate-matched, then settles back to this value. */
+  idleAlpha?: number;
 }
 
 /** Replace punctuation marks with a neutral placeholder for masked display. */
@@ -137,6 +140,7 @@ export class TextWordTarget implements WordTarget {
   private readonly displayWord: string;
   private cursor = 0;
   private complete = false;
+  private claimed = false;
   private dimmed = false;
   private candidate = false;
   private spellClaimed = false;
@@ -207,6 +211,7 @@ export class TextWordTarget implements WordTarget {
     }
 
     this.relayout();
+    this.container.setAlpha(this.restingAlpha());
   }
 
   private fitBannerText(initialFontSize: number): void {
@@ -343,6 +348,7 @@ export class TextWordTarget implements WordTarget {
 
   onClaim(mods: { spell: boolean; alt: boolean }): void {
     this.dimmed = false;
+    this.claimed = true;
     this.spellClaimed = mods.spell;
     this.altClaimed = mods.alt;
     this.playClaimPulse();
@@ -363,6 +369,7 @@ export class TextWordTarget implements WordTarget {
     if (this.complete) return;
     this.container.setScale(1);
     this.cursor = 0;
+    this.claimed = false;
     this.spellClaimed = false;
     this.altClaimed = false;
     this.candidate = false;
@@ -418,7 +425,7 @@ export class TextWordTarget implements WordTarget {
    *  roll). Restoring goes back to the dimmed-state alpha so this composes
    *  with setDimmed. Typing input is unaffected — the word is just hidden. */
   setHidden(hidden: boolean, durationMs = 220): void {
-    const targetAlpha = hidden ? 0 : this.dimmed ? 0.12 : 1;
+    const targetAlpha = hidden ? 0 : this.dimmed ? 0.12 : this.restingAlpha();
     this.opts.scene.tweens.add({
       targets: this.container,
       alpha: targetAlpha,
@@ -455,7 +462,7 @@ export class TextWordTarget implements WordTarget {
       if (!this.container.scene) return;
       this.opts.scene.tweens.add({
         targets: this.container,
-        alpha: 1,
+        alpha: this.restingAlpha(),
         y: baseY,
         scaleX: 1,
         scaleY: 1,
@@ -561,7 +568,7 @@ export class TextWordTarget implements WordTarget {
   }
 
   private applyDim(): void {
-    const alpha = this.dimmed ? 0.12 : 1;
+    const alpha = this.dimmed ? 0.12 : this.restingAlpha();
     this.container.setAlpha(alpha);
     if (this.dimmed) return;
     // Color priority: alt > spell > candidate > danger > default.
@@ -576,6 +583,11 @@ export class TextWordTarget implements WordTarget {
       return;
     }
     this.remainingText.setColor(PALETTE.cream);
+  }
+
+  private restingAlpha(): number {
+    if (this.claimed || this.candidate) return 1;
+    return Math.max(0, Math.min(1, this.opts.idleAlpha ?? 1));
   }
 
   /** Linear interpolation between cream and ember by the current danger level.

@@ -793,20 +793,31 @@ export class WinterMountainScene extends Phaser.Scene {
     }
 
     if (beat === "lift") {
+      const bank = this.add.graphics();
+      bank.fillStyle(0x101a26, 0.26);
+      bank.fillEllipse(-8, 24, 304, 48);
+      bank.fillStyle(0x4a6175, 0.16);
+      bank.fillEllipse(-92, 16, 144, 28);
+      bank.fillEllipse(62, 12, 186, 32);
+      bank.fillStyle(0xb8c9d8, 0.2);
+      bank.fillEllipse(-70, 5, 132, 18);
+      bank.fillEllipse(76, 2, 156, 20);
+      cue.add(bank);
+
       const log = this.add.graphics().setAngle(-9);
       log.fillStyle(0x1d1711, 0.92);
       log.fillRoundedRect(-136, -20, 272, 40, 18);
-      log.fillStyle(0x3a2b1d, 0.98);
+      log.fillStyle(0x312619, 0.94);
       log.fillRoundedRect(-128, -17, 256, 34, 17);
-      log.fillStyle(0x5c432b, 0.86);
+      log.fillStyle(0x4c3925, 0.58);
       log.fillRoundedRect(-118, -9, 224, 10, 7);
       log.fillStyle(0x2a1d13, 0.92);
       log.fillEllipse(-132, 0, 38, 38);
-      log.fillStyle(0x6a4b2e, 0.68);
+      log.fillStyle(0x5a432d, 0.54);
       log.fillEllipse(-132, 0, 25, 25);
       log.lineStyle(2, 0x2b1c12, 0.74);
       log.strokeEllipse(-132, 0, 17, 17);
-      log.lineStyle(3, 0x8e785c, 0.24);
+      log.lineStyle(3, 0x9c8c74, 0.16);
       log.lineBetween(-82, -15, -64, 17);
       log.lineBetween(-18, -17, 0, 17);
       log.lineBetween(52, -16, 72, 15);
@@ -819,20 +830,31 @@ export class WinterMountainScene extends Phaser.Scene {
       cue.add(log);
 
       const snow = this.add.graphics().setAngle(-9);
-      snow.fillStyle(0xf0f7ff, 0.9);
+      snow.fillStyle(0xdceaf4, 0.76);
       snow.fillEllipse(-82, -22, 82, 18);
       snow.fillEllipse(-16, -24, 96, 19);
       snow.fillEllipse(58, -23, 78, 17);
       snow.fillEllipse(116, -16, 38, 13);
-      snow.fillStyle(0xbfd2df, 0.34);
+      snow.fillStyle(0x9eb5c8, 0.28);
       snow.fillEllipse(-126, -14, 32, 9);
       snow.fillEllipse(8, -11, 50, 8);
       snow.fillEllipse(100, -8, 44, 8);
-      snow.lineStyle(1.5, 0xffffff, 0.38);
+      snow.lineStyle(1.5, 0xffffff, 0.24);
       snow.lineBetween(-106, -27, -58, -29);
       snow.lineBetween(-28, -31, 28, -31);
       snow.lineBetween(42, -28, 86, -29);
       cue.add(snow);
+
+      const foregroundSnow = this.add.graphics();
+      foregroundSnow.fillStyle(0x142032, 0.14);
+      foregroundSnow.fillEllipse(-28, 31, 278, 22);
+      foregroundSnow.fillStyle(0xb5c7d5, 0.13);
+      foregroundSnow.fillEllipse(-20, 20, 238, 14);
+      foregroundSnow.lineStyle(2, 0xe2edf6, 0.15);
+      foregroundSnow.lineBetween(-136, 14, -62, 10);
+      foregroundSnow.lineBetween(-24, 12, 42, 10);
+      foregroundSnow.lineBetween(78, 12, 142, 9);
+      cue.add(foregroundSnow);
     } else if (beat === "step") {
       const ice = this.add.graphics();
       ice.fillStyle(0x213d54, 0.22);
@@ -903,6 +925,9 @@ export class WinterMountainScene extends Phaser.Scene {
     const cue = this.riverCuePosition(beat);
     if (beat === "duck") {
       return { x: cue.x - 184, y: cue.y - 72 };
+    }
+    if (beat === "lift") {
+      return { x: cue.x, y: cue.y - 112 };
     }
     return {
       x: cue.x,

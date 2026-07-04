@@ -393,8 +393,8 @@ export class AlmanacScene extends Phaser.Scene {
   private renderPageFooter(): void {
     const total = this.pageStack.length;
     this.addPageText(
-      this.scale.width / 2,
-      PAGE_BOTTOM_Y - 30,
+      RIGHT_PAGE_X + 205,
+      PAGE_BOTTOM_Y - 42,
       `page ${this.currentPage + 1} of ${total}`,
       {
         fontSize: "20px",
@@ -726,9 +726,9 @@ export class AlmanacScene extends Phaser.Scene {
       this.prevTarget = new TextWordTarget({
         scene: this,
         word: "previous page",
-        x: LEFT_PAGE_X + 200,
-        y: this.scale.height - 130,
-        fontSize: 26,
+        x: LEFT_PAGE_X + 210,
+        y: PAGE_BOTTOM_Y - 46,
+        fontSize: 24,
         outline: true,
         frame: "banner",
         onClaim: () => this.playPageFocus(-1),
@@ -744,9 +744,9 @@ export class AlmanacScene extends Phaser.Scene {
       this.nextTarget = new TextWordTarget({
         scene: this,
         word: "next page",
-        x: RIGHT_PAGE_X + 200,
-        y: this.scale.height - 130,
-        fontSize: 26,
+        x: RIGHT_PAGE_X + PAGE_TEXT_WIDTH - 190,
+        y: PAGE_BOTTOM_Y - 46,
+        fontSize: 24,
         outline: true,
         frame: "banner",
         onClaim: () => this.playPageFocus(1),
@@ -762,8 +762,8 @@ export class AlmanacScene extends Phaser.Scene {
       scene: this,
       word: "close the almanac",
       x: this.scale.width / 2,
-      y: this.scale.height - 70,
-      fontSize: 28,
+      y: PAGE_BOTTOM_Y - 46,
+      fontSize: 24,
       outline: true,
       frame: "banner",
       onClaim: () => this.playCloseFocus(),

@@ -179,6 +179,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private pathCue: Phaser.GameObjects.Container | null = null;
   private pathCueIndex: number | null = null;
   private pathCueWordAnchor: WordBodyAnchorHandle | null = null;
+  private ambientMistFields: Phaser.GameObjects.Container[] = [];
   private revisitMemoryCue: Phaser.GameObjects.Container | null = null;
   private revisitMemoryWordAnchor: WordBodyAnchorHandle | null = null;
   private ingaFigure: Phaser.GameObjects.Container | null = null;
@@ -219,6 +220,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.pathCue = null;
     this.pathCueIndex = null;
     this.pathCueWordAnchor = null;
+    this.ambientMistFields = [];
     this.ingaFigure = null;
     this.ingaWordAnchors = [];
     this.ghostKingBody = null;
@@ -247,19 +249,21 @@ export class HauntedWoodScene extends Phaser.Scene {
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
     addBackdropDrift(this, backdrop, { durationMs: 20000, driftX: -4, driftY: -3 });
-    addAmbientDrift(this, {
-      kind: "mist",
-      count: 24,
-      depth: -2,
-      area: { x: -160, y: 430, width: this.scale.width + 320, height: 330 },
-      alpha: 0.1,
-      minSize: 5,
-      maxSize: 11,
-      driftX: 260,
-      driftY: -30,
-      minDurationMs: 9000,
-      maxDurationMs: 17000,
-    });
+    this.ambientMistFields.push(
+      addAmbientDrift(this, {
+        kind: "mist",
+        count: 24,
+        depth: -2,
+        area: { x: -160, y: 430, width: this.scale.width + 320, height: 330 },
+        alpha: 0.1,
+        minSize: 5,
+        maxSize: 11,
+        driftX: 260,
+        driftY: -30,
+        minDurationMs: 9000,
+        maxDurationMs: 17000,
+      }),
+    );
     addLivingLight(this, {
       x: 960,
       y: 770,
@@ -294,19 +298,21 @@ export class HauntedWoodScene extends Phaser.Scene {
       delayMs: 1300,
       scale: 1.04,
     });
-    addAmbientDrift(this, {
-      kind: "mist",
-      count: 12,
-      depth: -1.45,
-      area: { x: -180, y: 500, width: this.scale.width + 360, height: 260 },
-      alpha: 0.085,
-      minSize: 11,
-      maxSize: 24,
-      driftX: 320,
-      driftY: -42,
-      minDurationMs: 8200,
-      maxDurationMs: 16000,
-    });
+    this.ambientMistFields.push(
+      addAmbientDrift(this, {
+        kind: "mist",
+        count: 12,
+        depth: -1.45,
+        area: { x: -180, y: 500, width: this.scale.width + 360, height: 260 },
+        alpha: 0.085,
+        minSize: 11,
+        maxSize: 24,
+        driftX: 320,
+        driftY: -42,
+        minDurationMs: 8200,
+        maxDurationMs: 16000,
+      }),
+    );
     this.drawShrine();
     this.wrenContainer = this.drawWren(WREN_X, WREN_Y);
     playSceneEventPulse(this, {
@@ -419,6 +425,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.wispCatCompanion = null;
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
+      this.ambientMistFields = [];
     });
 
     this.ambientHandle = playAmbientWood();
@@ -633,6 +640,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private startArrival(): void {
     this.narration.say("wood_intro_arrival");
     this.band.setObjective("Type the path words to reach the lantern in the trees.");
+    this.setAmbientMistFieldAlpha(0.2, 520);
     this.showPathCue(0);
     this.time.delayedCall(760, () => this.stageWrenAtPathEntrance());
     this.time.delayedCall(2800, () => this.startPathExploration());
@@ -967,6 +975,17 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.pathCueWordAnchor = null;
   }
 
+  private setAmbientMistFieldAlpha(alpha: number, durationMs: number): void {
+    const fields = this.ambientMistFields.filter((field) => field.scene);
+    if (fields.length === 0) return;
+    this.tweens.add({
+      targets: fields,
+      alpha,
+      duration: durationMs,
+      ease: "Sine.easeInOut",
+    });
+  }
+
   // ─── Act 1 — Inga NPC ────────────────────────────────────────────────────
 
   private startIngaNPC(): void {
@@ -1008,6 +1027,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Act 2 — Through the Wood ─────────────────────────────────────────────
 
   private startAct2(): void {
+    this.setAmbientMistFieldAlpha(0.78, 900);
     this.setNarrator("The crossroads. Shapes drift between the trees.");
     // Schedule first mist roll during Act 2
     this.mistTimer = this.time.addEvent({

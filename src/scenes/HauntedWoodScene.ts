@@ -94,6 +94,10 @@ const WOOD_PATH_STAGE_Y = 826;
 const WOOD_ROOT_CUE_Y = 792;
 const WOOD_CANOPY_CUE_Y = 674;
 const WOOD_LANTERN_CUE_Y = 782;
+const WOOD_NORTH_GHOST_REST_Y = 340;
+const WOOD_SOUTH_GHOST_REST_Y = 792;
+const WOOD_SIDE_GHOST_REST_Y = 704;
+const WOOD_SIDE_GHOST_STEP_Y = 46;
 const GHOST_KNOCKBACK_PAUSE_MS = 1800;
 
 // Ghost advance durations (ms). Words with punctuation chars are faster.
@@ -1825,7 +1829,12 @@ export class HauntedWoodScene extends Phaser.Scene {
     switch (direction) {
       case "north": {
         const restX = 760 + slot * 200;
-        return { startX: restX, startY: -120, restX, restY: 340 };
+        return {
+          startX: restX,
+          startY: -120,
+          restX,
+          restY: WOOD_NORTH_GHOST_REST_Y,
+        };
       }
       case "south": {
         const restX = 800 + slot * 180;
@@ -1833,11 +1842,11 @@ export class HauntedWoodScene extends Phaser.Scene {
           startX: restX,
           startY: screenH + 120,
           restX,
-          restY: screenH - 100,
+          restY: WOOD_SOUTH_GHOST_REST_Y,
         };
       }
       case "east": {
-        const restY = 720 + slot * 50;
+        const restY = WOOD_SIDE_GHOST_REST_Y + slot * WOOD_SIDE_GHOST_STEP_Y;
         return {
           startX: screenW + 120,
           startY: restY,
@@ -1846,7 +1855,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         };
       }
       case "west": {
-        const restY = 720 + slot * 50;
+        const restY = WOOD_SIDE_GHOST_REST_Y + slot * WOOD_SIDE_GHOST_STEP_Y;
         return { startX: -120, startY: restY, restX: 340, restY };
       }
     }

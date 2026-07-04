@@ -37,6 +37,7 @@ const SATCHEL_LABEL_Y = 34;
 const TILE = 36;
 const TILE_GAP = 8;
 const TILE_Y = MID_Y + 6;
+const MAX_VISIBLE_SATCHEL_TILES = 8;
 const SATCHEL_WAKE_DELAY_MS = 180;
 const BAND_ENTRY_WAKE_DELAY_MS = 90;
 // One-shot card slots
@@ -477,10 +478,13 @@ export class ConsoleBand {
       const icon = satchelIconFor(id);
       return icon !== null && scene.textures.exists(icon.key);
     });
-    if (drawable.length > 0) {
-      this.playSatchelRowWake(drawable.length);
+    const visibleDrawable = drawable.slice(0, MAX_VISIBLE_SATCHEL_TILES);
+    const overflowCount = drawable.length - visibleDrawable.length;
+    const displayedCount = visibleDrawable.length + (overflowCount > 0 ? 1 : 0);
+    if (displayedCount > 0) {
+      this.playSatchelRowWake(displayedCount);
     }
-    drawable.forEach((id, i) => {
+    visibleDrawable.forEach((id, i) => {
       const x = SATCHEL_X + i * (TILE + TILE_GAP);
       const iconContainer = scene.add
         .container(x + TILE / 2, TILE_Y)
@@ -509,6 +513,44 @@ export class ConsoleBand {
         ease: "Back.easeOut",
       });
     });
+    if (overflowCount > 0) {
+      const i = visibleDrawable.length;
+      const x = SATCHEL_X + i * (TILE + TILE_GAP);
+      const overflowContainer = scene.add
+        .container(x + TILE / 2, TILE_Y)
+        .setAlpha(0)
+        .setScale(0.92);
+      const tile = scene.add.graphics();
+      tile.fillStyle(0x0f0c08, 1);
+      tile.fillRoundedRect(-TILE / 2, -TILE / 2, TILE, TILE, 5);
+      tile.lineStyle(1, UI_HEX.brass, 0.95);
+      tile.strokeRoundedRect(-TILE / 2, -TILE / 2, TILE, TILE, 5);
+      tile.fillStyle(UI_HEX.brass, 0.1);
+      tile.fillRoundedRect(-TILE / 2 + 3, -TILE / 2 + 3, TILE - 6, TILE - 6, 4);
+      overflowContainer.add(tile);
+
+      const count = scene.add
+        .text(0, 0, `+${overflowCount}`, {
+          fontFamily: SERIF,
+          fontStyle: "italic",
+          fontSize: "17px",
+          color: "#f3ead2",
+          align: "center",
+        })
+        .setOrigin(0.5);
+      overflowContainer.add(count);
+      this.container.add(overflowContainer);
+
+      scene.tweens.add({
+        targets: overflowContainer,
+        alpha: 1,
+        scaleX: 1,
+        scaleY: 1,
+        delay: SATCHEL_WAKE_DELAY_MS + i * 65,
+        duration: 220,
+        ease: "Back.easeOut",
+      });
+    }
   }
 
   private playSatchelRowWake(count: number): void {

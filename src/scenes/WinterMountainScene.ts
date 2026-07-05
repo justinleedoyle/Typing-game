@@ -1419,13 +1419,30 @@ export class WinterMountainScene extends Phaser.Scene {
         if (realm) realm.quietLordIntruded = true;
       });
       this.time.delayedCall(1400, () => {
+        const anchor = this.quietLordIntrusionAnchor();
         playQuietLordIntrusion(this, {
-          x: this.scale.width / 2,
-          y: 340,
+          x: anchor.x,
+          y: anchor.y,
           text: "i have been listening from the cold.",
         });
       });
     }
+  }
+
+  private quietLordIntrusionAnchor(): { x: number; y: number } {
+    let threat: MovingWordEnemy | null = null;
+    for (const wolf of this.wolves) {
+      if (wolf.isDefeated() || !wolf.container.scene) continue;
+      if (!threat || wolf.advanceProgress() > threat.advanceProgress()) {
+        threat = wolf;
+      }
+    }
+
+    if (!threat) return { x: this.scale.width / 2, y: 340 };
+    return {
+      x: Phaser.Math.Clamp(threat.container.x, 260, this.scale.width - 260),
+      y: Phaser.Math.Clamp(threat.container.y - 150, 280, this.scale.height - 360),
+    };
   }
 
   /** UI-cohesion: every Winter word target gets the legibility outline by default

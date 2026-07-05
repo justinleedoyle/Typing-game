@@ -329,6 +329,11 @@ export class ScrollingPhrase {
     return this.container.x;
   }
 
+  /** Current vertical screen position of the banner center. */
+  getY(): number {
+    return this.container.y;
+  }
+
   /** Scroll progress 0..1 (1 = at the exit edge). The offensive one-shots rank
    *  banners by this — the nearest-to-exit is the "strongest" (most urgent). */
   getProgress(): number {

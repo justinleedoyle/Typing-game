@@ -1319,9 +1319,10 @@ export class SkyIslandScene extends Phaser.Scene {
         if (realm) realm.quietLordIntruded = true;
       });
       this.time.delayedCall(1800, () => {
+        const anchor = this.quietLordIntrusionAnchor();
         playQuietLordIntrusion(this, {
-          x: this.scale.width / 2,
-          y: 380,
+          x: anchor.x,
+          y: anchor.y,
           text: "every page goes blank.",
         });
       });
@@ -1369,6 +1370,22 @@ export class SkyIslandScene extends Phaser.Scene {
       });
       this.activePhrases.push(phraseObj);
     });
+  }
+
+  private quietLordIntrusionAnchor(): { x: number; y: number } {
+    let threat: ScrollingPhrase | null = null;
+    for (const phrase of this.activePhrases) {
+      if (phrase.isResolved()) continue;
+      if (!threat || phrase.getProgress() > threat.getProgress()) {
+        threat = phrase;
+      }
+    }
+
+    if (!threat) return { x: this.scale.width / 2, y: 380 };
+    return {
+      x: Phaser.Math.Clamp(threat.getX(), 340, this.scale.width - 340),
+      y: Phaser.Math.Clamp(threat.getY(), 280, this.scale.height - 360),
+    };
   }
 
   /** Called when a scrolling phrase finishes — either typed (`success=true`)

@@ -1531,9 +1531,10 @@ export class SunkenBellScene extends Phaser.Scene {
         if (realm) realm.quietLordIntruded = true;
       });
       this.time.delayedCall(1600, () => {
+        const anchor = this.quietLordIntrusionAnchor();
         playQuietLordIntrusion(this, {
-          x: this.scale.width / 2,
-          y: 380,
+          x: anchor.x,
+          y: anchor.y,
           text: "the silence answers.",
         });
       });
@@ -1561,6 +1562,22 @@ export class SunkenBellScene extends Phaser.Scene {
       this.spawnGhost(pos.x, pos.restX, pos.restY, word, i * 350, 13000, splits);
     });
     this.beginCombatWave();
+  }
+
+  private quietLordIntrusionAnchor(): { x: number; y: number } {
+    let threat: MovingWordEnemy | null = null;
+    for (const ghost of this.ghosts) {
+      if (ghost.isDefeated() || !ghost.container.scene) continue;
+      if (!threat || ghost.advanceProgress() > threat.advanceProgress()) {
+        threat = ghost;
+      }
+    }
+
+    if (!threat) return { x: this.scale.width / 2, y: 380 };
+    return {
+      x: Phaser.Math.Clamp(threat.container.x, 260, this.scale.width - 260),
+      y: Phaser.Math.Clamp(threat.container.y - 150, 280, this.scale.height - 360),
+    };
   }
 
   private onWave2Cleared(): void {

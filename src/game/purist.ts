@@ -11,8 +11,9 @@
 // Settings menu. The tier persists on the SaveStore.
 
 import Phaser from "phaser";
-import { PALETTE, SERIF } from "./palette";
+import { SERIF } from "./palette";
 import type { Difficulty, SaveStore } from "./saveState";
+import { cornerTicks, UI_CSS, UI_HEX } from "./ui/uiTheme";
 
 const ORDER: readonly Difficulty[] = ["forgiving", "standard", "purist"];
 
@@ -21,6 +22,18 @@ const LABELS: Record<Difficulty, string> = {
   standard: "Standard",
   purist: "Purist",
 };
+
+interface SceneWithConsoleBand extends Phaser.Scene {
+  band?: {
+    showNotice(
+      text: string,
+      opts?: {
+        label?: string;
+        durationMs?: number;
+      },
+    ): void;
+  };
+}
 
 /** Human-readable label for the Settings row + toast. */
 export function difficultyLabel(tier: Difficulty): string {
@@ -58,24 +71,44 @@ export function togglePuristMode(scene: Phaser.Scene, store: SaveStore): void {
 }
 
 function showDifficultyToast(scene: Phaser.Scene, tier: Difficulty): void {
-  const text = scene.add
-    .text(scene.scale.width / 2, 140, `Difficulty: ${LABELS[tier]}`, {
-      fontFamily: SERIF,
-      fontSize: "28px",
-      color: tier === "forgiving" ? PALETTE.cream : PALETTE.ember,
-      fontStyle: "italic",
-    })
-    .setOrigin(0.5)
+  const band = (scene as SceneWithConsoleBand).band;
+  if (typeof band?.showNotice === "function") {
+    band.showNotice(`Difficulty set to ${LABELS[tier]}.`, {
+      label: "difficulty",
+      durationMs: 1800,
+    });
+    return;
+  }
+
+  const container = scene.add
+    .container(scene.scale.width / 2, 92)
+    .setScrollFactor(0)
     .setDepth(100)
     .setAlpha(0);
+  const bg = scene.add.graphics();
+  bg.fillStyle(UI_HEX.parchment, 0.94);
+  bg.fillRoundedRect(-168, -27, 336, 54, 10);
+  bg.lineStyle(2, UI_HEX.brass, 0.82);
+  bg.strokeRoundedRect(-168, -27, 336, 54, 10);
+  const ticks = cornerTicks(scene, 320, 42, { inset: 4, size: 8, width: 2 });
+  const text = scene.add
+    .text(0, 0, `Difficulty: ${LABELS[tier]}`, {
+      fontFamily: SERIF,
+      fontSize: "24px",
+      color: tier === "forgiving" ? UI_CSS.ink : UI_CSS.ember,
+      fontStyle: "italic",
+    })
+    .setOrigin(0.5);
+  container.add([bg, ticks, text]);
 
   scene.tweens.add({
-    targets: text,
+    targets: container,
     alpha: { from: 0, to: 1 },
+    y: "-=6",
     duration: 200,
     yoyo: true,
     hold: 1100,
     ease: "Sine.easeInOut",
-    onComplete: () => text.destroy(),
+    onComplete: () => container.destroy(),
   });
 }

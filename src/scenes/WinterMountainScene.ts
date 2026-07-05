@@ -1116,12 +1116,18 @@ export class WinterMountainScene extends Phaser.Scene {
     }
 
     this.setNarrator(HELDUR_NARRATOR_PROMPTS[idx]);
+    const heldurPromptX = this.heldurSprite
+      ? this.heldurSprite.x + 185
+      : this.scale.width / 2;
+    const heldurPromptY = this.heldurSprite
+      ? this.heldurSprite.y - 255
+      : this.scale.height / 2 + 40;
 
     const target = this.makeHeldurWord({
       scene: this,
       word: HELDUR_QUESTIONS[idx],
-      x: this.scale.width / 2,
-      y: this.scale.height / 2 + 40,
+      x: heldurPromptX,
+      y: heldurPromptY,
       fontSize: 44,
       onClaim: () => playWrenFocus(this.wrenSprite),
       onComplete: () => {

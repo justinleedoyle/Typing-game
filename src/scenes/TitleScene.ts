@@ -23,6 +23,9 @@ const TITLE_PORTAL_BLUE = 0x9fd7ff;
 export class TitleScene extends Phaser.Scene {
   private prompt!: Phaser.GameObjects.Text;
   private promptPlate?: Phaser.GameObjects.Graphics;
+  private promptPlateCorners?: Phaser.GameObjects.Graphics;
+  private promptPlateW = 0;
+  private promptPlateH = 0;
   private promptTween?: Phaser.Tweens.Tween;
   private store?: SaveStore;
   private storePromise?: Promise<SaveStore>;
@@ -115,7 +118,9 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(4);
     this.promptPlate = this.drawPromptPlate(this.prompt);
+    this.promptPlateCorners = this.drawPromptPlateCorners(this.prompt);
     this.stageTitleObject(this.promptPlate, 300, { offsetY: 6 });
+    this.stageTitleObject(this.promptPlateCorners, 315, { offsetY: 6 });
     this.stageTitleObject(this.prompt, 335, { offsetY: 10, skipIfTyped: true });
 
     this.time.delayedCall(650, () => {
@@ -195,6 +200,8 @@ export class TitleScene extends Phaser.Scene {
   private drawPromptPlate(prompt: Phaser.GameObjects.Text): Phaser.GameObjects.Graphics {
     const w = this.promptPlateWidth(prompt);
     const h = Math.max(42, prompt.height + 18);
+    this.promptPlateW = w;
+    this.promptPlateH = h;
     const plate = this.add.graphics().setDepth(3);
     plate.fillStyle(0x0d0b08, 0.26);
     plate.fillEllipse(prompt.x, prompt.y + h * 0.34, w * 0.88, h * 0.44);
@@ -207,13 +214,56 @@ export class TitleScene extends Phaser.Scene {
     return plate;
   }
 
+  private drawPromptPlateCorners(
+    prompt: Phaser.GameObjects.Text,
+  ): Phaser.GameObjects.Graphics {
+    return cornerTicks(this, this.promptPlateW, this.promptPlateH, {
+      inset: 6,
+      size: 7,
+      width: 2,
+    })
+      .setPosition(prompt.x, prompt.y)
+      .setDepth(4);
+  }
+
   private promptPlateWidth(prompt: Phaser.GameObjects.Text): number {
     return Math.min(500, Math.max(300, prompt.width + 72));
   }
 
   private redrawPromptPlate(): void {
     this.promptPlate?.destroy();
+    this.promptPlateCorners?.destroy();
     this.promptPlate = this.drawPromptPlate(this.prompt);
+    this.promptPlateCorners = this.drawPromptPlateCorners(this.prompt);
+    this.playPromptCardWake();
+  }
+
+  private playPromptCardWake(): void {
+    if (this.promptPlateW <= 0 || this.promptPlateH <= 0) return;
+    const pulse = this.add
+      .graphics()
+      .setPosition(this.prompt.x, this.prompt.y)
+      .setDepth(5)
+      .setAlpha(0.72);
+    pulse.lineStyle(2, UI_HEX.brass, 0.5);
+    pulse.strokeRoundedRect(
+      -this.promptPlateW / 2 - 5,
+      -this.promptPlateH / 2 - 5,
+      this.promptPlateW + 10,
+      this.promptPlateH + 10,
+      9,
+    );
+    pulse.fillStyle(UI_HEX.brass, 0.12);
+    pulse.fillRect(-this.promptPlateW / 2, -this.promptPlateH / 2, this.promptPlateW, 3);
+    this.tweens.add({
+      targets: pulse,
+      alpha: 0,
+      scaleX: 1.06,
+      scaleY: 1.22,
+      duration: 430,
+      ease: "Sine.easeOut",
+      onComplete: () => pulse.destroy(),
+    });
   }
 
   private startPromptIdleTween(): void {

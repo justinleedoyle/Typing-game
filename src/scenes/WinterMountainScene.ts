@@ -415,6 +415,19 @@ export class WinterMountainScene extends Phaser.Scene {
       minDurationMs: 4600,
       maxDurationMs: 9000,
     });
+    addAmbientDrift(this, {
+      kind: "snow",
+      count: 16,
+      depth: -0.35,
+      area: { x: 360, y: WINTER_WREN_STAGE_Y - 150, width: 1200, height: 210 },
+      alpha: 0.28,
+      minSize: 2.5,
+      maxSize: 7,
+      driftX: -240,
+      driftY: 165,
+      minDurationMs: 3600,
+      maxDurationMs: 7200,
+    });
     this.wrenContainer = this.drawWren(
       this.scale.width / 2,
       WINTER_WREN_STAGE_Y,
@@ -3169,6 +3182,20 @@ export class WinterMountainScene extends Phaser.Scene {
     stageContainerEntrance(this, c, {
       breathDy: -4,
       breathMs: 2100,
+    });
+    addContainerWake(this, c, {
+      kind: "snow",
+      intervalMs: 420,
+      spreadX: 34,
+      spreadY: 12,
+      offsetY: -82,
+      color: PALETTE_HEX.frost,
+      alpha: 0.28,
+      size: 3.2,
+      depth: -0.2,
+      driftX: -36,
+      driftY: 22,
+      durationMs: 980,
     });
     return c;
   }

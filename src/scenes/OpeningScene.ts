@@ -10,6 +10,7 @@ import { TextWordTarget } from "../game/wordTarget";
 import {
   addAmbientDrift,
   addBackdropDrift,
+  addContainerWake,
   addIdleBreath,
   addLocalGroundShadow,
   addLivingLight,
@@ -157,6 +158,7 @@ export class OpeningScene extends Phaser.Scene {
       minDurationMs: 6800,
       maxDurationMs: 12000,
     });
+    this.startStudySourceWakes();
 
     // ── Narrator text ────────────────────────────────────────────────────────
     this.narration = new NarrationManager(this, {
@@ -182,6 +184,38 @@ export class OpeningScene extends Phaser.Scene {
 
     // ── Beat sequence ────────────────────────────────────────────────────────
     this.beat1();
+  }
+
+  private startStudySourceWakes(): void {
+    const typewriter = this.add.container(TYPEWRITER_TARGET.x, TYPEWRITER_TARGET.y + 40);
+    addContainerWake(this, typewriter, {
+      kind: "ember",
+      intervalMs: 520,
+      spreadX: 44,
+      spreadY: 18,
+      color: PALETTE_HEX.brass,
+      alpha: 0.22,
+      size: 2.8,
+      depth: -0.75,
+      driftX: 18,
+      driftY: -34,
+      durationMs: 980,
+    });
+
+    const portal = this.add.container(PORTAL_TARGET.x, PORTAL_TARGET.y);
+    addContainerWake(this, portal, {
+      kind: "mote",
+      intervalMs: 640,
+      spreadX: 66,
+      spreadY: 120,
+      color: PALETTE_HEX.frost,
+      alpha: 0.16,
+      size: 3.1,
+      depth: -0.8,
+      driftX: 28,
+      driftY: -44,
+      durationMs: 1200,
+    });
   }
 
   // ── Beats ──────────────────────────────────────────────────────────────────
@@ -781,6 +815,20 @@ export class OpeningScene extends Phaser.Scene {
     const actor = this.add.container(430, 900).setAlpha(0).setDepth(-1);
     this.runaActor = actor;
     actor.add(addLocalGroundShadow(this, 180, 28, { y: 7, alpha: 0.32 }));
+    addContainerWake(this, actor, {
+      kind: "mote",
+      intervalMs: 820,
+      spreadX: 28,
+      spreadY: 16,
+      offsetY: -208,
+      color: PALETTE_HEX.brass,
+      alpha: 0.16,
+      size: 2.6,
+      depth: -0.45,
+      driftX: 12,
+      driftY: -26,
+      durationMs: 920,
+    });
     const img = this.add
       .image(0, 0, "runa-sprite")
       .setOrigin(0.5, 1);
@@ -811,6 +859,20 @@ export class OpeningScene extends Phaser.Scene {
     const isBoy = this.wrenGender === "boy";
     const actor = this.add.container(isBoy ? 1240 : 1260, 950).setAlpha(0).setDepth(-1);
     this.siblingActor = actor;
+    addContainerWake(this, actor, {
+      kind: "mote",
+      intervalMs: isBoy ? 760 : 900,
+      spreadX: isBoy ? 24 : 30,
+      spreadY: 16,
+      offsetY: isBoy ? -136 : -164,
+      color: isBoy ? PALETTE_HEX.brass : 0x9fd7ff,
+      alpha: isBoy ? 0.15 : 0.13,
+      size: isBoy ? 2.4 : 2.7,
+      depth: -0.45,
+      driftX: isBoy ? 10 : 18,
+      driftY: -24,
+      durationMs: isBoy ? 880 : 980,
+    });
 
     const doorway = this.add.graphics().setPosition(isBoy ? 10 : -4, -142);
     doorway.fillStyle(isBoy ? 0xeedec0 : 0x8fa4bc, isBoy ? 0.07 : 0.1);

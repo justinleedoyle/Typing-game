@@ -3,7 +3,12 @@ import { playClack } from "../audio/clack";
 import { setAudioLevel } from "../audio/context";
 import { applyDevUnlock, parseDevTarget } from "../game/devUnlock";
 import { SERIF } from "../game/palette";
-import { addAmbientDrift, addBackdropDrift, addLivingLight } from "../game/livingScene";
+import {
+  addAmbientDrift,
+  addBackdropDrift,
+  addContainerWake,
+  addLivingLight,
+} from "../game/livingScene";
 import { cornerTicks, UI_CSS, UI_HEX } from "../game/ui/uiTheme";
 import {
   emptySave,
@@ -100,6 +105,7 @@ export class TitleScene extends Phaser.Scene {
       minDurationMs: 6800,
       maxDurationMs: 11800,
     });
+    this.startTitleSourceWakes();
 
     const titleObjects = this.drawTitlePlate(TITLE_PLATE.x, TITLE_PLATE.y);
     titleObjects.forEach((object, index) => {
@@ -141,6 +147,38 @@ export class TitleScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
+    });
+  }
+
+  private startTitleSourceWakes(): void {
+    const typewriter = this.add.container(TITLE_TYPEWRITER.x, TITLE_TYPEWRITER.y - 16);
+    addContainerWake(this, typewriter, {
+      kind: "ember",
+      intervalMs: 540,
+      spreadX: 42,
+      spreadY: 16,
+      color: UI_HEX.ember,
+      alpha: 0.22,
+      size: 2.6,
+      depth: -0.65,
+      driftX: 18,
+      driftY: -34,
+      durationMs: 980,
+    });
+
+    const portal = this.add.container(TITLE_PORTAL.x, TITLE_PORTAL.y);
+    addContainerWake(this, portal, {
+      kind: "mote",
+      intervalMs: 620,
+      spreadX: 64,
+      spreadY: 110,
+      color: TITLE_PORTAL_BLUE,
+      alpha: 0.16,
+      size: 3,
+      depth: -0.7,
+      driftX: 26,
+      driftY: -40,
+      durationMs: 1180,
     });
   }
 

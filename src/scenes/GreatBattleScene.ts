@@ -678,6 +678,7 @@ export class GreatBattleScene extends Phaser.Scene {
       wordWrapWidth: 1500,
       depth: 5,
       framed: true,
+      onSpeak: (speakerName) => this.attendSpeaker(speakerName),
     });
 
     // Candle & charge HUD, docked into the band — charges may be bumped by king-aurland.
@@ -779,8 +780,38 @@ export class GreatBattleScene extends Phaser.Scene {
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
-  private setNarrator(text: string): void {
-    this.narration.sayRaw(text, { speakerName: null });
+  private setNarrator(text: string, speakerName: string | null = null): void {
+    this.narration.sayRaw(text, { speakerName });
+  }
+
+  private attendSpeaker(speakerName: string | null): void {
+    this.setBandSpeaker(speakerName);
+
+    if (speakerName === "Quiet Lord") {
+      playActorAttention(this, this.quietLordContainer, {
+        tint: this.isForceDuel ? UI_HEX.ember : 0x6b5ea8,
+        scale: 1.012,
+        durationMs: 220,
+      });
+    } else if (speakerName === "Again") {
+      playActorAttention(this, this.againText, {
+        tint: 0xd4b8ff,
+        scale: 1.025,
+        durationMs: 220,
+      });
+    }
+  }
+
+  private setBandSpeaker(speakerName: string | null): void {
+    if (!speakerName || speakerName === "Runa") {
+      this.band.setPortrait("band-portrait-runa", "Runa");
+    } else if (speakerName === "Quiet Lord") {
+      this.band.setPortrait("quiet-lord", "Quiet Lord");
+    } else if (speakerName === "Again") {
+      this.band.setPortrait(undefined, "Again");
+    } else {
+      this.band.setPortrait(undefined, speakerName);
+    }
   }
 
   private showRelicNotice(id: string, label = "relic", durationMs = 2200): void {
@@ -3413,7 +3444,7 @@ export class GreatBattleScene extends Phaser.Scene {
       idx === 0
         ? "Answer in his own hand — mind the capitals:"
         : "Again, deeper — his name this time:";
-    this.setNarrator(`${lead}  ${word}`);
+    this.setNarrator(`${lead}  ${word}`, "Quiet Lord");
     this.band.setObjective("Mind the capitals in the Quiet Lord's word.");
 
     const wordPos = this.lordDuelWordPosition(idx, words.length, 520);

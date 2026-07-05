@@ -2278,7 +2278,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
               ringRadius: 54,
               count: 12,
             });
-          } else {
+          } else if (owner === "forn") {
             playActorAttention(this, this.fornSprite, {
               tint: PALETTE_HEX.ember,
             });

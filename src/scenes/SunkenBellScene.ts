@@ -3130,7 +3130,7 @@ export class SunkenBellScene extends Phaser.Scene {
       // wave check. The split children (if any) are spawned by the enemy's `split`
       // BEFORE this runs, so checkWaveCleared sees them and the wave stays open.
       onComplete: () => {
-        this.showQuietFlicker();
+        this.showQuietFlicker(container);
         if (this.breathActive) {
           this.breath.inhale();
           this.drawBreathBar();
@@ -3171,23 +3171,41 @@ export class SunkenBellScene extends Phaser.Scene {
     c.add(sprite);
   }
 
-  private showQuietFlicker(): void {
+  private showQuietFlicker(source?: Phaser.GameObjects.Container): void {
+    const x = source?.scene ? source.x : this.scale.width / 2;
+    const y = source?.scene
+      ? Math.max(260, Math.min(this.scale.height - 380, source.y - 132))
+      : this.scale.height / 2 - 60;
+    const scar = this.add.graphics().setPosition(x, y).setDepth(47).setAlpha(0.46);
+    scar.fillStyle(0x05050a, 0.28);
+    scar.fillRoundedRect(-124, -30, 248, 60, 14);
+    scar.fillStyle(0x182834, 0.24);
+    scar.fillEllipse(0, 0, 216, 42);
+    scar.lineStyle(2, 0x6f8f98, 0.24);
+    scar.strokeRoundedRect(-116, -24, 232, 48, 12);
+    scar.lineStyle(3, 0x05050a, 0.72);
+    scar.lineBetween(-78, -2, 84, -6);
     const txt = this.add
-      .text(this.scale.width / 2, this.scale.height / 2 - 60, "~~quiet them~~", {
+      .text(x, y, "~~quiet them~~", {
         fontFamily: SERIF,
         fontSize: "28px",
         color: PALETTE.dim,
         fontStyle: "italic",
       })
       .setOrigin(0.5)
-      .setAlpha(0.6);
+      .setDepth(48)
+      .setAlpha(0.68);
 
     this.tweens.add({
-      targets: txt,
+      targets: [scar, txt],
       alpha: 0,
+      y: "-=22",
       duration: 1000,
       ease: "Sine.easeOut",
-      onComplete: () => txt.destroy(),
+      onComplete: () => {
+        scar.destroy();
+        txt.destroy();
+      },
     });
   }
 

@@ -3519,6 +3519,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.againText.setPosition(this.scale.width / 2, 300);
     this.againText.setColor("#d4b8ff");
     this.againText.setDepth(10);
+    this.attendSpeaker("Again");
     playSceneEventPulse(this, {
       kind: "mote",
       color: 0xd4b8ff,

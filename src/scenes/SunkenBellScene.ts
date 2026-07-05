@@ -317,6 +317,19 @@ export class SunkenBellScene extends Phaser.Scene {
       minDurationMs: 5600,
       maxDurationMs: 11800,
     });
+    addAmbientDrift(this, {
+      kind: "bubble",
+      count: 12,
+      depth: -0.35,
+      area: { x: WREN_X - 260, y: WREN_Y - 190, width: 520, height: 180 },
+      alpha: 0.2,
+      minSize: 4,
+      maxSize: 10,
+      driftX: 34,
+      driftY: -210,
+      minDurationMs: 4300,
+      maxDurationMs: 9200,
+    });
     this.wrenContainer = this.drawWren(WREN_X, WREN_Y);
     playSceneEventPulse(this, {
       kind: "bubble",
@@ -3469,6 +3482,20 @@ export class SunkenBellScene extends Phaser.Scene {
     stageContainerEntrance(this, c, {
       breathDy: -4,
       breathMs: 2300,
+    });
+    addContainerWake(this, c, {
+      kind: "bubble",
+      intervalMs: 520,
+      spreadX: 30,
+      spreadY: 12,
+      offsetY: -86,
+      color: BELL_BURST_COLOR,
+      alpha: 0.23,
+      size: 3.3,
+      depth: 0.25,
+      driftX: 18,
+      driftY: -42,
+      durationMs: 980,
     });
     return c;
   }

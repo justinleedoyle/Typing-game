@@ -6,6 +6,7 @@ import { SERIF } from "../game/palette";
 import { addAmbientDrift, addBackdropDrift, addLivingLight } from "../game/livingScene";
 import { cornerTicks, UI_CSS, UI_HEX } from "../game/ui/uiTheme";
 import {
+  emptySave,
   SaveStore,
   SyncedBackend,
   type SaveBackend,
@@ -334,16 +335,22 @@ export class TitleScene extends Phaser.Scene {
   private async beginTransition(): Promise<void> {
     if (this.transitioning) return;
     this.transitioning = true;
-    this.store = await this.storePromise;
+    const dev = parseDevTarget(
+      typeof location !== "undefined" ? location.search : "",
+    );
     // Dev unlock (opt-in via ?dev) — unlock every realm + fill the satchel, and
     // with ?dev=<target> jump straight into a realm or the finale. For art +
     // feel-tuning; a no-op in normal play. The standard unlock persists to the
     // cloud save; loadout=bare uses a temporary in-memory store so it cannot wipe
     // the player's real satchel.
-    const dev = parseDevTarget(
-      typeof location !== "undefined" ? location.search : "",
-    );
-    if (dev.unlock && this.store) {
+    const immediateBareDevJump =
+      dev.unlock && dev.loadout === "bare" && !!dev.realmSceneKey;
+    if (immediateBareDevJump) {
+      this.store = this.createBareDevStore();
+    } else {
+      this.store = await this.storePromise;
+    }
+    if (dev.unlock && this.store && !immediateBareDevJump) {
       if (dev.loadout === "bare") {
         this.store = this.createBareDevStore(this.store);
       } else {
@@ -370,8 +377,10 @@ export class TitleScene extends Phaser.Scene {
     });
   }
 
-  private createBareDevStore(source: SaveStore): SaveStore {
-    const state = JSON.parse(JSON.stringify(source.get())) as SaveState;
+  private createBareDevStore(source?: SaveStore): SaveStore {
+    const state = source
+      ? (JSON.parse(JSON.stringify(source.get())) as SaveState)
+      : emptySave();
     applyDevUnlock(state, { satchel: "empty" });
     const backend: SaveBackend = {
       load: async () => state,

@@ -1434,7 +1434,12 @@ export class HauntedWoodScene extends Phaser.Scene {
           this.attendGhostKing();
           this.time.delayedCall(1400, () => this.startBossFight());
         },
-        { ghostKing: true },
+        {
+          body: this.ghostKingBody,
+          sourceOffsetY: -30,
+          ghostKing: true,
+          side: "left",
+        },
       );
     });
   }
@@ -2024,6 +2029,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       body?: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined;
       sourceOffsetY?: number;
       ghostKing?: boolean;
+      side?: "left" | "right";
     },
   ): void {
     let idx = 0;
@@ -2034,10 +2040,11 @@ export class HauntedWoodScene extends Phaser.Scene {
       }
       const step = steps[idx];
       if (!step) return;
-      const ownerWordPos =
-        owner?.body?.scene && !owner.ghostKing
-          ? this.ownerPassageWordPosition(owner.body, owner.sourceOffsetY)
-          : null;
+      const ownerWordPos = owner?.body?.scene
+        ? this.ownerPassageWordPosition(owner.body, owner.sourceOffsetY, {
+            side: owner.side,
+          })
+        : null;
       const opts: TextWordTargetOptions = {
         scene: this,
         word: step.word,

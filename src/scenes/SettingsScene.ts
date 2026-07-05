@@ -83,6 +83,9 @@ export class SettingsScene extends Phaser.Scene {
 
   private narrator!: Phaser.GameObjects.Text;
   private narratorPlate?: Phaser.GameObjects.Graphics;
+  private narratorPlateCorners?: Phaser.GameObjects.Graphics;
+  private narratorPlateW = 0;
+  private narratorPlateH = 0;
 
   constructor() {
     super("SettingsScene");
@@ -175,6 +178,7 @@ export class SettingsScene extends Phaser.Scene {
     // Narrator — matches WinterMountainScene's setNarrator styling so the
     // game's voice stays consistent across scenes.
     this.narratorPlate = this.add.graphics();
+    this.narratorPlateCorners = this.add.graphics();
     this.narrator = this.add
       .text(
         this.scale.width / 2,
@@ -940,11 +944,24 @@ export class SettingsScene extends Phaser.Scene {
   // ─── Narrator helper ────────────────────────────────────────────────────────
 
   private setNarrator(text: string): void {
+    const changed = text !== this.narrator.text;
     this.narrator.setText(text);
     this.redrawNarratorPlate();
+    if (changed) this.playNarratorCardWake();
     this.narrator.setAlpha(0);
+    this.narratorPlate?.setAlpha(0.9);
+    this.narratorPlateCorners?.setAlpha(0.9);
     this.tweens.add({
-      targets: this.narrator,
+      targets: [
+        this.narrator,
+        this.narratorPlate,
+        this.narratorPlateCorners,
+      ].filter(
+        (
+          target,
+        ): target is Phaser.GameObjects.Text | Phaser.GameObjects.Graphics =>
+          !!target,
+      ),
       alpha: 1,
       duration: 400,
       ease: "Sine.easeOut",
@@ -956,8 +973,10 @@ export class SettingsScene extends Phaser.Scene {
     const bounds = this.narrator.getBounds();
     const padX = 32;
     const padY = 16;
-    const w = bounds.width + padX * 2;
-    const h = bounds.height + padY * 2;
+    const w = Math.max(120, bounds.width + padX * 2);
+    const h = Math.max(56, bounds.height + padY * 2);
+    this.narratorPlateW = w;
+    this.narratorPlateH = h;
     this.narratorPlate.clear();
     this.narratorPlate.fillStyle(UI_HEX.parchment, 0.96);
     this.narratorPlate.fillRoundedRect(
@@ -975,6 +994,68 @@ export class SettingsScene extends Phaser.Scene {
       h,
       8,
     );
+
+    this.narratorPlateCorners?.clear();
+    if (!this.narratorPlateCorners) return;
+    const inset = 7;
+    const size = 8;
+    const left = this.narrator.x - w / 2 + inset;
+    const right = this.narrator.x + w / 2 - inset;
+    const top = this.narrator.y - h / 2 + inset;
+    const bottom = this.narrator.y + h / 2 - inset;
+    this.narratorPlateCorners.lineStyle(2, UI_HEX.brass, 0.9);
+    this.narratorPlateCorners.beginPath();
+    this.narratorPlateCorners.moveTo(left, top + size);
+    this.narratorPlateCorners.lineTo(left, top);
+    this.narratorPlateCorners.lineTo(left + size, top);
+    this.narratorPlateCorners.strokePath();
+    this.narratorPlateCorners.beginPath();
+    this.narratorPlateCorners.moveTo(right - size, top);
+    this.narratorPlateCorners.lineTo(right, top);
+    this.narratorPlateCorners.lineTo(right, top + size);
+    this.narratorPlateCorners.strokePath();
+    this.narratorPlateCorners.beginPath();
+    this.narratorPlateCorners.moveTo(left, bottom - size);
+    this.narratorPlateCorners.lineTo(left, bottom);
+    this.narratorPlateCorners.lineTo(left + size, bottom);
+    this.narratorPlateCorners.strokePath();
+    this.narratorPlateCorners.beginPath();
+    this.narratorPlateCorners.moveTo(right - size, bottom);
+    this.narratorPlateCorners.lineTo(right, bottom);
+    this.narratorPlateCorners.lineTo(right, bottom - size);
+    this.narratorPlateCorners.strokePath();
+  }
+
+  private playNarratorCardWake(): void {
+    if (this.narratorPlateW <= 0 || this.narratorPlateH <= 0) return;
+    const edge = this.add
+      .graphics()
+      .setPosition(this.narrator.x, this.narrator.y)
+      .setAlpha(0.62);
+    edge.lineStyle(2, UI_HEX.brass, 0.46);
+    edge.strokeRoundedRect(
+      -this.narratorPlateW / 2 - 5,
+      -this.narratorPlateH / 2 - 5,
+      this.narratorPlateW + 10,
+      this.narratorPlateH + 10,
+      10,
+    );
+    edge.fillStyle(UI_HEX.brass, 0.14);
+    edge.fillRect(
+      -this.narratorPlateW / 2,
+      -this.narratorPlateH / 2,
+      this.narratorPlateW,
+      3,
+    );
+    this.tweens.add({
+      targets: edge,
+      alpha: 0,
+      scaleX: 1.025,
+      scaleY: 1.12,
+      duration: 420,
+      ease: "Sine.easeOut",
+      onComplete: () => edge.destroy(),
+    });
   }
 }
 

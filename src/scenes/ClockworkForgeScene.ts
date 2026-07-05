@@ -2851,8 +2851,30 @@ export class ClockworkForgeScene extends Phaser.Scene {
   /** Gentle "forgiven" cue when forgive-wave-miss spares a slip — distinct from
    *  the harsh miss flinch. */
   private flashForgiven(): void {
+    const x = this.wrenContainer?.scene ? this.wrenContainer.x : this.scale.width / 2;
+    const y = this.wrenContainer?.scene
+      ? Math.max(300, Math.min(this.scale.height - 330, this.wrenContainer.y - 128))
+      : CATWALK_Y + 120;
+    const plate = this.add.graphics().setPosition(x, y).setDepth(59).setAlpha(0.78);
+    plate.fillStyle(0x20150f, 0.4);
+    plate.fillRoundedRect(-94, -23, 188, 46, 12);
+    plate.lineStyle(2, PALETTE_HEX.brass, 0.5);
+    plate.strokeRoundedRect(-86, -17, 172, 34, 10);
+    plate.lineStyle(3, PALETTE_HEX.ember, 0.62);
+    plate.lineBetween(-58, 4, -26, -8);
+    plate.lineBetween(-26, -8, 6, 6);
+    plate.lineBetween(6, 6, 54, -10);
+    playBodyImpact(this, this.wrenContainer, {
+      kind: "ember",
+      color: PALETTE_HEX.brass,
+      offsetY: -104,
+      depth: 58,
+      ringRadius: 34,
+      count: 8,
+      durationMs: 360,
+    });
     const txt = this.add
-      .text(this.scale.width / 2, CATWALK_Y + 120, "forgiven", {
+      .text(x, y, "forgiven", {
         fontFamily: SERIF,
         fontSize: "24px",
         fontStyle: "italic",
@@ -2862,12 +2884,15 @@ export class ClockworkForgeScene extends Phaser.Scene {
       .setDepth(60)
       .setAlpha(0.9);
     this.tweens.add({
-      targets: txt,
+      targets: [plate, txt],
       alpha: 0,
-      y: txt.y - 36,
+      y: "-=34",
       duration: 900,
       ease: "Sine.easeOut",
-      onComplete: () => txt.destroy(),
+      onComplete: () => {
+        plate.destroy();
+        txt.destroy();
+      },
     });
   }
 

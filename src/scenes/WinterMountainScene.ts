@@ -2368,7 +2368,16 @@ export class WinterMountainScene extends Phaser.Scene {
         const realm = s.realms["winter-mountain"];
         if (realm) realm.quietLordFragmentRevealed = true;
       });
-      flashQuietLordFragment(this, { text: "A" });
+      const boss = this.boss;
+      flashQuietLordFragment(this, {
+        text: "A",
+        x: boss
+          ? Phaser.Math.Clamp(boss.container.x || boss.restX, 320, this.scale.width - 320)
+          : this.scale.width / 2,
+        y: boss
+          ? Phaser.Math.Clamp((boss.container.y || boss.restY) - 126, 260, this.scale.height - 360)
+          : this.scale.height / 2 - 40,
+      });
     }
     // Almanac lore page 4 — the pack leader's true name. Stamped at the
     // moment of defeat, alongside the fragment flash.

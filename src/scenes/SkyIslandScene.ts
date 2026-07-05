@@ -2064,7 +2064,13 @@ export class SkyIslandScene extends Phaser.Scene {
                 const realm = s.realms["sky-island"];
                 if (realm) realm.quietLordFragmentRevealed = true;
               });
-              flashQuietLordFragment(this, { text: "Agai" });
+              flashQuietLordFragment(this, {
+                text: "Agai",
+                x: this.bossContainer?.scene ? this.bossContainer.x : this.scale.width / 2,
+                y: this.bossContainer?.scene
+                  ? Phaser.Math.Clamp(this.bossContainer.y - 56, 260, this.scale.height - 360)
+                  : this.scale.height / 2 - 40,
+              });
             }
             this.time.delayedCall(1600, () => this.startBossPhase3());
           });
@@ -2166,7 +2172,13 @@ export class SkyIslandScene extends Phaser.Scene {
         const realm = s.realms["sky-island"];
         if (realm) realm.quietLordFragmentRevealed = true;
       });
-      flashQuietLordFragment(this, { text: "Agai" });
+      flashQuietLordFragment(this, {
+        text: "Agai",
+        x: this.bossContainer?.scene ? this.bossContainer.x : this.scale.width / 2,
+        y: this.bossContainer?.scene
+          ? Phaser.Math.Clamp(this.bossContainer.y - 56, 260, this.scale.height - 360)
+          : this.scale.height / 2 - 40,
+      });
     }
     // Almanac lore page 4 — the Scholar-Spirit's riddles, stamped at boss defeat.
     this.store.update((s) => {

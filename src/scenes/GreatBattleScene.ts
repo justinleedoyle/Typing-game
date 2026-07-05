@@ -1381,9 +1381,16 @@ export class GreatBattleScene extends Phaser.Scene {
 
     // His word lands. On a loss the period is simply there (his victory); the
     // triumphant period click-in is the WIN seal, saved for the Phase-3 rebuild.
-    this.time.delayedCall(700, () =>
-      flashQuietLordFragment(this, { text: "Again.", durationMs: 2600 }),
-    );
+    this.time.delayedCall(700, () => {
+      const parent = this.againText?.parentContainer;
+      const x = this.againText?.scene
+        ? (parent ? parent.x + this.againText.x : this.againText.x)
+        : this.scale.width / 2;
+      const y = this.againText?.scene
+        ? (parent ? parent.y + this.againText.y : this.againText.y)
+        : this.scale.height / 2 - 40;
+      flashQuietLordFragment(this, { text: "Again.", durationMs: 2600, x, y });
+    });
     this.time.delayedCall(2600, () =>
       this.narration.say("finale_loss_we_begin_again"),
     );

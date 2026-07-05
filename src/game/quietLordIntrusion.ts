@@ -229,6 +229,10 @@ export interface QuietLordFragmentOptions {
    *  `Aga`, `Agai`, `Again`). The cross-out stroke is drawn for you;
    *  don't wrap the text in `~~` markers. */
   text: string;
+  /** Optional scene/body anchor for the scar. Defaults to screen center for
+   *  deliberately global beats. */
+  x?: number;
+  y?: number;
   /** Defaults to 64 — larger than the mid-realm intrusion since this is a
    *  reveal beat. */
   fontSize?: number;
@@ -252,8 +256,8 @@ export function flashQuietLordFragment(
   const fadeOutMs = 480;
   const holdMs = Math.max(0, durationMs - fadeInMs - fadeOutMs);
 
-  const x = scene.scale.width / 2;
-  const y = scene.scale.height / 2 - 40;
+  const x = opts.x ?? scene.scale.width / 2;
+  const y = opts.y ?? scene.scale.height / 2 - 40;
 
   // Audio sting — sharper attack than the mid-realm intrusion so it lands
   // with the boss-defeat camera flash that's already in flight.

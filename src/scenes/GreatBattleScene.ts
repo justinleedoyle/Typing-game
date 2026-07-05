@@ -1197,6 +1197,14 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
+  private wrenDefenderClaimOrigin(): { x: number; y: number } {
+    const defender = this.wrenDefender;
+    if (!defender?.scene) {
+      return { x: this.scale.width / 2, y: this.scale.height - 250 };
+    }
+    return { x: defender.x, y: defender.y - 112 };
+  }
+
   private dismissWrenDefender(durationMs = 420): void {
     const defender = this.wrenDefender;
     this.wrenDefender = undefined;
@@ -1671,15 +1679,17 @@ export class GreatBattleScene extends Phaser.Scene {
       x: enemy.graphic.x + enemy.body.x,
       y: enemy.graphic.y + enemy.body.y + wordOffsetY,
       fontSize: 34,
-      onClaim: () =>
+      onClaim: () => {
+        const from = this.wrenDefenderClaimOrigin();
         playClaimLine(
           this,
-          this.scale.width / 2,
-          this.scale.height - 250,
+          from.x,
+          from.y,
           enemy.graphic.x + enemy.body.x,
           enemy.graphic.y + enemy.body.y + wordOffsetY,
           { color: finaleClaimColorForRealm(waveDef.realmId) },
-        ),
+        );
+      },
       onAdvance: () =>
         playBodyTypePulse(this, enemy.graphic, {
           ...finaleTypedPulseForRealm(waveDef.realmId),

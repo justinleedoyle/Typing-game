@@ -384,6 +384,25 @@ export class SkyIslandScene extends Phaser.Scene {
       minDurationMs: 5200,
       maxDurationMs: 10800,
     });
+    addAmbientDrift(this, {
+      kind: "mote",
+      count: 12,
+      depth: -0.35,
+      area: {
+        x: this.scale.width / 2 - 340,
+        y: SKY_WREN_STAGE_Y - 190,
+        width: 680,
+        height: 220,
+      },
+      color: 0xf2cc65,
+      alpha: 0.16,
+      minSize: 2.5,
+      maxSize: 7,
+      driftX: 120,
+      driftY: -120,
+      minDurationMs: 3800,
+      maxDurationMs: 8600,
+    });
     this.drawTempleStones();
     this.drawAmbientLanterns();
     this.wrenContainer = this.drawWren(this.scale.width / 2, SKY_WREN_STAGE_Y);
@@ -3903,6 +3922,20 @@ export class SkyIslandScene extends Phaser.Scene {
     stageContainerEntrance(this, c, {
       breathDy: -5,
       breathMs: 2200,
+    });
+    addContainerWake(this, c, {
+      kind: "mote",
+      intervalMs: 620,
+      spreadX: 30,
+      spreadY: 12,
+      offsetY: -90,
+      color: 0xf2cc65,
+      alpha: 0.18,
+      size: 2.8,
+      depth: 0.28,
+      driftX: 34,
+      driftY: -34,
+      durationMs: 920,
     });
     return c;
   }

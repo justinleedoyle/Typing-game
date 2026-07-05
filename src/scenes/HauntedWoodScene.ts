@@ -313,6 +313,21 @@ export class HauntedWoodScene extends Phaser.Scene {
         maxDurationMs: 16000,
       }),
     );
+    this.ambientMistFields.push(
+      addAmbientDrift(this, {
+        kind: "mist",
+        count: 10,
+        depth: -0.35,
+        area: { x: WREN_X - 330, y: WREN_Y - 170, width: 660, height: 190 },
+        alpha: 0.08,
+        minSize: 8,
+        maxSize: 18,
+        driftX: 220,
+        driftY: -24,
+        minDurationMs: 6400,
+        maxDurationMs: 13000,
+      }),
+    );
     this.drawShrine();
     this.wrenContainer = this.drawWren(WREN_X, WREN_Y);
     playSceneEventPulse(this, {
@@ -3054,6 +3069,20 @@ export class HauntedWoodScene extends Phaser.Scene {
     stageContainerEntrance(this, c, {
       breathDy: -4,
       breathMs: 2300,
+    });
+    addContainerWake(this, c, {
+      kind: "mist",
+      intervalMs: 560,
+      spreadX: 32,
+      spreadY: 10,
+      offsetY: -84,
+      color: 0xa7d8a2,
+      alpha: 0.13,
+      size: 4.4,
+      depth: 0.24,
+      driftX: 48,
+      driftY: -16,
+      durationMs: 1100,
     });
     return c;
   }

@@ -311,6 +311,19 @@ export class ClockworkForgeScene extends Phaser.Scene {
       minDurationMs: 3400,
       maxDurationMs: 7600,
     });
+    addAmbientDrift(this, {
+      kind: "ember",
+      count: 14,
+      depth: -0.25,
+      area: { x: 240, y: CATWALK_Y - 120, width: this.scale.width - 480, height: 210 },
+      alpha: 0.24,
+      minSize: 2.5,
+      maxSize: 7,
+      driftX: 80,
+      driftY: -155,
+      minDurationMs: 3000,
+      maxDurationMs: 6800,
+    });
     this.drawForgeGlow();
     this.drawCatwalk();
     this.drawWren(this.catwalkEntranceWrenX(), CATWALK_Y + 20);
@@ -3532,6 +3545,20 @@ export class ClockworkForgeScene extends Phaser.Scene {
     stageContainerEntrance(this, c, {
       breathDy: -3,
       breathMs: 1900,
+    });
+    addContainerWake(this, c, {
+      kind: "ember",
+      intervalMs: 380,
+      spreadX: 28,
+      spreadY: 10,
+      offsetY: -78,
+      color: PALETTE_HEX.ember,
+      alpha: 0.24,
+      size: 2.9,
+      depth: 0.35,
+      driftX: 36,
+      driftY: -34,
+      durationMs: 840,
     });
   }
 

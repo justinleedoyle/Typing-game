@@ -15,6 +15,7 @@ import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
 import {
   addAmbientDrift,
+  addContainerWake,
   addLivingLight,
   attachWordBodyAnchor,
   type WordBodyAnchorHandle,
@@ -209,6 +210,7 @@ export class AlmanacScene extends Phaser.Scene {
       delayMs: 600,
       scale: 1.035,
     });
+    this.startAlmanacSourceWakes();
 
     this.bookGraphics = this.add.graphics();
     this.drawBook();
@@ -229,6 +231,38 @@ export class AlmanacScene extends Phaser.Scene {
     this.renderCurrentPage();
     this.placeNavigationTargets();
     this.playBookEntryWake();
+  }
+
+  private startAlmanacSourceWakes(): void {
+    const spine = this.add.container(BOOK_X + BOOK_WIDTH / 2, BOOK_Y + BOOK_HEIGHT / 2);
+    addContainerWake(this, spine, {
+      kind: "mote",
+      intervalMs: 760,
+      spreadX: 14,
+      spreadY: BOOK_HEIGHT * 0.32,
+      color: UI_HEX.brass,
+      alpha: 0.16,
+      size: 2.4,
+      depth: 0.16,
+      driftX: 10,
+      driftY: -26,
+      durationMs: 1050,
+    });
+
+    const pageCorners = this.add.container(BOOK_X + BOOK_WIDTH - 92, BOOK_Y + 86);
+    addContainerWake(this, pageCorners, {
+      kind: "mote",
+      intervalMs: 940,
+      spreadX: 120,
+      spreadY: 36,
+      color: UI_HEX.parchment,
+      alpha: 0.11,
+      size: 2.7,
+      depth: 0.14,
+      driftX: 18,
+      driftY: -22,
+      durationMs: 1120,
+    });
   }
 
   /** Walk cleared realms in REALM_ORDER and inline the lore pages the

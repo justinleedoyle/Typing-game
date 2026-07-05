@@ -815,28 +815,62 @@ export class SunkenBellScene extends Phaser.Scene {
     return true;
   }
 
-  /** Gentle frost shimmer + a one-word caption when a relic spares Wren — the
+  /** Gentle Bell shimmer + a one-word caption when a relic spares Wren — the
    *  legible "your relic just did something" beat, distinct from the harsh
    *  damage cue. */
   private flashGraceCue(label: "held" | "forgiven"): void {
     this.cameras.main.flash(160, 120, 170, 200, false);
+    const anchorX = this.wrenContainer?.scene ? this.wrenContainer.x : WREN_X;
+    const anchorY = this.wrenContainer?.scene
+      ? Math.max(300, Math.min(this.scale.height - 330, this.wrenContainer.y - 116))
+      : WREN_Y - 70;
+
+    const plate = this.add
+      .graphics()
+      .setPosition(anchorX, anchorY)
+      .setDepth(59)
+      .setAlpha(0.76);
+    plate.fillStyle(0x10242a, 0.38);
+    plate.fillRoundedRect(-86, -22, 172, 44, 12);
+    plate.lineStyle(2, BELL_BURST_COLOR, 0.5);
+    plate.strokeRoundedRect(-78, -16, 156, 32, 10);
+    plate.lineStyle(3, BELL_BURST_COLOR, 0.55);
+    plate.strokeEllipse(-38, 0, 22, 12);
+    plate.strokeEllipse(0, 0, 26, 14);
+    plate.strokeEllipse(40, 0, 22, 12);
+
+    if (this.wrenContainer?.scene) {
+      playBodyImpact(this, this.wrenContainer, {
+        kind: "bubble",
+        color: BELL_BURST_COLOR,
+        offsetY: -104,
+        depth: 58,
+        ringRadius: 32,
+        count: 8,
+        durationMs: 360,
+      });
+    }
+
     const txt = this.add
-      .text(WREN_X, WREN_Y - 70, label, {
+      .text(anchorX, anchorY, label, {
         fontFamily: SERIF,
         fontSize: "24px",
         fontStyle: "italic",
         color: PALETTE.frost,
       })
       .setOrigin(0.5)
-      .setDepth(20)
+      .setDepth(60)
       .setAlpha(0.9);
     this.tweens.add({
-      targets: txt,
+      targets: [plate, txt],
       alpha: 0,
-      y: txt.y - 36,
+      y: "-=34",
       duration: 900,
       ease: "Sine.easeOut",
-      onComplete: () => txt.destroy(),
+      onComplete: () => {
+        plate.destroy();
+        txt.destroy();
+      },
     });
   }
 

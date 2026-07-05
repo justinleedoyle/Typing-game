@@ -845,6 +845,14 @@ export class GreatBattleScene extends Phaser.Scene {
     return { x: lord.x, y: lord.y + 560 };
   }
 
+  private quietLordClaimOrigin(offsetX = 0, offsetY = 490): { x: number; y: number } {
+    const lord = this.quietLordContainer;
+    if (!lord?.scene) {
+      return { x: this.scale.width / 2 + offsetX, y: offsetY };
+    }
+    return { x: lord.x + offsetX, y: lord.y + offsetY };
+  }
+
   private finalPhraseWordPosition(index: number): { x: number; y: number } {
     const cx = this.againText?.x ?? this.scale.width / 2;
     const cy = this.againText?.y ?? 300;
@@ -873,10 +881,11 @@ export class GreatBattleScene extends Phaser.Scene {
     target = this.makeWord({
       ...opts,
       onClaim: (mods) => {
+        const from = this.quietLordClaimOrigin(sideOffset);
         playClaimLine(
           this,
-          this.scale.width / 2,
-          this.scale.height - 250,
+          from.x,
+          from.y,
           opts.x,
           opts.y,
           { color: claimColor, depth: 6 },

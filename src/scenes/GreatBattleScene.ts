@@ -829,6 +829,22 @@ export class GreatBattleScene extends Phaser.Scene {
     return { x: cx + offset.dx, y: cy + offset.dy };
   }
 
+  private facetClaimOrigin(): { x: number; y: number } {
+    const sigil = this.facetSigil;
+    if (!sigil?.scene) {
+      return { x: this.scale.width / 2, y: 300 };
+    }
+    return { x: sigil.x, y: sigil.y };
+  }
+
+  private quietLordBodyTarget(): { x: number; y: number } {
+    const lord = this.quietLordContainer;
+    if (!lord?.scene) {
+      return { x: this.scale.width / 2, y: 560 };
+    }
+    return { x: lord.x, y: lord.y + 560 };
+  }
+
   private finalPhraseWordPosition(index: number): { x: number; y: number } {
     const cx = this.againText?.x ?? this.scale.width / 2;
     const cy = this.againText?.y ?? 300;
@@ -2496,12 +2512,14 @@ export class GreatBattleScene extends Phaser.Scene {
         // A relic answers it — neutralized, no challenge. The Lord flickers.
         this.narration.say(FACET_LINES[facet.id].countered);
         this.band.setObjective(`${facet.name} is answered; hold steady.`);
+        const from = this.facetClaimOrigin();
+        const to = this.quietLordBodyTarget();
         playClaimLine(
           this,
-          this.scale.width / 2,
-          this.scale.height - 250,
-          this.scale.width / 2,
-          300,
+          from.x,
+          from.y,
+          to.x,
+          to.y,
           { color: UI_HEX.brass, depth: 6, durationMs: 520 },
         );
         this.playFacetImpact(facet, "countered");
@@ -2558,15 +2576,17 @@ export class GreatBattleScene extends Phaser.Scene {
       x: wordPos.x,
       y: wordPos.y,
       fontSize: 46,
-      onClaim: () =>
+      onClaim: () => {
+        const from = this.facetClaimOrigin();
         playClaimLine(
           this,
-          this.scale.width / 2,
-          this.scale.height - 250,
+          from.x,
+          from.y,
           wordPos.x,
           wordPos.y,
           { color: UI_HEX.brass, depth: 6 },
-        ),
+        );
+      },
       onAdvance: () =>
         this.facetSigil &&
         playBodyTypePulse(this, this.facetSigil, {

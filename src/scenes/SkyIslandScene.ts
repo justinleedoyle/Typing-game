@@ -2864,8 +2864,9 @@ export class SkyIslandScene extends Phaser.Scene {
         return;
       }
       const word = passages[step] ?? "";
-      const ownerBody = owner?.body?.scene ? owner.body : this.ettaSprite;
-      const sourceOffsetY = owner?.body?.scene ? (owner.sourceOffsetY ?? -48) : -120;
+      const hasExplicitOwner = Boolean(owner?.body?.scene);
+      const ownerBody = hasExplicitOwner ? owner?.body : this.ettaSprite;
+      const sourceOffsetY = hasExplicitOwner ? (owner?.sourceOffsetY ?? -48) : -120;
       const pos = this.skyOwnedWordPosition(ownerBody, sourceOffsetY, word);
       const opts: TextWordTargetOptions = {
         scene: this,
@@ -2876,9 +2877,11 @@ export class SkyIslandScene extends Phaser.Scene {
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
           playWrenAction(this.wrenSprite);
-          playActorAttention(this, this.ettaSprite, {
-            tint: PALETTE_HEX.brass,
-          });
+          if (!hasExplicitOwner) {
+            playActorAttention(this, this.ettaSprite, {
+              tint: PALETTE_HEX.brass,
+            });
+          }
           playBodyImpact(this, this.wrenContainer, {
             kind: "mote",
             color: PALETTE_HEX.brass,

@@ -3431,17 +3431,6 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private startPhase3(): void {
     this.clearActiveTargets();
-    playSceneEventPulse(this, {
-      kind: "mote",
-      color: 0xd4b8ff,
-      x: this.scale.width / 2,
-      y: 430,
-      depth: 3,
-      ringWidth: 680,
-      ringHeight: 220,
-      count: 14,
-      alpha: 0.12,
-    });
 
     const satchel = this.store.get().satchel;
     const hasAnyCompanion = COMPANION_IDS.some((id) => satchel.includes(id));
@@ -3460,6 +3449,17 @@ export class GreatBattleScene extends Phaser.Scene {
     this.againText.setPosition(this.scale.width / 2, 300);
     this.againText.setColor("#d4b8ff");
     this.againText.setDepth(10);
+    playSceneEventPulse(this, {
+      kind: "mote",
+      color: 0xd4b8ff,
+      x: this.againText.x,
+      y: this.againText.y + 130,
+      depth: 3,
+      ringWidth: 680,
+      ringHeight: 220,
+      count: 14,
+      alpha: 0.12,
+    });
 
     // Tween to center
     this.tweens.add({

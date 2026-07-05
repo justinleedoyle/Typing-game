@@ -3271,8 +3271,9 @@ export class SunkenBellScene extends Phaser.Scene {
       const step = steps[idx];
       if (!step) return;
       const freeingAurland = this.fork2Choice === "free-aurland";
+      const ownerBody = freeingAurland ? this.aurlandImage : this.bellTongueCue;
       const pos = this.bellPassageWordPosition(
-        freeingAurland ? this.aurlandImage : this.bellTongueCue,
+        ownerBody,
         freeingAurland ? -142 : -48,
         {
           side: freeingAurland ? "right" : "left",
@@ -3289,9 +3290,11 @@ export class SunkenBellScene extends Phaser.Scene {
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {
           playWrenAction(this.wrenSprite);
-          playActorAttention(this, this.aurlandImage, {
-            tint: BELL_BURST_COLOR,
-          });
+          if (freeingAurland) {
+            playActorAttention(this, this.aurlandImage, {
+              tint: BELL_BURST_COLOR,
+            });
+          }
           playBodyImpact(this, this.wrenContainer, {
             kind: "bubble",
             color: BELL_BURST_COLOR,

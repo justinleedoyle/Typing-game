@@ -950,9 +950,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
         if (realm) realm.quietLordIntruded = true;
       });
       this.time.delayedCall(1800, () => {
+        const anchor = this.quietLordIntrusionAnchor();
         playQuietLordIntrusion(this, {
-          x: this.scale.width / 2,
-          y: 360,
+          x: anchor.x,
+          y: anchor.y,
           text: "THE BRASS REMEMBERS A DIFFERENT NAME.",
         });
       });
@@ -985,6 +986,22 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
     this.beginCombatWave();
     this.watchForWaveClear(() => this.startFork1());
+  }
+
+  private quietLordIntrusionAnchor(): { x: number; y: number } {
+    let threat: MovingWordEnemy | null = null;
+    for (const golem of this.golems) {
+      if (golem.isDefeated() || !golem.container.scene) continue;
+      if (!threat || golem.advanceProgress() > threat.advanceProgress()) {
+        threat = golem;
+      }
+    }
+
+    if (!threat) return { x: this.scale.width / 2, y: 360 };
+    return {
+      x: Phaser.Math.Clamp(threat.container.x, 260, this.scale.width - 260),
+      y: Phaser.Math.Clamp(threat.container.y - 170, 280, this.scale.height - 360),
+    };
   }
 
   // ─── Fork 1 ──────────────────────────────────────────────────────────────────

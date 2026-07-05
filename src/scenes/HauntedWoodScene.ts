@@ -1128,13 +1128,30 @@ export class HauntedWoodScene extends Phaser.Scene {
         if (realm) realm.quietLordIntruded = true;
       });
       this.time.delayedCall(2000, () => {
+        const anchor = this.quietLordIntrusionAnchor();
         playQuietLordIntrusion(this, {
-          x: this.scale.width / 2,
-          y: 420,
+          x: anchor.x,
+          y: anchor.y,
           text: "we are all going quiet.",
         });
       });
     }
+  }
+
+  private quietLordIntrusionAnchor(): { x: number; y: number } {
+    let threat: MovingWordEnemy | null = null;
+    for (const ghost of this.ghosts) {
+      if (ghost.isDefeated() || !ghost.container.scene) continue;
+      if (!threat || ghost.advanceProgress() > threat.advanceProgress()) {
+        threat = ghost;
+      }
+    }
+
+    if (!threat) return { x: this.scale.width / 2, y: 420 };
+    return {
+      x: Phaser.Math.Clamp(threat.container.x, 260, this.scale.width - 260),
+      y: Phaser.Math.Clamp(threat.container.y - 130, 280, this.scale.height - 360),
+    };
   }
 
   private onCrossroads2Cleared(): void {

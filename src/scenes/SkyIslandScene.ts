@@ -1556,8 +1556,31 @@ export class SkyIslandScene extends Phaser.Scene {
       duration: 220,
       ease: "Sine.easeInOut",
     });
+    const x = seal.scene ? seal.x : this.scale.width / 2;
+    const y = seal.scene
+      ? Math.max(280, Math.min(this.scale.height - 360, seal.y - 96))
+      : 640;
+    const glint = this.add.graphics().setPosition(x, y).setDepth(59).setAlpha(0.78);
+    glint.fillStyle(0x2a2112, 0.36);
+    glint.fillRoundedRect(-118, -24, 236, 48, 12);
+    glint.lineStyle(2, PALETTE_HEX.brass, 0.54);
+    glint.strokeRoundedRect(-110, -18, 220, 36, 10);
+    glint.lineStyle(3, PALETTE_HEX.brass, 0.62);
+    glint.lineBetween(-82, 0, -30, 0);
+    glint.strokeCircle(-20, 0, 8);
+    glint.lineBetween(-70, 0, -78, 8);
+    glint.lineBetween(-58, 0, -66, 8);
+    playBodyImpact(this, seal, {
+      kind: "mote",
+      color: PALETTE_HEX.brass,
+      offsetY: -64,
+      depth: 58,
+      ringRadius: 34,
+      count: 8,
+      durationMs: 360,
+    });
     const txt = this.add
-      .text(this.scale.width / 2, 640, "the key holds", {
+      .text(x + 22, y, "the key holds", {
         fontFamily: SERIF,
         fontSize: "24px",
         fontStyle: "italic",
@@ -1567,12 +1590,15 @@ export class SkyIslandScene extends Phaser.Scene {
       .setDepth(60)
       .setAlpha(0.9);
     this.tweens.add({
-      targets: txt,
+      targets: [glint, txt],
       alpha: 0,
-      y: txt.y - 30,
+      y: "-=28",
       duration: 1000,
       ease: "Sine.easeOut",
-      onComplete: () => txt.destroy(),
+      onComplete: () => {
+        glint.destroy();
+        txt.destroy();
+      },
     });
   }
 

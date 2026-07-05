@@ -19,6 +19,7 @@ import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import {
   addAmbientDrift,
   addBackdropDrift,
+  addContainerWake,
   addGroundShadow,
   addIdleBreath,
   addLocalGroundShadow,
@@ -1787,8 +1788,56 @@ export class PortalChamberScene extends Phaser.Scene {
       minDurationMs: 7200,
       maxDurationMs: 13000,
     });
+    this.startHubForegroundLife();
 
     this.drawHubStations();
+  }
+
+  private startHubForegroundLife(): void {
+    const deskLight = this.add.container(178, 694);
+    addContainerWake(this, deskLight, {
+      kind: "ember",
+      intervalMs: 560,
+      spreadX: 36,
+      spreadY: 18,
+      color: 0xf2be68,
+      alpha: 0.24,
+      size: 2.7,
+      depth: -1.2,
+      driftX: 18,
+      driftY: -34,
+      durationMs: 1150,
+    });
+
+    const portalFloor = this.add.container(HUB_STATIONS.portalFloor.x, HUB_STATIONS.portalFloor.y - 292);
+    addContainerWake(this, portalFloor, {
+      kind: "mote",
+      intervalMs: 470,
+      spreadX: 230,
+      spreadY: 38,
+      color: 0x78c980,
+      alpha: 0.16,
+      size: 3.1,
+      depth: -1.15,
+      driftX: 28,
+      driftY: -46,
+      durationMs: 1300,
+    });
+
+    const shelfGlints = this.add.container(SHELF_STATION.x, SHELF_STATION.summaryY - 18);
+    addContainerWake(this, shelfGlints, {
+      kind: "mote",
+      intervalMs: 720,
+      spreadX: 92,
+      spreadY: 42,
+      color: UI_HEX.brass,
+      alpha: 0.18,
+      size: 2.4,
+      depth: -1.05,
+      driftX: 20,
+      driftY: -28,
+      durationMs: 1050,
+    });
   }
 
   private drawHubStations(): void {
@@ -2379,6 +2428,20 @@ export class PortalChamberScene extends Phaser.Scene {
     this.runaSprite = img;
     img.setScale(360 / img.height);
     addIdleBreath(this, img, { dy: -4, durationMs: 2200, delayMs: 300 });
+    addContainerWake(this, img, {
+      kind: "mote",
+      intervalMs: 860,
+      spreadX: 28,
+      spreadY: 18,
+      offsetY: -176,
+      color: UI_HEX.brass,
+      alpha: 0.18,
+      size: 2.6,
+      depth: 0.2,
+      driftX: 12,
+      driftY: -26,
+      durationMs: 900,
+    });
   }
 
   /** Relic icons displayed on the painted cabinet shelves (far right). */
@@ -2651,6 +2714,20 @@ export class PortalChamberScene extends Phaser.Scene {
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
     addIdleBreath(this, c, { dy: -4, durationMs: 2100 });
+    addContainerWake(this, c, {
+      kind: "mote",
+      intervalMs: 760,
+      spreadX: 24,
+      spreadY: 10,
+      offsetY: -104,
+      color: UI_HEX.brass,
+      alpha: 0.16,
+      size: 2.7,
+      depth: 0.35,
+      driftX: 12,
+      driftY: -24,
+      durationMs: 860,
+    });
     return c;
   }
 }

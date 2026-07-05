@@ -3642,6 +3642,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private onFinalPhraseComplete(): void {
     this.clearActiveTargets();
+    this.band.setObjective("Again is sealed; watch the final mark.");
     // §5.5.10 — the period click-in. The word the realms spelled out letter by
     // letter (A → Ag → … → Again, no period) completes HERE: after a still beat
     // on "Again", the period SNAPS into place — "that's been the word the whole

@@ -1601,6 +1601,11 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private onFinalPassageComplete(): void {
     this.clearActiveTargets();
+    const ghostKing = this.ghostKingBody;
+    const fragmentX = ghostKing?.scene ? ghostKing.x : this.scale.width / 2;
+    const fragmentY = ghostKing?.scene
+      ? Phaser.Math.Clamp(ghostKing.y - 92, 260, this.scale.height - 360)
+      : this.scale.height / 2 - 40;
     // Ghost-King dissolves
     this.cameras.main.flash(500, 220, 230, 210, false);
     this.fadeGhostKingBody();
@@ -1625,6 +1630,8 @@ export class HauntedWoodScene extends Phaser.Scene {
         });
         flashQuietLordFragment(this, {
           text: "Again",
+          x: fragmentX,
+          y: fragmentY,
           onDone: () => {
             this.time.delayedCall(600, () => this.startWispCatGate());
           },

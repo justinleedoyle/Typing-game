@@ -1568,7 +1568,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
         const realm = s.realms["clockwork-forge"];
         if (realm) realm.quietLordFragmentRevealed = true;
       });
-      flashQuietLordFragment(this, { text: "Aga" });
+      flashQuietLordFragment(this, {
+        text: "Aga",
+        x: this.bossContainer?.scene ? this.bossContainer.x : this.scale.width / 2,
+        y: this.bossContainer?.scene
+          ? Phaser.Math.Clamp(this.bossContainer.y - 178, 260, this.scale.height - 360)
+          : this.scale.height / 2 - 40,
+      });
     }
     // Almanac lore page 4 — the Command-Golem's name, stamped at defeat.
     this.store.update((s) => {

@@ -1960,6 +1960,8 @@ export class SunkenBellScene extends Phaser.Scene {
                 });
                 flashQuietLordFragment(this, {
                   text: "Ag",
+                  x: wardenSprite.x,
+                  y: Phaser.Math.Clamp(wardenSprite.y - 128, 260, this.scale.height - 360),
                   onDone: () => {
                     this.time.delayedCall(400, () => this.startWardenPhase3(wardenSprite));
                   },

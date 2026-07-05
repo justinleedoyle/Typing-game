@@ -2830,8 +2830,40 @@ export class HauntedWoodScene extends Phaser.Scene {
   /** Gentle "forgiven" cue when forgive-wave-miss spares a slip — distinct from
    *  the harsh miss flinch. */
   private flashForgiven(): void {
+    const x = this.wrenContainer?.scene ? this.wrenContainer.x : WREN_X;
+    const y = this.wrenContainer?.scene
+      ? Math.max(300, Math.min(this.scale.height - 330, this.wrenContainer.y - 120))
+      : WREN_Y - 120;
+
+    const plate = this.add
+      .graphics()
+      .setPosition(x, y)
+      .setDepth(59)
+      .setAlpha(0.76);
+    plate.fillStyle(0x10180f, 0.42);
+    plate.fillRoundedRect(-92, -23, 184, 46, 12);
+    plate.lineStyle(2, PALETTE_HEX.moss, 0.48);
+    plate.strokeRoundedRect(-84, -17, 168, 34, 10);
+    plate.lineStyle(3, PALETTE_HEX.brass, 0.5);
+    plate.lineBetween(-60, 6, -36, -7);
+    plate.lineBetween(-36, -7, -12, 5);
+    plate.lineBetween(12, 5, 38, -8);
+    plate.lineBetween(38, -8, 62, 6);
+
+    if (this.wrenContainer?.scene) {
+      playBodyImpact(this, this.wrenContainer, {
+        kind: "mist",
+        color: PALETTE_HEX.moss,
+        offsetY: -108,
+        depth: 58,
+        ringRadius: 32,
+        count: 8,
+        durationMs: 380,
+      });
+    }
+
     const txt = this.add
-      .text(WREN_X, WREN_Y - 120, "forgiven", {
+      .text(x, y, "forgiven", {
         fontFamily: SERIF,
         fontSize: "24px",
         fontStyle: "italic",
@@ -2841,12 +2873,15 @@ export class HauntedWoodScene extends Phaser.Scene {
       .setDepth(60)
       .setAlpha(0.9);
     this.tweens.add({
-      targets: txt,
+      targets: [plate, txt],
       alpha: 0,
-      y: txt.y - 36,
+      y: "-=36",
       duration: 900,
       ease: "Sine.easeOut",
-      onComplete: () => txt.destroy(),
+      onComplete: () => {
+        plate.destroy();
+        txt.destroy();
+      },
     });
   }
 

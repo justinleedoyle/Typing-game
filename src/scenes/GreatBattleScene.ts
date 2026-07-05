@@ -2323,19 +2323,22 @@ export class GreatBattleScene extends Phaser.Scene {
       satchel.includes("wind-phrase") && satchel.includes("quiet-chant");
     this.whirlwindCancelAnnounced = false;
 
+    this.band.setObjective("Face the Quiet Lord; watch for realm facets.");
+    this.drawQuietLord(this.isForceDuel, this.isKindnessDuel);
+
+    const lordX = this.quietLordContainer.x;
+    const lordY = this.quietLordContainer.y + 560;
     playSceneEventPulse(this, {
       kind: "mist",
       color: this.isForceDuel ? 0x9b2424 : 0x6b5ea8,
-      x: this.scale.width / 2,
-      y: 560,
+      x: lordX,
+      y: lordY,
       depth: 3,
       ringWidth: this.isForceDuel ? 760 : 640,
       ringHeight: 260,
       count: 14,
       alpha: 0.12,
     });
-    this.band.setObjective("Face the Quiet Lord; watch for realm facets.");
-    this.drawQuietLord(this.isForceDuel, this.isKindnessDuel);
     this.showQuietLordDescription();
   }
 

@@ -19,6 +19,7 @@ import { playClaim } from "../audio/claim";
 import { setAudioLevel } from "../audio/context";
 import {
   addAmbientDrift,
+  addContainerWake,
   addLivingLight,
   attachWordBodyAnchor,
   type WordBodyAnchorHandle,
@@ -172,6 +173,7 @@ export class SettingsScene extends Phaser.Scene {
       delayMs: 700,
       scale: 1.035,
     });
+    this.startSettingsSourceWakes();
 
     this.drawSettingsShell();
 
@@ -209,6 +211,38 @@ export class SettingsScene extends Phaser.Scene {
 
     this.renderMenu();
     this.playSettingsEntryWake();
+  }
+
+  private startSettingsSourceWakes(): void {
+    const titleEdge = this.add.container(this.scale.width / 2, 138);
+    addContainerWake(this, titleEdge, {
+      kind: "mote",
+      intervalMs: 820,
+      spreadX: 210,
+      spreadY: 22,
+      color: UI_HEX.brass,
+      alpha: 0.13,
+      size: 2.4,
+      depth: 0.18,
+      driftX: 16,
+      driftY: -24,
+      durationMs: 980,
+    });
+
+    const ledgerEdge = this.add.container(PANEL_X + PANEL_W / 2 - 78, PANEL_Y - 60);
+    addContainerWake(this, ledgerEdge, {
+      kind: "mote",
+      intervalMs: 900,
+      spreadX: 28,
+      spreadY: PANEL_H * 0.36,
+      color: UI_HEX.parchment,
+      alpha: 0.1,
+      size: 2.8,
+      depth: 0.16,
+      driftX: -18,
+      driftY: -20,
+      durationMs: 1080,
+    });
   }
 
   // ─── Menu rendering ─────────────────────────────────────────────────────────

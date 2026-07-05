@@ -2857,7 +2857,7 @@ export class WinterMountainScene extends Phaser.Scene {
               ringRadius: 54,
               count: 12,
             });
-          } else {
+          } else if (owner === "huntress") {
             playActorAttention(this, this.huntressSprite, {
               tint: PALETTE_HEX.frost,
             });

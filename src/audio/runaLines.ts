@@ -1156,14 +1156,6 @@ const FINALE_LINES: readonly RunaLine[] = [
     isNew: true,
   },
   {
-    id: "finale_ally_king_aurland",
-    scene: "finale",
-    trigger: "GreatBattleScene.create() — King Aurland charge-bank ally modifier (wired)",
-    text: "King Aurland steadies the spell bank before the first wave.",
-    tone: "reading",
-    isNew: true,
-  },
-  {
     id: "finale_ally_hunters_horn",
     scene: "finale",
     trigger: "GreatBattleScene — Hunter's Horn ally interrupt (wired)",

@@ -89,7 +89,7 @@ export interface RelicEffect {
 //
 // One entry per id in RELICS. Alignment values are the canon §5.5.11 lists
 // (force: 9, kindness: 11) + the 5 §5.5.9 companions + 2 neutral allies
-// (king-aurland = +spell-charge, untethered-wind = slow-advance). The
+// (king-aurland = Forge Soul-bank, untethered-wind = slow-advance). The
 // completeness + canon-match tests in tests/relicEffects.test.ts lock these
 // against RELICS and against the §5.5.11 alignment lists.
 
@@ -195,8 +195,8 @@ export const RELIC_EFFECTS: Record<string, RelicEffect> = {
       announce: "the lock-bar holds once when they break through.",
     },
   },
-  // king-aurland: full merfolk army / +1 spell charge per wave — pure utility,
-  // off the force/kindness axis. In-realm: a wave starts with banked Soul.
+  // king-aurland: full merfolk army / Forge Soul-bank — pure utility, off the
+  // force/kindness axis. In-realm: a wave starts with banked Soul.
   "king-aurland": {
     alignment: "neutral",
     isCompanion: false,

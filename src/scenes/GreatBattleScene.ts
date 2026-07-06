@@ -45,7 +45,6 @@ import {
   playBodyTypePulse,
   playActorAttention,
   playClaimLine,
-  playMeterPulse,
   playSceneEventPulse,
   pulseUiObject,
   stageContainerEntrance,
@@ -84,7 +83,6 @@ interface BattleSceneData {
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const WAVE_CANDLES = 3;
-const WAVE_CHARGES = 2;
 const WALL_WARD = {
   x: 960,
   y: 824,
@@ -456,15 +454,12 @@ export class GreatBattleScene extends Phaser.Scene {
 
   // HUD
   private candleGroup!: Phaser.GameObjects.Container;
-  private chargeGroup!: Phaser.GameObjects.Container;
   private wallWard?: Phaser.GameObjects.Container;
   private wallWardFlames: Phaser.GameObjects.Graphics[] = [];
   private wrenDefender?: Phaser.GameObjects.Container;
   private wrenDefenderSprite?: Phaser.GameObjects.Image;
   private drawnCandles: number | null = null;
-  private drawnCharges: number | null = null;
   private candles = WAVE_CANDLES;
-  private charges = WAVE_CHARGES;
 
   // Fail state (Tier 3) — candles are now a real, losable economy across the
   // whole finale (not the old never-decrementing prop). A breach in Phase 1 or
@@ -481,7 +476,6 @@ export class GreatBattleScene extends Phaser.Scene {
   private currentWaveIdx = -1;
 
   // Phase 1 — ally modifier state
-  private waveCharges = WAVE_CHARGES; // may be bumped by king-aurland
   // §5.5.11 — shrine-token: first miss per wave forgives the camera-shake
   // side effect. Accuracy still recorded (recordKeystroke path is inside
   // typingInput and not interceptable without deeper changes).
@@ -548,7 +542,6 @@ export class GreatBattleScene extends Phaser.Scene {
     this.waveQueue = [];
     this.currentWaveIdx = -1;
     this.candles = WAVE_CANDLES;
-    this.charges = WAVE_CHARGES;
     this.wallWard = undefined;
     this.wallWardFlames = [];
     this.wrenDefender = undefined;
@@ -559,7 +552,6 @@ export class GreatBattleScene extends Phaser.Scene {
     this.brightnessAlpha = 0;
 
     // Ally modifier state
-    this.waveCharges = WAVE_CHARGES;
     this.shrineTokenForgivenThisWave = false;
     this.untetheredWindSlowMult = 1.0;
     this.lastMissFeedbackAt = 0;
@@ -670,9 +662,9 @@ export class GreatBattleScene extends Phaser.Scene {
     this.drawWallWard();
     this.drawWrenDefender();
 
-    // UI cohesion — the console band. The finale has no heart/soul HUD; its candle
-    // (fail-state) + spell-charge meters dock into the band, with Runa at the portrait
-    // nook. No satchel icons here (the band's zone holds the two meters instead).
+    // UI cohesion — the console band. The finale has no heart/soul HUD; its
+    // truthful fail-state meter is the candle pool docked into the band, with
+    // Runa at the portrait nook.
     this.band = new ConsoleBand(this, {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
@@ -690,16 +682,10 @@ export class GreatBattleScene extends Phaser.Scene {
       onSpeak: (speakerName) => this.attendSpeaker(speakerName),
     });
 
-    // Candle & charge HUD, docked into the band — charges may be bumped by king-aurland.
+    // Candle HUD, docked into the band.
     const satchel = this.store.get().satchel;
-    const hasKingAurland = satchel.includes("king-aurland");
-    if (hasKingAurland) {
-      this.waveCharges = WAVE_CHARGES + 1; // +1 spell charge per wave
-    }
-
     const meterY = band.bandTopY + 112;
-    this.candleGroup = this.add.container(430, meterY).setDepth(1500);
-    this.chargeGroup = this.add.container(720, meterY).setDepth(1500);
+    this.candleGroup = this.add.container(520, meterY).setDepth(1500);
     const finaleHudLabel: Phaser.Types.GameObjects.Text.TextStyle = {
       fontFamily: SERIF,
       fontStyle: "italic",
@@ -707,22 +693,12 @@ export class GreatBattleScene extends Phaser.Scene {
       color: "#a59b89",
     };
     const candleLabel = this.add
-      .text(430, meterY - 40, "candles", finaleHudLabel)
-      .setOrigin(0.5)
-      .setDepth(1500);
-    const chargeLabel = this.add
-      .text(720, meterY - 40, "spells", finaleHudLabel)
+      .text(520, meterY - 40, "candles", finaleHudLabel)
       .setOrigin(0.5)
       .setDepth(1500);
     this.redrawCandles();
-    this.redrawCharges();
     this.stageFinaleMeterObject(candleLabel, 70, { offsetY: 5 });
     this.stageFinaleMeterObject(this.candleGroup, 95, { offsetY: 8 });
-    this.stageFinaleMeterObject(chargeLabel, 115, { offsetY: 5 });
-    this.stageFinaleMeterObject(this.chargeGroup, 140, { offsetY: 8 });
-    if (hasKingAurland) {
-      this.time.delayedCall(520, () => this.playKingAurlandChargeCue());
-    }
 
     // Untethered Wind: slow enemy advance by ~15%
     if (satchel.includes("untethered-wind")) {
@@ -873,30 +849,6 @@ export class GreatBattleScene extends Phaser.Scene {
     this.band.showNotice("Shrine-Token holds the wall.", {
       label: "relic",
       durationMs: 1800,
-    });
-  }
-
-  private playKingAurlandChargeCue(): void {
-    if (!this.chargeGroup?.scene) return;
-    this.showRelicNotice("finale_ally_king_aurland", "ally", 1900);
-    pulseUiObject(this, this.chargeGroup, { scale: 1.18, durationMs: 340 });
-    playMeterPulse(this, {
-      x: this.chargeGroup.x,
-      y: this.chargeGroup.y - 10,
-      width: 126,
-      height: 34,
-      color: 0xa7d2dd,
-      depth: 1501,
-      durationMs: 420,
-    });
-    playBodyImpact(this, this.chargeGroup, {
-      kind: "bubble",
-      color: 0xa7d2dd,
-      offsetY: -10,
-      depth: 1502,
-      ringRadius: 34,
-      count: 7,
-      durationMs: 400,
     });
   }
 
@@ -1594,30 +1546,6 @@ export class GreatBattleScene extends Phaser.Scene {
     this.redrawWallWardCandles();
   }
 
-  private redrawCharges(): void {
-    const previous = this.drawnCharges;
-    this.chargeGroup.removeAll(true);
-    for (let i = 0; i < this.waveCharges; i++) {
-      const ready = i < this.charges;
-      const x = (i - (this.waveCharges - 1) / 2) * 24;
-      const g = this.add.graphics();
-      if (ready) {
-        g.fillStyle(PALETTE_HEX.brass, 0.9);
-        g.fillCircle(x, -10, 8);
-        g.lineStyle(2, 0xf3ead2, 0.9);
-        g.strokeCircle(x, -10, 8);
-      } else {
-        g.lineStyle(2, 0x8a8275, 0.6);
-        g.strokeCircle(x, -10, 8);
-      }
-      this.chargeGroup.add(g);
-    }
-    if (previous !== null && previous !== this.charges) {
-      pulseUiObject(this, this.chargeGroup, { scale: 1.16 });
-    }
-    this.drawnCharges = this.charges;
-  }
-
   private stageFinaleMeterObject(
     object: Phaser.GameObjects.GameObject,
     delayMs: number,
@@ -1830,8 +1758,6 @@ export class GreatBattleScene extends Phaser.Scene {
     this.currentWaveIdx += 1;
 
     // Reset per-wave ally state
-    this.charges = this.waveCharges;
-    this.redrawCharges();
     // §5.5.11 — shrine-token: each new wave gets a fresh forgiveness slot
     this.shrineTokenForgivenThisWave = false;
     // Fail state: track whether this wave costs a candle, for the clean-wave

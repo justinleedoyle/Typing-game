@@ -2362,6 +2362,10 @@ export class WinterMountainScene extends Phaser.Scene {
   private castThunderclap(source: MovingWordEnemy): void {
     this.typingInput.getStats().spendSoul(SPELL_COST);
     this.refreshThunderPips();
+    this.band.showNotice("Thunder rolls from Wren.", {
+      label: "spell",
+      durationMs: 1300,
+    });
     this.cameras.main.flash(220, 240, 230, 200);
     playChime();
 
@@ -2380,6 +2384,10 @@ export class WinterMountainScene extends Phaser.Scene {
   private frostShatter(source: MovingWordEnemy): void {
     this.typingInput.getStats().spendSoul(SPELL_COST);
     this.refreshThunderPips();
+    this.band.showNotice("Frost shatters through the pack.", {
+      label: "spell",
+      durationMs: 1300,
+    });
     this.cameras.main.flash(220, 150, 200, 240); // icy blue, vs thunderclap white
     playChime();
 

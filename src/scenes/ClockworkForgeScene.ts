@@ -2100,6 +2100,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // Alt-claim landed). The guard in spendSoul makes a stale arm a no-op.
     // spellCost folds in soul-thrift (bellows-hammer) so arm + spend agree.
     this.typingInput.getStats().spendSoul(this.spellCost);
+    this.band.showNotice("Chain-spark fires.", {
+      label: "spell",
+      durationMs: 1300,
+    });
     playSparkZap();
     const nearest = this.findNearestLiveGolem(self);
     if (!nearest) return;

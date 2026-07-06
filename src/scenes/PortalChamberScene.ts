@@ -558,7 +558,7 @@ export class PortalChamberScene extends Phaser.Scene {
       scene: this,
       word: arch.label,
       x: arch.x,
-      y: archTargetY(archIndex),
+      y: archTargetY(arch, archIndex),
       fontSize: opts.fontSize,
       priority: opts.priority,
       outline: true,
@@ -2989,11 +2989,9 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 }
 
-// Stagger arch typing-target Y positions so adjacent labels don't overlap.
-// Odd-indexed arches sit slightly higher than even-indexed ones.
-function archTargetY(archIndex: number): number {
-  const BASE_Y = 705; // arch.baseY
-  const HEIGHT = 265; // arch.height
-  const base = BASE_Y - HEIGHT - 50;
-  return archIndex % 2 === 0 ? base : base - 36;
+// Stagger portal typing targets inside their painted arch surfaces so the words
+// belong to the portal instead of hovering above the room.
+function archTargetY(arch: ArchSpec, archIndex: number): number {
+  const surfaceCenter = arch.baseY - arch.height * 0.5;
+  return surfaceCenter + (archIndex % 2 === 0 ? 30 : -26);
 }

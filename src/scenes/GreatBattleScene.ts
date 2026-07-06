@@ -1286,6 +1286,85 @@ export class GreatBattleScene extends Phaser.Scene {
     return target;
   }
 
+  /** Whirlwind defense belongs to the visible storm, not the Quiet Lord body. */
+  private makeWhirlwindDefenseWord(
+    opts: TextWordTargetOptions,
+    swirl: Phaser.GameObjects.Graphics,
+  ): TextWordTarget {
+    const originalOnClaim = opts.onClaim;
+    const originalOnAdvance = opts.onAdvance;
+    const originalOnComplete = opts.onComplete;
+    const frost = PALETTE_HEX.frost;
+
+    let target!: TextWordTarget;
+    target = this.makeWord({
+      ...opts,
+      onClaim: (mods) => {
+        const from = this.wrenDefenderClaimOrigin();
+        playClaimLine(
+          this,
+          from.x,
+          from.y,
+          opts.x,
+          opts.y,
+          { color: frost, depth: 6, durationMs: 420 },
+        );
+        originalOnClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        if (swirl.scene) {
+          playBodyTypePulse(this, swirl, {
+            kind: "snow",
+            color: frost,
+            depth: 6,
+            ringRadius: 42,
+            durationMs: 240,
+          });
+        }
+        originalOnAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        this.clearTargetAnchor(target);
+        if (swirl.scene) {
+          playClaimLine(
+            this,
+            target.getAnchorX(),
+            target.getAnchorY() - 6,
+            swirl.x,
+            swirl.y,
+            { color: frost, depth: 6, durationMs: 360 },
+          );
+          playBodyImpact(this, swirl, {
+            kind: "snow",
+            color: frost,
+            depth: 6,
+            ringRadius: 72,
+            count: 14,
+            durationMs: 440,
+          });
+        }
+        this.playWallWardPulse("hold");
+        originalOnComplete();
+      },
+    });
+
+    this.trackTargetAnchor(
+      target,
+      attachWordBodyAnchor(
+        this,
+        swirl,
+        () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+        {
+          color: frost,
+          alpha: 0.15,
+          depth: 6,
+          targetOffsetY: 24,
+        },
+      ),
+    );
+    return target;
+  }
+
   /** Final phrase words rebuild the revealed `Again`, rather than floating alone. */
   private makeFinalPhraseWord(opts: TextWordTargetOptions): TextWordTarget {
     const originalOnClaim = opts.onClaim;
@@ -3622,7 +3701,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.cameras.main.shake(240, 0.004);
 
     const wordPos = this.lordDuelWordPosition(1, 2, 480);
-    const defenseTarget = this.makeLordWord({
+    const defenseTarget = this.makeWhirlwindDefenseWord({
       scene: this,
       word: "hold",
       x: wordPos.x,
@@ -3643,7 +3722,7 @@ export class GreatBattleScene extends Phaser.Scene {
           },
         });
       },
-    }, { kind: "snow", color: PALETTE_HEX.frost, ringRadius: 40 });
+    }, swirl);
     this.typingInput.register(defenseTarget);
     this.activeTargets.push(defenseTarget);
   }

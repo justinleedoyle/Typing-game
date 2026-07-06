@@ -499,6 +499,7 @@ export class PortalChamberScene extends Phaser.Scene {
         {
           fontSize: 18,
           priority: -1,
+          stationPulse: HUB_STATIONS.portalFloor,
           entryDelayMs: 130,
           idleAlpha: 0.42,
         },

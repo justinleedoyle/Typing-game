@@ -436,6 +436,14 @@ export class ScrollingPhrase {
       count: 10,
       radius: 40,
     });
+    playBodyImpact(this.opts.scene, this.container, {
+      kind: "snow",
+      color: PALETTE_HEX.frost,
+      offsetY: 0,
+      ringRadius: Math.min(58, this.bannerW / 5),
+      count: 10,
+      durationMs: 380,
+    });
   }
 
   /** Apply a per-frame blur amount in [0, 1]. 0 = fully clear, 1 = beam core.

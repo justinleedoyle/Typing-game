@@ -77,6 +77,48 @@ export interface ConsoleBandOptions {
   satchelLabel?: string;
 }
 
+interface NoticeColors {
+  labelColor: string;
+  textColor: string;
+  wakeColor: number;
+}
+
+function noticeColorsFor(label: string): NoticeColors {
+  switch (label) {
+    case "heart":
+      return {
+        labelColor: "#d6754a",
+        textColor: "#ffe0cf",
+        wakeColor: UI_HEX.ember,
+      };
+    case "spell":
+    case "one-shot":
+      return {
+        labelColor: "#d7b965",
+        textColor: "#fff1c9",
+        wakeColor: UI_HEX.brass,
+      };
+    case "difficulty":
+      return {
+        labelColor: "#d8c8a3",
+        textColor: "#f3ead2",
+        wakeColor: UI_HEX.parchment,
+      };
+    case "task":
+      return {
+        labelColor: "#a59b89",
+        textColor: "#f3ead2",
+        wakeColor: UI_HEX.brass,
+      };
+    default:
+      return {
+        labelColor: "#d7b965",
+        textColor: "#fff1c9",
+        wakeColor: UI_HEX.parchment,
+      };
+  }
+}
+
 export class ConsoleBand {
   /** World Y of the band's top edge — scenes keep the action above this. */
   readonly bandTopY: number;
@@ -153,13 +195,12 @@ export class ConsoleBand {
   showNotice(text: string, opts: ConsoleBandNoticeOptions = {}): void {
     const trimmed = text.trim();
     if (trimmed.length === 0) return;
+    const label = opts.label ?? "satchel";
+    const colors = noticeColorsFor(label);
     this.noticeTimer?.remove(false);
     this.noticeActive = true;
-    this.renderObjective(opts.label ?? "satchel", trimmed, {
-      labelColor: "#d7b965",
-      textColor: "#fff1c9",
-    });
-    this.playNoticeSatchelWake(opts.label ?? "satchel", opts.itemId);
+    this.renderObjective(label, trimmed, colors);
+    this.playNoticeSatchelWake(label, opts.itemId);
     this.noticeTimer = this.scene.time.delayedCall(opts.durationMs ?? 1900, () => {
       this.noticeActive = false;
       this.noticeTimer = null;
@@ -751,7 +792,7 @@ export class ConsoleBand {
 
   private playReadoutWake(label: string): void {
     const notice = label !== "task";
-    const color = notice ? UI_HEX.parchment : UI_HEX.brass;
+    const color = noticeColorsFor(label).wakeColor;
     const rail = this.scene.add.graphics().setAlpha(0.78);
     rail.fillStyle(color, notice ? 0.34 : 0.26);
     rail.fillRect(0, 0, this.bandWidth, 3);

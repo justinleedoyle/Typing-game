@@ -455,6 +455,10 @@ export class MovingWordEnemy {
     this.wordTarget = target;
     this.cfg.typingInput.register(target);
     this.cfg.onTargetAttached?.(target);
+    target.playEntryWake({
+      durationMs: 180,
+      offsetY: 0,
+    });
     this.wordAnchor?.destroy();
     this.wordAnchor = attachWordBodyAnchor(
       this.cfg.scene,

@@ -359,6 +359,10 @@ export class OneShotInvoker<E> {
       onComplete: () => this.fire(w),
     });
     this.cfg.typingInput.register(w.target);
+    w.target.playEntryWake({
+      durationMs: 190,
+      offsetY: 6,
+    });
     this.pulseCard(w, "ready");
 
     // A soft pulse on the title so "it's ready" reads at a glance.

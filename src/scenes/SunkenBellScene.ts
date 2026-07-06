@@ -825,12 +825,48 @@ export class SunkenBellScene extends Phaser.Scene {
       this.noticeGraceSave("A warding relic holds your breath.");
       return;
     }
+    this.playBreathGaspCue();
     this.cameras.main.flash(280, 0, 0, 0, false);
     playWrenHurt(this.wrenSprite, { knockX: 0 });
     playDamageThud();
     flashDamageVignette(this);
     this.breath.gasp();
     this.drawBreathBar();
+  }
+
+  /** Air-empty damage belongs to the docked air gauge before Wren gasps. */
+  private playBreathGaspCue(): void {
+    const wrenX = this.wrenContainer?.scene ? this.wrenContainer.x : WREN_X;
+    const wrenY = this.wrenContainer?.scene ? this.wrenContainer.y - 106 : WREN_Y - 106;
+
+    playMeterPulse(this, {
+      x: this.breathAnchor.x,
+      y: this.breathAnchor.y,
+      width: 178,
+      height: 28,
+      color: PALETTE_HEX.ember,
+      depth: 1502,
+      durationMs: 420,
+    });
+    playClaimLine(
+      this,
+      this.breathAnchor.x,
+      this.breathAnchor.y,
+      wrenX,
+      wrenY,
+      { color: PALETTE_HEX.ember, depth: 58, durationMs: 380 },
+    );
+    if (this.wrenContainer?.scene) {
+      playBodyImpact(this, this.wrenContainer, {
+        kind: "bubble",
+        color: PALETTE_HEX.ember,
+        offsetY: -104,
+        depth: 58,
+        ringRadius: 34,
+        count: 8,
+        durationMs: 360,
+      });
+    }
   }
 
   /** Spend one grace-pool save (a defensive relic). Returns true if one was

@@ -51,6 +51,7 @@ import {
   playBodyTypePulse,
   playClaimLine,
   playActorAttention,
+  playMeterPulse,
   playRealmClearResonance,
   playSceneEventPulse,
   stageContainerEntrance,
@@ -2862,8 +2863,32 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.waveForgivenessReady =
       this.combat.perWaveProcs.includes("forgive-wave-miss");
     this.typingInput.getStats().bankSoulFraction(this.combat.soulBankedFraction);
+    this.playSoulBankCue();
     this.applyAutoEase();
     this.applyCompanionTrip();
+  }
+
+  private playSoulBankCue(): void {
+    if (this.combat.soulBankedFraction <= 0) return;
+    const soulX = this.band.metersAnchor.x - 86;
+    const soulY = this.band.metersAnchor.y + 22;
+    playClaimLine(
+      this,
+      this.band.satchelAnchor.x + 58,
+      this.band.bandTopY - 10,
+      soulX,
+      soulY,
+      { color: PALETTE_HEX.brass, depth: 2001, durationMs: 360 },
+    );
+    playMeterPulse(this, {
+      x: soulX,
+      y: soulY,
+      width: 220,
+      height: 34,
+      color: PALETTE_HEX.brass,
+      depth: 2002,
+      durationMs: 420,
+    });
   }
 
   /** companion-trip (snow-fox-cub): a short while into each wave the fox darts in

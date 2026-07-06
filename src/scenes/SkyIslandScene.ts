@@ -2996,6 +2996,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private spiritReachesWren(spirit: LanternSpirit): void {
     // Gentle flash — no wave reset
+    this.playSpiritHitWrenCue(spirit);
     this.cameras.main.flash(300, 26, 16, 8, false);
     playWrenHurt(this.wrenSprite, { knockX: 0 });
     playDamageThud();
@@ -3028,6 +3029,38 @@ export class SkyIslandScene extends Phaser.Scene {
           this.startSpiritAdvance(spirit);
         });
       },
+    });
+  }
+
+  private playSpiritHitWrenCue(spirit: LanternSpirit): void {
+    if (!spirit.container.scene || !this.wrenContainer.scene) return;
+
+    const fromX = spirit.container.x;
+    const fromY = spirit.container.y - 44;
+    const toX = this.wrenContainer.x;
+    const toY = this.wrenContainer.y - 112;
+    playClaimLine(this, fromX, fromY, toX, toY, {
+      color: 0xf5c842,
+      depth: 58,
+      durationMs: 260,
+    });
+    playBodyImpact(this, spirit.container, {
+      kind: "mote",
+      color: 0xf5c842,
+      offsetY: -42,
+      depth: 58,
+      ringRadius: 28,
+      count: 7,
+      durationMs: 320,
+    });
+    playBodyImpact(this, this.wrenContainer, {
+      kind: "mote",
+      color: 0xf5c842,
+      offsetY: -104,
+      depth: 59,
+      ringRadius: 34,
+      count: 8,
+      durationMs: 360,
     });
   }
 

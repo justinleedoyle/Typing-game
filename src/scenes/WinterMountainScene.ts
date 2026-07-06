@@ -1809,12 +1809,12 @@ export class WinterMountainScene extends Phaser.Scene {
       knockbackMs: 700,
       knockbackPauseMs: WOLF_KNOCKBACK_PAUSE_MS,
       dangerRampStart: DANGER_RAMP_START,
-      anchorOffsetY: -118,
+      anchorOffsetY: -104,
       idleBobDy: 6,
       idleBobMs: 900,
       defeatRiseY: -60,
       defeatMs: 500,
-      fontSize: 32,
+      fontSize: 34,
       // Frost burst on completion — wolves go "down in snow," not "down in brass."
       burstColor: PALETTE_HEX.frost,
       defeatImpactKind: "snow",
@@ -3296,15 +3296,46 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private drawWolfInto(c: Phaser.GameObjects.Container, facingLeft: boolean): void {
-    c.add(addLocalGroundShadow(this, 158, 28, { y: 9, alpha: 0.4 }));
+    c.add(addLocalGroundShadow(this, 224, 36, { y: 12, alpha: 0.46 }));
+    c.add(this.makeWolfFrostRim(false));
     c.add(makeWolfSprite(this, false, facingLeft));
+    c.add(this.makeWolfSnowFooting(false));
   }
 
   private drawBossInto(c: Phaser.GameObjects.Container): Phaser.GameObjects.Image {
-    c.add(addLocalGroundShadow(this, 212, 38, { y: 12, alpha: 0.44 }));
+    c.add(addLocalGroundShadow(this, 286, 46, { y: 14, alpha: 0.5 }));
+    c.add(this.makeWolfFrostRim(true));
     const sprite = makeWolfSprite(this, true, false);
     c.add(sprite);
+    c.add(this.makeWolfSnowFooting(true));
     return sprite;
+  }
+
+  private makeWolfFrostRim(isBoss: boolean): Phaser.GameObjects.Graphics {
+    const g = this.add.graphics();
+    const width = isBoss ? 410 : 330;
+    const height = isBoss ? 170 : 128;
+    const y = isBoss ? -150 : -112;
+    g.fillStyle(0xb7dcff, isBoss ? 0.13 : 0.11);
+    g.fillEllipse(0, y, width, height);
+    g.lineStyle(isBoss ? 3 : 2, 0xd8ecff, isBoss ? 0.26 : 0.22);
+    g.strokeEllipse(0, y, width * 0.92, height * 0.86);
+    g.lineStyle(1, 0xffffff, isBoss ? 0.18 : 0.14);
+    g.strokeEllipse(0, y - 4, width * 0.72, height * 0.58);
+    return g;
+  }
+
+  private makeWolfSnowFooting(isBoss: boolean): Phaser.GameObjects.Graphics {
+    const g = this.add.graphics();
+    const width = isBoss ? 330 : 260;
+    g.fillStyle(0xdceaf8, isBoss ? 0.24 : 0.2);
+    g.fillEllipse(0, 18, width, isBoss ? 28 : 22);
+    g.fillStyle(0x8fb5d0, isBoss ? 0.18 : 0.14);
+    g.fillEllipse(-28, 24, width * 0.78, isBoss ? 19 : 15);
+    g.lineStyle(2, 0xffffff, isBoss ? 0.2 : 0.16);
+    g.lineBetween(-width * 0.34, 12, width * 0.1, 8);
+    g.lineBetween(-width * 0.05, 16, width * 0.36, 11);
+    return g;
   }
 }
 

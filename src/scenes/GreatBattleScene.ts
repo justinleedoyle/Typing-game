@@ -1897,6 +1897,60 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
+  private enemyCuePoint(enemy: Enemy): { x: number; y: number } {
+    if (enemy.target) {
+      return { x: enemy.target.getAnchorX(), y: enemy.target.getAnchorY() };
+    }
+    return {
+      x: enemy.graphic.x + enemy.body.x,
+      y: enemy.graphic.y + enemy.body.y - 54,
+    };
+  }
+
+  private playEttasLedgerMarkCue(enemy: Enemy): void {
+    const mark = this.enemyCuePoint(enemy);
+    playClaimLine(
+      this,
+      mark.x - 48,
+      mark.y - 42,
+      mark.x + 18,
+      mark.y - 4,
+      { color: UI_HEX.brass, depth: 49, durationMs: 420 },
+    );
+    playBodyImpact(this, enemy.graphic, {
+      kind: "mote",
+      color: UI_HEX.brass,
+      offsetX: enemy.body.x,
+      offsetY: enemy.body.y - 44,
+      depth: 48,
+      ringRadius: 34,
+      count: 8,
+      durationMs: 360,
+    });
+  }
+
+  private playGhostKingInterceptCue(enemy: Enemy): void {
+    const mark = this.enemyCuePoint(enemy);
+    playClaimLine(
+      this,
+      this.scale.width * 0.14,
+      520,
+      mark.x,
+      mark.y - 2,
+      { color: 0xd8e2cf, depth: 49, durationMs: 520 },
+    );
+    playBodyImpact(this, enemy.graphic, {
+      kind: "mist",
+      color: 0xd8e2cf,
+      offsetX: enemy.body.x,
+      offsetY: enemy.body.y - 18,
+      depth: 48,
+      ringRadius: 44,
+      count: 10,
+      durationMs: 430,
+    });
+  }
+
   // §5.5.11 — ettas-ledger: defeat the shortest-word live enemy automatically
   private applyEttasLedgerAutoComplete(): void {
     const waveEnemies = this.enemies.filter(
@@ -1908,6 +1962,7 @@ export class GreatBattleScene extends Phaser.Scene {
       a.word.length <= b.word.length ? a : b,
     );
     this.showRelicNotice("finale_ally_etta_ledger", "ledger");
+    this.playEttasLedgerMarkCue(easiest);
     this.defeatEnemy(easiest);
   }
 
@@ -1919,6 +1974,7 @@ export class GreatBattleScene extends Phaser.Scene {
     if (waveEnemies.length === 0) return;
     const victim = waveEnemies[Math.floor(Math.random() * waveEnemies.length)]!;
     this.showRelicNotice("finale_ally_ghost_king", "ally");
+    this.playGhostKingInterceptCue(victim);
     this.defeatEnemy(victim);
   }
 

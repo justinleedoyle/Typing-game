@@ -3,7 +3,6 @@ import { type AmbientHandle, playAmbientForge } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
-import { pickLowHeartLine } from "../audio/runaLines";
 import { playDamageThud } from "../audio/damageThud";
 import { playSparkZap } from "../audio/sparkZap";
 import { playWaveSting } from "../audio/waveSting";
@@ -14,6 +13,7 @@ import {
   playWordCompleteBurst,
 } from "../game/vfx";
 import { HeartSoulHud } from "../game/heartSoulHud";
+import { showLowHeartFeedback } from "../game/lowHeartFeedback";
 import { NarrationManager } from "../game/narrationManager";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -393,9 +393,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
       getCombo: () => this.typingInput.getStats().getCombo(),
       getCastReady: () => this.typingInput.getStats().canCast(this.spellCost),
       onSustainedLowHeart: () =>
-        this.band.showNotice(pickLowHeartLine().text, {
-          label: "heart",
-          durationMs: 2400,
+        showLowHeartFeedback({
+          scene: this,
+          band: this.band,
+          body: this.wrenContainer,
+          kind: "ember",
+          color: PALETTE_HEX.ember,
         }),
       anchor: band.metersAnchor,
       plate: false,

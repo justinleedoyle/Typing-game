@@ -3,11 +3,11 @@ import { type AmbientHandle, playAmbientWinter } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
-import { pickLowHeartLine } from "../audio/runaLines";
 import { playDamageThud } from "../audio/damageThud";
 import { playWaveSting } from "../audio/waveSting";
 import { flashDamageVignette } from "../game/vfx";
 import { HeartSoulHud } from "../game/heartSoulHud";
+import { showLowHeartFeedback } from "../game/lowHeartFeedback";
 import { NarrationManager } from "../game/narrationManager";
 import { showAlmanacStampCard } from "../game/ui/almanacStamp";
 import { ConsoleBand } from "../game/ui/consoleBand";
@@ -515,9 +515,12 @@ export class WinterMountainScene extends Phaser.Scene {
       getCombo: () => this.typingInput.getStats().getCombo(),
       getCastReady: () => this.typingInput.getStats().canCast(SPELL_COST),
       onSustainedLowHeart: () =>
-        this.band.showNotice(pickLowHeartLine().text, {
-          label: "heart",
-          durationMs: 2400,
+        showLowHeartFeedback({
+          scene: this,
+          band: this.band,
+          body: this.wrenContainer,
+          kind: "snow",
+          color: PALETTE_HEX.frost,
         }),
       anchor: band.metersAnchor,
       plate: false,

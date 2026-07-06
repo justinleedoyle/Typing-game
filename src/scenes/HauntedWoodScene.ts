@@ -3,13 +3,13 @@ import { type AmbientHandle, playAmbientWood } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
-import { pickLowHeartLine } from "../audio/runaLines";
 import { playDamageThud } from "../audio/damageThud";
 import { playWaveSting } from "../audio/waveSting";
 import { playBellToll } from "../audio/bellToll";
 import { playSparkZap } from "../audio/sparkZap";
 import { flashDamageVignette, playWordCompleteBurst } from "../game/vfx";
 import { HeartSoulHud } from "../game/heartSoulHud";
+import { showLowHeartFeedback } from "../game/lowHeartFeedback";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
@@ -392,9 +392,12 @@ export class HauntedWoodScene extends Phaser.Scene {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
       onSustainedLowHeart: () =>
-        this.band.showNotice(pickLowHeartLine().text, {
-          label: "heart",
-          durationMs: 2400,
+        showLowHeartFeedback({
+          scene: this,
+          band: this.band,
+          body: this.wrenContainer,
+          kind: "mist",
+          color: PALETTE_HEX.moss,
         }),
       anchor: band.metersAnchor,
       plate: false,

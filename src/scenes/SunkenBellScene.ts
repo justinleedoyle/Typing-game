@@ -3,7 +3,6 @@ import { type AmbientHandle, playAmbientBell } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
-import { pickLowHeartLine } from "../audio/runaLines";
 import { playDamageThud } from "../audio/damageThud";
 import { playWaveSting } from "../audio/waveSting";
 import { flashDamageVignette } from "../game/vfx";
@@ -11,6 +10,7 @@ import { BeatClock } from "../game/beatClock";
 import { decideBeatGate } from "../game/beatGate";
 import { BreathMeter } from "../game/breathMeter";
 import { HeartSoulHud } from "../game/heartSoulHud";
+import { showLowHeartFeedback } from "../game/lowHeartFeedback";
 import { NarrationManager } from "../game/narrationManager";
 import { showAlmanacStampCard } from "../game/ui/almanacStamp";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -390,9 +390,12 @@ export class SunkenBellScene extends Phaser.Scene {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
       onSustainedLowHeart: () =>
-        this.band.showNotice(pickLowHeartLine().text, {
-          label: "heart",
-          durationMs: 2400,
+        showLowHeartFeedback({
+          scene: this,
+          band: this.band,
+          body: this.wrenContainer,
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
         }),
       anchor: band.metersAnchor,
       plate: false,

@@ -1238,6 +1238,7 @@ export class PortalChamberScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(1);
     this.accountDisplayObjects.push(status);
+    this.stageAccountObject(status, 105, { offsetY: 6 });
   }
 
   private clearAccountDisplay(): void {
@@ -1251,6 +1252,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private registerAccountZoneTargets(): void {
     this.narration.clear();
     this.drawAccountStationPanel();
+    this.playAccountPanelWake();
     void this.renderAccountStatus();
     this.registerNavTarget(
       "settings",
@@ -1339,6 +1341,7 @@ export class PortalChamberScene extends Phaser.Scene {
       ACCOUNT_PANEL.statusY + 19,
     );
     this.accountDisplayObjects.push(panel);
+    this.stageAccountObject(panel, 35, { offsetY: 8 });
 
     const corners = cornerTicks(this, ACCOUNT_PANEL.width, ACCOUNT_PANEL.height, {
       inset: 6,
@@ -1349,6 +1352,77 @@ export class PortalChamberScene extends Phaser.Scene {
       .setAlpha(0.38)
       .setDepth(0.1);
     this.accountDisplayObjects.push(corners);
+    this.stageAccountObject(corners, 55, { offsetY: 8 });
+  }
+
+  private stageAccountObject(
+    object: Phaser.GameObjects.GameObject,
+    delayMs: number,
+    opts: { offsetY?: number } = {},
+  ): void {
+    const item = object as Phaser.GameObjects.GameObject & {
+      alpha: number;
+      y: number;
+      setAlpha: (value: number) => Phaser.GameObjects.GameObject;
+      setY: (value: number) => Phaser.GameObjects.GameObject;
+    };
+    if (typeof item.y !== "number" || !item.setAlpha || !item.setY) return;
+
+    const baseY = item.y;
+    const finalAlpha = item.alpha;
+    item.setAlpha(0);
+    item.setY(baseY + (opts.offsetY ?? 8));
+    this.time.delayedCall(delayMs, () => {
+      if (!object.scene) return;
+      this.tweens.add({
+        targets: item,
+        alpha: finalAlpha,
+        y: baseY,
+        duration: 220,
+        ease: "Sine.easeOut",
+      });
+    });
+  }
+
+  private playAccountPanelWake(): void {
+    const frame = this.add
+      .container(ACCOUNT_PANEL.x, ACCOUNT_PANEL.y)
+      .setDepth(8)
+      .setAlpha(0.52);
+    const g = this.add.graphics();
+    g.fillStyle(UI_HEX.brass, 0.04);
+    g.fillRoundedRect(
+      -ACCOUNT_PANEL.width / 2,
+      -ACCOUNT_PANEL.height / 2,
+      ACCOUNT_PANEL.width,
+      ACCOUNT_PANEL.height,
+      10,
+    );
+    g.lineStyle(1.5, UI_HEX.brass, 0.52);
+    g.strokeRoundedRect(
+      -ACCOUNT_PANEL.width / 2,
+      -ACCOUNT_PANEL.height / 2,
+      ACCOUNT_PANEL.width,
+      ACCOUNT_PANEL.height,
+      10,
+    );
+    frame.add(g);
+    frame.add(
+      cornerTicks(this, ACCOUNT_PANEL.width, ACCOUNT_PANEL.height, {
+        inset: 5,
+        size: 11,
+        width: 2,
+      }),
+    );
+    this.tweens.add({
+      targets: frame,
+      alpha: 0,
+      scaleX: 1.04,
+      scaleY: 1.08,
+      duration: 360,
+      ease: "Sine.easeOut",
+      onComplete: () => frame.destroy(),
+    });
   }
 
   private openAlmanac(): void {

@@ -165,6 +165,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   // neutral on a revisit, which has no combat.
   private combat: CombatLoadout = resolveCombatLoadout([], "haunted-wood");
   private waveForgivenessReady = false;
+  private snowFoxTripNoticed = false;
   // Tier 4 — Soul-charged typed invocation for offensive one-shots. Wood is the
   // last realm and richest satchel, so it can hold all three: toll-strike
   // (bells-tongue), jam-foe (sabotage-wrench), and bind-beat (tether-cord). Null
@@ -216,6 +217,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.boneFluteCue = null;
     this.groveLightCue = null;
     this.forkChoiceWordAnchors = [];
+    this.snowFoxTripNoticed = false;
     this.revisitMemoryCue = null;
     this.revisitMemoryWordAnchor = null;
     this.pathCue = null;
@@ -2870,8 +2872,8 @@ export class HauntedWoodScene extends Phaser.Scene {
    *  and trips the most-advanced ghost (a stumble). No-op without the relic. */
   private applyCompanionTrip(): void {
     if (!this.combat.perWaveProcs.includes("companion-trip")) return;
-    this.time.delayedCall(COMPANION_TRIP_DELAY_MS, () =>
-      tripMostAdvancedFoe(this, this.ghosts, {
+    this.time.delayedCall(COMPANION_TRIP_DELAY_MS, () => {
+      const tripped = tripMostAdvancedFoe(this, this.ghosts, {
         textureKey: "wood-companion-snow-fox",
         startX: this.wrenContainer.x - 120,
         startY: this.wrenContainer.y - 18,
@@ -2879,8 +2881,15 @@ export class HauntedWoodScene extends Phaser.Scene {
         depth: 58,
         color: PALETTE_HEX.frost,
         kind: "snow",
-      }),
-    );
+      });
+      if (tripped && !this.snowFoxTripNoticed) {
+        this.snowFoxTripNoticed = true;
+        this.band.showNotice("Snow-fox trips the lead ghost.", {
+          label: "companion",
+          durationMs: 1600,
+        });
+      }
+    });
   }
 
   /** auto-ease (Etta's Ledger — owned by the time Wren reaches the Wood): mark

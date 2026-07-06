@@ -191,6 +191,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private combat: CombatLoadout = resolveCombatLoadout([], "sunken-bell");
   private graceSaves = 0;
   private waveForgivenessReady = false;
+  private snowFoxTripNoticed = false;
 
   /** Explicit per-wave continuation, set by each spawner. Replaces the old
    *  narrator-substring routing (which had soft-locked the first encounter,
@@ -227,6 +228,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.beatLocked = false;
     this.breath.reset();
     this.breathActive = false;
+    this.snowFoxTripNoticed = false;
     this.onWaveCleared = null;
     this.fork1Choice = null;
     this.fork2Choice = null;
@@ -922,8 +924,8 @@ export class SunkenBellScene extends Phaser.Scene {
    *  and trips the most-advanced ghost (a stumble). No-op without the relic. */
   private applyCompanionTrip(): void {
     if (!this.combat.perWaveProcs.includes("companion-trip")) return;
-    this.time.delayedCall(COMPANION_TRIP_DELAY_MS, () =>
-      tripMostAdvancedFoe(this, this.ghosts, {
+    this.time.delayedCall(COMPANION_TRIP_DELAY_MS, () => {
+      const tripped = tripMostAdvancedFoe(this, this.ghosts, {
         textureKey: "bell-companion-snow-fox",
         startX: this.wrenContainer.x - 120,
         startY: this.wrenContainer.y - 18,
@@ -931,8 +933,15 @@ export class SunkenBellScene extends Phaser.Scene {
         depth: 58,
         color: PALETTE_HEX.frost,
         kind: "snow",
-      }),
-    );
+      });
+      if (tripped && !this.snowFoxTripNoticed) {
+        this.snowFoxTripNoticed = true;
+        this.band.showNotice("Snow-fox trips the lead ghost.", {
+          label: "companion",
+          durationMs: 1600,
+        });
+      }
+    });
   }
 
   /** auto-ease (Etta's Ledger): mark the easiest (shortest-word) ghost of the

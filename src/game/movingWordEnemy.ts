@@ -399,9 +399,21 @@ export class MovingWordEnemy {
     if (this.defeated || !this.frozen) return;
     this.frozen = false;
     this.clearFreeze();
-    // startAdvance recomputes its duration from the body's CURRENT position, so
-    // the enemy resumes from where it froze (it's guarded against a dead wave).
+    const c = this.cfg.container;
+    playBodyImpact(this.cfg.scene, c, {
+      kind: "snow",
+      color: PALETTE_HEX.frost,
+      offsetY:
+        this.cfg.defeatImpactOffsetY ?? Math.min(-34, this.anchorOffsetY / 2),
+      depth: 49,
+      ringRadius: 32,
+      count: 8,
+      durationMs: 320,
+    });
+    // Freeze kills every body tween. Restore the living idle motion before the
+    // enemy resumes from its current position.
     if (!this.cfg.manualAttach && !this.wordTarget) this.attachTarget();
+    this.idleBob();
     this.startAdvance();
   }
 

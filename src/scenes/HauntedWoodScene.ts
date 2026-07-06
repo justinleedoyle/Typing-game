@@ -48,6 +48,7 @@ import {
   addLocalGroundShadow,
   addLivingLight,
   playActorAttention,
+  playBodyContactCue,
   playBodyImpact,
   playBodyTypePulse,
   playClaimLine,
@@ -1909,7 +1910,15 @@ export class HauntedWoodScene extends Phaser.Scene {
         playChime();
         this.checkGhostWaveComplete();
       },
-      onReachWren: () => {
+      onReachWren: (self) => {
+        playBodyContactCue(this, self.container, this.wrenContainer, {
+          kind: "mist",
+          color: GHOST_BURST_COLOR,
+          sourceOffsetY: -60,
+          targetOffsetY: -108,
+          sourceRadius: 32,
+          targetRadius: 36,
+        });
         this.cameras.main.shake(180, 0.004);
         playWrenHurt(this.wrenSprite, { knockX: 0 });
         playDamageThud();

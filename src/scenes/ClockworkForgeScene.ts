@@ -47,6 +47,7 @@ import {
   fadeOutStagedSprite,
   addLocalGroundShadow,
   addLivingLight,
+  playBodyContactCue,
   playBodyImpact,
   playBodyTypePulse,
   playClaimLine,
@@ -2059,8 +2060,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
         if (idx >= 0) this.activeTargets.splice(idx, 1);
       },
       onDefeated: () => playChime(),
-      onReachWren: () => {
+      onReachWren: (self) => {
         // Golem retreats and tries again (no candle system in the Forge).
+        playBodyContactCue(this, self.container, this.wrenContainer, {
+          kind: "ember",
+          color: PALETTE_HEX.ember,
+          sourceOffsetY: -86,
+          targetOffsetY: -108,
+          sourceRadius: 32,
+          targetRadius: 36,
+        });
         this.cameras.main.shake(180, 0.004);
         playWrenHurt(this.wrenSprite, { knockX: 0 });
         playDamageThud();

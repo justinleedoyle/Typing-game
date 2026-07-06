@@ -202,6 +202,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private combat: CombatLoadout = resolveCombatLoadout([], "clockwork-forge");
   private spellCost = SPELL_COST;
   private waveForgivenessReady = false;
+  private snowFoxTripNoticed = false;
   // Tier 4 — the Soul-charged, typed invocation for offensive one-shots. In the
   // Forge that's toll-strike (bells-tongue, earned in the Bell on a force fork):
   // a charged "toll" word strikes the strongest live golem. Null until create().
@@ -248,6 +249,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.oneShotInvoker = null;
     this.shiftHeld = false;
     this.waveActive = false;
+    this.snowFoxTripNoticed = false;
     this.fork1Choice = null;
     this.fork2Choice = null;
     this.companionAwarded = false;
@@ -2895,8 +2897,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
    *  and trips the most-advanced golem (a stumble). No-op without the relic. */
   private applyCompanionTrip(): void {
     if (!this.combat.perWaveProcs.includes("companion-trip")) return;
-    this.time.delayedCall(COMPANION_TRIP_DELAY_MS, () =>
-      tripMostAdvancedFoe(this, this.golems, {
+    this.time.delayedCall(COMPANION_TRIP_DELAY_MS, () => {
+      const tripped = tripMostAdvancedFoe(this, this.golems, {
         textureKey: "forge-companion-snow-fox",
         startX: this.wrenContainer.x - 120,
         startY: this.wrenContainer.y - 18,
@@ -2904,8 +2906,15 @@ export class ClockworkForgeScene extends Phaser.Scene {
         depth: 58,
         color: PALETTE_HEX.frost,
         kind: "snow",
-      }),
-    );
+      });
+      if (tripped && !this.snowFoxTripNoticed) {
+        this.snowFoxTripNoticed = true;
+        this.band.showNotice("Snow-fox trips the lead golem.", {
+          label: "companion",
+          durationMs: 1600,
+        });
+      }
+    });
   }
 
   /** auto-ease (Etta's Ledger): glow the easiest (shortest-word) golem of the

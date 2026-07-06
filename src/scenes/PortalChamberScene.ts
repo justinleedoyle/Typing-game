@@ -291,8 +291,8 @@ export class PortalChamberScene extends Phaser.Scene {
 
     // Runa's narration — the shared top caption every other scene uses. The
     // hub's Runa-narrator beats (arrival, desk reflections, the endgame calls)
-    // route through say(id); say() is the voice hook when audio lands. The
-    // bottom `hint` above keeps only the functional prompts (arch name, shelf).
+    // route through say(id); say() is the voice hook when audio lands. Functional
+    // hub prompts live on their stations instead of in a detached bottom banner.
     this.narration = new NarrationManager(this, {
       y: 150,
       framed: true,
@@ -417,7 +417,7 @@ export class PortalChamberScene extends Phaser.Scene {
         fontSize: 30,
         entryDelayMs: 40,
       });
-      this.setHint("type the glowing arch's name to step through  ·  backspace to cancel");
+      this.setHint("");
       // First-arrival narration — only while nothing is cleared yet (the
       // "you're new here" state). On returns the desk reflections carry Runa.
       if (!REALM_SEQUENCE.some((id) => state.realms[id]?.cleared)) {
@@ -718,21 +718,9 @@ export class PortalChamberScene extends Phaser.Scene {
   // ─── Shelf zone ───────────────────────────────────────────────────────────
 
   private registerShelfZoneTargets(): void {
-    const state = this.store.get();
-    const items = state.satchel;
     // Shelf is a functional zone — clear Runa's top caption.
     this.narration.clear();
-
-    if (items.length === 0) {
-      this.setHint("your shelf is empty. bring something back from a realm.");
-    } else if (items.length <= 3) {
-      const names = items
-        .map((id) => RELICS[id]?.name ?? id)
-        .join(" · ");
-      this.setHint(`on your shelf: ${names}`);
-    } else {
-      this.setHint(`your shelf holds ${items.length} keepsakes. type almanac for the full record.`);
-    }
+    this.setHint("");
 
     this.registerNavTarget(
       "back",
@@ -1281,7 +1269,7 @@ export class PortalChamberScene extends Phaser.Scene {
 
   private registerAccountZoneTargets(): void {
     this.narration.clear();
-    this.setHint("account station  ·  type settings, sign in/out, or portals");
+    this.setHint("");
     this.drawAccountStationPanel();
     void this.renderAccountStatus();
     this.registerNavTarget(
@@ -1542,7 +1530,7 @@ export class PortalChamberScene extends Phaser.Scene {
       const isLocked  = i > nextIdx;
 
       if (isNext) {
-        this.drawArchStatusPlaque(arch, "open passage", "", "next");
+        this.drawArchStatusPlaque(arch, "open passage", "type name", "next");
       } else if (isCleared) {
         this.drawArchStateSeal(arch, "cleared");
       } else if (isLocked) {

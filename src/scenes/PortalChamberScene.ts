@@ -171,6 +171,7 @@ const HUB_STATIONS = {
     height: ACCOUNT_STATION.height,
   },
 } as const;
+const PORTAL_CALL_WORD_Y = HUB_STATIONS.portalFloor.y - 318;
 
 // Maps the last-cleared realm to its Runa desk-line ID in runaLines.ts. The
 // line text now lives there (single source of truth); the hub renders it via
@@ -430,7 +431,7 @@ export class PortalChamberScene extends Phaser.Scene {
           scene: this,
           word: "defend hearthward",
           x: this.scale.width / 2,
-          y: HUB_STATIONS.portalFloor.y - 420,
+          y: PORTAL_CALL_WORD_Y,
           fontSize: 42,
           outline: true,
           onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),
@@ -453,7 +454,7 @@ export class PortalChamberScene extends Phaser.Scene {
           scene: this,
           word: "begin again",
           x: this.scale.width / 2,
-          y: HUB_STATIONS.portalFloor.y - 420,
+          y: PORTAL_CALL_WORD_Y,
           fontSize: 38,
           outline: true,
           onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),

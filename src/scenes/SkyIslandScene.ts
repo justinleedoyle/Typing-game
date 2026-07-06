@@ -209,6 +209,7 @@ export class SkyIslandScene extends Phaser.Scene {
    *  scene shutdown — they persist across all five temples. */
   private templeLanterns: Phaser.GameObjects.Graphics[] = [];
   private warmLightCueShown = false;
+  private graceSaveNoticed = false;
 
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
@@ -276,6 +277,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.activeTargets = [];
     this.activePhrases = [];
     this.warmLightCueShown = false;
+    this.graceSaveNoticed = false;
     this.oneShotInvoker = null;
     this.pathCue = null;
     this.pathCueBeat = null;
@@ -1617,9 +1619,9 @@ export class SkyIslandScene extends Phaser.Scene {
     });
   }
 
-  /** Tier 4 unseal — the gentle counterpart to flashScrollReseal: a soft gold
-   *  shimmer + "the key holds" when the Master Key pardons a reseal (progress
-   *  kept), so the player reads it as a relic saving them, not a slip. */
+  /** Tier 4 unseal/grace — the gentle counterpart to flashScrollReseal: a soft
+   *  gold shimmer when the defensive grace pool pardons a reseal (progress kept),
+   *  so the player reads it as a relic saving them, not a slip. */
   private flashSealForgiven(seal: Phaser.GameObjects.Container): void {
     this.tweens.killTweensOf(seal);
     seal.setAlpha(1);
@@ -1653,8 +1655,9 @@ export class SkyIslandScene extends Phaser.Scene {
       count: 8,
       durationMs: 360,
     });
+    this.noticeGraceSave("A warding relic holds the seal.");
     const txt = this.add
-      .text(x + 22, y, "the key holds", {
+      .text(x + 22, y, "the ward holds", {
         fontFamily: SERIF,
         fontSize: "24px",
         fontStyle: "italic",
@@ -1673,6 +1676,15 @@ export class SkyIslandScene extends Phaser.Scene {
         glint.destroy();
         txt.destroy();
       },
+    });
+  }
+
+  private noticeGraceSave(text: string): void {
+    if (this.graceSaveNoticed) return;
+    this.graceSaveNoticed = true;
+    this.band.showNotice(text, {
+      label: "relic",
+      durationMs: 1700,
     });
   }
 

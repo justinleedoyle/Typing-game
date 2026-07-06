@@ -193,6 +193,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private waveForgivenessReady = false;
   private snowFoxTripNoticed = false;
   private shrineForgivenessNoticed = false;
+  private graceSaveNoticed = false;
 
   /** Explicit per-wave continuation, set by each spawner. Replaces the old
    *  narrator-substring routing (which had soft-locked the first encounter,
@@ -231,6 +232,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.breathActive = false;
     this.snowFoxTripNoticed = false;
     this.shrineForgivenessNoticed = false;
+    this.graceSaveNoticed = false;
     this.onWaveCleared = null;
     this.fork1Choice = null;
     this.fork2Choice = null;
@@ -819,6 +821,7 @@ export class SunkenBellScene extends Phaser.Scene {
       this.breath.gasp();
       this.drawBreathBar();
       this.flashGraceCue("held");
+      this.noticeGraceSave("A warding relic holds your breath.");
       return;
     }
     this.cameras.main.flash(280, 0, 0, 0, false);
@@ -952,6 +955,15 @@ export class SunkenBellScene extends Phaser.Scene {
     this.band.showNotice("Shrine-Token forgives the slip.", {
       label: "relic",
       durationMs: 1600,
+    });
+  }
+
+  private noticeGraceSave(text: string): void {
+    if (this.graceSaveNoticed) return;
+    this.graceSaveNoticed = true;
+    this.band.showNotice(text, {
+      label: "relic",
+      durationMs: 1700,
     });
   }
 

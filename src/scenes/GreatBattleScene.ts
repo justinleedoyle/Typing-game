@@ -3612,14 +3612,14 @@ export class GreatBattleScene extends Phaser.Scene {
       this.brassSongbirdStallTimer = this.time.delayedCall(4000, () => {
         this.brassSongbirdStallTimer = null;
         if (this.brassSongbirdActiveTarget === target) {
-          this.applyBrassSongbirdHint(target, word);
+          this.applyBrassSongbirdHint(target);
         }
       });
     }
   }
 
   // §5.5.9 — brass-songbird: auto-fill the next 3 characters of the stalled word
-  private applyBrassSongbirdHint(_target: TextWordTarget, word: string): void {
+  private applyBrassSongbirdHint(target: TextWordTarget): void {
     this.showRelicNotice("finale_companion_songbird", "ally");
     const companion = this.showFinaleCompanionAction("brass-songbird");
     playActorAttention(this, companion, { scale: 1.05, durationMs: 220 });
@@ -3629,12 +3629,10 @@ export class GreatBattleScene extends Phaser.Scene {
       }
     });
 
-    // TextWordTarget doesn't expose a direct "advance N chars" API, so we
-    // simulate by injecting up to 3 typed characters via the typingInput.
-    // We read how far the player is from the target's typed progress if possible,
-    // otherwise fall back to typing the first 3 chars of the full word.
-    // TODO: expose a typed-so-far getter on TextWordTarget for a cleaner hint
-    const hintChars = word.slice(0, Math.min(3, word.length));
+    // Simulate the song by injecting the next three untyped characters. Use the
+    // target cursor's remaining text so a partial word gets continued, not
+    // restarted from its first letter.
+    const hintChars = target.rawRemaining().slice(0, 3);
     for (const ch of hintChars) {
       this.typingInput.handleChar(ch, { spell: false });
     }

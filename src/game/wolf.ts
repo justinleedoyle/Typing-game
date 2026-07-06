@@ -3,8 +3,8 @@ import wolfLeader from "../../art/wolf/wolf-leader.png";
 import wolfPack from "../../art/wolf/wolf-pack.png";
 
 /** On-screen heights at the 1920x1080 design resolution. */
-const PACK_DISPLAY_HEIGHT = 195;
-const LEADER_DISPLAY_HEIGHT = 270;
+const PACK_DISPLAY_HEIGHT = 245;
+const LEADER_DISPLAY_HEIGHT = 330;
 
 export function preloadWolves(scene: Phaser.Scene): void {
   scene.load.image("wolf-pack", wolfPack);

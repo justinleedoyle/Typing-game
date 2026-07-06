@@ -704,6 +704,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private registerShelfZoneTargets(): void {
     // Shelf is a functional zone — clear Runa's top caption.
     this.narration.clear();
+    this.playShelfDisplayWake();
 
     this.registerNavTarget(
       "back",
@@ -2526,6 +2527,7 @@ export class PortalChamberScene extends Phaser.Scene {
       const iy = SHELF_GRID.startY + Math.floor(i / SHELF_GRID.cols) * SHELF_GRID.rowGap;
       const tile = this.add.container(ix, iy).setDepth(1).setAlpha(0.9);
       this.shelfDisplayObjects.push(tile);
+      this.stageShelfObject(tile, 80 + i * 28);
       const tileBg = this.add.graphics();
       const half = SHELF_GRID.tileSize / 2;
       tileBg.fillStyle(UI_HEX.panel, 0.42);
@@ -2575,6 +2577,7 @@ export class PortalChamberScene extends Phaser.Scene {
     const y = SHELF_STATION.summaryY;
     const plate = this.add.graphics().setDepth(0);
     this.shelfDisplayObjects.push(plate);
+    this.stageShelfObject(plate, 35);
     plate.fillStyle(UI_HEX.panel, 0.34);
     plate.fillRoundedRect(x - width / 2, y - height / 2, width, height, 8);
     plate.lineStyle(1, UI_HEX.brass, 0.34);
@@ -2590,6 +2593,7 @@ export class PortalChamberScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(1);
     this.shelfDisplayObjects.push(label);
+    this.stageShelfObject(label, 70);
   }
 
   private drawShelfSummaryPlate(itemCount: number): void {
@@ -2599,6 +2603,7 @@ export class PortalChamberScene extends Phaser.Scene {
     const y = SHELF_STATION.summaryY;
     const plate = this.add.graphics().setDepth(0);
     this.shelfDisplayObjects.push(plate);
+    this.stageShelfObject(plate, 35);
     plate.fillStyle(UI_HEX.panel, 0.24);
     plate.fillRoundedRect(x - width / 2, y - height / 2, width, height, 9);
     plate.lineStyle(1, UI_HEX.brass, 0.28);
@@ -2626,6 +2631,8 @@ export class PortalChamberScene extends Phaser.Scene {
       .setAlpha(0.68)
       .setDepth(1);
     this.shelfDisplayObjects.push(count, label);
+    this.stageShelfObject(count, 70);
+    this.stageShelfObject(label, 95);
 
     addIdleBreath(this, count, { dy: -1.5, durationMs: 2200, delayMs: 200 });
   }
@@ -2638,6 +2645,7 @@ export class PortalChamberScene extends Phaser.Scene {
     const y = SHELF_GRID.startY + ((rows - 1) * SHELF_GRID.rowGap) / 2;
     const backer = this.add.graphics().setDepth(-1);
     this.shelfDisplayObjects.push(backer);
+    this.stageShelfObject(backer, 35);
     backer.fillStyle(UI_HEX.panel, 0.18);
     backer.fillRoundedRect(x - width / 2, y - height / 2, width, height, 10);
     backer.lineStyle(1, UI_HEX.brass, 0.22);
@@ -2648,6 +2656,70 @@ export class PortalChamberScene extends Phaser.Scene {
       backer.lineStyle(1, UI_HEX.brass, 0.13);
       backer.lineBetween(x - width / 2 + 16, railY, x + width / 2 - 16, railY);
     }
+  }
+
+  private stageShelfObject(
+    object: Phaser.GameObjects.GameObject,
+    delayMs: number,
+  ): void {
+    const item = object as Phaser.GameObjects.GameObject & {
+      alpha: number;
+      setAlpha: (value: number) => Phaser.GameObjects.GameObject;
+    };
+    if (!item.setAlpha) return;
+
+    const finalAlpha = item.alpha;
+    item.setAlpha(0);
+    this.time.delayedCall(delayMs, () => {
+      if (!object.scene) return;
+      this.tweens.add({
+        targets: item,
+        alpha: finalAlpha,
+        duration: 210,
+        ease: "Sine.easeOut",
+      });
+    });
+  }
+
+  private playShelfDisplayWake(): void {
+    const frame = this.add
+      .container(SHELF_STATION.x, SHELF_STATION.y)
+      .setDepth(8)
+      .setAlpha(0.5);
+    const g = this.add.graphics();
+    g.fillStyle(UI_HEX.brass, 0.035);
+    g.fillRoundedRect(
+      -SHELF_STATION.width / 2,
+      -SHELF_STATION.height / 2,
+      SHELF_STATION.width,
+      SHELF_STATION.height,
+      10,
+    );
+    g.lineStyle(1.5, UI_HEX.brass, 0.48);
+    g.strokeRoundedRect(
+      -SHELF_STATION.width / 2,
+      -SHELF_STATION.height / 2,
+      SHELF_STATION.width,
+      SHELF_STATION.height,
+      10,
+    );
+    frame.add(g);
+    frame.add(
+      cornerTicks(this, SHELF_STATION.width, SHELF_STATION.height, {
+        inset: 5,
+        size: 11,
+        width: 2,
+      }),
+    );
+    this.tweens.add({
+      targets: frame,
+      alpha: 0,
+      scaleX: 1.04,
+      scaleY: 1.08,
+      duration: 360,
+      ease: "Sine.easeOut",
+      onComplete: () => frame.destroy(),
+    });
   }
 
   // ─── Wren character ───────────────────────────────────────────────────────

@@ -942,6 +942,23 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
+  private playMasterKeyOpeningCue(): void {
+    playSceneEventPulse(this, {
+      kind: "mote",
+      color: UI_HEX.brass,
+      x: this.scale.width * 0.15,
+      y: 500,
+      depth: 5,
+      durationMs: 560,
+      ringWidth: 330,
+      ringHeight: 126,
+      count: 7,
+      alpha: 0.07,
+      spreadX: 128,
+      spreadY: 38,
+    });
+  }
+
   /** UI-cohesion: every finale word target gets the legibility outline (TTT-style). */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
     return new TextWordTarget({ outline: true, depth: 6, ...opts });
@@ -3149,6 +3166,7 @@ export class GreatBattleScene extends Phaser.Scene {
     if (satchel.includes("master-key") && !this.masterKeyFlankUsed) {
       this.masterKeyFlankUsed = true;
       this.showRelicNotice("finale_relic_master_key");
+      this.playMasterKeyOpeningCue();
       this.band.setObjective("Type flank through the Master-Key opening.");
       const flankTarget = this.makeLordWord({
         scene: this,

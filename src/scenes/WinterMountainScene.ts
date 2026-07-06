@@ -631,8 +631,7 @@ export class WinterMountainScene extends Phaser.Scene {
         },
       });
       this.attachRevisitMemoryWordAnchor(target);
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     };
     advance();
   }
@@ -802,8 +801,7 @@ export class WinterMountainScene extends Phaser.Scene {
       },
     });
     this.attachRiverCueWordAnchor(target);
-    this.typingInput.register(target);
-    this.activeTargets.push(target);
+    this.registerActiveTarget(target);
   }
 
   private showRiverCue(beat: (typeof RIVER_BEATS)[number]): void {
@@ -1167,8 +1165,7 @@ export class WinterMountainScene extends Phaser.Scene {
         this.time.delayedCall(1800, () => this.runHeldurExchange(idx + 1));
       },
     });
-    this.typingInput.register(target);
-    this.activeTargets.push(target);
+    this.registerActiveTarget(target);
   }
 
   private onHeldurSpoken(): void {
@@ -1344,8 +1341,7 @@ export class WinterMountainScene extends Phaser.Scene {
       },
     );
     cue.once(Phaser.GameObjects.Events.DESTROY, releaseCueAnchor);
-    this.typingInput.register(target);
-    this.activeTargets.push(target);
+    this.registerActiveTarget(target);
   }
 
   private restoreCandles(): void {
@@ -1496,6 +1492,17 @@ export class WinterMountainScene extends Phaser.Scene {
         onComplete();
       },
     });
+  }
+
+  private registerActiveTarget(...targets: TextWordTarget[]): void {
+    for (const target of targets) {
+      this.typingInput.register(target);
+      this.activeTargets.push(target);
+      target.playEntryWake({
+        durationMs: 180,
+        offsetY: 0,
+      });
+    }
   }
 
   private makeHeldurWord(opts: TextWordTargetOptions): TextWordTarget {
@@ -2127,9 +2134,7 @@ export class WinterMountainScene extends Phaser.Scene {
       },
     });
 
-    this.typingInput.register(kindTarget);
-    this.typingInput.register(hurtTarget);
-    this.activeTargets.push(kindTarget, hurtTarget);
+    this.registerActiveTarget(kindTarget, hurtTarget);
   }
 
   // ─── CYOA Fork 1 (after Wave 2, before Wave 3) ───────────────────────────
@@ -2166,9 +2171,7 @@ export class WinterMountainScene extends Phaser.Scene {
         this.startFireflyBranch(nextWave);
       },
     }, { kind: "mote", color: PALETTE_HEX.brass, sourceOffsetY: -34 });
-    this.typingInput.register(huntress);
-    this.typingInput.register(firefly);
-    this.activeTargets.push(huntress, firefly);
+    this.registerActiveTarget(huntress, firefly);
   }
 
   private startHuntressBranch(nextWave: number): void {
@@ -2567,9 +2570,7 @@ export class WinterMountainScene extends Phaser.Scene {
       },
     }, { kind: "snow", color: PALETTE_HEX.frost, sourceOffsetY: -38 });
 
-    this.typingInput.register(buryTarget);
-    this.typingInput.register(peltTarget);
-    this.activeTargets.push(buryTarget, peltTarget);
+    this.registerActiveTarget(buryTarget, peltTarget);
   }
 
   private showCairnCue(): Phaser.GameObjects.Container {
@@ -2725,9 +2726,7 @@ export class WinterMountainScene extends Phaser.Scene {
       },
     });
 
-    this.typingInput.register(whisperTarget);
-    this.typingInput.register(letGoTarget);
-    this.activeTargets.push(whisperTarget, letGoTarget);
+    this.registerActiveTarget(whisperTarget, letGoTarget);
   }
 
   private showFoxCompanion(
@@ -3021,8 +3020,7 @@ export class WinterMountainScene extends Phaser.Scene {
         );
         trueNameSeal.once(Phaser.GameObjects.Events.DESTROY, releaseTrueNameAnchor);
       }
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     };
 
     advance();

@@ -102,6 +102,7 @@ export class ConsoleBand {
   private portraitLabel?: Phaser.GameObjects.Text;
   private renderedPortraitKey = "";
   private portraitInitialized = false;
+  private satchelTileCount = 0;
 
   constructor(scene: Phaser.Scene, opts: ConsoleBandOptions = {}) {
     this.scene = scene;
@@ -155,6 +156,7 @@ export class ConsoleBand {
       labelColor: "#d7b965",
       textColor: "#fff1c9",
     });
+    this.playNoticeSatchelWake(opts.label ?? "satchel");
     this.noticeTimer = this.scene.time.delayedCall(opts.durationMs ?? 1900, () => {
       this.noticeActive = false;
       this.noticeTimer = null;
@@ -509,6 +511,7 @@ export class ConsoleBand {
     const visibleDrawable = drawable.slice(0, MAX_VISIBLE_SATCHEL_TILES);
     const overflowCount = drawable.length - visibleDrawable.length;
     const displayedCount = visibleDrawable.length + (overflowCount > 0 ? 1 : 0);
+    this.satchelTileCount = displayedCount;
     if (displayedCount > 0) {
       this.playSatchelRowWake(displayedCount);
     }
@@ -613,6 +616,37 @@ export class ConsoleBand {
       scaleX: 1.02,
       duration: 640,
       delay: SATCHEL_WAKE_DELAY_MS,
+      ease: "Sine.easeOut",
+      onComplete: () => wake.destroy(),
+    });
+  }
+
+  private playNoticeSatchelWake(label: string): void {
+    if (!["satchel", "relic", "companion"].includes(label)) return;
+    const hasTiles = this.satchelTileCount > 0;
+    const rowW = hasTiles
+      ? this.satchelTileCount * TILE + Math.max(0, this.satchelTileCount - 1) * TILE_GAP
+      : 414;
+    const x = SATCHEL_X - 10;
+    const y = TILE_Y - TILE / 2 - 10;
+    const wake = this.scene.add.graphics().setAlpha(0);
+    wake.fillStyle(UI_HEX.brass, hasTiles ? 0.075 : 0.045);
+    wake.fillRoundedRect(x, y, rowW + 20, TILE + 20, 8);
+    wake.lineStyle(1, UI_HEX.brass, hasTiles ? 0.4 : 0.24);
+    wake.strokeRoundedRect(x, y, rowW + 20, TILE + 20, 8);
+    wake.lineStyle(1, UI_HEX.parchment, hasTiles ? 0.2 : 0.12);
+    wake.beginPath();
+    wake.moveTo(x + 10, y + TILE + 26);
+    wake.lineTo(x + rowW + 10, y + TILE + 26);
+    wake.strokePath();
+    this.container.add(wake);
+
+    this.scene.tweens.add({
+      targets: wake,
+      alpha: { from: 0.64, to: 0 },
+      scaleX: 1.018,
+      scaleY: 1.05,
+      duration: 540,
       ease: "Sine.easeOut",
       onComplete: () => wake.destroy(),
     });

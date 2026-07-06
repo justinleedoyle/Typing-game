@@ -943,6 +943,7 @@ export class SunkenBellScene extends Phaser.Scene {
         this.snowFoxTripNoticed = true;
         this.band.showNotice("Snow-fox trips the lead ghost.", {
           label: "companion",
+          itemId: "snow-fox-cub",
           durationMs: 1600,
         });
       }
@@ -954,6 +955,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.shrineForgivenessNoticed = true;
     this.band.showNotice("Shrine-Token forgives the slip.", {
       label: "relic",
+      itemId: "shrine-token",
       durationMs: 1600,
     });
   }

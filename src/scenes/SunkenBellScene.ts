@@ -71,6 +71,7 @@ import bellWardenSprite from "../../art/bell/bell-warden.png";
 import olinSprite from "../../art/bell/olin.png";
 import aurlandSprite from "../../art/bell/aurland.png";
 import glassFishSprite from "../../art/companions/glass-fish.png";
+import snowFoxSprite from "../../art/companions/snow-fox.png";
 
 // Danger ramps in over the LAST 60% of a ghost's advance — earlier portion
 // stays cream so players can read the word, then it shifts red as the ghost
@@ -245,6 +246,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.load.image("olin", olinSprite);
     this.load.image("aurland", aurlandSprite);
     this.load.image("bell-companion-glass-fish", glassFishSprite);
+    this.load.image("bell-companion-snow-fox", snowFoxSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
@@ -918,7 +920,15 @@ export class SunkenBellScene extends Phaser.Scene {
   private applyCompanionTrip(): void {
     if (!this.combat.perWaveProcs.includes("companion-trip")) return;
     this.time.delayedCall(COMPANION_TRIP_DELAY_MS, () =>
-      tripMostAdvancedFoe(this, this.ghosts),
+      tripMostAdvancedFoe(this, this.ghosts, {
+        textureKey: "bell-companion-snow-fox",
+        startX: this.wrenContainer.x - 120,
+        startY: this.wrenContainer.y - 18,
+        height: 74,
+        depth: 58,
+        color: PALETTE_HEX.frost,
+        kind: "snow",
+      }),
     );
   }
 

@@ -3263,10 +3263,11 @@ export class SunkenBellScene extends Phaser.Scene {
       // On completion: the quiet-them flicker, a breath in the choir wave, then the
       // wave check. The split children (if any) are spawned by the enemy's `split`
       // BEFORE this runs, so checkWaveCleared sees them and the wave stays open.
-      onComplete: () => {
+      onComplete: (_mods, self) => {
         this.showQuietFlicker(container);
         if (this.breathActive) {
           this.breath.inhale();
+          this.playBreathRecoveryCue(self);
           this.drawBreathBar();
         }
         this.checkWaveCleared();
@@ -3292,6 +3293,22 @@ export class SunkenBellScene extends Phaser.Scene {
     });
 
     this.ghosts.push(ghost);
+  }
+
+  private playBreathRecoveryCue(source: MovingWordEnemy): void {
+    if (!this.breathActive) return;
+    playClaimLine(
+      this,
+      source.container.x,
+      source.container.y - 82,
+      this.breathAnchor.x,
+      this.breathAnchor.y,
+      {
+        color: BELL_BURST_COLOR,
+        depth: 1452,
+        durationMs: 430,
+      },
+    );
   }
 
   /** Add the painted choir-ghost sprite into a container, scaled to the old

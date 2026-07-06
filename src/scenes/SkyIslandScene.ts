@@ -1718,13 +1718,46 @@ export class SkyIslandScene extends Phaser.Scene {
     const target = targets[0];
     if (!target) return;
     if (effect === "toll-strike") {
+      this.playOneShotSourceLine(
+        effect,
+        target.getX(),
+        target.getY(),
+        PALETTE_HEX.ember,
+      );
       playBellToll();
       this.cameras.main.shake(160, 0.004);
       target.strike();
     } else if (effect === "jam-foe") {
+      this.playOneShotSourceLine(
+        effect,
+        target.getX(),
+        target.getY(),
+        PALETTE_HEX.frost,
+      );
       playSparkZap();
       target.freeze();
     }
+  }
+
+  private oneShotSource(effect: OffensiveOneShot): { x: number; y: number } | null {
+    const offensiveOneShots = this.combat.oneShots.filter(isOffensiveOneShot);
+    const idx = offensiveOneShots.indexOf(effect);
+    return idx >= 0 ? this.band.oneShotSlots[idx] ?? null : null;
+  }
+
+  private playOneShotSourceLine(
+    effect: OffensiveOneShot,
+    toX: number,
+    toY: number,
+    color: number,
+  ): void {
+    const source = this.oneShotSource(effect);
+    if (!source) return;
+    playClaimLine(this, source.x, source.y - 24, toX, toY, {
+      color,
+      depth: 62,
+      durationMs: 420,
+    });
   }
 
   /** Surface that the satchel is doing something here, once and briefly. The

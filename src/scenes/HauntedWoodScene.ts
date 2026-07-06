@@ -2823,6 +2823,12 @@ export class HauntedWoodScene extends Phaser.Scene {
     if (effect === "toll-strike") {
       const t = targets[0];
       if (!t || t.isDefeated()) return;
+      this.playOneShotSourceLine(
+        effect,
+        t.container.x,
+        t.container.y - 78,
+        PALETTE_HEX.ember,
+      );
       playBellToll();
       playWordCompleteBurst(this, t.container.x, t.restY - 80, {
         color: PALETTE_HEX.ember,
@@ -2834,15 +2840,68 @@ export class HauntedWoodScene extends Phaser.Scene {
     } else if (effect === "jam-foe") {
       const t = targets[0];
       if (!t || t.isDefeated()) return;
+      this.playOneShotSourceLine(
+        effect,
+        t.container.x,
+        t.container.y - 78,
+        PALETTE_HEX.frost,
+      );
       playSparkZap();
+      playBodyImpact(this, t.container, {
+        kind: "snow",
+        color: PALETTE_HEX.frost,
+        offsetY: -78,
+        depth: 63,
+        ringRadius: 38,
+        count: 8,
+        durationMs: 380,
+      });
       t.freeze();
     } else if (effect === "bind-beat") {
       playWaveSting();
       this.cameras.main.shake(220, 0.004);
       for (const g of targets) {
-        if (!g.isDefeated()) g.freeze(BIND_BEAT_FREEZE_MS);
+        if (!g.isDefeated()) {
+          this.playOneShotSourceLine(
+            effect,
+            g.container.x,
+            g.container.y - 78,
+            PALETTE_HEX.brass,
+          );
+          playBodyImpact(this, g.container, {
+            kind: "mist",
+            color: PALETTE_HEX.brass,
+            offsetY: -78,
+            depth: 63,
+            ringRadius: 34,
+            count: 6,
+            durationMs: 360,
+          });
+          g.freeze(BIND_BEAT_FREEZE_MS);
+        }
       }
     }
+  }
+
+  private oneShotSource(effect: OffensiveOneShot): { x: number; y: number } | null {
+    const offensiveOneShots = this.combat.oneShots.filter(isOffensiveOneShot);
+    const idx = offensiveOneShots.indexOf(effect);
+    return idx >= 0 ? this.band.oneShotSlots[idx] ?? null : null;
+  }
+
+  private playOneShotSourceLine(
+    effect: OffensiveOneShot,
+    toX: number,
+    toY: number,
+    color: number,
+  ): void {
+    const source = this.oneShotSource(effect);
+    if (!source) return;
+    playClaimLine(this, source.x, source.y - 24, toX, toY, {
+      color,
+      depth: 62,
+      durationMs: 420,
+    });
   }
 
   /** Surface that the satchel is doing something here, once and briefly. The

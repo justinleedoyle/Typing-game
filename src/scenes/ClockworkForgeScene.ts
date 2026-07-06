@@ -3058,11 +3058,38 @@ export class ClockworkForgeScene extends Phaser.Scene {
     if (effect === "toll-strike") this.tollStrike(targets[0]);
   }
 
+  private oneShotSource(effect: OffensiveOneShot): { x: number; y: number } | null {
+    const offensiveOneShots = this.combat.oneShots.filter(isOffensiveOneShot);
+    const idx = offensiveOneShots.indexOf(effect);
+    return idx >= 0 ? this.band.oneShotSlots[idx] ?? null : null;
+  }
+
+  private playOneShotSourceLine(
+    effect: OffensiveOneShot,
+    toX: number,
+    toY: number,
+    color: number,
+  ): void {
+    const source = this.oneShotSource(effect);
+    if (!source) return;
+    playClaimLine(this, source.x, source.y - 24, toX, toY, {
+      color,
+      depth: 62,
+      durationMs: 420,
+    });
+  }
+
   /** toll-strike (bells-tongue): the bell's tongue rings and fells the strongest
    *  golem outright — a deep toll + an ember bloom where it stood. A programmatic
    *  defeat (like the chain-spark), so no command flourish, just the kill. */
   private tollStrike(target: MovingWordEnemy | undefined): void {
     if (!target || target.isDefeated()) return;
+    this.playOneShotSourceLine(
+      "toll-strike",
+      target.container.x,
+      target.restY - 80,
+      PALETTE_HEX.ember,
+    );
     playBellToll();
     playWordCompleteBurst(this, target.container.x, target.restY - 80, {
       color: PALETTE_HEX.ember,

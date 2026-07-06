@@ -2023,10 +2023,62 @@ export class SunkenBellScene extends Phaser.Scene {
    *  redrawWardenPhase2 graphics). Drawn at absolute coords (no scaled container),
    *  same as the procedural bell. */
   private drawWarden(): Phaser.GameObjects.Image {
-    const sprite = this.add.image(WARDEN_X, WARDEN_Y, "bell-warden");
+    this.drawWardenStageBase();
+    const sprite = this.add.image(WARDEN_X, WARDEN_Y, "bell-warden").setDepth(8);
     sprite.setScale(WARDEN_SPRITE_HEIGHT / sprite.height);
     addIdleBreath(this, sprite, { dy: -3, durationMs: 2800 });
     return sprite;
+  }
+
+  private drawWardenStageBase(): void {
+    const base = this.add.container(WARDEN_X, WARDEN_Y + 150).setDepth(7);
+    base.add(addLocalGroundShadow(this, 210, 34, {
+      y: 8,
+      alpha: 0.24,
+      color: 0x02070c,
+    }));
+
+    const water = this.add.graphics();
+    water.fillStyle(0x102c3a, 0.18);
+    water.fillEllipse(0, 0, 260, 42);
+    water.fillStyle(0xa7d2dd, 0.08);
+    water.fillEllipse(-18, -5, 178, 24);
+    water.lineStyle(2, BELL_BURST_COLOR, 0.24);
+    water.strokeEllipse(-26, -4, 172, 19);
+    water.strokeEllipse(42, 6, 128, 15);
+    water.lineStyle(1, 0xa7d2dd, 0.18);
+    water.lineBetween(-104, -2, -58, -8);
+    water.lineBetween(-34, 7, 24, 0);
+    water.lineBetween(48, -2, 114, 5);
+    water.fillStyle(0xa7d2dd, 0.18);
+    water.fillCircle(-72, -10, 2.6);
+    water.fillCircle(84, -2, 2.2);
+    water.fillCircle(18, -8, 2);
+    base.add(water);
+
+    addContainerWake(this, base, {
+      kind: "bubble",
+      intervalMs: 720,
+      spreadX: 100,
+      spreadY: 14,
+      color: BELL_BURST_COLOR,
+      alpha: 0.16,
+      size: 3.4,
+      depth: 7.2,
+      driftX: 16,
+      driftY: -44,
+      durationMs: 1200,
+    });
+
+    this.tweens.add({
+      targets: base,
+      scaleX: { from: 0.992, to: 1.018 },
+      scaleY: { from: 1.018, to: 0.992 },
+      duration: 1900,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
   }
 
   private playWardenStagePulse(

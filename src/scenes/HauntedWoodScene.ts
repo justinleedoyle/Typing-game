@@ -3310,6 +3310,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private drawGhostKing(): void {
     const gkx = 1400;
     const gky = 560;
+    const rootBase = this.makeGhostKingRootBase(gkx, gky + 212);
 
     // Root throne — kept as graphics (the painted sprite is just the king).
     const throne = this.add.graphics();
@@ -3334,7 +3335,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
     // Fade both in together.
     this.tweens.add({
-      targets: [throne, sprite],
+      targets: [rootBase, throne, sprite],
       alpha: 1,
       duration: 1200,
       ease: "Sine.easeIn",
@@ -3343,6 +3344,60 @@ export class HauntedWoodScene extends Phaser.Scene {
         this.playGhostKingStagePulse();
       },
     });
+  }
+
+  private makeGhostKingRootBase(x: number, y: number): Phaser.GameObjects.Container {
+    const c = this.add.container(x, y).setAlpha(0);
+    c.add(addLocalGroundShadow(this, 230, 34, {
+      y: 16,
+      alpha: 0.22,
+      color: 0x020602,
+    }));
+
+    const mist = this.add.graphics();
+    mist.fillStyle(0x11180f, 0.24);
+    mist.fillEllipse(0, 4, 268, 46);
+    mist.fillStyle(0xd8e2cf, 0.075);
+    mist.fillEllipse(-34, -2, 178, 26);
+    mist.fillEllipse(54, 8, 148, 23);
+    mist.lineStyle(3, 0x6f8b68, 0.16);
+    mist.lineBetween(-112, 2, -64, 10);
+    mist.lineBetween(-54, 10, -8, -4);
+    mist.lineBetween(4, -2, 58, 12);
+    mist.lineBetween(50, 11, 118, 2);
+    mist.lineStyle(1, 0xd8e2cf, 0.14);
+    mist.lineBetween(-88, -8, -32, -14);
+    mist.lineBetween(34, -10, 92, -14);
+    mist.fillStyle(0xd8e2cf, 0.14);
+    mist.fillCircle(-72, -8, 2.8);
+    mist.fillCircle(72, -5, 2.5);
+    mist.fillCircle(-8, -12, 2);
+    c.add(mist);
+
+    addContainerWake(this, c, {
+      kind: "mist",
+      intervalMs: 760,
+      spreadX: 120,
+      spreadY: 18,
+      color: 0xd8e2cf,
+      alpha: 0.12,
+      size: 7,
+      depth: 0.3,
+      driftX: 76,
+      driftY: -20,
+      durationMs: 1260,
+    });
+
+    this.tweens.add({
+      targets: c,
+      scaleX: { from: 1.012, to: 0.988 },
+      scaleY: { from: 0.992, to: 1.018 },
+      duration: 2400,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    return c;
   }
 
   private playGhostKingStagePulse(intense = false): void {

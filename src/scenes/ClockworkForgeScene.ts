@@ -1420,6 +1420,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.clearActiveTargets();
     this.golems = [];
     this.waveActive = false;
+    this.playCommandGolemRiseCue();
     this.cameras.main.shake(300, 0.006);
     this.narration.say("forge_command_golem_rise");
     this.time.delayedCall(2800, () => this.startBossPhase1());
@@ -1445,6 +1446,23 @@ export class ClockworkForgeScene extends Phaser.Scene {
       onComplete: () => this.playCommandGolemStagePulse(),
     });
     this.idleBob(this.bossContainer);
+  }
+
+  private playCommandGolemRiseCue(): void {
+    playSceneEventPulse(this, {
+      kind: "ember",
+      color: PALETTE_HEX.ember,
+      x: this.scale.width / 2 + 200,
+      y: FLOOR_Y - 92,
+      depth: 42,
+      ringWidth: 620,
+      ringHeight: 112,
+      count: 12,
+      alpha: 0.1,
+      spreadX: 270,
+      spreadY: 38,
+      durationMs: 760,
+    });
   }
 
   private playCommandGolemStagePulse(intense = false): void {

@@ -641,6 +641,7 @@ export class MovingWordEnemy {
    *  advance, tears down the word, and fades the body up and out. */
   defeat(): void {
     if (this.defeated) return;
+    const playerCompletion = this.completedByPlayer;
     this.defeated = true;
     this.clearFreeze();
     this.clearArrivalTimer();
@@ -653,6 +654,7 @@ export class MovingWordEnemy {
     this.advanceTween = null;
     const c = this.cfg.container;
     this.cfg.scene.tweens.killTweensOf(c);
+    if (playerCompletion) this.playDefeatImpact();
     this.cfg.scene.tweens.add({
       targets: c,
       alpha: 0,
@@ -680,6 +682,23 @@ export class MovingWordEnemy {
     this.completedByPlayer = true;
     this.defeat();
     this.cfg.onComplete?.(mods, this);
+  }
+
+  private playDefeatImpact(): void {
+    playBodyImpact(this.cfg.scene, this.cfg.container, {
+      kind: this.cfg.defeatImpactKind ?? "mote",
+      color:
+        this.cfg.defeatImpactColor ??
+        this.cfg.claimLineColor ??
+        (this.cfg.burstColor === null ? undefined : this.cfg.burstColor),
+      offsetY:
+        this.cfg.defeatImpactOffsetY ??
+        Math.min(-38, this.anchorOffsetY * 0.58),
+      depth: 51,
+      ringRadius: 42,
+      count: 10,
+      durationMs: 430,
+    });
   }
 
   private reachWren(): void {

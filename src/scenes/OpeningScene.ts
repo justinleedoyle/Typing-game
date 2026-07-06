@@ -19,6 +19,7 @@ import {
   playClaimLine,
   type WordBodyAnchorHandle,
 } from "../game/livingScene";
+import { cornerTicks, UI_HEX } from "../game/ui/uiTheme";
 import openingBackdrop from "../../art/references/opening-typewriter-study-clean.png";
 import { makeQuietLordSprite, preloadQuietLord } from "../game/quietLord";
 import runaSprite from "../../art/runa/runa-front.png";
@@ -29,6 +30,9 @@ interface OpeningSceneData {
 }
 
 const IDENTITY_CHOICE_TARGET = { x: 790, y: 650 };
+const IDENTITY_CARD_W = 230;
+const IDENTITY_CARD_H = 124;
+const IDENTITY_CARD_OFFSET_X = 150;
 const NAME_TARGET = { x: 910, y: 640 };
 const TYPEWRITER_TARGET = { x: 790, y: 700 };
 const PORTAL_TARGET = { x: 1510, y: 610 };
@@ -51,6 +55,7 @@ interface StudyTargetOptions {
   y: number;
   fontSize: number;
   response: StudyResponsePoint;
+  frame?: "banner" | null;
   onComplete: () => void;
 }
 
@@ -66,6 +71,7 @@ export class OpeningScene extends Phaser.Scene {
   private siblingKeepsake: Phaser.GameObjects.Graphics | null = null;
   private studyTypingPulseTimes = new WeakMap<StudyResponsePoint, number>();
   private studyWordAnchorReleases: Array<() => void> = [];
+  private identityChoiceCards: Phaser.GameObjects.Container[] = [];
 
   // §5.5.2 — Wren is gender-selectable. Cached from saveState in init(); set
   // by Beat 2.5 on first run; used by beat3 (sibling appearance + dialogue),
@@ -89,6 +95,7 @@ export class OpeningScene extends Phaser.Scene {
     this.siblingKeepsake = null;
     this.studyTypingPulseTimes = new WeakMap();
     this.studyWordAnchorReleases = [];
+    this.identityChoiceCards = [];
     // Honor an existing gender choice on revisit / New Game+; null on a
     // truly fresh save so Beat 2.5 will prompt.
     this.wrenGender = this.store.get().wrenGender;
@@ -179,6 +186,7 @@ export class OpeningScene extends Phaser.Scene {
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.clearStudyWordAnchors();
+      this.clearIdentityChoiceCards();
       this.siblingKeepsake = null;
     });
 
@@ -272,6 +280,7 @@ export class OpeningScene extends Phaser.Scene {
       "Before we begin, I should know who I am calling down into all of this. Type 'boy' or 'girl'.",
       "Runa",
     );
+    this.drawIdentityChoiceCards();
 
     const pick = (gender: "boy" | "girl") => {
       // Clear the unpicked target; the picked one self-destroys via its
@@ -282,6 +291,7 @@ export class OpeningScene extends Phaser.Scene {
       }
       this.beat2_5Targets = [];
       this.clearStudyWordAnchors();
+      this.clearIdentityChoiceCards(true);
       this.wrenGender = gender;
       this.store.update((s) => {
         s.wrenGender = gender;
@@ -290,21 +300,26 @@ export class OpeningScene extends Phaser.Scene {
       this.playStudyPulse(STUDY_RESPONSE.identity);
       this.time.delayedCall(700, () => this.beat3());
     };
+    const boyX = IDENTITY_CHOICE_TARGET.x - IDENTITY_CARD_OFFSET_X;
+    const girlX = IDENTITY_CHOICE_TARGET.x + IDENTITY_CARD_OFFSET_X;
+    const choiceY = IDENTITY_CHOICE_TARGET.y + 4;
 
     const boy = this.makeStudyTarget({
       word: "boy",
-      x: IDENTITY_CHOICE_TARGET.x - 120,
-      y: IDENTITY_CHOICE_TARGET.y,
-      fontSize: 44,
-      response: STUDY_RESPONSE.identity,
+      x: boyX,
+      y: choiceY,
+      fontSize: 42,
+      frame: null,
+      response: { x: boyX, y: IDENTITY_CHOICE_TARGET.y - 34, color: PALETTE_HEX.cream },
       onComplete: () => pick("boy"),
     });
     const girl = this.makeStudyTarget({
       word: "girl",
-      x: IDENTITY_CHOICE_TARGET.x + 120,
-      y: IDENTITY_CHOICE_TARGET.y,
-      fontSize: 44,
-      response: STUDY_RESPONSE.identity,
+      x: girlX,
+      y: choiceY,
+      fontSize: 42,
+      frame: null,
+      response: { x: girlX, y: IDENTITY_CHOICE_TARGET.y - 34, color: PALETTE_HEX.cream },
       onComplete: () => pick("girl"),
     });
     this.typingInput.register(boy);
@@ -638,7 +653,7 @@ export class OpeningScene extends Phaser.Scene {
       y: opts.y,
       fontSize: opts.fontSize,
       outline: true,
-      frame: "banner",
+      frame: opts.frame === null ? undefined : opts.frame ?? "banner",
       onClaim: () => {
         this.playStudyClaimLine(opts.response, target);
         this.playStudyClaimPulse(opts.response);
@@ -659,6 +674,107 @@ export class OpeningScene extends Phaser.Scene {
       durationMs: 250,
       offsetY: 12,
     });
+  }
+
+  private drawIdentityChoiceCards(): void {
+    this.clearIdentityChoiceCards();
+    this.identityChoiceCards = [
+      this.drawIdentityChoiceCard(
+        IDENTITY_CHOICE_TARGET.x - IDENTITY_CARD_OFFSET_X,
+        IDENTITY_CHOICE_TARGET.y,
+        PALETTE_HEX.brass,
+        0,
+      ),
+      this.drawIdentityChoiceCard(
+        IDENTITY_CHOICE_TARGET.x + IDENTITY_CARD_OFFSET_X,
+        IDENTITY_CHOICE_TARGET.y,
+        PALETTE_HEX.frost,
+        60,
+      ),
+    ];
+  }
+
+  private drawIdentityChoiceCard(
+    x: number,
+    y: number,
+    accent: number,
+    delayMs: number,
+  ): Phaser.GameObjects.Container {
+    const card = this.add.container(x, y + 14).setDepth(-0.35).setAlpha(0);
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x07050a, 0.26);
+    shadow.fillEllipse(0, IDENTITY_CARD_H / 2 - 4, IDENTITY_CARD_W * 0.86, 20);
+
+    const paper = this.add.graphics();
+    paper.fillStyle(UI_HEX.parchment, 0.92);
+    paper.fillRoundedRect(
+      -IDENTITY_CARD_W / 2,
+      -IDENTITY_CARD_H / 2,
+      IDENTITY_CARD_W,
+      IDENTITY_CARD_H,
+      9,
+    );
+    paper.lineStyle(2, UI_HEX.frame, 0.72);
+    paper.strokeRoundedRect(
+      -IDENTITY_CARD_W / 2,
+      -IDENTITY_CARD_H / 2,
+      IDENTITY_CARD_W,
+      IDENTITY_CARD_H,
+      9,
+    );
+    paper.lineStyle(1, UI_HEX.brass, 0.28);
+    paper.lineBetween(-IDENTITY_CARD_W / 2 + 28, -18, IDENTITY_CARD_W / 2 - 28, -18);
+    paper.lineBetween(-IDENTITY_CARD_W / 2 + 34, 30, IDENTITY_CARD_W / 2 - 34, 30);
+
+    const ticks = cornerTicks(this, IDENTITY_CARD_W, IDENTITY_CARD_H, {
+      inset: 8,
+      size: 13,
+      width: 2,
+    });
+    const seal = this.add.graphics().setPosition(-IDENTITY_CARD_W / 2 + 34, -IDENTITY_CARD_H / 2 + 32);
+    seal.fillStyle(accent, 0.22);
+    seal.fillCircle(0, 0, 17);
+    seal.lineStyle(2, accent, 0.58);
+    seal.strokeCircle(0, 0, 17);
+    seal.lineStyle(1, UI_HEX.frame, 0.34);
+    seal.lineBetween(-7, -2, 7, -2);
+    seal.lineBetween(-4, 5, 4, 5);
+
+    card.add([shadow, paper, ticks, seal]);
+    card.setScale(0.98);
+    this.tweens.add({
+      targets: card,
+      alpha: 1,
+      y,
+      scaleX: 1,
+      scaleY: 1,
+      delay: delayMs,
+      duration: 260,
+      ease: "Sine.easeOut",
+    });
+    return card;
+  }
+
+  private clearIdentityChoiceCards(animated = false): void {
+    const cards = [...this.identityChoiceCards];
+    this.identityChoiceCards = [];
+    for (const card of cards) {
+      this.tweens.killTweensOf(card);
+      if (!animated || !card.scene) {
+        card.destroy();
+        continue;
+      }
+      this.tweens.add({
+        targets: card,
+        alpha: 0,
+        y: card.y + 12,
+        scaleX: 0.97,
+        scaleY: 0.97,
+        duration: 220,
+        ease: "Sine.easeIn",
+        onComplete: () => card.destroy(),
+      });
+    }
   }
 
   private attachStudyWordAnchor(

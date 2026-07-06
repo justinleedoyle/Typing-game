@@ -176,6 +176,15 @@ interface LordWordFxOptions {
   impactOffsetX?: number;
 }
 
+interface CompanionWindowWordFxOptions {
+  kind: AmbientKind;
+  color: number;
+  sourceX: number;
+  sourceY: number;
+  ringRadius?: number;
+  impactOffsetX?: number;
+}
+
 interface FinaleEnemyArtSpec {
   textureKey: string;
   height: number;
@@ -1283,6 +1292,93 @@ export class GreatBattleScene extends Phaser.Scene {
         },
       ),
     );
+    return target;
+  }
+
+  /** Companion hit-window words come from the ally-opened window, then strike the Lord. */
+  private makeCompanionWindowWord(
+    opts: TextWordTargetOptions,
+    fx: CompanionWindowWordFxOptions,
+  ): TextWordTarget {
+    const originalOnClaim = opts.onClaim;
+    const originalOnAdvance = opts.onAdvance;
+    const originalOnComplete = opts.onComplete;
+    const sideOffset =
+      fx.impactOffsetX ?? (opts.x - this.scale.width / 2) * 0.18;
+    const sourceAnchor = this.add
+      .container(fx.sourceX, fx.sourceY)
+      .setDepth(5)
+      .setAlpha(0);
+
+    let target!: TextWordTarget;
+    target = this.makeWord({
+      ...opts,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          sourceAnchor.x,
+          sourceAnchor.y,
+          target.getAnchorX(),
+          target.getAnchorY(),
+          { color: fx.color, depth: 6, durationMs: 420 },
+        );
+        originalOnClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        if (sourceAnchor.scene) {
+          playBodyTypePulse(this, sourceAnchor, {
+            kind: fx.kind,
+            color: fx.color,
+            depth: 6,
+            ringRadius: fx.ringRadius ?? 36,
+            durationMs: 240,
+          });
+        }
+        originalOnAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        const hit = this.quietLordClaimOrigin(sideOffset, 508);
+        this.clearTargetAnchor(target);
+        playClaimLine(
+          this,
+          target.getAnchorX(),
+          target.getAnchorY() - 6,
+          hit.x,
+          hit.y,
+          { color: fx.color, depth: 6, durationMs: 360 },
+        );
+        playBodyImpact(this, this.quietLordContainer, {
+          kind: fx.kind,
+          color: fx.color,
+          offsetX: sideOffset,
+          offsetY: 508,
+          depth: 7,
+          ringRadius: (fx.ringRadius ?? 40) + 18,
+          count: 12,
+          durationMs: 420,
+        });
+        originalOnComplete();
+      },
+    });
+
+    const anchor = attachWordBodyAnchor(
+      this,
+      sourceAnchor,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: fx.color,
+        alpha: 0.15,
+        depth: 6,
+        targetOffsetY: 24,
+      },
+    );
+    this.trackTargetAnchor(target, {
+      update: anchor.update,
+      destroy: () => {
+        anchor.destroy();
+        if (sourceAnchor.scene) sourceAnchor.destroy();
+      },
+    });
     return target;
   }
 
@@ -3560,7 +3656,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.time.delayedCall(500, () => {
       const wordPos = { x: this.scale.width * 0.64, y: 560 };
       this.playGlassFishCorridorCue();
-      const bonusTarget = this.makeLordWord({
+      const bonusTarget = this.makeCompanionWindowWord({
         scene: this,
         word: "light",
         x: wordPos.x,
@@ -3582,7 +3678,13 @@ export class GreatBattleScene extends Phaser.Scene {
             },
           });
         },
-      }, { kind: "bubble", color: 0xa7d2dd, ringRadius: 38 });
+      }, {
+        kind: "bubble",
+        color: 0xa7d2dd,
+        sourceX: wordPos.x,
+        sourceY: wordPos.y + 46,
+        ringRadius: 38,
+      });
       this.typingInput.register(bonusTarget);
       this.activeTargets.push(bonusTarget);
     });
@@ -3610,7 +3712,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.playLanternMothThroneCue();
 
     // Spawn a bonus hit-window word on the side
-    const bonusTarget = this.makeLordWord({
+    const bonusTarget = this.makeCompanionWindowWord({
       scene: this,
       word: "throne",
       x: this.scale.width * 0.15,
@@ -3632,7 +3734,13 @@ export class GreatBattleScene extends Phaser.Scene {
         if (idx >= 0) this.activeTargets.splice(idx, 1);
         bonusTarget.destroy();
       },
-    }, { kind: "mote", color: 0xffd080, ringRadius: 36 });
+    }, {
+      kind: "mote",
+      color: 0xffd080,
+      sourceX: this.scale.width * 0.15,
+      sourceY: 510,
+      ringRadius: 36,
+    });
     this.typingInput.register(bonusTarget);
     this.activeTargets.push(bonusTarget);
     this.time.delayedCall(5200, () => {
@@ -3733,7 +3841,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.band.setObjective("Type flank through the wisp-cat opening.");
     const companion = this.showFinaleCompanionAction("wisp-cat");
     this.playWispCatFlankCue();
-    const flankTarget = this.makeLordWord({
+    const flankTarget = this.makeCompanionWindowWord({
       scene: this,
       word: "flank",
       x: this.scale.width * 0.85,
@@ -3755,7 +3863,13 @@ export class GreatBattleScene extends Phaser.Scene {
           },
         });
       },
-    }, { kind: "mist", color: 0x9fb69a, ringRadius: 36 });
+    }, {
+      kind: "mist",
+      color: 0x9fb69a,
+      sourceX: this.scale.width * 0.85,
+      sourceY: 550,
+      ringRadius: 36,
+    });
     this.typingInput.register(flankTarget);
     this.activeTargets.push(flankTarget);
   }

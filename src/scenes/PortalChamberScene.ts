@@ -6,7 +6,7 @@ import { playClaim } from "../audio/claim";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { RELICS } from "../game/relics";
-import type { SaveStore } from "../game/saveState";
+import type { Difficulty, SaveStore } from "../game/saveState";
 import {
   currentUserDisplayName,
   signInWithGoogle,
@@ -15,7 +15,7 @@ import {
 } from "../game/supabaseClient";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
-import { isPuristToggleKey, togglePuristMode } from "../game/purist";
+import { difficultyLabel, isPuristToggleKey, togglePuristMode } from "../game/purist";
 import {
   addAmbientDrift,
   addBackdropDrift,
@@ -195,6 +195,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private persistentStationWordAnchorReleases: Array<() => void> = [];
   private shelfDisplayObjects: Phaser.GameObjects.GameObject[] = [];
   private accountDisplayObjects: Phaser.GameObjects.GameObject[] = [];
+  private difficultyNotice?: Phaser.GameObjects.Container;
   private portalFloorCallGlow?: Phaser.GameObjects.Container;
   private stationTypingPulseTimes = new WeakMap<StationSpec, number>();
   private portalTypingPulseTimes = new Map<string, number>();
@@ -222,6 +223,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.persistentStationWordAnchorReleases = [];
     this.shelfDisplayObjects = [];
     this.accountDisplayObjects = [];
+    this.difficultyNotice = undefined;
     this.portalFloorCallGlow = undefined;
     this.stationTypingPulseTimes = new WeakMap();
     this.portalTypingPulseTimes = new Map();
@@ -304,6 +306,8 @@ export class PortalChamberScene extends Phaser.Scene {
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
       this.clearPersistentStationWordAnchors();
+      this.difficultyNotice?.destroy();
+      this.difficultyNotice = undefined;
     });
 
     this.ambientHandle = playAmbientHub();
@@ -1360,11 +1364,78 @@ export class PortalChamberScene extends Phaser.Scene {
   private onKeyDown(event: KeyboardEvent): void {
     // Ctrl+Shift+P: toggle purist mode from the hub too.
     if (isPuristToggleKey(event)) {
-      togglePuristMode(this, this.store);
+      const next = togglePuristMode(this, this.store, { announce: false });
+      this.showHubDifficultyNotice(next);
       return;
     }
     if (event.key.length === 1 || event.key === " ") playClack();
     this.typingInput.handleChar(event.key);
+  }
+
+  private showHubDifficultyNotice(tier: Difficulty): void {
+    this.difficultyNotice?.destroy();
+
+    const station = HUB_STATIONS.account;
+    const width = 236;
+    const height = 46;
+    const y =
+      ACCOUNT_PANEL.y +
+      ACCOUNT_PANEL.height / 2 +
+      (this.activeZone === "account" ? 48 : 38);
+    const container = this.add
+      .container(station.x, y)
+      .setDepth(12)
+      .setAlpha(0)
+      .setScale(0.96);
+
+    const bg = this.add.graphics();
+    bg.fillStyle(UI_HEX.panel, 0.78);
+    bg.fillRoundedRect(-width / 2, -height / 2, width, height, 8);
+    bg.lineStyle(1.5, UI_HEX.brass, 0.66);
+    bg.strokeRoundedRect(-width / 2, -height / 2, width, height, 8);
+
+    const corners = cornerTicks(this, width - 12, height - 10, {
+      inset: 4,
+      size: 8,
+      width: 1,
+    }).setAlpha(0.62);
+    const text = this.add
+      .text(0, 0, `difficulty: ${difficultyLabel(tier)}`, {
+        fontFamily: SERIF,
+        fontSize: "17px",
+        fontStyle: "italic",
+        color: tier === "forgiving" ? PALETTE.brass : PALETTE.ember,
+      })
+      .setOrigin(0.5);
+    container.add([bg, corners, text]);
+    this.difficultyNotice = container;
+
+    this.focusStation(station);
+    this.pulseStation(station);
+
+    this.tweens.add({
+      targets: container,
+      alpha: 1,
+      scaleX: 1,
+      scaleY: 1,
+      y: y - 6,
+      duration: 180,
+      ease: "Sine.easeOut",
+    });
+    this.time.delayedCall(1250, () => {
+      if (this.difficultyNotice !== container || !container.active) return;
+      this.tweens.add({
+        targets: container,
+        alpha: 0,
+        y: y - 12,
+        duration: 220,
+        ease: "Sine.easeInOut",
+        onComplete: () => {
+          if (this.difficultyNotice === container) this.difficultyNotice = undefined;
+          container.destroy();
+        },
+      });
+    });
   }
 
   // ─── Arch appearance ──────────────────────────────────────────────────────

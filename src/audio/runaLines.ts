@@ -1204,6 +1204,14 @@ const FINALE_LINES: readonly RunaLine[] = [
     isNew: true,
   },
   {
+    id: "finale_relic_sabotage_wrench_wave",
+    scene: "finale",
+    trigger: "GreatBattleScene.runNextWave() — Sabotage-Wrench shortens Phase-1 echo words (wired)",
+    text: "Sabotage-Wrench — the echo-words catch and shorten.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
     id: "finale_phase2_unmake",
     scene: "finale",
     trigger: "GreatBattleScene.startPhase2a() — default duel open (wired)",

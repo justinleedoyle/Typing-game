@@ -485,6 +485,7 @@ export class GreatBattleScene extends Phaser.Scene {
   // side effect. Accuracy still recorded (recordKeystroke path is inside
   // typingInput and not interceptable without deeper changes).
   private shrineTokenForgivenThisWave = false;
+  private sabotageWrenchWaveNoticed = false;
   private untetheredWindSlowMult = 1.0; // untethered-wind: <1 slows advance
   // Damage-feedback parity (#73): onMiss fires per keystroke, so the thud +
   // edge vignette are throttled to avoid strobing on a burst of mistyping.
@@ -903,6 +904,23 @@ export class GreatBattleScene extends Phaser.Scene {
       alpha: 0.075,
       spreadX: 520,
       spreadY: 58,
+    });
+  }
+
+  private playSabotageWrenchWaveCue(): void {
+    playSceneEventPulse(this, {
+      kind: "ember",
+      color: PALETTE_HEX.ember,
+      x: this.scale.width / 2,
+      y: 716,
+      depth: 5,
+      durationMs: 520,
+      ringWidth: 1040,
+      ringHeight: 150,
+      count: 9,
+      alpha: 0.07,
+      spreadX: 420,
+      spreadY: 42,
     });
   }
 
@@ -1667,6 +1685,14 @@ export class GreatBattleScene extends Phaser.Scene {
     // §5.5.11 — Apprentices' Cabal (sabotage-wrench): enemy words shortened by 1 char
     if (satchel.includes("sabotage-wrench")) {
       words = words.map((w) => (w.length > 2 ? w.slice(0, -1) : w));
+      if (!this.sabotageWrenchWaveNoticed) {
+        this.sabotageWrenchWaveNoticed = true;
+        this.time.delayedCall(360, () => {
+          if (this.runOver) return;
+          this.playSabotageWrenchWaveCue();
+          this.showRelicNotice("finale_relic_sabotage_wrench_wave", "wrench");
+        });
+      }
     }
 
     const xPositions = [this.scale.width * 0.25, this.scale.width * 0.5, this.scale.width * 0.75];

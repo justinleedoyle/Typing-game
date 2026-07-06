@@ -176,7 +176,7 @@ interface LordWordFxOptions {
   impactOffsetX?: number;
 }
 
-interface CompanionWindowWordFxOptions {
+interface WindowStrikeWordFxOptions {
   kind: AmbientKind;
   color: number;
   sourceX: number;
@@ -1295,10 +1295,10 @@ export class GreatBattleScene extends Phaser.Scene {
     return target;
   }
 
-  /** Companion hit-window words come from the ally-opened window, then strike the Lord. */
-  private makeCompanionWindowWord(
+  /** Hit-window words come from a local opening, then strike the Lord. */
+  private makeWindowStrikeWord(
     opts: TextWordTargetOptions,
-    fx: CompanionWindowWordFxOptions,
+    fx: WindowStrikeWordFxOptions,
   ): TextWordTarget {
     const originalOnClaim = opts.onClaim;
     const originalOnAdvance = opts.onAdvance;
@@ -3553,7 +3553,7 @@ export class GreatBattleScene extends Phaser.Scene {
       this.showRelicNotice("finale_relic_master_key");
       this.playMasterKeyOpeningCue();
       this.band.setObjective("Type flank through the Master-Key opening.");
-      const flankTarget = this.makeLordWord({
+      const flankTarget = this.makeWindowStrikeWord({
         scene: this,
         word: "flank",
         x: this.scale.width * 0.15,
@@ -3571,6 +3571,12 @@ export class GreatBattleScene extends Phaser.Scene {
             onComplete: () => this.startPhase2bMainRounds(),
           });
         },
+      }, {
+        kind: "mote",
+        color: UI_HEX.brass,
+        sourceX: this.scale.width * 0.15,
+        sourceY: 548,
+        ringRadius: 36,
       });
       this.typingInput.register(flankTarget);
       this.activeTargets.push(flankTarget);
@@ -3656,7 +3662,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.time.delayedCall(500, () => {
       const wordPos = { x: this.scale.width * 0.64, y: 560 };
       this.playGlassFishCorridorCue();
-      const bonusTarget = this.makeCompanionWindowWord({
+      const bonusTarget = this.makeWindowStrikeWord({
         scene: this,
         word: "light",
         x: wordPos.x,
@@ -3712,7 +3718,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.playLanternMothThroneCue();
 
     // Spawn a bonus hit-window word on the side
-    const bonusTarget = this.makeCompanionWindowWord({
+    const bonusTarget = this.makeWindowStrikeWord({
       scene: this,
       word: "throne",
       x: this.scale.width * 0.15,
@@ -3841,7 +3847,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.band.setObjective("Type flank through the wisp-cat opening.");
     const companion = this.showFinaleCompanionAction("wisp-cat");
     this.playWispCatFlankCue();
-    const flankTarget = this.makeCompanionWindowWord({
+    const flankTarget = this.makeWindowStrikeWord({
       scene: this,
       word: "flank",
       x: this.scale.width * 0.85,

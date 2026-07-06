@@ -77,14 +77,54 @@ await suite("parseDevTarget: ?dev=<target> resolves the scene-key jump", () => {
     "bare finale route can jump directly to a single realm echo wave",
   );
   assertEqual(
+    parseDevTarget("?dev=great-battle&loadout=bare&phase=2"),
+    {
+      unlock: true,
+      realmSceneKey: "GreatBattleScene",
+      loadout: "bare",
+      finalePhase: "phase2",
+    },
+    "bare finale route can jump directly to the duel phase",
+  );
+  assertEqual(
+    parseDevTarget("?dev=great-battle&loadout=bare&phase=final"),
+    {
+      unlock: true,
+      realmSceneKey: "GreatBattleScene",
+      loadout: "bare",
+      finalePhase: "phase3",
+    },
+    "bare finale route can jump directly to the final phrase phase",
+  );
+  assertEqual(
+    parseDevTarget("?dev=great-battle&loadout=bare&phase=3&wave=sunken-bell"),
+    {
+      unlock: true,
+      realmSceneKey: "GreatBattleScene",
+      loadout: "bare",
+      finalePhase: "phase3",
+    },
+    "finale phase selector takes precedence over a Phase-1 wave selector",
+  );
+  assertEqual(
     parseDevTarget("?dev=great-battle&loadout=bare&wave=not-a-realm"),
     { unlock: true, realmSceneKey: "GreatBattleScene", loadout: "bare" },
     "unknown finale wave selectors are ignored",
   );
   assertEqual(
+    parseDevTarget("?dev=great-battle&loadout=bare&phase=not-a-phase"),
+    { unlock: true, realmSceneKey: "GreatBattleScene", loadout: "bare" },
+    "unknown finale phase selectors are ignored",
+  );
+  assertEqual(
     parseDevTarget("?dev=sunken-bell&wave=clockwork-forge"),
     { unlock: true, realmSceneKey: "SunkenBellScene" },
     "wave selector only applies to direct finale jumps",
+  );
+  assertEqual(
+    parseDevTarget("?dev=sunken-bell&phase=2"),
+    { unlock: true, realmSceneKey: "SunkenBellScene" },
+    "phase selector only applies to direct finale jumps",
   );
   assertEqual(
     parseDevTarget("?dev=great-battle&loadout=full"),

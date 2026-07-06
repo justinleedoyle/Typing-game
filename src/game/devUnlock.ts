@@ -19,6 +19,10 @@
 //                         → jump straight to a single finale Phase-1 realm echo
 //                           for screenshot tuning, without typing through prior
 //                           waves. Valid wave ids are the five realm ids below.
+//   ?dev=great-battle&loadout=bare&phase=2
+//   ?dev=great-battle&loadout=bare&phase=3
+//                         → jump straight to the finale duel or final phrase for
+//                           late-finale screenshot/feel-tuning passes.
 //
 // The unlock writes to the real save (tied to the player's login), so once you've
 // loaded ?dev once, everything stays unlocked in normal play too. The bare-loadout
@@ -43,6 +47,8 @@ export const DEV_SCENE_KEYS: Record<string, string> = {
   "great-battle": "GreatBattleScene",
 };
 
+export type DevFinalePhase = "phase2" | "phase3";
+
 export interface DevTarget {
   /** True when `?dev` is present — unlock everything. */
   readonly unlock: boolean;
@@ -52,6 +58,14 @@ export interface DevTarget {
   readonly loadout?: "bare";
   /** Optional direct finale Phase-1 wave selector for screenshot/feel tuning. */
   readonly finaleWaveRealmId?: string;
+  /** Optional direct late-finale phase selector for screenshot/feel tuning. */
+  readonly finalePhase?: DevFinalePhase;
+}
+
+function parseFinalePhase(value: string): DevFinalePhase | null {
+  if (value === "2" || value === "phase2" || value === "duel") return "phase2";
+  if (value === "3" || value === "phase3" || value === "final") return "phase3";
+  return null;
 }
 
 /** Parse the dev intent from a URL query string (location.search). Pure. */
@@ -60,8 +74,10 @@ export function parseDevTarget(search: string): DevTarget {
   if (!params.has("dev")) return { unlock: false, realmSceneKey: null };
   const realm = params.get("dev") ?? "";
   const wave = params.get("wave") ?? "";
+  const finalePhase =
+    realm === "great-battle" ? parseFinalePhase(params.get("phase") ?? "") : null;
   const finaleWaveRealmId =
-    realm === "great-battle" && Object.hasOwn(REALM_SCENE_KEYS, wave)
+    realm === "great-battle" && !finalePhase && Object.hasOwn(REALM_SCENE_KEYS, wave)
       ? wave
       : null;
   return {
@@ -69,6 +85,7 @@ export function parseDevTarget(search: string): DevTarget {
     realmSceneKey: DEV_SCENE_KEYS[realm] ?? null,
     ...(params.get("loadout") === "bare" ? { loadout: "bare" as const } : {}),
     ...(finaleWaveRealmId ? { finaleWaveRealmId } : {}),
+    ...(finalePhase ? { finalePhase } : {}),
   };
 }
 

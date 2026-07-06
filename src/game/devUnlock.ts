@@ -15,6 +15,11 @@
 //                           clears would otherwise remove later waves too fast.
 //                           TitleScene keeps this variant in-memory only so it
 //                           never wipes the player's real saved satchel.
+//   ?dev=clockwork-forge&satchel=snow-fox-cub
+//                         → unlock the route with an exact temporary satchel for
+//                           screenshot passes where one carried companion/relic
+//                           should be visible without the full debug inventory.
+//                           Comma-separate ids for a small mixed loadout.
 //   ?dev=great-battle&loadout=bare&wave=sunken-bell
 //                         → jump straight to a single finale Phase-1 realm echo
 //                           for screenshot tuning, without typing through prior
@@ -56,6 +61,8 @@ export interface DevTarget {
   readonly realmSceneKey: string | null;
   /** Optional temporary loadout override for screenshot/feel-tuning routes. */
   readonly loadout?: "bare";
+  /** Optional exact temporary satchel ids for screenshot/feel-tuning routes. */
+  readonly satchelOverride?: readonly string[];
   /** Optional direct finale Phase-1 wave selector for screenshot/feel tuning. */
   readonly finaleWaveRealmId?: string;
   /** Optional direct late-finale phase selector for screenshot/feel tuning. */
@@ -68,12 +75,27 @@ function parseFinalePhase(value: string): DevFinalePhase | null {
   return null;
 }
 
+function parseSatchelOverride(value: string | null): string[] | null {
+  if (!value) return null;
+  const ids: string[] = [];
+  for (const raw of value.split(",")) {
+    const id = raw.trim();
+    if (!Object.hasOwn(RELICS, id) || ids.includes(id)) continue;
+    ids.push(id);
+  }
+  return ids.length > 0 ? ids : null;
+}
+
 /** Parse the dev intent from a URL query string (location.search). Pure. */
 export function parseDevTarget(search: string): DevTarget {
   const params = new URLSearchParams(search);
   if (!params.has("dev")) return { unlock: false, realmSceneKey: null };
   const realm = params.get("dev") ?? "";
   const wave = params.get("wave") ?? "";
+  const bareLoadout = params.get("loadout") === "bare";
+  const satchelOverride = bareLoadout
+    ? null
+    : parseSatchelOverride(params.get("satchel"));
   const finalePhase =
     realm === "great-battle" ? parseFinalePhase(params.get("phase") ?? "") : null;
   const finaleWaveRealmId =
@@ -83,7 +105,8 @@ export function parseDevTarget(search: string): DevTarget {
   return {
     unlock: true,
     realmSceneKey: DEV_SCENE_KEYS[realm] ?? null,
-    ...(params.get("loadout") === "bare" ? { loadout: "bare" as const } : {}),
+    ...(bareLoadout ? { loadout: "bare" as const } : {}),
+    ...(satchelOverride ? { satchelOverride } : {}),
     ...(finaleWaveRealmId ? { finaleWaveRealmId } : {}),
     ...(finalePhase ? { finalePhase } : {}),
   };
@@ -94,7 +117,7 @@ export function parseDevTarget(search: string): DevTarget {
  *  preserves any existing RealmProgress fields (choices, intrusion flags). */
 export function applyDevUnlock(
   s: SaveState,
-  opts: { satchel?: "full" | "empty" } = {},
+  opts: { satchel?: "full" | "empty" | readonly string[] } = {},
 ): void {
   // The full `?dev` shortcut is meant to land in the hub, not replay the
   // opening cinematic on a fresh profile. This is the same gate the opening
@@ -108,6 +131,10 @@ export function applyDevUnlock(
   }
   if (opts.satchel === "empty") {
     s.satchel = [];
+    return;
+  }
+  if (Array.isArray(opts.satchel)) {
+    s.satchel = [...new Set(opts.satchel.filter((id) => Object.hasOwn(RELICS, id)))];
     return;
   }
   const owned = new Set(s.satchel);

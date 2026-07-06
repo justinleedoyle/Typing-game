@@ -67,6 +67,34 @@ await suite("parseDevTarget: ?dev=<target> resolves the scene-key jump", () => {
     "bare finale route → jump with temporary empty loadout",
   );
   assertEqual(
+    parseDevTarget("?dev=clockwork-forge&satchel=snow-fox-cub"),
+    {
+      unlock: true,
+      realmSceneKey: "ClockworkForgeScene",
+      satchelOverride: ["snow-fox-cub"],
+    },
+    "targeted satchel route → jump with a temporary exact loadout",
+  );
+  assertEqual(
+    parseDevTarget("?dev=haunted-wood&satchel=snow-fox-cub,bells-tongue,snow-fox-cub,not-real"),
+    {
+      unlock: true,
+      realmSceneKey: "HauntedWoodScene",
+      satchelOverride: ["snow-fox-cub", "bells-tongue"],
+    },
+    "targeted satchel route dedupes known ids and ignores unknown ids",
+  );
+  assertEqual(
+    parseDevTarget("?dev=sunken-bell&satchel=not-real"),
+    { unlock: true, realmSceneKey: "SunkenBellScene" },
+    "unknown targeted satchel ids are ignored",
+  );
+  assertEqual(
+    parseDevTarget("?dev=great-battle&loadout=bare&satchel=snow-fox-cub"),
+    { unlock: true, realmSceneKey: "GreatBattleScene", loadout: "bare" },
+    "bare loadout takes precedence over a targeted satchel",
+  );
+  assertEqual(
     parseDevTarget("?dev=great-battle&loadout=bare&wave=sunken-bell"),
     {
       unlock: true,
@@ -171,6 +199,21 @@ await suite("applyDevUnlock: can intentionally leave the satchel empty", () => {
     assert(s.realms[id]?.cleared === true, `${id} cleared`);
   }
   assertEqual(s.satchel, [], "temporary bare route has no relic/companion loadout");
+});
+
+await suite("applyDevUnlock: can use an exact temporary satchel", () => {
+  const s = freshSave();
+  s.satchel = ["bells-tongue", "quiet-chant"];
+  applyDevUnlock(s, { satchel: ["snow-fox-cub", "bells-tongue", "snow-fox-cub", "not-real"] });
+  assert(s.typewriterAwakened === true, "opening gate still completes");
+  for (const id of Object.keys(REALM_SCENE_KEYS)) {
+    assert(s.realms[id]?.cleared === true, `${id} cleared`);
+  }
+  assertEqual(
+    s.satchel,
+    ["snow-fox-cub", "bells-tongue"],
+    "temporary targeted route uses only the requested known ids",
+  );
 });
 
 await suite("applyDevUnlock: preserves existing progress + dedupes satchel", () => {

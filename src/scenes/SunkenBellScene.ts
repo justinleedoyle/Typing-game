@@ -35,6 +35,7 @@ import {
   addLocalGroundShadow,
   addLivingLight,
   attachWordBodyAnchor,
+  playBodyContactCue,
   playBodyImpact,
   playBodyTypePulse,
   playClaimLine,
@@ -3272,7 +3273,15 @@ export class SunkenBellScene extends Phaser.Scene {
         }
         this.checkWaveCleared();
       },
-      onReachWren: () => {
+      onReachWren: (self) => {
+        playBodyContactCue(this, self.container, this.wrenContainer, {
+          kind: "bubble",
+          color: BELL_BURST_COLOR,
+          sourceOffsetY: -62,
+          targetOffsetY: -106,
+          sourceRadius: 32,
+          targetRadius: 36,
+        });
         this.cameras.main.flash(300, 0, 0, 0, false);
         playWrenHurt(this.wrenSprite, { knockX: 0 });
         playDamageThud();

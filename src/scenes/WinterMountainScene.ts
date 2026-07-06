@@ -39,6 +39,7 @@ import {
   addIdleBreath,
   addLocalGroundShadow,
   addLivingLight,
+  playBodyContactCue,
   playBodyImpact,
   playBodyTypePulse,
   playClaimLine,
@@ -1824,7 +1825,7 @@ export class WinterMountainScene extends Phaser.Scene {
         playChime();
         this.afterWolfDefeated(self);
       },
-      onReachWren: () => this.onWolfHit(),
+      onReachWren: (self) => this.onWolfHit(self),
       // Shift = thunderclap (knock the pack back), Alt = frost-shatter (kill the
       // nearest too). Any claim first returns Wren to rest.
       onComplete: (mods, self) => {
@@ -1908,7 +1909,7 @@ export class WinterMountainScene extends Phaser.Scene {
         playChime();
         this.afterWolfDefeated(self);
       },
-      onReachWren: () => this.onWolfHit(),
+      onReachWren: (self) => this.onWolfHit(self),
       onComplete: () => this.returnWrenToRest(),
     });
 
@@ -1992,7 +1993,15 @@ export class WinterMountainScene extends Phaser.Scene {
   /** The hit feel when a wolf reaches Wren — shared by pack and boss. Snuffing a
    *  candle may end the wave (a wipe at zero), which the enemy's reachWren detects
    *  and halts on, so there's nothing to knock back. */
-  private onWolfHit(): void {
+  private onWolfHit(source: MovingWordEnemy): void {
+    playBodyContactCue(this, source.container, this.wrenContainer, {
+      kind: "snow",
+      color: PALETTE_HEX.frost,
+      sourceOffsetY: -82,
+      targetOffsetY: -110,
+      sourceRadius: 34,
+      targetRadius: 38,
+    });
     this.cameras.main.shake(220, 0.005);
     playDamageThud();
     flashDamageVignette(this);

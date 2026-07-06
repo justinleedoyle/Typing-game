@@ -213,6 +213,21 @@ export interface ClaimLineOptions {
   durationMs?: number;
 }
 
+export interface BodyContactCueOptions {
+  kind?: AmbientKind;
+  color?: number;
+  depth?: number;
+  durationMs?: number;
+  sourceOffsetX?: number;
+  sourceOffsetY?: number;
+  targetOffsetX?: number;
+  targetOffsetY?: number;
+  sourceRadius?: number;
+  targetRadius?: number;
+  sourceCount?: number;
+  targetCount?: number;
+}
+
 export interface WordBodyAnchorOptions {
   color?: number;
   alpha?: number;
@@ -905,6 +920,61 @@ export function playBodyImpact(
       onComplete: () => fleck.destroy(),
     });
   }
+}
+
+/** Short contact read from one body into another. Use this for damage/contact
+ *  moments where a foe reaches Wren or a scene object affects another object, so
+ *  the consequence has a visible source and destination instead of reading only
+ *  as screen shake or UI feedback. */
+export function playBodyContactCue(
+  scene: Phaser.Scene,
+  source: BodyImpactTarget,
+  target: BodyImpactTarget,
+  opts: BodyContactCueOptions = {},
+): void {
+  if (!source.active || !target.active) return;
+
+  const kind = opts.kind ?? "mote";
+  const color = opts.color ?? colorFor(kind);
+  const depth = opts.depth ?? 58;
+  const durationMs = opts.durationMs ?? 320;
+  const sourceOffsetX = opts.sourceOffsetX ?? 0;
+  const sourceOffsetY = opts.sourceOffsetY ?? -54;
+  const targetOffsetX = opts.targetOffsetX ?? 0;
+  const targetOffsetY = opts.targetOffsetY ?? -108;
+
+  playClaimLine(
+    scene,
+    source.x + sourceOffsetX,
+    source.y + sourceOffsetY,
+    target.x + targetOffsetX,
+    target.y + targetOffsetY,
+    {
+      color,
+      depth,
+      durationMs: Math.max(220, durationMs - 60),
+    },
+  );
+  playBodyImpact(scene, source, {
+    kind,
+    color,
+    offsetX: sourceOffsetX,
+    offsetY: sourceOffsetY,
+    depth,
+    ringRadius: opts.sourceRadius ?? 30,
+    count: opts.sourceCount ?? 7,
+    durationMs,
+  });
+  playBodyImpact(scene, target, {
+    kind,
+    color,
+    offsetX: targetOffsetX,
+    offsetY: targetOffsetY,
+    depth: depth + 1,
+    ringRadius: opts.targetRadius ?? 34,
+    count: opts.targetCount ?? 8,
+    durationMs: durationMs + 40,
+  });
 }
 
 /** A small per-letter reaction at the body/banner being typed. Completion gets

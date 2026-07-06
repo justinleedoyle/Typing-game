@@ -136,13 +136,12 @@ const DESK_REFLECTION_CARD = {
 } as const;
 const ACCOUNT_PANEL = {
   x: 1788,
-  y: 238,
+  y: 228,
   width: 216,
-  height: 154,
+  height: 126,
   statusY: 188,
   authY: 228,
   settingsY: 268,
-  portalsY: 308,
 } as const;
 const ACCOUNT_STATION = {
   x: ACCOUNT_PANEL.x,
@@ -1406,18 +1405,7 @@ export class PortalChamberScene extends Phaser.Scene {
         entryDelayMs: 70,
       },
     );
-    this.registerNavTarget(
-      "portals",
-      ACCOUNT_PANEL.x,
-      ACCOUNT_PANEL.portalsY,
-      () => this.enterZone("portals"),
-      {
-        fontSize: 18,
-        priority: -2,
-        stationPulse: HUB_STATIONS.account,
-        entryDelayMs: 130,
-      },
-    );
+    this.registerPortalReturnTarget(130);
     void this.addAccountAuthTarget();
   }
 

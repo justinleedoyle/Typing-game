@@ -5,7 +5,8 @@
 // `onSustainedLowHeart` callback fires when Heart sits below LOW_HEART_THRESHOLD
 // for LOW_HEART_HOLD_MS continuously — useful for triggering a tender Runa
 // line. The watcher rate-limits itself with LOW_HEART_COOLDOWN_MS so it never
-// spams during a rough patch.
+// spams during a rough patch. Event cues also wake their owning meter row, so
+// the feedback reads as coming from the console surface as well as the actor.
 
 import Phaser from "phaser";
 import { PALETTE, PALETTE_HEX, SERIF } from "./palette";
@@ -285,6 +286,7 @@ export class HeartSoulHud {
     if (!this.opts.getCastReady) return;
     const ready = this.opts.getCastReady();
     if (ready && !this.castReadyLast) {
+      this.pulseRow(this.soulPips, PALETTE_HEX.brass);
       this.opts.onCastReady?.();
     }
     this.castReadyLast = ready;
@@ -331,6 +333,7 @@ export class HeartSoulHud {
     ) {
       this.lowHeartLastFiredMs = now;
       this.lowHeartSinceMs = null;
+      this.pulseRow(this.heartPips, PALETTE_HEX.ember);
       this.opts.onSustainedLowHeart();
     }
   }

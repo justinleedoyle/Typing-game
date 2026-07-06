@@ -192,6 +192,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private graceSaves = 0;
   private waveForgivenessReady = false;
   private snowFoxTripNoticed = false;
+  private shrineForgivenessNoticed = false;
 
   /** Explicit per-wave continuation, set by each spawner. Replaces the old
    *  narrator-substring routing (which had soft-locked the first encounter,
@@ -229,6 +230,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.breath.reset();
     this.breathActive = false;
     this.snowFoxTripNoticed = false;
+    this.shrineForgivenessNoticed = false;
     this.onWaveCleared = null;
     this.fork1Choice = null;
     this.fork2Choice = null;
@@ -944,6 +946,15 @@ export class SunkenBellScene extends Phaser.Scene {
     });
   }
 
+  private noticeShrineForgiveness(): void {
+    if (this.shrineForgivenessNoticed) return;
+    this.shrineForgivenessNoticed = true;
+    this.band.showNotice("Shrine-Token forgives the slip.", {
+      label: "relic",
+      durationMs: 1600,
+    });
+  }
+
   /** auto-ease (Etta's Ledger): mark the easiest (shortest-word) ghost of the
    *  wave with a soft glow so the player knows where to start — a small edge,
    *  not a free kill. No-op without the relic or with no ghosts. */
@@ -1047,6 +1058,7 @@ export class SunkenBellScene extends Phaser.Scene {
       this.typingInput.getStats().record(false);
       if (isDesync) this.typingInput.resetClaimedProgress();
       this.flashGraceCue("forgiven");
+      this.noticeShrineForgiveness();
       return;
     }
     flashWrenMiss(this.wrenSprite);

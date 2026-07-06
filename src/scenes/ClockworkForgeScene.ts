@@ -203,6 +203,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private spellCost = SPELL_COST;
   private waveForgivenessReady = false;
   private snowFoxTripNoticed = false;
+  private shrineForgivenessNoticed = false;
   // Tier 4 — the Soul-charged, typed invocation for offensive one-shots. In the
   // Forge that's toll-strike (bells-tongue, earned in the Bell on a force fork):
   // a charged "toll" word strikes the strongest live golem. Null until create().
@@ -250,6 +251,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.shiftHeld = false;
     this.waveActive = false;
     this.snowFoxTripNoticed = false;
+    this.shrineForgivenessNoticed = false;
     this.fork1Choice = null;
     this.fork2Choice = null;
     this.companionAwarded = false;
@@ -375,6 +377,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         if (this.waveForgivenessReady) {
           this.waveForgivenessReady = false;
           this.flashForgiven();
+          this.noticeShrineForgiveness();
           return;
         }
         flashWrenMiss(this.wrenSprite);
@@ -3006,6 +3009,15 @@ export class ClockworkForgeScene extends Phaser.Scene {
         plate.destroy();
         txt.destroy();
       },
+    });
+  }
+
+  private noticeShrineForgiveness(): void {
+    if (this.shrineForgivenessNoticed) return;
+    this.shrineForgivenessNoticed = true;
+    this.band.showNotice("Shrine-Token forgives the slip.", {
+      label: "relic",
+      durationMs: 1600,
     });
   }
 

@@ -7,7 +7,10 @@ import { playDamageThud } from "../audio/damageThud";
 import { playWaveSting } from "../audio/waveSting";
 import { flashDamageVignette } from "../game/vfx";
 import { HeartSoulHud } from "../game/heartSoulHud";
-import { showLowHeartFeedback } from "../game/lowHeartFeedback";
+import {
+  showLowHeartFeedback,
+  showSpellReadyFeedback,
+} from "../game/lowHeartFeedback";
 import { NarrationManager } from "../game/narrationManager";
 import { showAlmanacStampCard } from "../game/ui/almanacStamp";
 import { ConsoleBand } from "../game/ui/consoleBand";
@@ -514,6 +517,13 @@ export class WinterMountainScene extends Phaser.Scene {
       getSoul: () => this.typingInput.getStats().getSoul(),
       getCombo: () => this.typingInput.getStats().getCombo(),
       getCastReady: () => this.typingInput.getStats().canCast(SPELL_COST),
+      onCastReady: () =>
+        showSpellReadyFeedback({
+          scene: this,
+          body: this.wrenContainer,
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+        }),
       onSustainedLowHeart: () =>
         showLowHeartFeedback({
           scene: this,

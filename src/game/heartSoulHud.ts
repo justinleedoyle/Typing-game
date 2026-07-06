@@ -38,6 +38,8 @@ interface HudOptions {
    *  provided, the "soul" label pulses brass to signal a cast is armed —
    *  the only ready-cue in realms (e.g. Forge) that have no charge pips. */
   getCastReady?: () => boolean;
+  /** Fires once when the Soul/spell state transitions from not-ready to ready. */
+  onCastReady?: () => void;
   onSustainedLowHeart?: () => void;
   /** UI-cohesion pass: render as a crafted "console" — brass-framed panel with
    *  corner brackets (matches the dialogue card + the TTT console) instead of the
@@ -66,6 +68,7 @@ export class HeartSoulHud {
   private soulTargetTier: number | null = null;
   private lowHeartSinceMs: number | null = null;
   private lowHeartLastFiredMs = -Infinity;
+  private castReadyLast = false;
   private soulLabel!: Phaser.GameObjects.Text;
   private comboText!: Phaser.GameObjects.Text;
   private comboTier = -1;
@@ -280,7 +283,12 @@ export class HeartSoulHud {
 
   private tickCastReady(): void {
     if (!this.opts.getCastReady) return;
-    if (this.opts.getCastReady()) {
+    const ready = this.opts.getCastReady();
+    if (ready && !this.castReadyLast) {
+      this.opts.onCastReady?.();
+    }
+    this.castReadyLast = ready;
+    if (ready) {
       const pulse = 0.6 + 0.4 * (0.5 + 0.5 * Math.sin(this.pulseMs / 320));
       this.soulLabel.setColor(PALETTE.brass).setAlpha(pulse);
     } else {

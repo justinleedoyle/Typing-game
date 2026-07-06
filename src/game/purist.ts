@@ -35,7 +35,7 @@ interface SceneWithConsoleBand extends Phaser.Scene {
   };
 }
 
-/** Human-readable label for the Settings row + toast. */
+/** Human-readable label for the Settings row and difficulty notices. */
 export function difficultyLabel(tier: Difficulty): string {
   return LABELS[tier];
 }
@@ -59,15 +59,26 @@ export function isPuristToggleKey(event: KeyboardEvent): boolean {
   return event.key === "P" || event.key === "p";
 }
 
-/** Cycle forgiving → standard → purist → … on the store, with a brief toast. */
-export function togglePuristMode(scene: Phaser.Scene, store: SaveStore): void {
+interface TogglePuristModeOptions {
+  announce?: boolean;
+}
+
+/** Cycle forgiving → standard → purist → … on the store, with an optional notice. */
+export function togglePuristMode(
+  scene: Phaser.Scene,
+  store: SaveStore,
+  opts: TogglePuristModeOptions = {},
+): Difficulty {
   let next: Difficulty = "standard";
   store.update((s) => {
     const i = ORDER.indexOf(s.difficulty);
     next = ORDER[(i + 1) % ORDER.length];
     s.difficulty = next;
   });
-  showDifficultyToast(scene, next);
+  if (opts.announce !== false) {
+    showDifficultyToast(scene, next);
+  }
+  return next;
 }
 
 function showDifficultyToast(scene: Phaser.Scene, tier: Difficulty): void {

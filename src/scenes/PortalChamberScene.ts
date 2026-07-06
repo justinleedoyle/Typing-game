@@ -274,7 +274,6 @@ export class PortalChamberScene extends Phaser.Scene {
 
     this.drawRoom();
     this.drawRuna();
-    this.drawDisplayShelf(false);
     for (const arch of ARCHES) {
       this.drawArch(arch);
     }
@@ -344,7 +343,8 @@ export class PortalChamberScene extends Phaser.Scene {
   private enterZone(zone: Zone, animate = true): void {
     this.activeZone = zone;
     this.clearZoneTargets();
-    this.drawDisplayShelf(zone === "shelf");
+    if (zone === "shelf") this.drawDisplayShelf();
+    else this.clearShelfDisplay();
     this.walkWrenTo(ZONE_X[zone], animate);
 
     if (zone === "portals") this.registerPortalZoneTargets();
@@ -2632,17 +2632,12 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   /** Relic icons displayed on the painted cabinet shelves (far right). */
-  private drawDisplayShelf(expanded: boolean): void {
+  private drawDisplayShelf(): void {
     const items = this.store.get().satchel;
     this.clearShelfDisplay();
 
     if (items.length === 0) {
       this.drawShelfEmptyPlate();
-      return;
-    }
-
-    if (!expanded) {
-      this.drawShelfSummaryPlate(items.length);
       return;
     }
 
@@ -2723,47 +2718,6 @@ export class PortalChamberScene extends Phaser.Scene {
       .setDepth(1);
     this.shelfDisplayObjects.push(label);
     this.stageShelfObject(label, 70);
-  }
-
-  private drawShelfSummaryPlate(itemCount: number): void {
-    const width = 188;
-    const height = 62;
-    const x = SHELF_STATION.x;
-    const y = SHELF_STATION.summaryY;
-    const plate = this.add.graphics().setDepth(0);
-    this.shelfDisplayObjects.push(plate);
-    this.stageShelfObject(plate, 35);
-    plate.fillStyle(UI_HEX.panel, 0.24);
-    plate.fillRoundedRect(x - width / 2, y - height / 2, width, height, 9);
-    plate.lineStyle(1, UI_HEX.brass, 0.28);
-    plate.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 9);
-    plate.lineStyle(1, UI_HEX.brass, 0.18);
-    plate.lineBetween(x - width / 2 + 20, y + 3, x + width / 2 - 20, y + 3);
-
-    const count = this.add
-      .text(x, y - 11, `${itemCount}`, {
-        fontFamily: SERIF,
-        fontSize: "28px",
-        color: "#d6c087",
-      })
-      .setOrigin(0.5)
-      .setAlpha(0.72)
-      .setDepth(1);
-    const label = this.add
-      .text(x, y + 17, "keepsakes", {
-        fontFamily: SERIF,
-        fontSize: "14px",
-        fontStyle: "italic",
-        color: "#8f8161",
-      })
-      .setOrigin(0.5)
-      .setAlpha(0.68)
-      .setDepth(1);
-    this.shelfDisplayObjects.push(count, label);
-    this.stageShelfObject(count, 70);
-    this.stageShelfObject(label, 95);
-
-    addIdleBreath(this, count, { dy: -1.5, durationMs: 2200, delayMs: 200 });
   }
 
   private drawShelfGridBacker(itemCount: number): void {

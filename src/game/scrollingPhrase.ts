@@ -199,6 +199,10 @@ export class ScrollingPhrase {
       onComplete: () => this.handleComplete(),
     });
     this.opts.typingInput.register(this.target);
+    this.target.playEntryWake({
+      durationMs: 180,
+      offsetY: 0,
+    });
     this.startScroll(endX);
   }
 

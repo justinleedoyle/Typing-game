@@ -980,6 +980,23 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
+  private playLanternMothThroneCue(): void {
+    playSceneEventPulse(this, {
+      kind: "mote",
+      color: 0xffd080,
+      x: this.scale.width * 0.15,
+      y: 460,
+      depth: 5,
+      durationMs: 620,
+      ringWidth: 300,
+      ringHeight: 116,
+      count: 8,
+      alpha: 0.075,
+      spreadX: 120,
+      spreadY: 34,
+    });
+  }
+
   private playTetherCordBindCue(): void {
     if (!this.quietLordContainer?.scene) return;
     playActorAttention(this, this.quietLordContainer, {
@@ -3374,6 +3391,7 @@ export class GreatBattleScene extends Phaser.Scene {
       hold: 1200,
       onComplete: () => throneLight.destroy(),
     });
+    this.playLanternMothThroneCue();
 
     // Spawn a bonus hit-window word on the side
     const bonusTarget = this.makeLordWord({

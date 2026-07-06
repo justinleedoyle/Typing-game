@@ -394,9 +394,11 @@ export class HauntedWoodScene extends Phaser.Scene {
       },
       onClaim: () => playClaim(),
     });
+    const offensiveOneShots = this.combat.oneShots.filter(isOffensiveOneShot);
     new HeartSoulHud(this, {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
+      showSoul: offensiveOneShots.length > 0,
       onSustainedLowHeart: () =>
         showLowHeartFeedback({
           scene: this,
@@ -413,7 +415,6 @@ export class HauntedWoodScene extends Phaser.Scene {
     // one-shots. The widget sits just above Wren. Threats are the live, non-frozen
     // ghosts (the boss's every-punctuation capstone is a stationary passage, NOT
     // in `this.ghosts`, so a one-shot can't trivialise it).
-    const offensiveOneShots = this.combat.oneShots.filter(isOffensiveOneShot);
     this.oneShotInvoker = new OneShotInvoker<MovingWordEnemy>({
       scene: this,
       typingInput: this.typingInput,

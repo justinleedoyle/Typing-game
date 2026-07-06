@@ -13,7 +13,10 @@ import {
   playWordCompleteBurst,
 } from "../game/vfx";
 import { HeartSoulHud } from "../game/heartSoulHud";
-import { showLowHeartFeedback } from "../game/lowHeartFeedback";
+import {
+  showLowHeartFeedback,
+  showSpellReadyFeedback,
+} from "../game/lowHeartFeedback";
 import { NarrationManager } from "../game/narrationManager";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
@@ -392,6 +395,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
       getSoul: () => this.typingInput.getStats().getSoul(),
       getCombo: () => this.typingInput.getStats().getCombo(),
       getCastReady: () => this.typingInput.getStats().canCast(this.spellCost),
+      onCastReady: () =>
+        showSpellReadyFeedback({
+          scene: this,
+          body: this.wrenContainer,
+          kind: "ember",
+          color: PALETTE_HEX.brass,
+        }),
       onSustainedLowHeart: () =>
         showLowHeartFeedback({
           scene: this,

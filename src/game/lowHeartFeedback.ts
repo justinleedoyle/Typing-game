@@ -28,6 +28,14 @@ interface LowHeartFeedbackOptions {
   bodyOffsetY?: number;
 }
 
+interface SpellReadyFeedbackOptions {
+  scene: Phaser.Scene;
+  body: LowHeartBody | null | undefined;
+  kind: AmbientKind;
+  color: number;
+  bodyOffsetY?: number;
+}
+
 /**
  * Shared low-Heart feedback: the console still carries Runa's readout, but the
  * visible Wren body also reacts in the local realm material so Heart is not only
@@ -61,5 +69,29 @@ export function showLowHeartFeedback({
     count: 7,
     depth: 58,
     durationMs: 360,
+  });
+}
+
+export function showSpellReadyFeedback({
+  scene,
+  body,
+  kind,
+  color,
+  bodyOffsetY = -104,
+}: SpellReadyFeedbackOptions): void {
+  if (!body?.active) return;
+  playActorAttention(scene, body, {
+    tint: color,
+    scale: 1.014,
+    durationMs: 160,
+  });
+  playBodyImpact(scene, body, {
+    kind,
+    color,
+    offsetY: bodyOffsetY,
+    ringRadius: 22,
+    count: 5,
+    depth: 58,
+    durationMs: 300,
   });
 }

@@ -29,6 +29,7 @@ import { difficultyLabel, togglePuristMode } from "../game/purist";
 import {
   emptySave,
   type AudioLevel,
+  type Difficulty,
   type SaveStore,
 } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
@@ -45,6 +46,7 @@ interface SettingsSceneData {
 type Mode = "normal" | "renaming" | "confirming-reset";
 
 const AUDIO_CYCLE: readonly AudioLevel[] = ["loud", "medium", "quiet", "off"] as const;
+const DIFFICULTY_CYCLE: readonly Difficulty[] = ["forgiving", "standard", "purist"] as const;
 const MAX_NAME_LENGTH = 16;
 
 const ROW_X = 960;
@@ -309,10 +311,24 @@ export class SettingsScene extends Phaser.Scene {
 
     const state = this.store.get();
 
-    this.drawRow(0, "Difficulty", difficultyLabel(state.difficulty));
+    this.drawRow(0, "Difficulty");
+    this.drawTokenTrack(
+      0,
+      DIFFICULTY_CYCLE,
+      state.difficulty,
+      (tier) => difficultyLabel(tier),
+      { tokenW: 126, tokenH: 38, gap: 10 },
+    );
     this.drawAction(0, "difficulty", () => this.handleDifficulty());
 
-    this.drawRow(1, "Sound", state.audioLevel);
+    this.drawRow(1, "Sound");
+    this.drawTokenTrack(
+      1,
+      AUDIO_CYCLE,
+      state.audioLevel,
+      (level) => level,
+      { tokenW: 92, tokenH: 38, gap: 9 },
+    );
     this.drawAction(1, "sound", () => this.handleSound());
 
     this.drawRow(2, "Profile name", state.profileName);
@@ -340,7 +356,7 @@ export class SettingsScene extends Phaser.Scene {
     this.menuTargets = [];
   }
 
-  private drawRow(index: number, label: string, value: string): void {
+  private drawRow(index: number, label: string, value?: string): void {
     const y = ROW_START_Y + index * ROW_SPACING;
     const rowRule = this.add.graphics();
     rowRule.lineStyle(1, UI_HEX.brass, 0.22);
@@ -361,16 +377,84 @@ export class SettingsScene extends Phaser.Scene {
     this.rowTexts.push(labelText);
     this.stageLedgerObject(labelText, 50 + index * 34);
 
-    const valueText = this.add
-      .text(ROW_X + VALUE_OFFSET_X, y, value, {
-        fontFamily: SERIF,
-        fontSize: "32px",
-        fontStyle: "italic",
-        color: UI_CSS.brass,
-      })
-      .setOrigin(0, 0.5);
-    this.rowTexts.push(valueText);
-    this.stageLedgerObject(valueText, 65 + index * 34);
+    if (value) {
+      const valueText = this.add
+        .text(ROW_X + VALUE_OFFSET_X, y, value, {
+          fontFamily: SERIF,
+          fontSize: "32px",
+          fontStyle: "italic",
+          color: UI_CSS.brass,
+        })
+        .setOrigin(0, 0.5);
+      this.rowTexts.push(valueText);
+      this.stageLedgerObject(valueText, 65 + index * 34);
+    }
+  }
+
+  private drawTokenTrack<T extends string>(
+    index: number,
+    options: readonly T[],
+    active: T,
+    labelFor: (value: T) => string,
+    opts: { tokenW: number; tokenH: number; gap: number },
+  ): void {
+    const y = ROW_START_Y + index * ROW_SPACING;
+    const totalW = options.length * opts.tokenW + (options.length - 1) * opts.gap;
+    const startX = ROW_X + VALUE_OFFSET_X;
+    const trackX = startX + totalW / 2;
+
+    const rail = this.add.graphics();
+    rail.setPosition(trackX, y);
+    rail.fillStyle(UI_HEX.panel, 0.36);
+    rail.fillRoundedRect(
+      -totalW / 2 - 14,
+      -opts.tokenH / 2 - 9,
+      totalW + 28,
+      opts.tokenH + 18,
+      9,
+    );
+    rail.lineStyle(1, UI_HEX.brass, 0.3);
+    rail.strokeRoundedRect(
+      -totalW / 2 - 14,
+      -opts.tokenH / 2 - 9,
+      totalW + 28,
+      opts.tokenH + 18,
+      9,
+    );
+    this.rowTexts.push(rail);
+    this.stageLedgerObject(rail, 52 + index * 34, { offsetY: 5 });
+
+    options.forEach((option, i) => {
+      const x = startX + opts.tokenW / 2 + i * (opts.tokenW + opts.gap);
+      const selected = option === active;
+      const token = this.add.graphics();
+      token.setPosition(x, y);
+      token.fillStyle(selected ? UI_HEX.parchment : UI_HEX.panel, selected ? 0.96 : 0.46);
+      token.fillRoundedRect(-opts.tokenW / 2, -opts.tokenH / 2, opts.tokenW, opts.tokenH, 7);
+      token.lineStyle(
+        selected ? 2 : 1,
+        selected ? UI_HEX.brass : UI_HEX.frame,
+        selected ? 0.9 : 0.45,
+      );
+      token.strokeRoundedRect(-opts.tokenW / 2, -opts.tokenH / 2, opts.tokenW, opts.tokenH, 7);
+      if (selected) {
+        token.fillStyle(UI_HEX.ember, 0.84);
+        token.fillCircle(-opts.tokenW / 2 + 13, -opts.tokenH / 2 + 11, 4);
+      }
+      this.rowTexts.push(token);
+      this.stageLedgerObject(token, 64 + index * 34 + i * 18, { offsetY: 5 });
+
+      const tokenLabel = this.add
+        .text(x + (selected ? 6 : 0), y + 1, labelFor(option), {
+          fontFamily: SERIF,
+          fontSize: selected ? "18px" : "17px",
+          fontStyle: selected ? "normal" : "italic",
+          color: selected ? UI_CSS.ink : UI_CSS.cream,
+        })
+        .setOrigin(0.5);
+      this.rowTexts.push(tokenLabel);
+      this.stageLedgerObject(tokenLabel, 74 + index * 34 + i * 18, { offsetY: 5 });
+    });
   }
 
   private drawAction(

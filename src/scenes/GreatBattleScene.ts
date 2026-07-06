@@ -736,7 +736,7 @@ export class GreatBattleScene extends Phaser.Scene {
         const hasShrineToken = this.store.get().satchel.includes("shrine-token");
         if (hasShrineToken && !this.shrineTokenForgivenThisWave) {
           this.shrineTokenForgivenThisWave = true;
-          // First miss forgiven — skip the flinch entirely
+          this.playShrineForgivenessCue();
           return;
         }
         this.cameras.main.shake(100, 0.003);
@@ -860,6 +860,14 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private showRelicNotice(id: string, label = "relic", durationMs = 2200): void {
     this.band.showNotice(getRunaLine(id)?.text ?? id, { label, durationMs });
+  }
+
+  private playShrineForgivenessCue(): void {
+    this.playWallWardPulse("hold");
+    this.band.showNotice("Shrine-Token holds the wall.", {
+      label: "relic",
+      durationMs: 1800,
+    });
   }
 
   /** UI-cohesion: every finale word target gets the legibility outline (TTT-style). */

@@ -170,7 +170,8 @@ const OPENING_LINES: readonly RunaLine[] = [
 //
 // Voice-ready via NarrationManager (option (a)): the hub's Runa-narrator beats
 // route through narration.say(id) as the top caption, like every other scene.
-// The bottom `hint` keeps only functional prompts (arch name, shelf contents).
+// Functional hub prompts are owned by their stations: the active arch plaque,
+// shelf cabinet, account panel, and typed station targets.
 //
 // WIRED (say-routed): hub_first_arrival (first visit, nothing cleared yet),
 // hub_desk_{none,winter,sunken,forge,sky,wood} (desk reflections, keyed by
@@ -179,9 +180,9 @@ const OPENING_LINES: readonly RunaLine[] = [
 // map (warm contractions: "you're", "that's"), so it reads identically — only
 // relocated to the top caption and de-prefixed (the old `Runa: "…"` tag is gone).
 //
-// NOT say-routed (kept as records): hub_portals_prompt is the functional bottom
-// hint (functional prompts don't get say(id), per the wire rule); hub_portal_opens
-// and hub_return_greeting_winter have no beat yet — candidates for a future portal
+// NOT say-routed (kept as records): hub_portals_prompt is now represented by
+// the active arch plaque instead of a narration beat; hub_portal_opens and
+// hub_return_greeting_winter have no beat yet — candidates for a future portal
 // send-off / per-realm return greeting.
 
 const HUB_LINES: readonly RunaLine[] = [

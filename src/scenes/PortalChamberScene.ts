@@ -185,8 +185,6 @@ export class PortalChamberScene extends Phaser.Scene {
   private archGraphics = new Map<string, Phaser.GameObjects.Graphics>();
   private archGlows = new Map<string, Phaser.GameObjects.Graphics>();
   private archSprites = new Map<string, Phaser.GameObjects.Sprite>();
-  private hintPlate!: Phaser.GameObjects.Graphics;
-  private hint!: Phaser.GameObjects.Text;
   private narration!: NarrationManager;
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
@@ -200,7 +198,6 @@ export class PortalChamberScene extends Phaser.Scene {
   private portalFloorCallGlow?: Phaser.GameObjects.Container;
   private stationTypingPulseTimes = new WeakMap<StationSpec, number>();
   private portalTypingPulseTimes = new Map<string, number>();
-  private lastHintText = "";
   private ambientHandle?: AmbientHandle;
   private showPortalRevisits = false;
   private hubArrival: HubArrivalSource | null = null;
@@ -228,7 +225,6 @@ export class PortalChamberScene extends Phaser.Scene {
     this.portalFloorCallGlow = undefined;
     this.stationTypingPulseTimes = new WeakMap();
     this.portalTypingPulseTimes = new Map();
-    this.lastHintText = "";
     this.showPortalRevisits = false;
     this.activeZone = "portals";
     this.openingUtilityScene = false;
@@ -276,18 +272,6 @@ export class PortalChamberScene extends Phaser.Scene {
     this.drawArchLabels();
 
     this.wrenContainer = this.drawWren(ZONE_X.portals, WREN_Y);
-
-    this.hintPlate = this.add.graphics().setDepth(24);
-    this.hint = this.add
-      .text(this.scale.width / 2, this.scale.height - 42, "", {
-        fontFamily: SERIF,
-        fontSize: "20px",
-        color: "#c9b98e",
-        align: "center",
-        wordWrap: { width: 1200 },
-      })
-      .setOrigin(0.5)
-      .setDepth(25);
 
     // Runa's narration — the shared top caption every other scene uses. The
     // hub's Runa-narrator beats (arrival, desk reflections, the endgame calls)
@@ -417,7 +401,6 @@ export class PortalChamberScene extends Phaser.Scene {
         fontSize: 30,
         entryDelayMs: 40,
       });
-      this.setHint("");
       // First-arrival narration — only while nothing is cleared yet (the
       // "you're new here" state). On returns the desk reflections carry Runa.
       if (!REALM_SEQUENCE.some((id) => state.realms[id]?.cleared)) {
@@ -451,7 +434,6 @@ export class PortalChamberScene extends Phaser.Scene {
         this.zoneTargets.push(battleTarget);
         this.stageHubTarget(battleTarget, 80);
         this.narration.say("hub_all_cleared");
-        this.setHint("");
       } else {
         // Battle cleared — show begin again target (New Game+).
         let releaseAnchor = (): void => {};
@@ -479,7 +461,6 @@ export class PortalChamberScene extends Phaser.Scene {
         this.zoneTargets.push(ngPlusTarget);
         this.stageHubTarget(ngPlusTarget, 80);
         this.narration.say("hub_post_battle");
-        this.setHint("");
       }
     }
 
@@ -704,7 +685,6 @@ export class PortalChamberScene extends Phaser.Scene {
       .reverse()
       .find((id) => state.realms[id]?.cleared) ?? "none";
     this.narration.say(DESK_LINE_IDS[lastCleared] ?? DESK_LINE_IDS["none"]);
-    this.setHint("");
 
     this.registerNavTarget(
       "back",
@@ -720,7 +700,6 @@ export class PortalChamberScene extends Phaser.Scene {
   private registerShelfZoneTargets(): void {
     // Shelf is a functional zone — clear Runa's top caption.
     this.narration.clear();
-    this.setHint("");
 
     this.registerNavTarget(
       "back",
@@ -959,7 +938,6 @@ export class PortalChamberScene extends Phaser.Scene {
 
   private onEnterPortal(sceneKey: string, revisit: boolean): void {
     playChime();
-    this.setHint("");
     this.narration.clear();
     this.flashPortalForScene(sceneKey);
     this.playPortalTravel(sceneKey);
@@ -978,7 +956,6 @@ export class PortalChamberScene extends Phaser.Scene {
     if (this.enteringGreatBattle) return;
     this.enteringGreatBattle = true;
     playChime();
-    this.setHint("");
     this.narration.clear();
     this.portalFloorCallGlow?.destroy();
     this.portalFloorCallGlow = undefined;
@@ -1269,7 +1246,6 @@ export class PortalChamberScene extends Phaser.Scene {
 
   private registerAccountZoneTargets(): void {
     this.narration.clear();
-    this.setHint("");
     this.drawAccountStationPanel();
     void this.renderAccountStatus();
     this.registerNavTarget(
@@ -2254,7 +2230,6 @@ export class PortalChamberScene extends Phaser.Scene {
     if (this.openingUtilityScene) return;
     this.openingUtilityScene = true;
     if (opts.playChime) playChime();
-    this.setHint("");
     this.playHubActorAction(station.x, opts.includeRuna === true);
     if (opts.pulseStation !== false) this.pulseStation(station);
     this.playUtilityStationExitWake(station, opts.kind);
@@ -2353,57 +2328,6 @@ export class PortalChamberScene extends Phaser.Scene {
         img.scaleY = originalScaleY;
         addIdleBreath(this, img, { dy: -4, durationMs: 2200, delayMs: 160 });
       },
-    });
-  }
-
-  private setHint(text: string): void {
-    const changed = text !== this.lastHintText;
-    this.lastHintText = text;
-    this.hint.setText(text);
-    this.hintPlate.clear();
-    if (!text) {
-      this.hint.setAlpha(1);
-      return;
-    }
-
-    const width = Math.min(1260, Math.max(420, this.hint.width + 70));
-    const height = Math.max(42, this.hint.height + 18);
-    const x = this.hint.x - width / 2;
-    const y = this.hint.y - height / 2;
-    this.hintPlate.fillStyle(UI_HEX.panel, 0.72);
-    this.hintPlate.fillRoundedRect(x, y, width, height, 8);
-    this.hintPlate.lineStyle(1, UI_HEX.brass, 0.64);
-    this.hintPlate.strokeRoundedRect(x, y, width, height, 8);
-    if (changed) this.playHintWake(width, height);
-  }
-
-  private playHintWake(width: number, height: number): void {
-    this.hint.setAlpha(0.62);
-    this.tweens.add({
-      targets: this.hint,
-      alpha: 1,
-      duration: 180,
-      ease: "Sine.easeOut",
-    });
-
-    const pulse = this.add
-      .container(this.hint.x, this.hint.y)
-      .setDepth(26)
-      .setAlpha(0.46);
-    const g = this.add.graphics();
-    g.lineStyle(1, UI_HEX.brass, 0.55);
-    g.strokeRoundedRect(-width / 2, -height / 2, width, height, 8);
-    g.fillStyle(UI_HEX.parchment, 0.1);
-    g.fillRoundedRect(-width / 2 + 18, -height / 2 + 7, width - 36, 4, 2);
-    pulse.add(g);
-    this.tweens.add({
-      targets: pulse,
-      alpha: 0,
-      scaleX: 1.025,
-      scaleY: 1.14,
-      duration: 280,
-      ease: "Sine.easeOut",
-      onComplete: () => pulse.destroy(),
     });
   }
 
@@ -2589,7 +2513,6 @@ export class PortalChamberScene extends Phaser.Scene {
     if (this.restartingNewGame) return;
     this.restartingNewGame = true;
     playChime();
-    this.setHint("");
     this.narration.clear();
     // Preserve keystroke calibration so adaptive word selection carries over.
     const oldStats = this.store.get().keyStats;

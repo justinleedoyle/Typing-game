@@ -115,6 +115,24 @@ const FACET_LINES: Record<FacetId, { telegraph: string; countered: string }> = {
   grief: { telegraph: "finale_facet_grief_telegraph", countered: "finale_facet_grief_countered" },
 };
 
+const FINALE_NOTICE_ITEM_IDS: Record<string, string> = {
+  finale_ally_firefly_lantern: "firefly-lantern",
+  finale_ally_untethered_wind: "untethered-wind",
+  finale_relic_sabotage_wrench_wave: "sabotage-wrench",
+  finale_ally_hunters_horn: "hunters-horn",
+  finale_ally_etta_ledger: "ettas-ledger",
+  finale_ally_ghost_king: "ghost-kings-promise",
+  finale_relic_bells_tongue: "bells-tongue",
+  finale_relic_sabotage_wrench: "sabotage-wrench",
+  finale_relic_tether_cord: "tether-cord",
+  finale_relic_master_key: "master-key",
+  finale_companion_glass_fish: "glass-fish",
+  finale_companion_lantern_moth: "lantern-moth",
+  finale_relic_windphrase_chant: "wind-phrase",
+  finale_companion_wisp_cat: "wisp-cat",
+  finale_companion_songbird: "brass-songbird",
+};
+
 // ─── Wave definition ───────────────────────────────────────────────────────────
 
 interface WaveDef {
@@ -841,13 +859,18 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private showRelicNotice(id: string, label = "relic", durationMs = 2200): void {
-    this.band.showNotice(getRunaLine(id)?.text ?? id, { label, durationMs });
+    this.band.showNotice(getRunaLine(id)?.text ?? id, {
+      label,
+      itemId: FINALE_NOTICE_ITEM_IDS[id],
+      durationMs,
+    });
   }
 
   private playShrineForgivenessCue(): void {
     this.playWallWardPulse("hold");
     this.band.showNotice("Shrine-Token holds the wall.", {
       label: "relic",
+      itemId: "shrine-token",
       durationMs: 1800,
     });
   }
@@ -2366,7 +2389,11 @@ export class GreatBattleScene extends Phaser.Scene {
 
     if (satchel.includes(waveDef.companionId)) {
       this.showCompanionCameo(waveDef);
-      this.band.showNotice(waveDef.companionLine, { label: "ally", durationMs: 2400 });
+      this.band.showNotice(waveDef.companionLine, {
+        label: "ally",
+        itemId: waveDef.companionId,
+        durationMs: 2400,
+      });
       this.time.delayedCall(2600, () => this.runNextWave());
     } else {
       // Brief pause, no cameo

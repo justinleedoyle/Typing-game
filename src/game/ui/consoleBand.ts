@@ -56,6 +56,8 @@ const OBJECTIVE_MAX_TEXT_H = 24;
 export interface ConsoleBandNoticeOptions {
   /** Small label at the left of the strip, e.g. "satchel" or "relic". */
   label?: string;
+  /** Relic/companion id to pulse when its visible satchel tile is present. */
+  itemId?: string;
   /** How long the notice owns the strip before the task line returns. */
   durationMs?: number;
 }
@@ -103,6 +105,7 @@ export class ConsoleBand {
   private renderedPortraitKey = "";
   private portraitInitialized = false;
   private satchelTileCount = 0;
+  private readonly satchelIconTiles = new Map<string, Phaser.GameObjects.Container>();
 
   constructor(scene: Phaser.Scene, opts: ConsoleBandOptions = {}) {
     this.scene = scene;
@@ -156,7 +159,7 @@ export class ConsoleBand {
       labelColor: "#d7b965",
       textColor: "#fff1c9",
     });
-    this.playNoticeSatchelWake(opts.label ?? "satchel");
+    this.playNoticeSatchelWake(opts.label ?? "satchel", opts.itemId);
     this.noticeTimer = this.scene.time.delayedCall(opts.durationMs ?? 1900, () => {
       this.noticeActive = false;
       this.noticeTimer = null;
@@ -487,6 +490,7 @@ export class ConsoleBand {
     iconIds: readonly string[],
     labelText: string,
   ): void {
+    this.satchelIconTiles.clear();
     const divider = scene.add.graphics();
     divider.fillStyle(0x6e5a36, 0.45);
     divider.fillRect(DIVIDER_X, PAD, 1, BAND_H - PAD * 2);
@@ -533,6 +537,7 @@ export class ConsoleBand {
       img.setScale(Math.min((TILE - 6) / img.width, (TILE - 6) / img.height));
       iconContainer.add(img);
       this.container.add(iconContainer);
+      this.satchelIconTiles.set(id, iconContainer);
 
       scene.tweens.add({
         targets: iconContainer,
@@ -621,8 +626,13 @@ export class ConsoleBand {
     });
   }
 
-  private playNoticeSatchelWake(label: string): void {
-    if (!["satchel", "relic", "companion"].includes(label)) return;
+  private playNoticeSatchelWake(label: string, itemId?: string): void {
+    const tile = itemId ? this.satchelIconTiles.get(itemId) : undefined;
+    if (tile) {
+      this.playSatchelTileWake(tile);
+      return;
+    }
+    if (!itemId && !["satchel", "relic", "companion", "ally"].includes(label)) return;
     const hasTiles = this.satchelTileCount > 0;
     const rowW = hasTiles
       ? this.satchelTileCount * TILE + Math.max(0, this.satchelTileCount - 1) * TILE_GAP
@@ -649,6 +659,56 @@ export class ConsoleBand {
       duration: 540,
       ease: "Sine.easeOut",
       onComplete: () => wake.destroy(),
+    });
+  }
+
+  private playSatchelTileWake(tile: Phaser.GameObjects.Container): void {
+    const x = tile.x;
+    const y = tile.y;
+    const wake = this.scene.add.graphics().setAlpha(0);
+    wake.fillStyle(UI_HEX.brass, 0.12);
+    wake.fillRoundedRect(
+      x - TILE / 2 - 8,
+      y - TILE / 2 - 8,
+      TILE + 16,
+      TILE + 16,
+      8,
+    );
+    wake.lineStyle(2, UI_HEX.brass, 0.58);
+    wake.strokeRoundedRect(
+      x - TILE / 2 - 8,
+      y - TILE / 2 - 8,
+      TILE + 16,
+      TILE + 16,
+      8,
+    );
+    wake.lineStyle(1, UI_HEX.parchment, 0.24);
+    wake.strokeRoundedRect(
+      x - TILE / 2 + 4,
+      y - TILE / 2 + 4,
+      TILE - 8,
+      TILE - 8,
+      4,
+    );
+    this.container.add(wake);
+    this.container.bringToTop(tile);
+
+    this.scene.tweens.add({
+      targets: wake,
+      alpha: { from: 0.72, to: 0 },
+      scaleX: 1.12,
+      scaleY: 1.12,
+      duration: 420,
+      ease: "Sine.easeOut",
+      onComplete: () => wake.destroy(),
+    });
+    this.scene.tweens.add({
+      targets: tile,
+      scaleX: 1.08,
+      scaleY: 1.08,
+      duration: 120,
+      yoyo: true,
+      ease: "Sine.easeOut",
     });
   }
 

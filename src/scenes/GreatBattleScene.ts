@@ -870,6 +870,24 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
+  private playUntetheredWindCue(): void {
+    this.playWallWardPulse("hold");
+    playSceneEventPulse(this, {
+      kind: "mote",
+      color: 0xd8e9ff,
+      x: this.scale.width / 2,
+      y: 650,
+      depth: 5,
+      durationMs: 720,
+      ringWidth: 1320,
+      ringHeight: 220,
+      count: 14,
+      alpha: 0.085,
+      spreadX: 560,
+      spreadY: 64,
+    });
+  }
+
   /** UI-cohesion: every finale word target gets the legibility outline (TTT-style). */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
     return new TextWordTarget({ outline: true, depth: 6, ...opts });
@@ -1571,6 +1589,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // §5.5.11 — Untethered Wind narration cue
     if (state.satchel.includes("untethered-wind")) {
       this.time.delayedCall(400, () => {
+        this.playUntetheredWindCue();
         this.showRelicNotice("finale_ally_untethered_wind", "wind");
       });
     }

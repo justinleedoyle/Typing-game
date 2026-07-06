@@ -78,6 +78,7 @@ import forgeCommandGolemSprite from "../../art/forge/command-golem.png";
 import fornSprite from "../../art/forge/forn.png";
 import runaPortrait from "../../art/runa/runa-front.png";
 import brassSongbirdSprite from "../../art/companions/brass-songbird.png";
+import snowFoxSprite from "../../art/companions/snow-fox.png";
 
 // Danger ramps in over the LAST 60% of a golem's advance — earlier portion
 // stays cream so players can read the word, then it shifts ember as the
@@ -258,6 +259,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.load.image("forge-command-golem", forgeCommandGolemSprite);
     this.load.image("forn", fornSprite);
     this.load.image("forge-companion-songbird", brassSongbirdSprite);
+    this.load.image("forge-companion-snow-fox", snowFoxSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
@@ -2856,7 +2858,15 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private applyCompanionTrip(): void {
     if (!this.combat.perWaveProcs.includes("companion-trip")) return;
     this.time.delayedCall(COMPANION_TRIP_DELAY_MS, () =>
-      tripMostAdvancedFoe(this, this.golems),
+      tripMostAdvancedFoe(this, this.golems, {
+        textureKey: "forge-companion-snow-fox",
+        startX: this.wrenContainer.x - 120,
+        startY: this.wrenContainer.y - 18,
+        height: 74,
+        depth: 58,
+        color: PALETTE_HEX.frost,
+        kind: "snow",
+      }),
     );
   }
 

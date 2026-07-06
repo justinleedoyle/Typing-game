@@ -74,6 +74,7 @@ import woodGhostSprite from "../../art/wood/ghost.png";
 import ghostKingSprite from "../../art/wood/ghost-king.png";
 import runaPortrait from "../../art/runa/runa-front.png";
 import wispCatSprite from "../../art/companions/wisp-cat.png";
+import snowFoxSprite from "../../art/companions/snow-fox.png";
 
 interface HauntedWoodSceneData {
   store: SaveStore;
@@ -236,6 +237,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.load.image("wood-ghost", woodGhostSprite);
     this.load.image("ghost-king", ghostKingSprite);
     this.load.image("wood-companion-wisp-cat", wispCatSprite);
+    this.load.image("wood-companion-snow-fox", snowFoxSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
@@ -2838,7 +2840,15 @@ export class HauntedWoodScene extends Phaser.Scene {
   private applyCompanionTrip(): void {
     if (!this.combat.perWaveProcs.includes("companion-trip")) return;
     this.time.delayedCall(COMPANION_TRIP_DELAY_MS, () =>
-      tripMostAdvancedFoe(this, this.ghosts),
+      tripMostAdvancedFoe(this, this.ghosts, {
+        textureKey: "wood-companion-snow-fox",
+        startX: this.wrenContainer.x - 120,
+        startY: this.wrenContainer.y - 18,
+        height: 72,
+        depth: 58,
+        color: PALETTE_HEX.frost,
+        kind: "snow",
+      }),
     );
   }
 

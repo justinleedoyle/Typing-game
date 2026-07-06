@@ -35,6 +35,7 @@ interface AlmanacSceneData {
 
 const PAGE_INK = UI_CSS.ink; // "#2a1f12" — shared with the dialogue-card ink
 const PAGE_INK_DIM = "#6a543a";
+const PAGE_INK_DIM_HEX = 0x6a543a;
 
 // Companion creature IDs, one per realm. Stored in `satchel` alongside relics
 // but called out separately on the overview page (they're the kindness-gated
@@ -582,20 +583,12 @@ export class AlmanacScene extends Phaser.Scene {
       const lore = REALM_LORE[realmId];
       const isCleared = state.realms[realmId]?.cleared === true;
       const y = TOP_TEXT_Y + 230 + i * 46;
-      const glyph = isCleared ? "✦" : "·";
-      const color = isCleared ? PAGE_INK : PAGE_INK_DIM;
-      this.addPageText(LEFT_PAGE_X, y, `${glyph}  ${lore?.title ?? realmId}`, {
-        fontSize: "26px",
-        color,
-        fontStyle: isCleared ? "normal" : "italic",
-      });
-      if (isCleared) {
-        this.addPageText(LEFT_PAGE_X + 480, y, "stamped", {
-          fontSize: "20px",
-          fontStyle: "italic",
-          color: PAGE_INK_DIM,
-        });
-      }
+      this.addOverviewRealmMark(
+        LEFT_PAGE_X,
+        y + 6,
+        lore?.title ?? realmId,
+        isCleared,
+      );
     });
 
     // ─── Right page — companions + Quiet Lord fragment + tally ──────────────
@@ -611,16 +604,12 @@ export class AlmanacScene extends Phaser.Scene {
     );
 
     if (collectedCompanions.length === 0) {
-      this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 60, "(none yet)", {
-        fontSize: "24px",
-        fontStyle: "italic",
-        color: PAGE_INK_DIM,
-      });
+      this.addEmptyCompanionRack(RIGHT_PAGE_X, TOP_TEXT_Y + 82);
     } else {
       collectedCompanions.forEach((c, i) => {
-        this.addSatchelRow(
-          RIGHT_PAGE_X,
-          TOP_TEXT_Y + 60 + i * 48,
+        this.addOverviewCompanionChip(
+          RIGHT_PAGE_X + (i % 2) * 294,
+          TOP_TEXT_Y + 82 + Math.floor(i / 2) * 78,
           c.id,
           c.name,
         );
@@ -667,18 +656,218 @@ export class AlmanacScene extends Phaser.Scene {
     const realmRelicCount = state.satchel.filter(
       (id) => !COMPANION_IDS.includes(id),
     ).length;
-    this.addPageText(
+    this.addOverviewTallyPlaque(
       RIGHT_PAGE_X,
       TOP_TEXT_Y + 530,
-      `${realmRelicCount} relics carried  ·  ${state.almanacLore.length} lore pages`,
-      {
-        fontSize: "22px",
-        fontStyle: "italic",
-        color: PAGE_INK_DIM,
-      },
+      realmRelicCount,
+      state.almanacLore.length,
     );
 
     this.renderPageFooter();
+  }
+
+  private addOverviewRealmMark(
+    x: number,
+    y: number,
+    title: string,
+    stamped: boolean,
+  ): void {
+    const c = this.add.container(x, y).setDepth(10);
+    const width = 560;
+    const height = 42;
+    const g = this.add.graphics();
+
+    g.fillStyle(stamped ? UI_HEX.parchmentDark : UI_HEX.parchment, stamped ? 0.18 : 0.08);
+    g.fillRoundedRect(0, -height / 2, width, height, 8);
+    g.lineStyle(1.5, UI_HEX.brass, stamped ? 0.34 : 0.16);
+    g.strokeRoundedRect(0, -height / 2, width, height, 8);
+    g.lineStyle(1, UI_HEX.brass, stamped ? 0.18 : 0.08);
+    g.lineBetween(48, -height / 2 + 7, 48, height / 2 - 7);
+
+    if (stamped) {
+      g.fillStyle(UI_HEX.brass, 0.18);
+      g.fillCircle(24, 0, 14);
+      g.lineStyle(2, UI_HEX.brass, 0.62);
+      g.strokeCircle(24, 0, 14);
+      g.beginPath();
+      g.moveTo(16, 0);
+      g.lineTo(22, 7);
+      g.lineTo(33, -8);
+      g.strokePath();
+
+      g.fillStyle(UI_HEX.brass, 0.12);
+      g.fillRoundedRect(width - 118, -14, 96, 28, 7);
+      g.lineStyle(1, UI_HEX.brass, 0.3);
+      g.strokeRoundedRect(width - 118, -14, 96, 28, 7);
+    } else {
+      g.lineStyle(1.5, PAGE_INK_DIM_HEX, 0.22);
+      g.strokeCircle(24, 0, 11);
+      g.lineStyle(1, PAGE_INK_DIM_HEX, 0.16);
+      g.lineBetween(17, 0, 31, 0);
+    }
+
+    const titleText = this.add
+      .text(64, 0, title, {
+        fontFamily: SERIF,
+        fontSize: "23px",
+        fontStyle: stamped ? "normal" : "italic",
+        color: stamped ? PAGE_INK : PAGE_INK_DIM,
+      })
+      .setOrigin(0, 0.5);
+    c.add([g, titleText]);
+
+    if (stamped) {
+      c.add(
+        this.add
+          .text(width - 70, 0, "stamped", {
+            fontFamily: SERIF,
+            fontSize: "17px",
+            fontStyle: "italic",
+            color: PAGE_INK_DIM,
+          })
+          .setOrigin(0.5),
+      );
+    }
+
+    this.pageTexts.push(c);
+    this.stagePageObject(c, this.nextPageWakeDelay(), { offsetY: 6 });
+  }
+
+  private addEmptyCompanionRack(x: number, y: number): void {
+    const c = this.add.container(x, y).setDepth(10);
+    const g = this.add.graphics();
+    g.fillStyle(UI_HEX.parchmentDark, 0.08);
+    g.fillRoundedRect(0, -18, 520, 86, 10);
+    g.lineStyle(1.5, UI_HEX.brass, 0.18);
+    g.strokeRoundedRect(0, -18, 520, 86, 10);
+    for (let i = 0; i < COMPANION_IDS.length; i++) {
+      const sx = 40 + i * 72;
+      g.fillStyle(UI_HEX.panel, 0.07);
+      g.fillRoundedRect(sx, 12, 44, 34, 8);
+      g.lineStyle(1, UI_HEX.brass, 0.16);
+      g.strokeRoundedRect(sx, 12, 44, 34, 8);
+      g.fillStyle(UI_HEX.brass, 0.12);
+      g.fillCircle(sx + 22, 29, 3.5);
+    }
+    c.add(g);
+    c.add(
+      this.add
+        .text(22, -2, "no companions tucked into the satchel yet", {
+          fontFamily: SERIF,
+          fontSize: "21px",
+          fontStyle: "italic",
+          color: PAGE_INK_DIM,
+        })
+        .setOrigin(0, 0.5),
+    );
+
+    this.pageTexts.push(c);
+    this.stagePageObject(c, this.nextPageWakeDelay(), { offsetY: 6 });
+  }
+
+  private addOverviewCompanionChip(
+    x: number,
+    y: number,
+    id: string,
+    name: string,
+  ): void {
+    const c = this.add.container(x, y).setDepth(10);
+    const width = 270;
+    const height = 58;
+    const g = this.add.graphics();
+    g.fillStyle(UI_HEX.parchmentDark, 0.16);
+    g.fillRoundedRect(0, -height / 2, width, height, 10);
+    g.lineStyle(1.5, UI_HEX.brass, 0.32);
+    g.strokeRoundedRect(0, -height / 2, width, height, 10);
+    g.lineStyle(1, UI_HEX.brass, 0.16);
+    g.lineBetween(58, -height / 2 + 8, 58, height / 2 - 8);
+    c.add(g);
+
+    const icon = iconFor(id);
+    if (icon && this.textures.exists(icon.key)) {
+      const img = this.add.image(30, 0, icon.key).setOrigin(0.5);
+      img.setScale(38 / Math.max(1, img.height));
+      c.add(img);
+    } else {
+      const fallback = this.add.graphics();
+      fallback.fillStyle(UI_HEX.brass, 0.18);
+      fallback.fillCircle(30, 0, 14);
+      fallback.lineStyle(1.5, UI_HEX.brass, 0.45);
+      fallback.strokeCircle(30, 0, 14);
+      c.add(fallback);
+    }
+
+    c.add(
+      this.add
+        .text(72, 0, name, {
+          fontFamily: SERIF,
+          fontSize: "21px",
+          color: PAGE_INK,
+          wordWrap: { width: width - 88 },
+        })
+        .setOrigin(0, 0.5),
+    );
+
+    this.pageTexts.push(c);
+    this.stagePageObject(c, this.nextPageWakeDelay(), { offsetY: 6 });
+  }
+
+  private addOverviewTallyPlaque(
+    x: number,
+    y: number,
+    relicCount: number,
+    loreCount: number,
+  ): void {
+    const c = this.add.container(x, y).setDepth(10);
+    const width = 520;
+    const height = 82;
+    const g = this.add.graphics();
+    g.fillStyle(UI_HEX.parchmentDark, 0.12);
+    g.fillRoundedRect(0, -height / 2, width, height, 12);
+    g.lineStyle(1.5, UI_HEX.brass, 0.28);
+    g.strokeRoundedRect(0, -height / 2, width, height, 12);
+    g.lineStyle(1, UI_HEX.brass, 0.18);
+    g.lineBetween(width / 2, -height / 2 + 12, width / 2, height / 2 - 12);
+    c.add(g);
+
+    this.addTallyCell(c, 38, relicCount, "relics carried");
+    this.addTallyCell(c, width / 2 + 38, loreCount, "lore pages");
+
+    this.pageTexts.push(c);
+    this.stagePageObject(c, this.nextPageWakeDelay(), { offsetY: 6 });
+  }
+
+  private addTallyCell(
+    container: Phaser.GameObjects.Container,
+    x: number,
+    count: number,
+    label: string,
+  ): void {
+    const seal = this.add.graphics();
+    seal.fillStyle(UI_HEX.brass, 0.14);
+    seal.fillCircle(x + 16, 0, 18);
+    seal.lineStyle(1.5, UI_HEX.brass, 0.36);
+    seal.strokeCircle(x + 16, 0, 18);
+    container.add(seal);
+    container.add(
+      this.add
+        .text(x + 16, 0, String(count), {
+          fontFamily: SERIF,
+          fontSize: "24px",
+          color: PAGE_INK,
+        })
+        .setOrigin(0.5),
+    );
+    container.add(
+      this.add
+        .text(x + 48, 0, label, {
+          fontFamily: SERIF,
+          fontSize: "20px",
+          fontStyle: "italic",
+          color: PAGE_INK_DIM,
+        })
+        .setOrigin(0, 0.5),
+    );
   }
 
   /** A satchel collection row: the painted icon on the left, the name beside it.

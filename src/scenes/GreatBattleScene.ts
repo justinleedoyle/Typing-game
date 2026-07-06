@@ -888,6 +888,24 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
+  private playFireflyLanternCue(): void {
+    this.playWallWardPulse("hold");
+    playSceneEventPulse(this, {
+      kind: "mote",
+      color: 0xfff1ad,
+      x: this.scale.width / 2,
+      y: 650,
+      depth: 5,
+      durationMs: 700,
+      ringWidth: 1220,
+      ringHeight: 190,
+      count: 12,
+      alpha: 0.075,
+      spreadX: 520,
+      spreadY: 58,
+    });
+  }
+
   /** UI-cohesion: every finale word target gets the legibility outline (TTT-style). */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
     return new TextWordTarget({ outline: true, depth: 6, ...opts });
@@ -1584,6 +1602,10 @@ export class GreatBattleScene extends Phaser.Scene {
       const dawnLight = this.add.graphics().setDepth(1);
       dawnLight.fillStyle(0xfff4c0, 0.06);
       dawnLight.fillRect(0, 0, this.scale.width, this.scale.height);
+      this.time.delayedCall(900, () => {
+        this.playFireflyLanternCue();
+        this.showRelicNotice("finale_ally_firefly_lantern", "lantern");
+      });
     }
 
     // §5.5.11 — Untethered Wind narration cue

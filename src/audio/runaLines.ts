@@ -1148,6 +1148,14 @@ const FINALE_LINES: readonly RunaLine[] = [
     isNew: true,
   },
   {
+    id: "finale_ally_firefly_lantern",
+    scene: "finale",
+    trigger: "GreatBattleScene.startPhase1() — Firefly Lantern ally modifier (wired)",
+    text: "Firefly Lantern — dawn reaches the wall early. Their words burn clearer.",
+    tone: "reading",
+    isNew: true,
+  },
+  {
     id: "finale_ally_hunters_horn",
     scene: "finale",
     trigger: "GreatBattleScene — Hunter's Horn ally interrupt (wired)",

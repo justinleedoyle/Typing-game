@@ -429,18 +429,19 @@ export class TitleScene extends Phaser.Scene {
     // Dev unlock (opt-in via ?dev) — unlock every realm + fill the satchel, and
     // with ?dev=<target> jump straight into a realm or the finale. For art +
     // feel-tuning; a no-op in normal play. The standard unlock persists to the
-    // cloud save; loadout=bare uses a temporary in-memory store so it cannot wipe
-    // the player's real satchel.
-    const immediateBareDevJump =
-      dev.unlock && dev.loadout === "bare" && !!dev.realmSceneKey;
-    if (immediateBareDevJump) {
-      this.store = this.createBareDevStore();
+    // cloud save; temporary loadouts (`loadout=bare` or `satchel=id,id`) use an
+    // in-memory store so they cannot wipe the player's real saved satchel.
+    const temporarySatchel = dev.loadout === "bare" ? [] : dev.satchelOverride;
+    const immediateTemporaryDevJump =
+      dev.unlock && temporarySatchel !== undefined && !!dev.realmSceneKey;
+    if (immediateTemporaryDevJump) {
+      this.store = this.createTemporaryDevStore(undefined, temporarySatchel);
     } else {
       this.store = await this.storePromise;
     }
-    if (dev.unlock && this.store && !immediateBareDevJump) {
-      if (dev.loadout === "bare") {
-        this.store = this.createBareDevStore(this.store);
+    if (dev.unlock && this.store && !immediateTemporaryDevJump) {
+      if (temporarySatchel !== undefined) {
+        this.store = this.createTemporaryDevStore(this.store, temporarySatchel);
       } else {
         this.store.update(applyDevUnlock);
       }
@@ -466,16 +467,20 @@ export class TitleScene extends Phaser.Scene {
     });
   }
 
-  private createBareDevStore(source?: SaveStore): SaveStore {
+  private createTemporaryDevStore(
+    source: SaveStore | undefined,
+    satchel: readonly string[],
+  ): SaveStore {
     const state = source
       ? (JSON.parse(JSON.stringify(source.get())) as SaveState)
       : emptySave();
-    applyDevUnlock(state, { satchel: "empty" });
+    applyDevUnlock(state, { satchel });
     const backend: SaveBackend = {
       load: async () => state,
       save: async () => {
         // Intentionally transient: this route is for visual/feel-tuning passes
-        // where the full satchel would auto-clear finale waves before inspection.
+        // where the full satchel would obscure UI or auto-clear waves before
+        // inspection.
       },
     };
     return new SaveStore(backend, state);

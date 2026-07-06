@@ -424,7 +424,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       applyEffect: (effect, targets) => this.applyOneShot(effect, targets),
       isActive: () =>
         this.ghosts.length > 0 && this.ghosts.some((g) => !g.isDefeated()),
-      announce: (text) => this.band.showNotice(text, { label: "relic" }),
+      announce: (text) => this.band.showNotice(text, { label: "one-shot" }),
       slots: band.oneShotSlots,
       compact: true,
     });

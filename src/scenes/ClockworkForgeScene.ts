@@ -436,7 +436,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       getThreats: () => this.liveGolemThreats(),
       applyEffect: (effect, targets) => this.applyOneShot(effect, targets),
       isActive: () => this.waveActive,
-      announce: (text) => this.band.showNotice(text, { label: "relic" }),
+      announce: (text) => this.band.showNotice(text, { label: "one-shot" }),
       slots: band.oneShotSlots,
       compact: true,
     });

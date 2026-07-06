@@ -488,7 +488,7 @@ export class SkyIslandScene extends Phaser.Scene {
       getThreats: () => this.liveBannerThreats(),
       applyEffect: (effect, targets) => this.applyOneShot(effect, targets),
       isActive: () => this.activePhrases.some((p) => p.isReady() && !p.isFrozen()),
-      announce: (text) => this.band.showNotice(text, { label: "relic" }),
+      announce: (text) => this.band.showNotice(text, { label: "one-shot" }),
       slots: band.oneShotSlots,
       compact: true,
     });

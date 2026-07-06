@@ -531,8 +531,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         },
       });
       this.attachRevisitMemoryWordAnchor(target);
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     };
     advance();
   }
@@ -717,8 +716,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         },
       });
       this.attachPathCueWordAnchor(i, target);
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     };
     advance();
   }
@@ -1076,8 +1074,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           this.time.delayedCall(2400, () => this.startAct2());
         },
       });
-      this.typingInput.register(reply);
-      this.activeTargets.push(reply);
+      this.registerActiveTarget(reply);
     });
   }
 
@@ -1284,9 +1281,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         this.startFork1BoneFlute();
       },
     }, -62);
-    this.typingInput.register(offeringTarget);
-    this.typingInput.register(fluteTarget);
-    this.activeTargets.push(offeringTarget, fluteTarget);
+    this.registerActiveTarget(offeringTarget, fluteTarget);
   }
 
   // ─── Fork 1A — Offering ───────────────────────────────────────────────────
@@ -1346,8 +1341,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         this.time.delayedCall(2400, () => this.startAct3());
       },
     });
-    this.typingInput.register(target);
-    this.activeTargets.push(target);
+    this.registerActiveTarget(target);
   }
 
   // ─── Fork 1B — Bone-Flute ─────────────────────────────────────────────────
@@ -1438,9 +1432,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         this.startBossFight();
       },
     }, -58);
-    this.typingInput.register(bargainTarget);
-    this.typingInput.register(forceTarget);
-    this.activeTargets.push(bargainTarget, forceTarget);
+    this.registerActiveTarget(bargainTarget, forceTarget);
   }
 
   // ─── Fork 2A — Bargain ────────────────────────────────────────────────────
@@ -1636,8 +1628,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           this.time.delayedCall(160, advance);
         },
       });
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     };
     advance();
   }
@@ -1741,9 +1732,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           this.time.delayedCall(1800, () => this.startEnding());
         },
       });
-      this.typingInput.register(callTarget);
-      this.typingInput.register(leaveTarget);
-      this.activeTargets.push(callTarget, leaveTarget);
+      this.registerActiveTarget(callTarget, leaveTarget);
     });
   }
 
@@ -2160,8 +2149,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         : owner?.body?.scene
           ? this.makeWoodForkWord(owner.body, opts, owner.sourceOffsetY)
           : this.makeWord(opts);
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     };
     advance();
   }
@@ -2217,6 +2205,17 @@ export class HauntedWoodScene extends Phaser.Scene {
         onComplete();
       },
     });
+  }
+
+  private registerActiveTarget(...targets: TextWordTarget[]): void {
+    for (const target of targets) {
+      this.typingInput.register(target);
+      this.activeTargets.push(target);
+      target.playEntryWake({
+        durationMs: 180,
+        offsetY: 0,
+      });
+    }
   }
 
   private makeIngaWord(opts: TextWordTargetOptions): TextWordTarget {

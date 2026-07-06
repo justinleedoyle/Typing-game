@@ -118,11 +118,12 @@ const DANGER_RAMP_START = 0.5;
 // not the default brass. Matches the ghost body tint.
 const GHOST_BURST_COLOR = 0xdde8dd;
 
-// Painted-sprite display heights (px), matching the old procedural body heights
-// so the word anchor + hit feel line up. The ghost body was a 76px-tall ellipse;
-// the king figure (crown down through the body ellipse, throne excluded) spanned
-// ~232px. Both drawn at native 1:1 (no scaled container). Tune on live.
-const WOOD_GHOST_SPRITE_HEIGHT = 84;
+// Painted-sprite display heights (px). Combat ghosts started at the old
+// procedural blob height, but the living-scene pass needs the painted body and
+// mist source to carry the threat, not only the punctuated word. The king figure
+// (crown down through the body ellipse, throne excluded) spanned ~232px.
+// Tune on live.
+const WOOD_GHOST_SPRITE_HEIGHT = 124;
 const GHOST_KING_SPRITE_HEIGHT = 232;
 const INGA_GHOST_SPRITE_HEIGHT = 92;
 
@@ -1870,12 +1871,12 @@ export class HauntedWoodScene extends Phaser.Scene {
       knockbackMs: 700,
       knockbackPauseMs: GHOST_KNOCKBACK_PAUSE_MS,
       dangerRampStart: DANGER_RAMP_START,
-      anchorOffsetY: -80,
+      anchorOffsetY: -92,
       idleBobDy: 7,
       idleBobMs: 1000,
       defeatRiseY: -50,
       defeatMs: 500,
-      fontSize: 32,
+      fontSize: 34,
       // Wisp-themed pale gray-green burst — a ghost going down in mist, not brass.
       burstColor: GHOST_BURST_COLOR,
       defeatImpactKind: "mist",
@@ -1996,16 +1997,35 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private drawGhostInto(
     c: Phaser.GameObjects.Container,
-    _punctuated: boolean,
+    punctuated: boolean,
   ): void {
-    // Painted wraith sprite replaces the old translucent-ellipse graphics. Scaled
-    // to the procedural body height so the word anchor + hit feel line up. The
+    // Painted wraith sprite replaces the old translucent-ellipse graphics. The
     // enemy applies restAlpha (0.6) to the whole container, keeping the ghostly
-    // translucence the flat shape used to bake in.
-    c.add(addLocalGroundShadow(this, 96, 20, { y: 8, alpha: 0.18 }));
+    // translucence while the local mist halo keeps the threat physically present.
+    c.add(addLocalGroundShadow(this, 148, 24, { y: 28, alpha: 0.2 }));
+    c.add(this.makeWoodGhostMistHalo(punctuated));
     const sprite = this.add.image(0, 0, "wood-ghost");
     sprite.setScale(WOOD_GHOST_SPRITE_HEIGHT / sprite.height);
     c.add(sprite);
+  }
+
+  private makeWoodGhostMistHalo(punctuated: boolean): Phaser.GameObjects.Graphics {
+    const g = this.add.graphics();
+    const accent = punctuated ? 0xf1fff1 : GHOST_BURST_COLOR;
+    g.fillStyle(0xceddce, 0.13);
+    g.fillEllipse(0, 8, 162, 92);
+    g.fillStyle(0xe8f2e8, punctuated ? 0.13 : 0.1);
+    g.fillEllipse(0, -8, 112, 142);
+    g.lineStyle(punctuated ? 3 : 2, accent, punctuated ? 0.3 : 0.22);
+    g.strokeEllipse(0, 4, 144, 82);
+    g.lineStyle(1, 0xffffff, punctuated ? 0.18 : 0.12);
+    g.strokeEllipse(0, -20, 82, 118);
+    g.fillStyle(accent, punctuated ? 0.32 : 0.22);
+    g.fillCircle(-54, -28, 4.5);
+    g.fillCircle(56, -18, 3.8);
+    g.fillCircle(-34, 42, 3.2);
+    g.fillCircle(46, 36, 3.2);
+    return g;
   }
 
   private checkGhostWaveComplete(): void {

@@ -963,6 +963,23 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
+  private playGlassFishCorridorCue(): void {
+    playSceneEventPulse(this, {
+      kind: "bubble",
+      color: 0xa7d2dd,
+      x: this.scale.width * 0.64,
+      y: 560,
+      depth: 5,
+      durationMs: 620,
+      ringWidth: 360,
+      ringHeight: 118,
+      count: 9,
+      alpha: 0.08,
+      spreadX: 142,
+      spreadY: 34,
+    });
+  }
+
   private playTetherCordBindCue(): void {
     if (!this.quietLordContainer?.scene) return;
     playActorAttention(this, this.quietLordContainer, {
@@ -3309,6 +3326,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.cameras.main.flash(400, 160, 220, 255, false);
     this.time.delayedCall(500, () => {
       const wordPos = { x: this.scale.width * 0.64, y: 560 };
+      this.playGlassFishCorridorCue();
       const bonusTarget = this.makeLordWord({
         scene: this,
         word: "light",

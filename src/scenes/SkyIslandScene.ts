@@ -2925,6 +2925,10 @@ export class SkyIslandScene extends Phaser.Scene {
     );
     this.typingInput.register(target);
     this.activeTargets.push(target);
+    target.playEntryWake({
+      durationMs: 180,
+      offsetY: 0,
+    });
   }
 
   private startSpiritAdvance(spirit: LanternSpirit): void {

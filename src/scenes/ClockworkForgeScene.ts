@@ -400,6 +400,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     new HeartSoulHud(this, {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
+      showSoul: !this.revisit,
       getCombo: () => this.typingInput.getStats().getCombo(),
       getCastReady: () => this.typingInput.getStats().canCast(this.spellCost),
       onCastReady: () =>

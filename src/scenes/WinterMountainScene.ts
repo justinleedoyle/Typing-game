@@ -467,14 +467,18 @@ export class WinterMountainScene extends Phaser.Scene {
       onSpeak: (speakerName) => this.attendSpeaker(speakerName),
     });
 
+    const showCombatMeters = !this.revisit;
+
     // Candle + thunder meters dock into the band's satchel zone (above the band
     // surface, so depth > the band's DEPTH).
     this.candleGroup = this.add
       .container(band.satchelAnchor.x + 90, band.satchelAnchor.y)
-      .setDepth(1500);
+      .setDepth(1500)
+      .setVisible(showCombatMeters);
     this.chargeGroup = this.add
       .container(band.satchelAnchor.x + 370, band.satchelAnchor.y)
-      .setDepth(1500);
+      .setDepth(1500)
+      .setVisible(showCombatMeters);
     this.redrawCandles();
     this.redrawCharges();
 
@@ -489,15 +493,19 @@ export class WinterMountainScene extends Phaser.Scene {
     const candleLabel = this.add
       .text(band.satchelAnchor.x + 90, band.satchelAnchor.y - 38, "candles", hudLabelStyle)
       .setOrigin(0.5)
-      .setDepth(1500);
+      .setDepth(1500)
+      .setVisible(showCombatMeters);
     const thunderLabel = this.add
       .text(band.satchelAnchor.x + 370, band.satchelAnchor.y - 38, "thunder", hudLabelStyle)
       .setOrigin(0.5)
-      .setDepth(1500);
-    this.stageWinterMeterObject(candleLabel, 70, { offsetY: 5 });
-    this.stageWinterMeterObject(this.candleGroup, 95, { offsetY: 8 });
-    this.stageWinterMeterObject(thunderLabel, 115, { offsetY: 5 });
-    this.stageWinterMeterObject(this.chargeGroup, 140, { offsetY: 8 });
+      .setDepth(1500)
+      .setVisible(showCombatMeters);
+    if (showCombatMeters) {
+      this.stageWinterMeterObject(candleLabel, 70, { offsetY: 5 });
+      this.stageWinterMeterObject(this.candleGroup, 95, { offsetY: 8 });
+      this.stageWinterMeterObject(thunderLabel, 115, { offsetY: 5 });
+      this.stageWinterMeterObject(this.chargeGroup, 140, { offsetY: 8 });
+    }
 
     this.typingInput = new TypingInputController(this.store);
     this.director = new WaveDirector(this.typingInput.getStats());
@@ -516,6 +524,7 @@ export class WinterMountainScene extends Phaser.Scene {
     new HeartSoulHud(this, {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
+      showSoul: !this.revisit,
       getCombo: () => this.typingInput.getStats().getCombo(),
       getCastReady: () => this.typingInput.getStats().canCast(SPELL_COST),
       onCastReady: () =>

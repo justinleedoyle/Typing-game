@@ -458,9 +458,11 @@ export class SkyIslandScene extends Phaser.Scene {
       },
       onClaim: () => playClaim(),
     });
+    const offensiveOneShots = this.combat.oneShots.filter(isOffensiveOneShot);
     new HeartSoulHud(this, {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
+      showSoul: offensiveOneShots.length > 0,
       onSustainedLowHeart: () =>
         showLowHeartFeedback({
           scene: this,
@@ -477,7 +479,6 @@ export class SkyIslandScene extends Phaser.Scene {
     // dock into the console band's one-shot slots; they only respond while a
     // scrolling temple has live banners (the sealed-scroll temple and the
     // between-temple lulls clear activePhrases, so the invoker is inert there).
-    const offensiveOneShots = this.combat.oneShots.filter(isOffensiveOneShot);
     this.oneShotInvoker = new OneShotInvoker<ScrollingPhrase>({
       scene: this,
       typingInput: this.typingInput,

@@ -1148,6 +1148,14 @@ const FINALE_LINES: readonly RunaLine[] = [
     isNew: true,
   },
   {
+    id: "finale_ally_hunters_horn",
+    scene: "finale",
+    trigger: "GreatBattleScene — Hunter's Horn ally interrupt (wired)",
+    text: "Hunter's Horn — Sigrid sounds it. One of them falters.",
+    tone: "urgent",
+    isNew: true,
+  },
+  {
     id: "finale_phase1_lord_arrives",
     scene: "finale",
     trigger: "GreatBattleScene.runNextWave() — the Quiet Lord arrives (wired)",

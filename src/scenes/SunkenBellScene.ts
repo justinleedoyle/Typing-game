@@ -1112,6 +1112,7 @@ export class SunkenBellScene extends Phaser.Scene {
       this.noticeShrineForgiveness();
       return;
     }
+    this.playRhythmStumbleCue(isDesync);
     flashWrenMiss(this.wrenSprite);
     this.cameras.main.shake(80, 0.0025);
     this.typingInput.getStats().record(false);
@@ -1120,6 +1121,61 @@ export class SunkenBellScene extends Phaser.Scene {
       const emptied = this.breath.stumble();
       this.drawBreathBar();
       if (emptied) this.gaspKnockback();
+    }
+  }
+
+  /** Rhythm mistakes belong to the missed toll/answer ring before Wren flinches. */
+  private playRhythmStumbleCue(isDesync: boolean): void {
+    const source = this.beatPhase === "off" ? this.offbeatRing : this.beatRing;
+    const color = isDesync ? PALETTE_HEX.ember : BELL_BURST_COLOR;
+    const ring = this.add
+      .graphics()
+      .setPosition(source.x, source.y)
+      .setDepth(58)
+      .setAlpha(isDesync ? 0.82 : 0.68);
+    ring.lineStyle(isDesync ? 4 : 3, color, isDesync ? 0.76 : 0.58);
+    ring.strokeCircle(0, 0, isDesync ? 42 : 34);
+    ring.lineBetween(-28, -18, 30, 20);
+    ring.lineBetween(-22, 18, 22, -18);
+    this.tweens.add({
+      targets: ring,
+      alpha: 0,
+      scale: isDesync ? 1.5 : 1.34,
+      duration: isDesync ? 430 : 340,
+      ease: "Sine.easeOut",
+      onComplete: () => ring.destroy(),
+    });
+
+    if (this.breathActive) {
+      playClaimLine(
+        this,
+        source.x,
+        source.y,
+        this.breathAnchor.x,
+        this.breathAnchor.y,
+        { color, depth: 58, durationMs: 320 },
+      );
+      playMeterPulse(this, {
+        x: this.breathAnchor.x,
+        y: this.breathAnchor.y,
+        width: 174,
+        height: 26,
+        color,
+        depth: 1502,
+        durationMs: 300,
+      });
+      return;
+    }
+
+    if (this.wrenContainer?.scene) {
+      playClaimLine(
+        this,
+        source.x,
+        source.y,
+        this.wrenContainer.x,
+        this.wrenContainer.y - 106,
+        { color, depth: 58, durationMs: 320 },
+      );
     }
   }
 

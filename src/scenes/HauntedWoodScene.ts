@@ -2839,6 +2839,15 @@ export class HauntedWoodScene extends Phaser.Scene {
         PALETTE_HEX.ember,
       );
       playBellToll();
+      playBodyImpact(this, t.container, {
+        kind: "ember",
+        color: PALETTE_HEX.ember,
+        offsetY: -78,
+        depth: 63,
+        ringRadius: 44,
+        count: 10,
+        durationMs: 380,
+      });
       playWordCompleteBurst(this, t.container.x, t.restY - 80, {
         color: PALETTE_HEX.ember,
         count: 16,

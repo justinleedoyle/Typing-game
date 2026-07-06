@@ -594,8 +594,7 @@ export class SkyIslandScene extends Phaser.Scene {
         },
       });
       this.attachRevisitMemoryWordAnchor(target);
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     };
     advance();
   }
@@ -763,8 +762,7 @@ export class SkyIslandScene extends Phaser.Scene {
         this.time.delayedCall(600, () => this.runPathBeats(idx + 1));
       },
     });
-    this.typingInput.register(target);
-    this.activeTargets.push(target);
+    this.registerActiveTarget(target);
   }
 
   private showPathCue(beat: (typeof PATH_BEATS)[number]): void {
@@ -1245,8 +1243,7 @@ export class SkyIslandScene extends Phaser.Scene {
           },
         );
         this.wrenContainer.once(Phaser.GameObjects.Events.DESTROY, releaseReplyAnchor);
-        this.typingInput.register(t);
-        this.activeTargets.push(t);
+        this.registerActiveTarget(t);
       });
     });
   }
@@ -1568,8 +1565,7 @@ export class SkyIslandScene extends Phaser.Scene {
       // Tier 4 — feed the grace pool (Master Key / Lock-Bar / Golem Heart /
       // Cairn-Token) into the no-miss temple as forgive-reset tokens (cap 2).
       target.setForgiveResets(this.combat.gracePool);
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     });
   }
 
@@ -1919,9 +1915,7 @@ export class SkyIslandScene extends Phaser.Scene {
             this.time.delayedCall(1600, () => this.startTemple(nextTempleIdx));
           },
         });
-        this.typingInput.register(helpTarget);
-        this.typingInput.register(skipTarget);
-        this.activeTargets.push(helpTarget, skipTarget);
+        this.registerActiveTarget(helpTarget, skipTarget);
       });
     });
   }
@@ -1970,13 +1964,11 @@ export class SkyIslandScene extends Phaser.Scene {
                 this.time.delayedCall(2200, () => this.startTemple(nextTempleIdx));
               },
             });
-            this.typingInput.register(placeTarget);
-            this.activeTargets.push(placeTarget);
+            this.registerActiveTarget(placeTarget);
           });
         },
       });
-      this.typingInput.register(liftTarget);
-      this.activeTargets.push(liftTarget);
+      this.registerActiveTarget(liftTarget);
     });
   }
 
@@ -2149,9 +2141,7 @@ export class SkyIslandScene extends Phaser.Scene {
         this.startFork1StealFlame();
       },
     }, -76);
-    this.typingInput.register(helpTarget);
-    this.typingInput.register(stealTarget);
-    this.activeTargets.push(helpTarget, stealTarget);
+    this.registerActiveTarget(helpTarget, stealTarget);
   }
 
   private startFork1HelpEtta(): void {
@@ -2242,8 +2232,7 @@ export class SkyIslandScene extends Phaser.Scene {
           this.time.delayedCall(2000, () => this.startBossPhase2());
         },
       });
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     });
   }
 
@@ -2286,8 +2275,7 @@ export class SkyIslandScene extends Phaser.Scene {
           });
         },
       });
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     });
   }
 
@@ -2339,8 +2327,7 @@ export class SkyIslandScene extends Phaser.Scene {
         }
       };
 
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     });
   }
 
@@ -2442,9 +2429,7 @@ export class SkyIslandScene extends Phaser.Scene {
         this.startFork2CutTether();
       },
     }, -58);
-    this.typingInput.register(kindTarget);
-    this.typingInput.register(tetherTarget);
-    this.activeTargets.push(kindTarget, tetherTarget);
+    this.registerActiveTarget(kindTarget, tetherTarget);
   }
 
   private startFork2KindEnding(): void {
@@ -2473,8 +2458,7 @@ export class SkyIslandScene extends Phaser.Scene {
           this.time.delayedCall(2200, () => this.startLanternMothGate());
         },
       }, -56);
-      this.typingInput.register(t);
-      this.activeTargets.push(t);
+      this.registerActiveTarget(t);
     });
   }
 
@@ -2560,9 +2544,7 @@ export class SkyIslandScene extends Phaser.Scene {
             this.time.delayedCall(2000, () => this.startTrueNamePassage());
           },
         });
-        this.typingInput.register(takeTarget);
-        this.typingInput.register(letGoTarget);
-        this.activeTargets.push(takeTarget, letGoTarget);
+        this.registerActiveTarget(takeTarget, letGoTarget);
       });
     } else {
       // Gate not met — no near-miss (single condition, as specified)
@@ -2699,8 +2681,7 @@ export class SkyIslandScene extends Phaser.Scene {
         },
       );
       seal.once(Phaser.GameObjects.Events.DESTROY, releaseSealAnchor);
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     });
   }
 
@@ -2923,12 +2904,7 @@ export class SkyIslandScene extends Phaser.Scene {
         targetOffsetY: 24,
       },
     );
-    this.typingInput.register(target);
-    this.activeTargets.push(target);
-    target.playEntryWake({
-      durationMs: 180,
-      offsetY: 0,
-    });
+    this.registerActiveTarget(target);
   }
 
   private startSpiritAdvance(spirit: LanternSpirit): void {
@@ -3183,8 +3159,7 @@ export class SkyIslandScene extends Phaser.Scene {
       const target = owner?.body?.scene
         ? this.makeSkyForkWord(owner.body, opts, owner.sourceOffsetY)
         : this.makeEttaWord(opts);
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     };
 
     advance();
@@ -3294,6 +3269,17 @@ export class SkyIslandScene extends Phaser.Scene {
         onComplete();
       },
     });
+  }
+
+  private registerActiveTarget(...targets: TextWordTarget[]): void {
+    for (const target of targets) {
+      this.typingInput.register(target);
+      this.activeTargets.push(target);
+      target.playEntryWake({
+        durationMs: 180,
+        offsetY: 0,
+      });
+    }
   }
 
   private makePathWord(opts: TextWordTargetOptions): TextWordTarget {

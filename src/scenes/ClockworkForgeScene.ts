@@ -3128,6 +3128,15 @@ export class ClockworkForgeScene extends Phaser.Scene {
       PALETTE_HEX.ember,
     );
     playBellToll();
+    playBodyImpact(this, target.container, {
+      kind: "ember",
+      color: PALETTE_HEX.ember,
+      offsetY: -82,
+      depth: 63,
+      ringRadius: 44,
+      count: 10,
+      durationMs: 380,
+    });
     playWordCompleteBurst(this, target.container.x, target.restY - 80, {
       color: PALETTE_HEX.ember,
       count: 16,

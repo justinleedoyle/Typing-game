@@ -924,6 +924,19 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
+  private playBellsTongueStrikeCue(): void {
+    if (!this.quietLordContainer?.scene) return;
+    playBodyImpact(this, this.quietLordContainer, {
+      kind: "bubble",
+      color: 0xa7d2dd,
+      offsetY: 508,
+      depth: 7,
+      ringRadius: 70,
+      count: 14,
+      durationMs: 520,
+    });
+  }
+
   private playTetherCordBindCue(): void {
     if (!this.quietLordContainer?.scene) return;
     playActorAttention(this, this.quietLordContainer, {
@@ -3054,7 +3067,7 @@ export class GreatBattleScene extends Phaser.Scene {
       this.showRelicNotice("finale_relic_bells_tongue");
       this.band.setObjective("Bell's Tongue strikes; brace for the next counter.");
       this.time.delayedCall(1800, () => {
-        // Camera flash to signal the super-hit
+        this.playBellsTongueStrikeCue();
         this.cameras.main.flash(300, 200, 200, 255, false);
         this.tweens.add({
           targets: this.quietLordContainer,

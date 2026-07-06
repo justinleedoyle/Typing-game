@@ -1681,6 +1681,17 @@ export class GreatBattleScene extends Phaser.Scene {
     );
     if (waveEnemies.length === 0) return;
     const target = waveEnemies[Math.floor(Math.random() * waveEnemies.length)]!;
+    this.showRelicNotice("finale_ally_hunters_horn", "horn");
+    playBodyImpact(this, target.graphic, {
+      kind: "ash",
+      color: PALETTE_HEX.brass,
+      offsetX: target.body.x,
+      offsetY: target.body.y - 16,
+      depth: 48,
+      ringRadius: 42,
+      count: 8,
+      durationMs: 360,
+    });
     // Stutter: shake the graphic horizontally twice
     this.tweens.add({
       targets: target.graphic,

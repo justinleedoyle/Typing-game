@@ -1928,6 +1928,15 @@ export class WinterMountainScene extends Phaser.Scene {
         this.time.delayedCall(140, () => this.bossBodySprite?.clearTint());
       }
       this.band.setObjective("Type the Pack-Leader's true name.");
+      playBodyImpact(this, boss.container, {
+        kind: "snow",
+        color: PALETTE_HEX.frost,
+        offsetY: -132,
+        depth: 58,
+        ringRadius: 66,
+        count: 14,
+        durationMs: 520,
+      });
       this.cameras.main.shake(180, 0.003);
       boss.attachWord();
     });

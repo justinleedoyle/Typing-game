@@ -924,6 +924,24 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
+  private playTetherCordBindCue(): void {
+    if (!this.quietLordContainer?.scene) return;
+    playActorAttention(this, this.quietLordContainer, {
+      tint: 0x9fcbd1,
+      scale: 0.988,
+      durationMs: 240,
+    });
+    playBodyImpact(this, this.quietLordContainer, {
+      kind: "mote",
+      color: 0x9fcbd1,
+      offsetY: 508,
+      depth: 7,
+      ringRadius: 54,
+      count: 10,
+      durationMs: 430,
+    });
+  }
+
   /** UI-cohesion: every finale word target gets the legibility outline (TTT-style). */
   private makeWord(opts: TextWordTargetOptions): TextWordTarget {
     return new TextWordTarget({ outline: true, depth: 6, ...opts });
@@ -3101,6 +3119,7 @@ export class GreatBattleScene extends Phaser.Scene {
     if (satchel.includes("tether-cord") && !this.tetherCordBindUsed) {
       this.tetherCordBindUsed = true;
       this.showRelicNotice("finale_relic_tether_cord");
+      this.playTetherCordBindCue();
       this.band.setObjective("Type bound while the tether-cord holds him.");
       const wordPos = this.lordDuelWordPosition(0, 1, 492);
       const bindTarget = this.makeLordWord({

@@ -941,6 +941,65 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
+  private playForceLordCrackCue(mode: "strike" | "open" = "strike"): void {
+    if (!this.quietLordContainer?.scene) return;
+    const body = this.quietLordBodyTarget();
+    const stronger = mode === "open";
+
+    playBodyImpact(this, this.quietLordContainer, {
+      kind: "ember",
+      color: UI_HEX.ember,
+      offsetY: 508,
+      depth: 8,
+      ringRadius: stronger ? 84 : 58,
+      count: stronger ? 16 : 10,
+      durationMs: stronger ? 540 : 380,
+    });
+
+    const crack = this.add
+      .graphics()
+      .setPosition(body.x, body.y - 12)
+      .setDepth(9)
+      .setAlpha(stronger ? 0.9 : 0.68);
+    crack.lineStyle(stronger ? 4 : 3, UI_HEX.ember, stronger ? 0.86 : 0.62);
+    crack.beginPath();
+    crack.moveTo(0, stronger ? -78 : -52);
+    crack.lineTo(stronger ? -14 : -9, stronger ? -38 : -24);
+    crack.lineTo(stronger ? 12 : 8, stronger ? -10 : -4);
+    crack.lineTo(stronger ? -8 : -5, stronger ? 34 : 24);
+    crack.lineTo(stronger ? 18 : 12, stronger ? 78 : 50);
+    crack.strokePath();
+    crack.lineStyle(2, UI_HEX.brass, stronger ? 0.42 : 0.28);
+    crack.lineBetween(
+      stronger ? -14 : -9,
+      stronger ? -38 : -24,
+      stronger ? -46 : -28,
+      stronger ? -20 : -12,
+    );
+    crack.lineBetween(
+      stronger ? 12 : 8,
+      stronger ? -10 : -4,
+      stronger ? 46 : 28,
+      stronger ? 6 : 4,
+    );
+    crack.lineBetween(
+      stronger ? -8 : -5,
+      stronger ? 34 : 24,
+      stronger ? -38 : -24,
+      stronger ? 52 : 34,
+    );
+
+    this.tweens.add({
+      targets: crack,
+      alpha: 0,
+      scaleX: stronger ? 1.2 : 1.12,
+      scaleY: stronger ? 1.16 : 1.08,
+      duration: stronger ? 560 : 360,
+      ease: "Sine.easeOut",
+      onComplete: () => crack.destroy(),
+    });
+  }
+
   private playWhirlwindCancelCue(): void {
     this.playWallWardPulse("hold");
 
@@ -3256,6 +3315,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
         // §5.5.11 — force duel: camera flash + shake on each defeat
         if (this.isForceDuel) {
+          this.playForceLordCrackCue("strike");
           this.cameras.main.flash(200, 255, 180, 100, false);
           this.cameras.main.shake(180, 0.006);
         }
@@ -3692,6 +3752,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
     // §5.5.11 — force duel: Lord visually cracks open (camera shake)
     if (this.isForceDuel) {
+      this.playForceLordCrackCue("open");
       this.cameras.main.shake(300, 0.01);
     }
 

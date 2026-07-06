@@ -396,6 +396,7 @@ export class SunkenBellScene extends Phaser.Scene {
     new HeartSoulHud(this, {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
+      showSoul: false,
       onSustainedLowHeart: () =>
         showLowHeartFeedback({
           scene: this,

@@ -32,6 +32,10 @@ const PIP_OUTLINE = 0x0b0a0f;
 interface HudOptions {
   getHeart: () => number;
   getSoul: () => number;
+  /** Set false in realms where Soul has no spendable keyboard action. Heart can
+   *  still carry the accuracy/low-heart feedback without advertising a false
+   *  resource row. Defaults true. */
+  showSoul?: boolean;
   /** Current clean-streak combo. When provided, an "×N" flourish appears
    *  below the meters once the streak clears COMBO_SHOW_MIN. */
   getCombo?: () => number;
@@ -70,23 +74,27 @@ export class HeartSoulHud {
   private lowHeartSinceMs: number | null = null;
   private lowHeartLastFiredMs = -Infinity;
   private castReadyLast = false;
-  private soulLabel!: Phaser.GameObjects.Text;
-  private comboText!: Phaser.GameObjects.Text;
+  private soulLabel: Phaser.GameObjects.Text | null = null;
+  private comboText: Phaser.GameObjects.Text | null = null;
   private comboTier = -1;
   private comboVisible = false;
   private pulseMs = 0;
+  private readonly showSoul: boolean;
   private readonly updateHandler: (time: number, delta: number) => void;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly opts: HudOptions,
   ) {
+    this.showSoul = opts.showSoul !== false;
     const rowW = PIP_COUNT * PIP_W + (PIP_COUNT - 1) * PIP_GAP;
     const labelW = 56;
     const padX = 14;
     const padY = 10;
     const plateW = rowW + LABEL_GAP + labelW + padX * 2;
-    const plateH = ROW_GAP + PIP_H + padY * 2;
+    const plateH = (this.showSoul ? ROW_GAP : 0) + PIP_H + padY * 2;
+    const plateCenterY = ROW_GAP / 2;
+    const heartRowY = this.showSoul ? 0 : ROW_GAP / 2;
     const x = opts.anchor?.x ?? scene.scale.width - HUD_PADDING;
     const y = opts.anchor?.y ?? HUD_PADDING;
     this.container = scene.add
@@ -105,7 +113,7 @@ export class HeartSoulHud {
       const plate = scene.add
         .rectangle(
           plateCenterX,
-          ROW_GAP / 2,
+          plateCenterY,
           plateW,
           plateH,
           consoleStyle ? UI_HEX.panel : PALETTE_HEX.ink,
@@ -119,53 +127,62 @@ export class HeartSoulHud {
       this.container.add(plate);
       if (consoleStyle) {
         const ticks = cornerTicks(scene, plateW, plateH, { inset: 5, size: 8 });
-        ticks.setPosition(plateCenterX, ROW_GAP / 2);
+        ticks.setPosition(plateCenterX, plateCenterY);
         this.container.add(ticks);
       }
     }
 
     const heartLabel = scene.add
-      .text(-rowW - LABEL_GAP, 0, "heart", {
+      .text(-rowW - LABEL_GAP, heartRowY, "heart", {
         fontFamily: SERIF,
         fontStyle: "italic",
         fontSize: "16px",
         color: PALETTE.cream,
       })
       .setOrigin(1, 0.5);
-    this.soulLabel = scene.add
-      .text(-rowW - LABEL_GAP, ROW_GAP, "soul", {
-        fontFamily: SERIF,
-        fontStyle: "italic",
-        fontSize: "16px",
-        color: PALETTE.cream,
-      })
-      .setOrigin(1, 0.5);
-    this.container.add([heartLabel, this.soulLabel]);
+    this.container.add(heartLabel);
+
+    if (this.showSoul) {
+      this.soulLabel = scene.add
+        .text(-rowW - LABEL_GAP, ROW_GAP, "soul", {
+          fontFamily: SERIF,
+          fontStyle: "italic",
+          fontSize: "16px",
+          color: PALETTE.cream,
+        })
+        .setOrigin(1, 0.5);
+      this.container.add(this.soulLabel);
+    }
 
     // Combo flourish — sits just below the soul pips, right-aligned to their
     // edge. Hidden until the streak clears COMBO_SHOW_MIN.
-    this.comboText = scene.add
-      .text(0, ROW_GAP + 20, "", {
-        fontFamily: SERIF,
-        fontStyle: "italic",
-        fontSize: "18px",
-        color: PALETTE.brass,
-      })
-      .setOrigin(1, 0.5)
-      .setAlpha(0);
-    this.container.add(this.comboText);
+    if (this.showSoul) {
+      this.comboText = scene.add
+        .text(0, ROW_GAP + 20, "", {
+          fontFamily: SERIF,
+          fontStyle: "italic",
+          fontSize: "18px",
+          color: PALETTE.brass,
+        })
+        .setOrigin(1, 0.5)
+        .setAlpha(0);
+      this.container.add(this.comboText);
+    }
 
     for (let i = 0; i < PIP_COUNT; i++) {
       const px = -rowW + i * (PIP_W + PIP_GAP) + PIP_W / 2;
       const heart = scene.add
-        .rectangle(px, 0, PIP_W, PIP_H, PIP_EMPTY)
-        .setStrokeStyle(1, PIP_OUTLINE, 0.8);
-      const soul = scene.add
-        .rectangle(px, ROW_GAP, PIP_W, PIP_H, PIP_EMPTY)
+        .rectangle(px, heartRowY, PIP_W, PIP_H, PIP_EMPTY)
         .setStrokeStyle(1, PIP_OUTLINE, 0.8);
       this.heartPips.push(heart);
-      this.soulPips.push(soul);
-      this.container.add([heart, soul]);
+      this.container.add(heart);
+      if (this.showSoul) {
+        const soul = scene.add
+          .rectangle(px, ROW_GAP, PIP_W, PIP_H, PIP_EMPTY)
+          .setStrokeStyle(1, PIP_OUTLINE, 0.8);
+        this.soulPips.push(soul);
+        this.container.add(soul);
+      }
     }
 
     const baseY = this.container.y;
@@ -193,16 +210,18 @@ export class HeartSoulHud {
   private tick(deltaMs: number): void {
     this.pulseMs += deltaMs;
     const heart = this.opts.getHeart();
-    const soul = this.opts.getSoul();
     this.maybePulseRow("heart", heart);
-    this.maybePulseRow("soul", soul);
     const t = 1 - Math.pow(1 - LERP_RATE, deltaMs / 16.67);
     this.currentHeart += (heart - this.currentHeart) * t;
-    this.currentSoul += (soul - this.currentSoul) * t;
     this.renderRow(this.heartPips, this.currentHeart, PALETTE_HEX.ember);
-    this.renderRow(this.soulPips, this.currentSoul, PALETTE_HEX.brass);
-    this.tickCombo();
-    this.tickCastReady();
+    if (this.showSoul) {
+      const soul = this.opts.getSoul();
+      this.maybePulseRow("soul", soul);
+      this.currentSoul += (soul - this.currentSoul) * t;
+      this.renderRow(this.soulPips, this.currentSoul, PALETTE_HEX.brass);
+      this.tickCombo();
+      this.tickCastReady();
+    }
     this.tickLowHeartWatcher(heart);
   }
 
@@ -241,6 +260,7 @@ export class HeartSoulHud {
   }
 
   private tickCombo(): void {
+    if (!this.comboText) return;
     const combo = this.opts.getCombo?.() ?? 0;
     if (combo < COMBO_SHOW_MIN) {
       if (this.comboVisible || this.comboText.alpha > 0) {
@@ -283,6 +303,7 @@ export class HeartSoulHud {
   }
 
   private tickCastReady(): void {
+    if (!this.soulLabel) return;
     if (!this.opts.getCastReady) return;
     const ready = this.opts.getCastReady();
     if (ready && !this.castReadyLast) {

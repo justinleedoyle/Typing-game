@@ -2145,7 +2145,17 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // Brief delay before the chain target falls — gives the arc time to
     // visually land before the second defeat fires its own burst.
     this.time.delayedCall(140, () => {
-      if (!nearest.isDefeated()) nearest.defeat();
+      if (nearest.isDefeated()) return;
+      playBodyImpact(this, nearest.container, {
+        kind: "ember",
+        color: PALETTE_HEX.brass,
+        offsetY: -82,
+        depth: 63,
+        ringRadius: 42,
+        count: 10,
+        durationMs: 380,
+      });
+      nearest.defeat();
     });
   }
 

@@ -1393,6 +1393,7 @@ export class SkyIslandScene extends Phaser.Scene {
         }),
         claimLineColor: 0xf5c842,
         onComplete: () => this.onPhraseResolved(true),
+        onMissCue: (source) => this.playPhraseMissCue(source),
         onMiss: () => this.onPhraseResolved(false),
       });
       this.activePhrases.push(phraseObj);
@@ -1461,6 +1462,38 @@ export class SkyIslandScene extends Phaser.Scene {
     if (this.templePhrasesRemaining <= 0) {
       this.onTempleCleared();
     }
+  }
+
+  private playPhraseMissCue(source: Phaser.GameObjects.Container): void {
+    if (!source.scene || !this.wrenContainer.scene) return;
+    const sourceX = Phaser.Math.Clamp(source.x, 40, this.scale.width - 40);
+    const sourceY = source.y;
+    const targetX = this.wrenContainer.x;
+    const targetY = this.wrenContainer.y - 112;
+    playClaimLine(this, sourceX, sourceY, targetX, targetY, {
+      color: 0xf5c842,
+      depth: 58,
+      durationMs: 300,
+    });
+    playBodyImpact(this, source, {
+      kind: "mote",
+      color: 0xf5c842,
+      offsetX: sourceX - source.x,
+      offsetY: 0,
+      depth: 58,
+      ringRadius: 30,
+      count: 7,
+      durationMs: 320,
+    });
+    playBodyImpact(this, this.wrenContainer, {
+      kind: "mote",
+      color: 0xf5c842,
+      offsetY: -104,
+      depth: 59,
+      ringRadius: 34,
+      count: 8,
+      durationMs: 360,
+    });
   }
 
   private onTempleCleared(): void {

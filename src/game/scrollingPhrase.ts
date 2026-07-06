@@ -32,6 +32,10 @@ export interface ScrollingPhraseOptions {
   onComplete?: () => void;
   /** Called when the banner exits the far side without being typed. */
   onMiss?: () => void;
+  /** Optional source-owned cue before the missed banner tears down. Use this
+   *  when the owning scene has a defended body/stake that should visibly receive
+   *  the escaped scroll's hit instead of only firing global damage feedback. */
+  onMissCue?: (source: Phaser.GameObjects.Container) => void;
   /** Optional origin for a brief claim-line flourish when the banner is targeted. */
   claimLineFrom?: () => { x: number; y: number };
   claimLineColor?: number;
@@ -303,6 +307,7 @@ export class ScrollingPhrase {
     this.flutterTween?.stop();
     this.flutterTween = null;
     this.dropTarget();
+    this.opts.onMissCue?.(this.container);
     // Banner has already drifted off-screen. Tear it down.
     this.container.destroy();
     // Knock feedback at the scene level — caller's onMiss handles Heart

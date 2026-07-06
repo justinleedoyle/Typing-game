@@ -997,6 +997,23 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
+  private playWispCatFlankCue(): void {
+    playSceneEventPulse(this, {
+      kind: "mist",
+      color: 0x9fb69a,
+      x: this.scale.width * 0.85,
+      y: 500,
+      depth: 5,
+      durationMs: 620,
+      ringWidth: 310,
+      ringHeight: 118,
+      count: 8,
+      alpha: 0.07,
+      spreadX: 124,
+      spreadY: 34,
+    });
+  }
+
   private playTetherCordBindCue(): void {
     if (!this.quietLordContainer?.scene) return;
     playActorAttention(this, this.quietLordContainer, {
@@ -3516,6 +3533,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.showRelicNotice("finale_companion_wisp_cat", "ally");
     this.band.setObjective("Type flank through the wisp-cat opening.");
     const companion = this.showFinaleCompanionAction("wisp-cat");
+    this.playWispCatFlankCue();
     const flankTarget = this.makeLordWord({
       scene: this,
       word: "flank",

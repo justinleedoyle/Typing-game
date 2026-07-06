@@ -702,13 +702,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.playDeskReflectionWake();
     this.playRunaAttention();
 
-    this.registerNavTarget(
-      "back",
-      640,
-      908,
-      () => this.enterZone("portals"),
-      { fontSize: 22, stationPulse: HUB_STATIONS.portalFloor, entryDelayMs: 70 },
-    );
+    this.registerPortalReturnTarget(70);
   }
 
   private drawDeskReflectionCard(lastCleared: string): void {
@@ -842,12 +836,21 @@ export class PortalChamberScene extends Phaser.Scene {
     this.narration.clear();
     this.playShelfDisplayWake();
 
+    this.registerPortalReturnTarget(70);
+  }
+
+  private registerPortalReturnTarget(entryDelayMs: number): void {
     this.registerNavTarget(
-      "back",
-      1520,
-      930,
+      "portals",
+      HUB_STATIONS.portalFloor.x,
+      HUB_STATIONS.portalFloor.y - 22,
       () => this.enterZone("portals"),
-      { fontSize: 22, stationPulse: HUB_STATIONS.portalFloor, entryDelayMs: 70 },
+      {
+        fontSize: 20,
+        stationPulse: HUB_STATIONS.portalFloor,
+        entryDelayMs,
+        idleAlpha: 0.52,
+      },
     );
   }
 

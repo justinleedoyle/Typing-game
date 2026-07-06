@@ -543,8 +543,7 @@ export class SunkenBellScene extends Phaser.Scene {
         },
       });
       this.attachRevisitMemoryWordAnchor(target);
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     };
     advance();
   }
@@ -1239,8 +1238,7 @@ export class SunkenBellScene extends Phaser.Scene {
         },
       });
       lanternAnchor = this.attachDescentLanternWordAnchor(lantern, target);
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     });
   }
 
@@ -1539,14 +1537,12 @@ export class SunkenBellScene extends Phaser.Scene {
                   this.onOlinTeachComplete();
                 },
               });
-              this.typingInput.register(teachTarget);
-              this.activeTargets.push(teachTarget);
+              this.registerActiveTarget(teachTarget);
             });
           });
         },
       });
-      this.typingInput.register(nameTarget);
-      this.activeTargets.push(nameTarget);
+      this.registerActiveTarget(nameTarget);
     });
   }
 
@@ -1875,8 +1871,7 @@ export class SunkenBellScene extends Phaser.Scene {
       },
     );
     cue.once(Phaser.GameObjects.Events.DESTROY, releaseCueAnchor);
-    this.typingInput.register(target);
-    this.activeTargets.push(target);
+    this.registerActiveTarget(target);
   }
 
   // ─── Act 2: Fork 1 — The Cathedral Doors ──────────────────────────────────
@@ -1920,9 +1915,7 @@ export class SunkenBellScene extends Phaser.Scene {
         this.startFork1Force();
       },
     }, -48);
-    this.typingInput.register(chantTarget);
-    this.typingInput.register(forceTarget);
-    this.activeTargets.push(chantTarget, forceTarget);
+    this.registerActiveTarget(chantTarget, forceTarget);
   }
 
   private startFork1Chant(): void {
@@ -1978,8 +1971,7 @@ export class SunkenBellScene extends Phaser.Scene {
           this.startFork1ForceBreak();
         },
       }, -48);
-      this.typingInput.register(openTarget);
-      this.activeTargets.push(openTarget);
+      this.registerActiveTarget(openTarget);
     });
   }
 
@@ -2010,8 +2002,7 @@ export class SunkenBellScene extends Phaser.Scene {
           advance();
         },
       }, -48);
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     };
     this.time.delayedCall(400, advance);
   }
@@ -2092,8 +2083,7 @@ export class SunkenBellScene extends Phaser.Scene {
           }
         },
       });
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     });
   }
 
@@ -2163,8 +2153,7 @@ export class SunkenBellScene extends Phaser.Scene {
             }
           },
         });
-        this.typingInput.register(target);
-        this.activeTargets.push(target);
+        this.registerActiveTarget(target);
       });
     });
   }
@@ -2215,8 +2204,7 @@ export class SunkenBellScene extends Phaser.Scene {
           this.beatClock.onNextBeat(advanceWord);
         },
       });
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
 
       // On the next toll, if this word wasn't finished — stumble.
       // Reset to the checkpoint (start of current sentence).
@@ -2316,9 +2304,7 @@ export class SunkenBellScene extends Phaser.Scene {
         this.startFork2ClaimTongue();
       },
     }, -48);
-    this.typingInput.register(freeTarget);
-    this.typingInput.register(claimTarget);
-    this.activeTargets.push(freeTarget, claimTarget);
+    this.registerActiveTarget(freeTarget, claimTarget);
   }
 
   private startFork2FreeAurland(): void {
@@ -2453,9 +2439,7 @@ export class SunkenBellScene extends Phaser.Scene {
             this.startTrueNamePassage();
           },
         });
-        this.typingInput.register(takeTarget);
-        this.typingInput.register(letGoTarget);
-        this.activeTargets.push(takeTarget, letGoTarget);
+        this.registerActiveTarget(takeTarget, letGoTarget);
       });
     } else {
       this.startTrueNamePassage();
@@ -2583,8 +2567,7 @@ export class SunkenBellScene extends Phaser.Scene {
         },
       );
       seal.once(Phaser.GameObjects.Events.DESTROY, releaseSealAnchor);
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     });
   }
 
@@ -2648,6 +2631,17 @@ export class SunkenBellScene extends Phaser.Scene {
         onComplete();
       },
     });
+  }
+
+  private registerActiveTarget(...targets: TextWordTarget[]): void {
+    for (const target of targets) {
+      this.typingInput.register(target);
+      this.activeTargets.push(target);
+      target.playEntryWake({
+        durationMs: 180,
+        offsetY: 0,
+      });
+    }
   }
 
   private playWrenTypingPulse(): void {
@@ -3517,8 +3511,7 @@ export class SunkenBellScene extends Phaser.Scene {
           this.time.delayedCall(1200, advance);
         },
       }, -62);
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     };
 
     advance();
@@ -3583,8 +3576,7 @@ export class SunkenBellScene extends Phaser.Scene {
         freeingAurland
           ? this.makeAurlandWord(targetOptions)
           : this.makeBellForkWord(this.bellTongueCue, targetOptions, -48);
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     };
 
     advance();

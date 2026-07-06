@@ -3773,14 +3773,15 @@ export class GreatBattleScene extends Phaser.Scene {
     this.band.setObjective("Mind the capitals in the Quiet Lord's word.");
 
     const wordPos = this.lordDuelWordPosition(idx, words.length, 520);
-    const target = this.makeLordWord({
+    let target!: TextWordTarget;
+    target = this.makeLordWord({
       scene: this,
       word,
       x: wordPos.x,
       y: wordPos.y,
       fontSize: 52,
       caseSensitive: true,
-      onMiss: this.isKindnessDuel ? () => this.chargeKindnessMiss() : undefined,
+      onMiss: this.isKindnessDuel ? () => this.chargeKindnessMiss(target) : undefined,
       onComplete: () => {
         if (this.runOver) return;
         playChime();
@@ -3801,11 +3802,39 @@ export class GreatBattleScene extends Phaser.Scene {
   // §5.5.11 kindness duel: a slip during a counter beat costs a candle, but at
   // most once per beat (kindnessMissCharged is reset when the beat spawns) so a
   // single fumble doesn't cascade into an instant loss.
-  private chargeKindnessMiss(): void {
+  private chargeKindnessMiss(target?: TextWordTarget): void {
     if (this.runOver || this.kindnessMissCharged) return;
     this.kindnessMissCharged = true;
+    this.playKindnessMissCue(target);
     this.narration.say("finale_kindness_slip");
     this.loseCandle();
+  }
+
+  private playKindnessMissCue(target?: TextWordTarget): void {
+    const sourceX = target?.getAnchorX() ?? this.scale.width / 2;
+    const sourceY = target?.getAnchorY() ?? this.scale.height / 2;
+    const wardX = this.wallWard?.scene ? this.wallWard.x : WALL_WARD.x;
+    const wardY = this.wallWard?.scene ? this.wallWard.y - 34 : WALL_WARD.y - 34;
+
+    playClaimLine(
+      this,
+      sourceX,
+      sourceY + 6,
+      wardX,
+      wardY,
+      { color: UI_HEX.ember, depth: 9, durationMs: 420 },
+    );
+
+    const flare = this.add.container(sourceX, sourceY).setDepth(9);
+    playBodyImpact(this, flare, {
+      kind: "ember",
+      color: UI_HEX.ember,
+      depth: 10,
+      ringRadius: 38,
+      count: 9,
+      durationMs: 380,
+    });
+    this.time.delayedCall(440, () => flare.destroy());
   }
 
   private onSpellWordComplete(): void {

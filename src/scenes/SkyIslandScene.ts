@@ -4168,6 +4168,7 @@ export class SkyIslandScene extends Phaser.Scene {
     const c = this.add.container(bx, by);
     c.setAlpha(0);
     c.y = by - 24;
+    c.add(this.makeScholarSpiritSigil());
 
     // Painted Scholar-Spirit body, scaled to the old ~160px silhouette height
     // (head + torso). Replaces the concentric-ellipse figure, orbiting dot
@@ -4196,7 +4197,49 @@ export class SkyIslandScene extends Phaser.Scene {
       ease: "Sine.easeOut",
       onComplete: () => this.playScholarStagePulse(),
     });
+    addContainerWake(this, c, {
+      kind: "mote",
+      intervalMs: 560,
+      spreadX: 54,
+      spreadY: 24,
+      offsetY: 38,
+      color: 0xf5c842,
+      alpha: 0.2,
+      size: 3.2,
+      depth: 0.22,
+      driftX: 26,
+      driftY: -38,
+      durationMs: 1180,
+    });
 
+    return c;
+  }
+
+  private makeScholarSpiritSigil(): Phaser.GameObjects.Container {
+    const c = this.add.container(0, 0);
+    const y = SCHOLAR_SPIRIT_HEIGHT * 0.42;
+    c.add(addLocalGroundShadow(this, 150, 22, {
+      y: y + 4,
+      alpha: 0.18,
+      color: 0x020611,
+    }));
+
+    const sigil = this.add.graphics();
+    sigil.fillStyle(0xf5c842, 0.09);
+    sigil.fillEllipse(0, y, 176, 34);
+    sigil.fillStyle(0x8ab4f5, 0.055);
+    sigil.fillEllipse(0, y - 6, 116, 22);
+    sigil.lineStyle(2, 0xf5c842, 0.22);
+    sigil.strokeEllipse(0, y, 184, 38);
+    sigil.lineStyle(1, 0xfdedb0, 0.2);
+    sigil.lineBetween(-74, y - 2, -32, y - 8);
+    sigil.lineBetween(-18, y + 7, 22, y - 6);
+    sigil.lineBetween(34, y - 4, 78, y + 4);
+    sigil.fillStyle(0xfdedb0, 0.2);
+    sigil.fillCircle(-48, y - 7, 2.6);
+    sigil.fillCircle(50, y - 3, 2.4);
+    sigil.fillCircle(0, y - 10, 2);
+    c.add(sigil);
     return c;
   }
 

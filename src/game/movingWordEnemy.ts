@@ -83,8 +83,9 @@ export interface MovingWordEnemyConfig {
   /** Pause at the rest point after a knock-back before re-advancing. Default
    *  1500 (Forge 1200, Wood 1800, Bell 2000). */
   knockbackPauseMs?: number;
-  /** The x the knock-back retreats to. Default `restX`. */
+  /** The x/y the knock-back retreats to. Defaults to `restX` / `restY`. */
   knockbackToX?: number;
+  knockbackToY?: number;
   /** Progress at which the danger colour starts ramping in. Default 0.4 (Wood 0.5). */
   dangerRampStart?: number;
   /** Idle-bob amplitude (px, upward) and period (ms). Defaults 5 / 1100. */
@@ -195,6 +196,7 @@ export class MovingWordEnemy {
   private readonly knockbackMs: number;
   private readonly knockbackPauseMs: number;
   private readonly knockbackToX: number;
+  private readonly knockbackToY: number;
   private readonly rampStart: number;
   private readonly idleBobDy: number;
   private readonly idleBobMs: number;
@@ -217,6 +219,7 @@ export class MovingWordEnemy {
     this.knockbackMs = config.knockbackMs ?? 600;
     this.knockbackPauseMs = config.knockbackPauseMs ?? 1500;
     this.knockbackToX = config.knockbackToX ?? config.restX;
+    this.knockbackToY = config.knockbackToY ?? config.restY;
     this.rampStart = config.dangerRampStart ?? 0.4;
     this.idleBobDy = config.idleBobDy ?? 5;
     this.idleBobMs = config.idleBobMs ?? 1100;
@@ -306,10 +309,16 @@ export class MovingWordEnemy {
     this.cfg.scene.tweens.add({
       targets: c,
       x: this.knockbackToX,
+      y: this.knockbackToY,
       duration: retreatMs,
       ease: "Sine.easeOut",
+      onUpdate: () => {
+        this.wordTarget?.setAnchorX(c.x);
+        this.wordTarget?.setAnchorY(c.y + this.anchorOffsetY);
+      },
       onComplete: () => {
         this.wordTarget?.setAnchorX(c.x);
+        this.wordTarget?.setAnchorY(c.y + this.anchorOffsetY);
         this.cfg.scene.time.delayedCall(pauseMs, () => {
           if (this.defeated || !this.waveActive()) return;
           this.idleBob();
@@ -580,9 +589,9 @@ export class MovingWordEnemy {
     const { container, wrenX } = this.cfg;
     const wrenY = this.cfg.wrenY;
     // A diagonal close (Wood) scales duration by Euclidean distance; a straight or
-    // weaving close uses horizontal distance (the body's x-progress). Both reduce
-    // to the same fraction during a from-rest advance, but differ after a knock-back
-    // that only retreats x — there a diagonal ghost re-advances along its short axis.
+    // weaving close uses horizontal distance (the body's x-progress). Mid-path
+    // freeze/thaw resumes from the body's current position; knock-backs retreat
+    // to the configured home point before this method runs again.
     const remaining =
       wrenY !== undefined
         ? Math.hypot(wrenX - container.x, wrenY - container.y)
@@ -714,6 +723,7 @@ export class MovingWordEnemy {
     this.cfg.scene.tweens.add({
       targets: c,
       x: this.knockbackToX,
+      y: this.knockbackToY,
       duration: this.knockbackMs,
       ease: "Sine.easeOut",
       onComplete: () => {

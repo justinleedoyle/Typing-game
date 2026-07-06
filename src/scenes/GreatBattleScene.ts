@@ -1014,6 +1014,28 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
+  private playBrassSongbirdHintCue(target: TextWordTarget): void {
+    const songX = this.scale.width * 0.66;
+    const songY = 470;
+    playClaimLine(
+      this,
+      songX,
+      songY,
+      target.getAnchorX(),
+      target.getAnchorY() - 8,
+      { color: UI_HEX.brass, depth: 11, durationMs: 520 },
+    );
+    playBodyImpact(this, this.againText, {
+      kind: "mote",
+      color: UI_HEX.brass,
+      offsetY: 4,
+      depth: 11,
+      ringRadius: 42,
+      count: 8,
+      durationMs: 430,
+    });
+  }
+
   private playTetherCordBindCue(): void {
     if (!this.quietLordContainer?.scene) return;
     playActorAttention(this, this.quietLordContainer, {
@@ -3888,6 +3910,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.showRelicNotice("finale_companion_songbird", "ally");
     const companion = this.showFinaleCompanionAction("brass-songbird");
     playActorAttention(this, companion, { scale: 1.05, durationMs: 220 });
+    this.playBrassSongbirdHintCue(target);
     this.time.delayedCall(1350, () => {
       if (companion.scene) {
         this.dismissFinaleCompanionAction(companion, this.scale.width * 0.56, 485);

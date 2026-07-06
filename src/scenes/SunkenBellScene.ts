@@ -957,6 +957,26 @@ export class SunkenBellScene extends Phaser.Scene {
       repeat: -1,
       ease: "Sine.easeInOut",
     });
+    this.time.delayedCall(980, () => {
+      if (easiest.isDefeated() || !easiest.container.scene) return;
+      playClaimLine(
+        this,
+        this.band.satchelAnchor.x + 58,
+        this.band.bandTopY - 10,
+        easiest.container.x,
+        easiest.container.y - 70,
+        { color: PALETTE_HEX.brass, depth: 58, durationMs: 340 },
+      );
+      playBodyImpact(this, easiest.container, {
+        kind: "mote",
+        color: PALETTE_HEX.brass,
+        offsetY: -70,
+        depth: 58,
+        ringRadius: 30,
+        count: 7,
+        durationMs: 360,
+      });
+    });
   }
 
   // ─── Input ────────────────────────────────────────────────────────────────

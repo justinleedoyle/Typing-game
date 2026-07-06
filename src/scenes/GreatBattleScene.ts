@@ -45,6 +45,7 @@ import {
   playBodyTypePulse,
   playActorAttention,
   playClaimLine,
+  playMeterPulse,
   playSceneEventPulse,
   pulseUiObject,
   stageContainerEntrance,
@@ -691,7 +692,8 @@ export class GreatBattleScene extends Phaser.Scene {
 
     // Candle & charge HUD, docked into the band — charges may be bumped by king-aurland.
     const satchel = this.store.get().satchel;
-    if (satchel.includes("king-aurland")) {
+    const hasKingAurland = satchel.includes("king-aurland");
+    if (hasKingAurland) {
       this.waveCharges = WAVE_CHARGES + 1; // +1 spell charge per wave
     }
 
@@ -718,6 +720,9 @@ export class GreatBattleScene extends Phaser.Scene {
     this.stageFinaleMeterObject(this.candleGroup, 95, { offsetY: 8 });
     this.stageFinaleMeterObject(chargeLabel, 115, { offsetY: 5 });
     this.stageFinaleMeterObject(this.chargeGroup, 140, { offsetY: 8 });
+    if (hasKingAurland) {
+      this.time.delayedCall(520, () => this.playKingAurlandChargeCue());
+    }
 
     // Untethered Wind: slow enemy advance by ~15%
     if (satchel.includes("untethered-wind")) {
@@ -868,6 +873,30 @@ export class GreatBattleScene extends Phaser.Scene {
     this.band.showNotice("Shrine-Token holds the wall.", {
       label: "relic",
       durationMs: 1800,
+    });
+  }
+
+  private playKingAurlandChargeCue(): void {
+    if (!this.chargeGroup?.scene) return;
+    this.showRelicNotice("finale_ally_king_aurland", "ally", 1900);
+    pulseUiObject(this, this.chargeGroup, { scale: 1.18, durationMs: 340 });
+    playMeterPulse(this, {
+      x: this.chargeGroup.x,
+      y: this.chargeGroup.y - 10,
+      width: 126,
+      height: 34,
+      color: 0xa7d2dd,
+      depth: 1501,
+      durationMs: 420,
+    });
+    playBodyImpact(this, this.chargeGroup, {
+      kind: "bubble",
+      color: 0xa7d2dd,
+      offsetY: -10,
+      depth: 1502,
+      ringRadius: 34,
+      count: 7,
+      durationMs: 400,
     });
   }
 

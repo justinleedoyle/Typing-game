@@ -128,6 +128,12 @@ const RUNA_DESK_STATION = {
   targetX: 274,
   targetY: 791,
 } as const;
+const DESK_REFLECTION_CARD = {
+  x: 258,
+  y: 704,
+  width: 218,
+  height: 82,
+} as const;
 const ACCOUNT_PANEL = {
   x: 1788,
   y: 238,
@@ -193,6 +199,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private portalWordAnchors: WordBodyAnchorHandle[] = [];
   private stationWordAnchorReleases: Array<() => void> = [];
   private persistentStationWordAnchorReleases: Array<() => void> = [];
+  private deskDisplayObjects: Phaser.GameObjects.GameObject[] = [];
   private shelfDisplayObjects: Phaser.GameObjects.GameObject[] = [];
   private accountDisplayObjects: Phaser.GameObjects.GameObject[] = [];
   private difficultyNotice?: Phaser.GameObjects.Container;
@@ -221,6 +228,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.portalWordAnchors = [];
     this.stationWordAnchorReleases = [];
     this.persistentStationWordAnchorReleases = [];
+    this.deskDisplayObjects = [];
     this.shelfDisplayObjects = [];
     this.accountDisplayObjects = [];
     this.difficultyNotice = undefined;
@@ -356,6 +364,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.stationWordAnchorReleases = [];
     this.portalFloorCallGlow?.destroy();
     this.portalFloorCallGlow = undefined;
+    this.clearDeskDisplay();
     this.clearAccountDisplay();
     for (const t of this.zoneTargets) {
       this.typingInput.unregister(t);
@@ -689,6 +698,9 @@ export class PortalChamberScene extends Phaser.Scene {
       .reverse()
       .find((id) => state.realms[id]?.cleared) ?? "none";
     this.narration.say(DESK_LINE_IDS[lastCleared] ?? DESK_LINE_IDS["none"]);
+    this.drawDeskReflectionCard(lastCleared);
+    this.playDeskReflectionWake();
+    this.playRunaAttention();
 
     this.registerNavTarget(
       "back",
@@ -697,6 +709,130 @@ export class PortalChamberScene extends Phaser.Scene {
       () => this.enterZone("portals"),
       { fontSize: 22, stationPulse: HUB_STATIONS.portalFloor, entryDelayMs: 70 },
     );
+  }
+
+  private drawDeskReflectionCard(lastCleared: string): void {
+    this.clearDeskDisplay();
+
+    const clearedCount = REALM_SEQUENCE.filter((id) => this.store.get().realms[id]?.cleared).length;
+    const { x, y, width, height } = DESK_REFLECTION_CARD;
+    const card = this.add.container(x, y).setDepth(-0.18).setAlpha(0.9).setRotation(-0.035);
+    this.deskDisplayObjects.push(card);
+    this.stageDeskObject(card, 45);
+
+    const paper = this.add.graphics();
+    paper.fillStyle(UI_HEX.parchment, 0.66);
+    paper.fillRoundedRect(-width / 2, -height / 2, width, height, 8);
+    paper.lineStyle(1, UI_HEX.brass, 0.3);
+    paper.strokeRoundedRect(-width / 2, -height / 2, width, height, 8);
+    paper.lineStyle(1, UI_HEX.frame, 0.18);
+    paper.lineBetween(-width / 2 + 26, -16, width / 2 - 30, -18);
+    paper.lineBetween(-width / 2 + 30, 2, width / 2 - 46, -1);
+    paper.lineBetween(-width / 2 + 36, 19, width / 2 - 60, 17);
+    card.add(paper);
+
+    const corners = cornerTicks(this, width - 12, height - 10, {
+      inset: 5,
+      size: 8,
+      width: 1,
+    }).setAlpha(0.32);
+    card.add(corners);
+
+    const quill = this.add.graphics();
+    quill.lineStyle(2, UI_HEX.ink, 0.32);
+    quill.lineBetween(width / 2 - 48, -26, width / 2 - 14, 24);
+    quill.lineStyle(1, UI_HEX.brass, 0.34);
+    quill.strokeEllipse(width / 2 - 54, -29, 28, 11);
+    quill.strokeEllipse(width / 2 - 44, -19, 22, 9);
+    card.add(quill);
+
+    const stamps = this.add.graphics();
+    const startX = -width / 2 + 34;
+    const stampY = height / 2 - 18;
+    for (let i = 0; i < REALM_SEQUENCE.length; i += 1) {
+      const sx = startX + i * 22;
+      const filled = i < clearedCount;
+      stamps.lineStyle(1, filled ? UI_HEX.brass : UI_HEX.frame, filled ? 0.42 : 0.22);
+      stamps.strokeCircle(sx, stampY, 6);
+      if (filled) {
+        stamps.fillStyle(UI_HEX.brass, lastCleared === REALM_SEQUENCE[i] ? 0.34 : 0.22);
+        stamps.fillCircle(sx, stampY, 3.2);
+      }
+    }
+    card.add(stamps);
+
+    addIdleBreath(this, card, {
+      dy: -1.5,
+      durationMs: 2400,
+      delayMs: 250,
+    });
+  }
+
+  private clearDeskDisplay(): void {
+    for (const obj of this.deskDisplayObjects) {
+      this.tweens.killTweensOf(obj);
+      obj.destroy();
+    }
+    this.deskDisplayObjects = [];
+  }
+
+  private stageDeskObject(
+    object: Phaser.GameObjects.GameObject,
+    delayMs: number,
+  ): void {
+    const item = object as Phaser.GameObjects.GameObject & {
+      alpha: number;
+      y: number;
+      setAlpha: (value: number) => Phaser.GameObjects.GameObject;
+      setY: (value: number) => Phaser.GameObjects.GameObject;
+    };
+    if (typeof item.y !== "number" || !item.setAlpha || !item.setY) return;
+
+    const baseY = item.y;
+    const finalAlpha = item.alpha;
+    item.setAlpha(0);
+    item.setY(baseY + 8);
+    this.time.delayedCall(delayMs, () => {
+      if (!object.scene) return;
+      this.tweens.add({
+        targets: item,
+        alpha: finalAlpha,
+        y: baseY,
+        duration: 220,
+        ease: "Sine.easeOut",
+      });
+    });
+  }
+
+  private playDeskReflectionWake(): void {
+    const { x, y, width, height } = DESK_REFLECTION_CARD;
+    const frame = this.add
+      .container(x, y)
+      .setDepth(8)
+      .setAlpha(0.46)
+      .setRotation(-0.035);
+    const g = this.add.graphics();
+    g.fillStyle(UI_HEX.brass, 0.035);
+    g.fillRoundedRect(-width / 2, -height / 2, width, height, 9);
+    g.lineStyle(1.5, UI_HEX.brass, 0.48);
+    g.strokeRoundedRect(-width / 2, -height / 2, width, height, 9);
+    frame.add(g);
+    frame.add(
+      cornerTicks(this, width, height, {
+        inset: 5,
+        size: 11,
+        width: 2,
+      }),
+    );
+    this.tweens.add({
+      targets: frame,
+      alpha: 0,
+      scaleX: 1.05,
+      scaleY: 1.08,
+      duration: 360,
+      ease: "Sine.easeOut",
+      onComplete: () => frame.destroy(),
+    });
   }
 
   // ─── Shelf zone ───────────────────────────────────────────────────────────

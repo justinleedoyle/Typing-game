@@ -1610,12 +1610,70 @@ export class SkyIslandScene extends Phaser.Scene {
     // Reset any in-flight flash so a flurry of misses can't strand the alpha.
     this.tweens.killTweensOf(seal);
     seal.setAlpha(1);
+    seal.setScale(1);
+    this.playScrollResealSnap(seal);
     this.tweens.add({
       targets: seal,
       alpha: { from: 1, to: 0.45 },
       yoyo: true,
       duration: 150,
       ease: "Sine.easeInOut",
+    });
+    this.tweens.add({
+      targets: seal,
+      scaleX: { from: 1.014, to: 0.992 },
+      scaleY: { from: 1.014, to: 0.992 },
+      yoyo: true,
+      duration: 110,
+      ease: "Sine.easeInOut",
+      onComplete: () => {
+        if (seal.scene) seal.setScale(1);
+      },
+    });
+  }
+
+  private playScrollResealSnap(seal: Phaser.GameObjects.Container): void {
+    if (!seal.scene) return;
+
+    const waxX = seal.x;
+    const waxY = seal.y + 52;
+    const snap = this.add.graphics().setDepth(58).setAlpha(0.82);
+    snap.lineStyle(2.5, 0xa33b2a, 0.58);
+    snap.lineBetween(seal.x - 410, seal.y - 34, waxX - 24, waxY - 2);
+    snap.lineBetween(seal.x + 410, seal.y - 34, waxX + 24, waxY - 2);
+    snap.lineStyle(1.5, PALETTE_HEX.brass, 0.3);
+    snap.lineBetween(seal.x - 360, seal.y + 36, waxX - 18, waxY + 8);
+    snap.lineBetween(seal.x + 360, seal.y + 36, waxX + 18, waxY + 8);
+    this.tweens.add({
+      targets: snap,
+      alpha: 0,
+      duration: 340,
+      ease: "Sine.easeOut",
+      onComplete: () => snap.destroy(),
+    });
+
+    playSceneEventPulse(this, {
+      kind: "mote",
+      color: 0xa33b2a,
+      x: waxX,
+      y: waxY,
+      depth: 52,
+      durationMs: 360,
+      ringWidth: 230,
+      ringHeight: 54,
+      count: 6,
+      alpha: 0.045,
+      spreadX: 84,
+      spreadY: 24,
+    });
+    playBodyImpact(this, seal, {
+      kind: "mote",
+      color: 0xa33b2a,
+      offsetY: 50,
+      depth: 59,
+      ringRadius: 30,
+      count: 8,
+      durationMs: 340,
     });
   }
 

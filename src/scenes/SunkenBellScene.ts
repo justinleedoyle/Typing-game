@@ -104,12 +104,12 @@ const GHOST_KNOCKBACK_PAUSE_MS = 2000;
 const WREN_X = 960;
 const WREN_Y = 820;
 
-// Painted-sprite display heights (px), matching the old procedural body heights
-// so the word anchor + hit feel line up. The ghost body spanned ~90px (oval +
-// wispy tail); the Warden spanned ~320px (bell knob down through the rim). The
-// Warden is drawn at absolute coords (not in a scaled container), so its height
-// is used directly. Tune on live.
-const GHOST_SPRITE_HEIGHT = 96;
+// Painted-sprite display heights (px). The choir ghosts started at the old
+// procedural blob height, but the living-scene pass needs the painted body to
+// carry the threat against the dark cathedral, not just the floating word.
+// The Warden is drawn at absolute coords (not in a scaled container), so its
+// height is used directly. Tune on live.
+const GHOST_SPRITE_HEIGHT = 136;
 const WARDEN_SPRITE_HEIGHT = 320;
 
 // Painted NPC display heights (px). Olin is a small hunched figure — the old
@@ -3327,12 +3327,12 @@ export class SunkenBellScene extends Phaser.Scene {
       knockbackMs: 700,
       knockbackPauseMs: GHOST_KNOCKBACK_PAUSE_MS,
       dangerRampStart: DANGER_RAMP_START,
-      anchorOffsetY: -80,
+      anchorOffsetY: -96,
       idleBobDy: 8,
       idleBobMs: 1100,
       defeatRiseY: -50,
       defeatMs: 500,
-      fontSize: 32,
+      fontSize: 34,
       // Sea-green burst — the ghost dissolves into deep water, not brass.
       burstColor: BELL_BURST_COLOR,
       defeatImpactKind: "bubble",
@@ -3407,15 +3407,33 @@ export class SunkenBellScene extends Phaser.Scene {
     );
   }
 
-  /** Add the painted choir-ghost sprite into a container, scaled to the old
-   *  procedural body height (~90px) so the word anchor + hit feel still line up.
-   *  The container drives alpha (restAlpha 0.7) + the danger-ramp tint, so this
-   *  just places the art. */
+  /** Add the painted choir-ghost sprite into a container. The container drives
+   *  alpha (restAlpha 0.7) + the danger-ramp tint; the local water halo keeps
+   *  the body readable as a physical presence in the drowned nave. */
   private drawGhostInto(c: Phaser.GameObjects.Container): void {
-    c.add(addLocalGroundShadow(this, 88, 18, { y: 8, alpha: 0.18 }));
+    c.add(addLocalGroundShadow(this, 142, 24, { y: 28, alpha: 0.2 }));
+    c.add(this.makeBellGhostWaterHalo());
     const sprite = this.add.image(0, 0, "bell-ghost");
     sprite.setScale(GHOST_SPRITE_HEIGHT / sprite.height);
     c.add(sprite);
+  }
+
+  private makeBellGhostWaterHalo(): Phaser.GameObjects.Graphics {
+    const g = this.add.graphics();
+    g.fillStyle(0x4ab8d6, 0.12);
+    g.fillEllipse(0, 10, 168, 92);
+    g.fillStyle(0xd8f4ff, 0.12);
+    g.fillEllipse(0, -4, 122, 148);
+    g.lineStyle(2, 0xa8e7f2, 0.24);
+    g.strokeEllipse(0, 6, 150, 82);
+    g.lineStyle(1, 0xf1fbff, 0.18);
+    g.strokeEllipse(0, -14, 94, 128);
+    g.fillStyle(0xbfefff, 0.28);
+    g.fillCircle(-58, -34, 5);
+    g.fillCircle(52, -18, 4);
+    g.fillCircle(-36, 42, 3.5);
+    g.fillCircle(66, 34, 3.5);
+    return g;
   }
 
   private showQuietFlicker(source?: Phaser.GameObjects.Container): void {

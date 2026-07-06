@@ -4162,6 +4162,16 @@ export class GreatBattleScene extends Phaser.Scene {
     this.time.delayedCall(800, () => {
       playPeriodSnapSting();
       this.cameras.main.shake(120, 0.004);
+      playBodyImpact(this, this.againText, {
+        kind: "mote",
+        color: 0xd4b8ff,
+        offsetX: this.againText.width / 2,
+        offsetY: 4,
+        depth: 11,
+        ringRadius: 46,
+        count: 9,
+        durationMs: 360,
+      });
       this.tweens.add({
         targets: period,
         alpha: 1,

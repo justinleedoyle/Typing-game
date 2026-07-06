@@ -404,9 +404,11 @@ export class ClockworkForgeScene extends Phaser.Scene {
       onCastReady: () =>
         showSpellReadyFeedback({
           scene: this,
+          band: this.band,
           body: this.wrenContainer,
           kind: "ember",
           color: PALETTE_HEX.brass,
+          noticeText: "Spell is ready.",
         }),
       onSustainedLowHeart: () =>
         showLowHeartFeedback({

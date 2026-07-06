@@ -30,9 +30,12 @@ interface LowHeartFeedbackOptions {
 
 interface SpellReadyFeedbackOptions {
   scene: Phaser.Scene;
+  band?: ConsoleBand;
   body: LowHeartBody | null | undefined;
   kind: AmbientKind;
   color: number;
+  noticeText?: string;
+  noticeMs?: number;
   bodyOffsetY?: number;
 }
 
@@ -74,11 +77,19 @@ export function showLowHeartFeedback({
 
 export function showSpellReadyFeedback({
   scene,
+  band,
   body,
   kind,
   color,
+  noticeText = "Spell is ready.",
+  noticeMs = 1600,
   bodyOffsetY = -104,
 }: SpellReadyFeedbackOptions): void {
+  band?.showNotice(noticeText, {
+    label: "spell",
+    durationMs: noticeMs,
+  });
+
   if (!body?.active) return;
   playActorAttention(scene, body, {
     tint: color,

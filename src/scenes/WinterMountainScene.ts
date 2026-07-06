@@ -520,9 +520,11 @@ export class WinterMountainScene extends Phaser.Scene {
       onCastReady: () =>
         showSpellReadyFeedback({
           scene: this,
+          band: this.band,
           body: this.wrenContainer,
           kind: "mote",
           color: PALETTE_HEX.brass,
+          noticeText: "Thunder is ready.",
         }),
       onSustainedLowHeart: () =>
         showLowHeartFeedback({

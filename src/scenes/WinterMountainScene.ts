@@ -2368,11 +2368,20 @@ export class WinterMountainScene extends Phaser.Scene {
     });
     this.cameras.main.flash(220, 240, 230, 200);
     playChime();
+    this.playWrenTrailAction();
 
     // Shove the rest of the pack back to their rest points and pause before they
     // re-advance — breathing room, words intact (no kill, no candle cost).
     for (const w of this.wolves) {
       if (w.isDefeated() || w === source) continue;
+      this.playWinterSpellLine(
+        this.wrenContainer.x,
+        this.wrenContainer.y - 116,
+        w.container.x,
+        w.container.y - 88,
+        PALETTE_HEX.brass,
+      );
+      this.playWinterSpellImpact(w, PALETTE_HEX.brass, "mote");
       w.knockBack(450, 2500);
     }
   }
@@ -2404,7 +2413,45 @@ export class WinterMountainScene extends Phaser.Scene {
         nearest = w;
       }
     }
+    this.playWinterSpellLine(
+      source.container.x,
+      source.container.y - 98,
+      nearest.container.x,
+      nearest.container.y - 88,
+      PALETTE_HEX.frost,
+    );
+    this.playWinterSpellImpact(nearest, PALETTE_HEX.frost, "snow");
     nearest.defeat();
+  }
+
+  private playWinterSpellLine(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    color: number,
+  ): void {
+    playClaimLine(this, fromX, fromY, toX, toY, {
+      color,
+      depth: 62,
+      durationMs: 420,
+    });
+  }
+
+  private playWinterSpellImpact(
+    target: MovingWordEnemy,
+    color: number,
+    kind: "mote" | "snow",
+  ): void {
+    playBodyImpact(this, target.container, {
+      kind,
+      color,
+      offsetY: -88,
+      depth: 63,
+      ringRadius: 36,
+      count: 7,
+      durationMs: 360,
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

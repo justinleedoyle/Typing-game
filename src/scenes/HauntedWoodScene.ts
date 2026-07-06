@@ -166,6 +166,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private combat: CombatLoadout = resolveCombatLoadout([], "haunted-wood");
   private waveForgivenessReady = false;
   private snowFoxTripNoticed = false;
+  private shrineForgivenessNoticed = false;
   // Tier 4 — Soul-charged typed invocation for offensive one-shots. Wood is the
   // last realm and richest satchel, so it can hold all three: toll-strike
   // (bells-tongue), jam-foe (sabotage-wrench), and bind-beat (tether-cord). Null
@@ -218,6 +219,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.groveLightCue = null;
     this.forkChoiceWordAnchors = [];
     this.snowFoxTripNoticed = false;
+    this.shrineForgivenessNoticed = false;
     this.revisitMemoryCue = null;
     this.revisitMemoryWordAnchor = null;
     this.pathCue = null;
@@ -383,6 +385,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         if (this.waveForgivenessReady) {
           this.waveForgivenessReady = false;
           this.flashForgiven();
+          this.noticeShrineForgiveness();
           return;
         }
         flashWrenMiss(this.wrenSprite);
@@ -2991,6 +2994,15 @@ export class HauntedWoodScene extends Phaser.Scene {
         plate.destroy();
         txt.destroy();
       },
+    });
+  }
+
+  private noticeShrineForgiveness(): void {
+    if (this.shrineForgivenessNoticed) return;
+    this.shrineForgivenessNoticed = true;
+    this.band.showNotice("Shrine-Token forgives the slip.", {
+      label: "relic",
+      durationMs: 1600,
     });
   }
 

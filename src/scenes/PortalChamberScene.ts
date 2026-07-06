@@ -2111,7 +2111,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.account.height,
       "account",
       {
-        alpha: 0.025,
+        alpha: 0.12,
         labelAlpha: 0,
       },
     );

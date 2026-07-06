@@ -543,8 +543,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         },
       });
       this.attachRevisitMemoryWordAnchor(target);
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     };
     advance();
   }
@@ -716,8 +715,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       },
     });
     this.attachCatwalkCueWordAnchor(idx, target);
-    this.typingInput.register(target);
-    this.activeTargets.push(target);
+    this.registerActiveTarget(target);
   }
 
   // ─── Gregor tutorial ─────────────────────────────────────────────────────────
@@ -766,8 +764,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       },
     );
     this.wrenContainer.once(Phaser.GameObjects.Events.DESTROY, releaseReplyAnchor);
-    this.typingInput.register(reply1);
-    this.activeTargets.push(reply1);
+    this.registerActiveTarget(reply1);
   }
 
   private gregorStep2(): void {
@@ -803,8 +800,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         );
       },
     });
-    this.typingInput.register(target);
-    this.activeTargets.push(target);
+    this.registerActiveTarget(target);
   }
 
   private gregorTutorialCommand(tutorialGolem: StaticGolem): void {
@@ -859,8 +855,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         this.time.delayedCall(2400, () => this.startTutorialGolemFight());
       },
     });
-    this.typingInput.register(target);
-    this.activeTargets.push(target);
+    this.registerActiveTarget(target);
   }
 
   private staticGolemWordPosition(golem: StaticGolem, word: string): { x: number; y: number } {
@@ -1337,9 +1332,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       },
       { sourceOffsetY: -68 },
     );
-    this.typingInput.register(helpForn);
-    this.typingInput.register(joinCabal);
-    this.activeTargets.push(helpForn, joinCabal);
+    this.registerActiveTarget(helpForn, joinCabal);
   }
 
   private startFornBranch(): void {
@@ -1514,8 +1507,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
           this.time.delayedCall(700, nextWord);
         },
       });
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     };
     this.time.delayedCall(1040, nextWord);
   }
@@ -1569,8 +1561,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
           this.time.delayedCall(900, nextWord);
         },
       });
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     };
     nextWord();
   }
@@ -1612,8 +1603,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
           }
         },
       });
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     };
 
     runSequence();
@@ -1705,9 +1695,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       },
       { sourceOffsetY: -58 },
     );
-    this.typingInput.register(peaceful);
-    this.typingInput.register(fight);
-    this.activeTargets.push(peaceful, fight);
+    this.registerActiveTarget(peaceful, fight);
   }
 
   private startFork2PeacefulBranch(): void {
@@ -1743,8 +1731,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       },
       { color: PALETTE_HEX.brass, sourceOffsetY: -54 },
     );
-    this.typingInput.register(standDown);
-    this.activeTargets.push(standDown);
+    this.registerActiveTarget(standDown);
   }
 
   private startFork2FightBranch(): void {
@@ -1848,9 +1835,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
           this.startTrueNamePassage();
         },
       });
-      this.typingInput.register(whistle);
-      this.typingInput.register(leave);
-      this.activeTargets.push(whistle, leave);
+      this.registerActiveTarget(whistle, leave);
     } else if (nearMiss) {
       this.setNarrator(
         "A flash of brass among the pipes — something small and bright — then it's gone.",
@@ -2429,8 +2414,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         );
         trueNameSeal.once(Phaser.GameObjects.Events.DESTROY, releaseTrueNameAnchor);
       }
-      this.typingInput.register(target);
-      this.activeTargets.push(target);
+      this.registerActiveTarget(target);
     };
 
     advance();
@@ -3168,6 +3152,17 @@ export class ClockworkForgeScene extends Phaser.Scene {
         onComplete();
       },
     });
+  }
+
+  private registerActiveTarget(...targets: TextWordTarget[]): void {
+    for (const target of targets) {
+      this.typingInput.register(target);
+      this.activeTargets.push(target);
+      target.playEntryWake({
+        durationMs: 180,
+        offsetY: 0,
+      });
+    }
   }
 
   private playWrenTypingPulse(): void {

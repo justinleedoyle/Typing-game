@@ -208,6 +208,7 @@ export class SkyIslandScene extends Phaser.Scene {
   /** Lantern light-beam graphics. Drawn on the first temple, destroyed in
    *  scene shutdown — they persist across all five temples. */
   private templeLanterns: Phaser.GameObjects.Graphics[] = [];
+  private warmLightCueShown = false;
 
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
@@ -274,6 +275,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.spirits = [];
     this.activeTargets = [];
     this.activePhrases = [];
+    this.warmLightCueShown = false;
     this.oneShotInvoker = null;
     this.pathCue = null;
     this.pathCueBeat = null;
@@ -1324,6 +1326,7 @@ export class SkyIslandScene extends Phaser.Scene {
     if (this.templeLanterns.length === 0) {
       this.drawTempleLanterns();
     }
+    this.maybePlayWarmLightCue();
 
     // The middle temple is the sealed-scroll no-miss test — a different stake.
     if (idx === SEALED_SCROLL_TEMPLE_IDX) {
@@ -1391,6 +1394,38 @@ export class SkyIslandScene extends Phaser.Scene {
         onMiss: () => this.onPhraseResolved(false),
       });
       this.activePhrases.push(phraseObj);
+    });
+  }
+
+  private maybePlayWarmLightCue(): void {
+    if (this.warmLightCueShown || this.combat.warmLight <= 0) return;
+    this.warmLightCueShown = true;
+    const x = LANTERN_BLUR_XS[1]!;
+    const y = 420;
+    this.time.delayedCall(260, () => {
+      if (!this.scene.isActive()) return;
+      playClaimLine(
+        this,
+        this.band.satchelAnchor.x + 58,
+        this.band.bandTopY - 10,
+        x,
+        y - 130,
+        { color: 0xfdedb0, depth: 20, durationMs: 360 },
+      );
+      playSceneEventPulse(this, {
+        kind: "mote",
+        color: 0xfdedb0,
+        x,
+        y,
+        depth: 16,
+        durationMs: 620,
+        ringWidth: 980,
+        ringHeight: 280,
+        count: 18,
+        alpha: 0.09,
+        spreadX: 500,
+        spreadY: 150,
+      });
     });
   }
 

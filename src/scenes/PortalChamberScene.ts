@@ -2086,7 +2086,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.desk.width,
       HUB_STATIONS.desk.height,
       "runa's desk",
-      { alpha: 0.025, labelAlpha: 0 },
+      { alpha: 0.075, labelAlpha: 0 },
     );
     this.drawStationPlaque(
       HUB_STATIONS.almanac.x,
@@ -2094,7 +2094,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.almanac.width,
       HUB_STATIONS.almanac.height,
       "almanac",
-      { alpha: 0.025, labelAlpha: 0 },
+      { alpha: 0.08, labelAlpha: 0 },
     );
     this.drawStationPlaque(
       HUB_STATIONS.shelf.x,
@@ -2102,7 +2102,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.shelf.width,
       HUB_STATIONS.shelf.height,
       "your shelf",
-      { alpha: 0.025, labelAlpha: 0 },
+      { alpha: 0.07, labelAlpha: 0 },
     );
     this.drawStationPlaque(
       HUB_STATIONS.account.x,

@@ -58,6 +58,7 @@ import {
   playWrenHurt,
   preloadWren,
 } from "../game/wren";
+import type { DevFinalePhase } from "../game/devUnlock";
 import greatBattleBackdrop from "../../art/references/great-battle-clean.png";
 import runaPortrait from "../../art/runa/runa-front.png";
 import finaleWolfSprite from "../../art/wolf/wolf-pack.png";
@@ -76,6 +77,7 @@ import wispCatSprite from "../../art/companions/wisp-cat.png";
 interface BattleSceneData {
   store: SaveStore;
   devWaveRealmId?: string;
+  devFinalePhase?: DevFinalePhase;
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -444,6 +446,7 @@ interface Enemy {
 export class GreatBattleScene extends Phaser.Scene {
   private store!: SaveStore;
   private devWaveRealmId?: string;
+  private devFinalePhase?: DevFinalePhase;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
   private band!: ConsoleBand;
@@ -533,6 +536,10 @@ export class GreatBattleScene extends Phaser.Scene {
     this.devWaveRealmId = WAVE_DEFS.some((wave) => wave.realmId === data.devWaveRealmId)
       ? data.devWaveRealmId
       : undefined;
+    this.devFinalePhase =
+      data.devFinalePhase === "phase2" || data.devFinalePhase === "phase3"
+        ? data.devFinalePhase
+        : undefined;
     this.activeTargets = [];
     this.targetAnchors = new Map();
     this.enemies = [];
@@ -750,7 +757,44 @@ export class GreatBattleScene extends Phaser.Scene {
     this.ambientHandle = playAmbientBattle();
 
     // Begin
-    this.time.delayedCall(800, () => this.startPhase1());
+    this.time.delayedCall(800, () => this.startInitialFinalePhase());
+  }
+
+  private startInitialFinalePhase(): void {
+    if (this.devFinalePhase === "phase2") {
+      this.narration.say("finale_phase1_lord_arrives");
+      this.transitionToPhase2();
+      return;
+    }
+
+    if (this.devFinalePhase === "phase3") {
+      this.startDirectFinalPhraseDevRoute();
+      return;
+    }
+
+    this.startPhase1();
+  }
+
+  private startDirectFinalPhraseDevRoute(): void {
+    this.clearActiveTargets();
+    this.dismissWallWard(520);
+    this.preparePhase2RelicState();
+    this.band.setObjective("Again is loose; rebuild the final phrase.");
+    this.drawQuietLord(this.isForceDuel, this.isKindnessDuel);
+    this.setNarrator("Again is loose. Rebuild the final phrase.", "Again");
+
+    this.time.delayedCall(900, () => {
+      if (this.runOver || !this.quietLordContainer?.scene) return;
+      this.tweens.killTweensOf(this.quietLordContainer);
+      this.quietLordContainer.setAlpha(1);
+      this.tweens.add({
+        targets: this.quietLordContainer,
+        alpha: 0,
+        duration: 620,
+        ease: "Sine.easeIn",
+        onComplete: () => this.startPhase3(),
+      });
+    });
   }
 
   private onShutdown(): void {
@@ -2374,20 +2418,7 @@ export class GreatBattleScene extends Phaser.Scene {
   // ─── PHASE 2 — The Duel ─────────────────────────────────────────────────────
 
   private startPhase2(): void {
-    const satchel = this.store.get().satchel;
-
-    // §5.5.11 fork — resolve the duel alignment once via the shared aggregator
-    // (≥3 force = louder/harder; ≥3 kindness = quieter but cleaner-play).
-    const effects = getActiveRelicEffects(satchel);
-    this.isForceDuel = effects.isForceDuel;
-    this.isKindnessDuel = effects.isKindnessDuel;
-
-    // Stash relic availability for later methods
-    this.bellsTongueSuperHitAvailable = satchel.includes("bells-tongue");
-    this.tetherCordBindUsed = false;
-    this.whirlwindCanceled =
-      satchel.includes("wind-phrase") && satchel.includes("quiet-chant");
-    this.whirlwindCancelAnnounced = false;
+    this.preparePhase2RelicState();
 
     this.band.setObjective("Face the Quiet Lord; watch for realm facets.");
     this.drawQuietLord(this.isForceDuel, this.isKindnessDuel);
@@ -2406,6 +2437,23 @@ export class GreatBattleScene extends Phaser.Scene {
       alpha: 0.12,
     });
     this.showQuietLordDescription();
+  }
+
+  private preparePhase2RelicState(): void {
+    const satchel = this.store.get().satchel;
+
+    // §5.5.11 fork — resolve the duel alignment once via the shared aggregator
+    // (≥3 force = louder/harder; ≥3 kindness = quieter but cleaner-play).
+    const effects = getActiveRelicEffects(satchel);
+    this.isForceDuel = effects.isForceDuel;
+    this.isKindnessDuel = effects.isKindnessDuel;
+
+    // Stash relic availability for later methods.
+    this.bellsTongueSuperHitAvailable = satchel.includes("bells-tongue");
+    this.tetherCordBindUsed = false;
+    this.whirlwindCanceled =
+      satchel.includes("wind-phrase") && satchel.includes("quiet-chant");
+    this.whirlwindCancelAnnounced = false;
   }
 
   private drawQuietLord(forceDuel = false, kindnessDuel = false): void {

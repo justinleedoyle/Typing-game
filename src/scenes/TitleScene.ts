@@ -456,6 +456,7 @@ export class TitleScene extends Phaser.Scene {
               store: this.store,
               revisit: false,
               devWaveRealmId: dev.finaleWaveRealmId,
+              devFinalePhase: dev.finalePhase,
             });
             return;
           }

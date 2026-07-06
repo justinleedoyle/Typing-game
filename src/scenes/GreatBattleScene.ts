@@ -937,6 +937,32 @@ export class GreatBattleScene extends Phaser.Scene {
     });
   }
 
+  private playWhirlwindCancelCue(): void {
+    this.playWallWardPulse("hold");
+
+    const swirl = this.add
+      .graphics()
+      .setPosition(this.scale.width / 2, 250)
+      .setDepth(4)
+      .setAlpha(0.76);
+    swirl.lineStyle(2, PALETTE_HEX.frost, 0.62);
+    for (let radius = 32; radius <= 112; radius += 26) {
+      swirl.strokeCircle(0, 0, radius);
+    }
+    swirl.lineStyle(3, UI_HEX.brass, 0.38);
+    swirl.strokeEllipse(0, 0, 260, 76);
+    this.tweens.add({
+      targets: swirl,
+      rotation: -Math.PI * 1.1,
+      scaleX: 0.35,
+      scaleY: 0.35,
+      alpha: 0,
+      duration: 680,
+      ease: "Sine.easeInOut",
+      onComplete: () => swirl.destroy(),
+    });
+  }
+
   private playTetherCordBindCue(): void {
     if (!this.quietLordContainer?.scene) return;
     playActorAttention(this, this.quietLordContainer, {
@@ -3373,6 +3399,7 @@ export class GreatBattleScene extends Phaser.Scene {
         this.whirlwindCancelAnnounced = true;
         this.showRelicNotice("finale_relic_windphrase_chant");
         this.band.setObjective("Wind-Phrase and Quiet-Chant cancel the whirlwind.");
+        this.playWhirlwindCancelCue();
         const pulse = this.add.graphics().setDepth(3).setAlpha(0);
         pulse.fillStyle(PALETTE_HEX.frost, 0.22);
         pulse.fillRect(0, 0, this.scale.width, this.scale.height);

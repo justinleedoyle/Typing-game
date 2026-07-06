@@ -117,10 +117,12 @@ const FLOOR_Y = 780;
 
 const GOLEM_ADVANCE_MS = 15000;
 
-// Painted-sprite display heights (px), matching the old procedural body heights so
-// the word anchor + hit feel line up. The boss is drawn inside a ×1.8 container,
-// so its on-screen height is COMMAND_GOLEM_SPRITE_HEIGHT × 1.8. Tune on live.
-const GOLEM_SPRITE_HEIGHT = 132;
+// Painted-sprite display heights (px). Regular golems started at the old
+// procedural body height, but the living-scene pass needs the painted automaton
+// to carry more of the threat against the foundry floor. The boss is drawn
+// inside a ×1.8 container, so its on-screen height is
+// COMMAND_GOLEM_SPRITE_HEIGHT × 1.8. Tune on live.
+const GOLEM_SPRITE_HEIGHT = 172;
 const COMMAND_GOLEM_SPRITE_HEIGHT = 150;
 
 // Smith Forn's standing portrait — a believable character height (px). He's a
@@ -2041,8 +2043,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
       knockbackMs: 600,
       knockbackPauseMs: 1200,
       dangerRampStart: DANGER_RAMP_START,
-      anchorOffsetY: -100,
-      fontSize: 32,
+      anchorOffsetY: -118,
+      fontSize: 34,
       // Forge-fire burst on completion — an "ember bloom" rather than brass.
       burstColor: PALETTE_HEX.ember,
       defeatImpactKind: "ember",
@@ -3728,14 +3730,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
     });
   }
 
-  /** Add the painted golem sprite into a container, scaled to the old procedural
-   *  body height so the word anchor + hit feel still line up. Returns the sprite
-   *  so the command-flash can tint it brass. */
+  /** Add the painted golem sprite into a container. The local heat base keeps
+   *  regular golems planted in the foundry rather than reading as small UI
+   *  tokens under their words. Returns the sprite so the command-flash can tint
+   *  it brass. */
   private drawGolemInto(
     c: Phaser.GameObjects.Container,
     _isBoss: boolean,
   ): Phaser.GameObjects.Image {
-    c.add(addLocalGroundShadow(this, 132, 24, { y: 10, alpha: 0.42 }));
+    c.add(addLocalGroundShadow(this, 190, 34, { y: 16, alpha: 0.46 }));
+    c.add(this.makeGolemFoundryBase(false));
     const sprite = this.add.image(0, 0, "forge-golem");
     sprite.setScale(GOLEM_SPRITE_HEIGHT / sprite.height);
     c.add(sprite);
@@ -3750,10 +3754,30 @@ export class ClockworkForgeScene extends Phaser.Scene {
     _isBoss: boolean,
   ): Phaser.GameObjects.Image {
     c.add(addLocalGroundShadow(this, 164, 30, { y: 12, alpha: 0.46 }));
+    c.add(this.makeGolemFoundryBase(true));
     const sprite = this.add.image(0, 0, "forge-command-golem");
     sprite.setScale(COMMAND_GOLEM_SPRITE_HEIGHT / sprite.height);
     c.add(sprite);
     return sprite;
+  }
+
+  private makeGolemFoundryBase(isBoss: boolean): Phaser.GameObjects.Graphics {
+    const g = this.add.graphics();
+    const width = isBoss ? 190 : 174;
+    const emberY = isBoss ? 16 : 18;
+    g.fillStyle(0x090604, 0.22);
+    g.fillEllipse(0, emberY, width, isBoss ? 42 : 36);
+    g.fillStyle(PALETTE_HEX.ember, isBoss ? 0.16 : 0.14);
+    g.fillEllipse(0, emberY - 4, width * 0.72, isBoss ? 32 : 28);
+    g.lineStyle(2, PALETTE_HEX.brass, isBoss ? 0.28 : 0.22);
+    g.strokeEllipse(0, emberY - 3, width * 0.86, isBoss ? 36 : 31);
+    g.lineStyle(2, PALETTE_HEX.ember, isBoss ? 0.28 : 0.24);
+    g.lineBetween(-width * 0.34, emberY - 8, -width * 0.12, emberY - 14);
+    g.lineBetween(width * 0.06, emberY - 13, width * 0.32, emberY - 7);
+    g.fillStyle(0xf0ad58, isBoss ? 0.3 : 0.24);
+    g.fillCircle(-width * 0.22, emberY - 6, 3.6);
+    g.fillCircle(width * 0.24, emberY - 2, 3.2);
+    return g;
   }
 }
 

@@ -713,7 +713,8 @@ export class SettingsScene extends Phaser.Scene {
   // ─── Actions ────────────────────────────────────────────────────────────────
 
   private handleDifficulty(): void {
-    togglePuristMode(this, this.store);
+    const next = togglePuristMode(this, this.store, { announce: false });
+    this.setNarrator(`Difficulty: ${difficultyLabel(next)}.`);
     this.renderMenu();
   }
 

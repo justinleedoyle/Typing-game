@@ -2042,7 +2042,8 @@ export class HauntedWoodScene extends Phaser.Scene {
         // Mist peak: obscure ghost words for the hold duration. Player must
         // clear words before the roll, or hold their nerve and type blind —
         // unless the wind-phrase lifts the mist (words stay readable).
-        if (!mistClears) this.setActiveGhostWordsHidden(true);
+        if (mistClears) this.playWindPhraseClearCue();
+        else this.setActiveGhostWordsHidden(true);
         this.time.delayedCall(blindMs, () => {
           if (!mistClears) this.setActiveGhostWordsHidden(false);
           this.tweens.add({
@@ -2054,6 +2055,33 @@ export class HauntedWoodScene extends Phaser.Scene {
           });
         });
       },
+    });
+  }
+
+  private playWindPhraseClearCue(): void {
+    const x = this.scale.width / 2;
+    const y = Math.max(360, Math.min(this.scale.height - 360, this.wrenContainer.y - 220));
+    playClaimLine(
+      this,
+      this.band.satchelAnchor.x + 58,
+      this.band.bandTopY - 10,
+      x,
+      y,
+      { color: 0xd8eecf, depth: 101, durationMs: 360 },
+    );
+    playSceneEventPulse(this, {
+      kind: "mist",
+      color: 0xd8eecf,
+      x,
+      y,
+      depth: 101,
+      durationMs: 520,
+      ringWidth: 720,
+      ringHeight: 150,
+      count: 14,
+      alpha: 0.1,
+      spreadX: 330,
+      spreadY: 78,
     });
   }
 

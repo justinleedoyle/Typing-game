@@ -81,12 +81,10 @@ import lanternMothSprite from "../../art/companions/lantern-moth.png";
 // closes. Mirrors the Winter Mountain ramp so the typing feel is consistent.
 const DANGER_RAMP_START = 0.4;
 
-// Painted-sprite display heights (px), matching the old procedural body heights
-// so the word anchor + hit feel line up. The lantern-spirit replaces the 46×60
-// amber body ellipse (the separate glow halo is kept as-is). The Scholar-Spirit
-// boss replaces the head+torso silhouette (head top ≈ -60, torso bottom ≈ +100,
-// so ~160 tall). Sizing is tune-later. */
-const LANTERN_SPIRIT_HEIGHT = 88;
+// Painted-sprite display heights (px). The lantern-spirit used to match the old
+// tiny procedural ellipse; it now needs enough stage presence to read as an
+// actor in the scene rather than a marker beneath a word.
+const LANTERN_SPIRIT_HEIGHT = 124;
 const SCHOLAR_SPIRIT_HEIGHT = 160;
 const SPIRIT_WORD_ATTACH_DELAY_MS = 140;
 const SPIRIT_ARRIVAL_SETTLE_SCALE = 0.026;
@@ -2751,23 +2749,28 @@ export class SkyIslandScene extends Phaser.Scene {
     delay: number,
     advanceMs: number,
   ): void {
-    const container = this.add.container(startX, targetY);
+    const container = this.add.container(startX, targetY).setDepth(18);
+
+    container.add(this.makeLanternSpiritLumenBase());
 
     // Glow halo (outer)
     const glowGfx = this.add.graphics();
-    glowGfx.fillStyle(0xf5c842, 0.18);
-    glowGfx.fillEllipse(0, 0, 90, 90);
+    glowGfx.fillStyle(0xf5c842, 0.15);
+    glowGfx.fillEllipse(0, -10, 132, 148);
+    glowGfx.fillStyle(0xfdedb0, 0.08);
+    glowGfx.fillEllipse(0, -18, 82, 106);
     container.add(glowGfx);
 
-    // Lantern body — painted sprite, scaled to the old 60px body ellipse height.
+    // Lantern body — painted sprite with enough scale to carry the encounter.
     const lanternSprite = this.add.image(0, 0, "sky-lantern-spirit");
     lanternSprite.setScale(LANTERN_SPIRIT_HEIGHT / lanternSprite.height);
     container.add(lanternSprite);
     addContainerWake(this, container, {
       kind: "mote",
       intervalMs: 230,
-      spreadX: 20,
-      spreadY: 16,
+      spreadX: 30,
+      spreadY: 22,
+      offsetY: -18,
       color: 0xf5c842,
       alpha: 0.42,
       size: 4,
@@ -2806,9 +2809,9 @@ export class SkyIslandScene extends Phaser.Scene {
         playBodyImpact(this, container, {
           kind: "mote",
           color: 0xf5c842,
-          offsetY: -36,
+          offsetY: -54,
           depth: 21,
-          ringRadius: 32,
+          ringRadius: 42,
           count: 8,
           durationMs: 360,
         });
@@ -2864,8 +2867,8 @@ export class SkyIslandScene extends Phaser.Scene {
       scene: this,
       word: spirit.word,
       x: spirit.container.x,
-      y: spirit.restY - 80,
-      fontSize: 32,
+      y: spirit.restY - 98,
+      fontSize: 34,
       // Lantern-amber burst on completion — spirits "bloom out" in their own
       // light, matching the theme rather than the default brass.
       burstColor: 0xf5c842,
@@ -2875,16 +2878,16 @@ export class SkyIslandScene extends Phaser.Scene {
           this.wrenContainer.x,
           this.wrenContainer.y - 116,
           spirit.container.x,
-          spirit.restY - 80,
+          spirit.restY - 98,
           { color: 0xf5c842 },
         ),
       onAdvance: () =>
         playBodyTypePulse(this, spirit.container, {
           kind: "mote",
           color: 0xf5c842,
-          offsetY: -48,
+          offsetY: -58,
           depth: 22,
-          ringRadius: 22,
+          ringRadius: 28,
         }),
       onComplete: () => this.defeatSpirit(spirit),
     });
@@ -2901,11 +2904,31 @@ export class SkyIslandScene extends Phaser.Scene {
         color: 0xf5c842,
         alpha: 0.24,
         depth: 20,
-        sourceOffsetY: -46,
+        sourceOffsetY: -58,
         targetOffsetY: 24,
       },
     );
     this.registerActiveTarget(target);
+  }
+
+  private makeLanternSpiritLumenBase(): Phaser.GameObjects.Container {
+    const c = this.add.container(0, 0);
+    const groundY = LANTERN_SPIRIT_HEIGHT * 0.43;
+    c.add(addLocalGroundShadow(this, 118, 20, {
+      y: groundY + 2,
+      alpha: 0.24,
+      color: 0x03030a,
+    }));
+
+    const glow = this.add.graphics();
+    glow.fillStyle(0xf5c842, 0.11);
+    glow.fillEllipse(0, groundY, 140, 34);
+    glow.fillStyle(0xfdedb0, 0.08);
+    glow.fillEllipse(0, groundY - 2, 82, 20);
+    glow.lineStyle(1, 0xf5c842, 0.18);
+    glow.strokeEllipse(0, groundY, 154, 38);
+    c.add(glow);
+    return c;
   }
 
   private startSpiritAdvance(spirit: LanternSpirit): void {

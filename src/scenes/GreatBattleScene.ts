@@ -213,7 +213,7 @@ const WAVE_DEFS: WaveDef[] = [
   {
     realmId: "winter-mountain",
     bank: WINTER_WORD_BANK,
-    baseY: 580,
+    baseY: 602,
     companionId: "snow-fox-cub",
     companionLine: "The fox darts through the shadows. They scatter.",
     label: "shadow-wolves",
@@ -258,10 +258,10 @@ function finaleEnemyArtForRealm(realmId: string): FinaleEnemyArtSpec {
       return {
         textureKey: "finale-wolf-pack",
         height: 150,
-        shadowWidth: 220,
-        shadowHeight: 18,
+        shadowWidth: 240,
+        shadowHeight: 22,
         shadowY: 72,
-        shadowAlpha: 0.16,
+        shadowAlpha: 0.24,
         spriteY: -6,
         alpha: 0.98,
         tint: 0xdfeaff,
@@ -2506,12 +2506,20 @@ export class GreatBattleScene extends Phaser.Scene {
     const footing = this.add.graphics();
 
     if (realmId === "winter-mountain") {
-      footing.fillStyle(0xbfd3e4, 0.06);
-      footing.fillEllipse(10, 70, 208, 12);
-      footing.lineStyle(2, 0xe6f3ff, 0.08);
-      footing.lineBetween(-98, 62, -50, 60);
-      footing.lineBetween(-18, 61, 32, 60);
-      footing.lineBetween(78, 62, 116, 60);
+      footing.fillStyle(0x071018, 0.22);
+      footing.fillEllipse(10, 75, 238, 22);
+      footing.fillStyle(0xbfd3e4, 0.12);
+      footing.fillEllipse(10, 69, 216, 14);
+      footing.lineStyle(3, 0xe6f3ff, 0.14);
+      footing.lineBetween(-104, 61, -50, 59);
+      footing.lineBetween(-24, 60, 34, 59);
+      footing.lineBetween(76, 61, 124, 60);
+      footing.lineStyle(1.5, 0x9fd7ff, 0.16);
+      footing.lineBetween(-92, 72, -34, 75);
+      footing.lineBetween(18, 75, 88, 72);
+      footing.fillStyle(0xe6f3ff, 0.14);
+      footing.fillCircle(-72, 62, 2.4);
+      footing.fillCircle(64, 61, 2.2);
       body.add(footing);
       return;
     }

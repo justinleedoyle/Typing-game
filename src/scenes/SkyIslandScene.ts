@@ -1102,33 +1102,63 @@ export class SkyIslandScene extends Phaser.Scene {
   private drawPathLanternCue(): Phaser.GameObjects.Container {
     const c = this.add.container(this.scale.width / 2 + 22, SKY_LANTERN_CUE_Y).setDepth(-1).setAlpha(0);
     const cord = this.add.graphics();
-    cord.lineStyle(1.5, 0x8a7060, 0.54);
-    cord.lineBetween(0, -104, 0, -34);
-    cord.lineStyle(1, 0xc9a14a, 0.46);
-    cord.lineBetween(-24, -34, 24, -34);
+    cord.lineStyle(1.4, 0x8a7060, 0.5);
+    cord.lineBetween(-72, -92, 0, -55);
+    cord.lineBetween(72, -92, 0, -55);
+    cord.lineBetween(0, -118, 0, -55);
+    cord.lineStyle(2, 0xc9a14a, 0.3);
+    cord.lineBetween(-42, -55, 42, -55);
+    cord.lineStyle(1, 0xf7d882, 0.2);
+    cord.lineBetween(-31, -51, 31, -51);
     c.add(cord);
 
     const glow = this.add.graphics();
-    glow.fillStyle(0xf5c842, 0.1);
-    glow.fillEllipse(0, 8, 126, 126);
-    glow.lineStyle(2, 0xf5c842, 0.16);
-    glow.strokeEllipse(0, 8, 96, 102);
+    glow.fillStyle(0xf5c842, 0.12);
+    glow.fillEllipse(0, -5, 174, 142);
+    glow.fillStyle(0xf5c842, 0.08);
+    glow.fillEllipse(0, -4, 116, 118);
+    glow.lineStyle(2, 0xf5c842, 0.13);
+    glow.strokeEllipse(0, -4, 112, 104);
     c.add(glow);
 
-    const body = this.add.graphics();
-    body.fillStyle(0xd49020, 0.7);
-    body.fillRoundedRect(-21, -26, 42, 58, 18);
-    body.lineStyle(2, 0xfdedb0, 0.74);
-    body.strokeRoundedRect(-21, -26, 42, 58, 18);
-    body.fillStyle(0xfdedb0, 0.74);
-    body.fillEllipse(0, 2, 16, 26);
-    c.add(body);
+    const paper = this.add.graphics();
+    paper.fillStyle(0x30251a, 0.28);
+    paper.fillEllipse(5, -8, 80, 100);
+    paper.fillStyle(0xd99c36, 0.36);
+    paper.fillEllipse(0, -12, 76, 96);
+    paper.fillStyle(0xf5d889, 0.24);
+    paper.fillEllipse(0, -12, 54, 82);
+    paper.lineStyle(2.4, 0xfdedb0, 0.68);
+    paper.strokeEllipse(0, -12, 76, 96);
+    paper.lineStyle(1.5, 0xfdedb0, 0.34);
+    paper.strokeEllipse(0, -36, 58, 18);
+    paper.strokeEllipse(0, -15, 70, 22);
+    paper.strokeEllipse(0, 8, 62, 18);
+    paper.lineStyle(1.2, 0x8a5d25, 0.5);
+    paper.lineBetween(-26, -42, -20, 22);
+    paper.lineBetween(-12, -48, -9, 31);
+    paper.lineBetween(12, -48, 9, 31);
+    paper.lineBetween(26, -42, 20, 22);
+    paper.fillStyle(0xb47a2b, 0.82);
+    paper.fillRoundedRect(-21, -61, 42, 9, 5);
+    paper.fillRoundedRect(-22, 34, 44, 8, 5);
+    paper.lineStyle(1.3, 0xfdedb0, 0.36);
+    paper.strokeRoundedRect(-21, -61, 42, 9, 5);
+    paper.strokeRoundedRect(-22, 34, 44, 8, 5);
+    paper.fillStyle(0xffdf83, 0.78);
+    paper.fillEllipse(0, -6, 18, 32);
+    paper.lineStyle(1, 0xc07a2d, 0.54);
+    paper.lineBetween(0, 42, 0, 67);
+    paper.fillStyle(0xf3c563, 0.72);
+    paper.fillCircle(0, 55, 3.5);
+    paper.fillEllipse(0, 68, 12, 7);
+    c.add(paper);
 
     this.tweens.add({
-      targets: [glow, body],
-      scaleX: 1.08,
-      scaleY: 1.12,
-      duration: 900,
+      targets: [glow, paper],
+      scaleX: 1.045,
+      scaleY: 1.07,
+      duration: 1000,
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",

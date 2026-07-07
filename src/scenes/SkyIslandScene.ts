@@ -98,6 +98,11 @@ const ETTA_SPRITE_X = 520;
 const ETTA_SPRITE_Y = 760;
 const ETTA_SPRITE_DEPTH = 50;
 const ETTA_RESTING_ALPHA = 0.9;
+const LIGHTER_SPRITE_HEIGHT = 188;
+const LIGHTER_SPRITE_X = 1288;
+const LIGHTER_SPRITE_Y = 750;
+const LIGHTER_SPRITE_DEPTH = 42;
+const LIGHTER_RESTING_ALPHA = 0.94;
 
 interface SkyIslandSceneData {
   store: SaveStore;
@@ -212,6 +217,8 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
+  private lighterSprite: Phaser.GameObjects.Image | null = null;
+  private lighterReplyAnchors: WordBodyAnchorHandle[] = [];
 
   // Fork / companion flags
   private fork1Choice: "help-etta" | "steal-flame" | null = null;
@@ -281,6 +288,8 @@ export class SkyIslandScene extends Phaser.Scene {
     this.pathCue = null;
     this.pathCueBeat = null;
     this.pathWordAnchors = [];
+    this.lighterSprite = null;
+    this.lighterReplyAnchors = [];
     this.ambientLanterns = [];
     this.revisitMemoryCue = null;
     this.revisitMemoryWordAnchor = null;
@@ -510,6 +519,9 @@ export class SkyIslandScene extends Phaser.Scene {
       this.templeLanterns = [];
       this.clearSkyForkCues();
       this.dismissRevisitMemoryCue(false);
+      this.clearLighterReplyAnchors();
+      this.lighterSprite?.destroy();
+      this.lighterSprite = null;
       this.clearEttaWordAnchors();
       this.clearEttaBookCue();
       this.ettaSprite?.destroy();
@@ -1209,24 +1221,20 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private startLanternLighter(): void {
     this.band.setObjective("Answer the Lantern-Lighter before the spirits wake.");
+    this.showLanternLighter();
     this.narration.say("sky_lantern_lighter_intro");
     this.time.delayedCall(2000, () => {
       this.setNarrator(LIGHTER_LINE_1, "Lantern-Lighter");
       this.time.delayedCall(600, () => {
-        let replyAnchor: WordBodyAnchorHandle | null = null;
-        const releaseReplyAnchor = (): void => {
-          replyAnchor?.destroy();
-          replyAnchor = null;
-        };
-        const t = this.makeWord({
+        const replyPos = this.lighterReplyWordPosition();
+        const t = this.makeLighterReplyWord({
           scene: this,
           word: WREN_RESPONSE,
-          x: this.wrenContainer.x,
-          y: this.wrenContainer.y - 154,
+          x: replyPos.x,
+          y: replyPos.y,
           fontSize: 36,
           onClaim: () => playWrenFocus(this.wrenSprite),
           onComplete: () => {
-            releaseReplyAnchor();
             playWrenAction(this.wrenSprite);
             playChime();
             this.clearActiveTargets();
@@ -1237,19 +1245,6 @@ export class SkyIslandScene extends Phaser.Scene {
             });
           },
         });
-        replyAnchor = attachWordBodyAnchor(
-          this,
-          this.wrenContainer,
-          () => ({ x: t.getAnchorX(), y: t.getAnchorY() }),
-          {
-            color: PALETTE_HEX.brass,
-            alpha: 0.17,
-            depth: 43,
-            sourceOffsetY: -112,
-            targetOffsetY: 24,
-          },
-        );
-        this.wrenContainer.once(Phaser.GameObjects.Events.DESTROY, releaseReplyAnchor);
         this.registerActiveTarget(t);
       });
     });
@@ -1262,6 +1257,7 @@ export class SkyIslandScene extends Phaser.Scene {
       }
     });
     this.setNarrator("The Lantern-Lighter's Vigil — a page appears in the Almanac.");
+    this.time.delayedCall(1600, () => this.hideLanternLighter());
     this.time.delayedCall(2000, () => this.startFirstSpiritEncounterFixed());
   }
 
@@ -3248,6 +3244,12 @@ export class SkyIslandScene extends Phaser.Scene {
         scale: 1.02,
         durationMs: 220,
       });
+    } else if (speakerName === "Lantern-Lighter") {
+      playActorAttention(this, this.lighterSprite, {
+        tint: PALETTE_HEX.brass,
+        scale: 1.025,
+        durationMs: 220,
+      });
     }
   }
 
@@ -3258,6 +3260,8 @@ export class SkyIslandScene extends Phaser.Scene {
       this.band.setPortrait("etta", "Etta");
     } else if (speakerName === "Scholar-Spirit") {
       this.band.setPortrait("scholar-spirit", "Scholar-Spirit");
+    } else if (speakerName === "Lantern-Lighter") {
+      this.band.setPortrait("sky-lantern-spirit", "Lantern-Lighter");
     } else {
       this.band.setPortrait(undefined, speakerName);
     }
@@ -3490,6 +3494,107 @@ export class SkyIslandScene extends Phaser.Scene {
     this.ettaWordAnchors.push(anchor);
     etta.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
     return target;
+  }
+
+  private makeLighterReplyWord(opts: TextWordTargetOptions): TextWordTarget {
+    const lighter = this.lighterSprite;
+    if (!lighter?.scene) return this.makeWord(opts);
+
+    const onClaim = opts.onClaim;
+    const onAdvance = opts.onAdvance;
+    const onComplete = opts.onComplete;
+    let anchor: WordBodyAnchorHandle | null = null;
+    const releaseAnchor = (): void => {
+      if (!anchor) return;
+      anchor.destroy();
+      const idx = this.lighterReplyAnchors.indexOf(anchor);
+      if (idx >= 0) this.lighterReplyAnchors.splice(idx, 1);
+      anchor = null;
+    };
+
+    const target = this.makeWord({
+      ...opts,
+      burstColor: opts.burstColor ?? PALETTE_HEX.brass,
+      onClaim: (mods) => {
+        playClaimLine(
+          this,
+          this.wrenContainer.x,
+          this.wrenContainer.y - 112,
+          lighter.x,
+          lighter.y - LIGHTER_SPRITE_HEIGHT * 0.58,
+          { color: PALETTE_HEX.brass, depth: 58 },
+        );
+        playActorAttention(this, lighter, {
+          tint: PALETTE_HEX.brass,
+          scale: 1.025,
+          durationMs: 180,
+        });
+        onClaim?.(mods);
+      },
+      onAdvance: (cursor, wordLength) => {
+        playBodyTypePulse(this, lighter, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: -LIGHTER_SPRITE_HEIGHT * 0.58,
+          depth: 58,
+          ringRadius: 24,
+        });
+        onAdvance?.(cursor, wordLength);
+      },
+      onComplete: () => {
+        releaseAnchor();
+        playBodyImpact(this, lighter, {
+          kind: "mote",
+          color: PALETTE_HEX.brass,
+          offsetY: -LIGHTER_SPRITE_HEIGHT * 0.58,
+          depth: 58,
+          ringRadius: 44,
+          count: 10,
+        });
+        onComplete();
+      },
+    });
+
+    anchor = attachWordBodyAnchor(
+      this,
+      lighter,
+      () => ({ x: target.getAnchorX(), y: target.getAnchorY() }),
+      {
+        color: PALETTE_HEX.brass,
+        alpha: 0.18,
+        depth: 44,
+        sourceOffsetY: -LIGHTER_SPRITE_HEIGHT * 0.58,
+        targetOffsetY: 24,
+      },
+    );
+    this.lighterReplyAnchors.push(anchor);
+    lighter.once(Phaser.GameObjects.Events.DESTROY, releaseAnchor);
+    return target;
+  }
+
+  private clearLighterReplyAnchors(): void {
+    for (const anchor of this.lighterReplyAnchors) anchor.destroy();
+    this.lighterReplyAnchors = [];
+  }
+
+  private lighterReplyWordPosition(): { x: number; y: number } {
+    const lighter = this.lighterSprite;
+    const wrenX = this.wrenContainer?.scene ? this.wrenContainer.x : SKY_WREN_STAGE_X;
+    const wrenY = this.wrenContainer?.scene ? this.wrenContainer.y : SKY_WREN_STAGE_Y;
+    if (!lighter?.scene) return { x: wrenX, y: wrenY - 176 };
+
+    return {
+      x: Phaser.Math.Clamp(
+        Phaser.Math.Linear(wrenX, lighter.x, 0.4),
+        380,
+        this.scale.width - 380,
+      ),
+      y: Phaser.Math.Clamp(
+        Math.min(wrenY - 270, lighter.y - LIGHTER_SPRITE_HEIGHT * 0.98),
+        330,
+        this.scale.height - 420,
+      ),
+    };
   }
 
   private makeEttaBookWord(opts: TextWordTargetOptions): TextWordTarget {
@@ -4173,6 +4278,58 @@ export class SkyIslandScene extends Phaser.Scene {
       durationMs: 920,
     });
     return c;
+  }
+
+  private showLanternLighter(): void {
+    if (this.lighterSprite?.scene) return;
+
+    const sprite = this.add
+      .image(LIGHTER_SPRITE_X, LIGHTER_SPRITE_Y, "sky-lantern-spirit")
+      .setOrigin(0.5, 1)
+      .setDepth(LIGHTER_SPRITE_DEPTH);
+    sprite.setScale(LIGHTER_SPRITE_HEIGHT / sprite.height);
+    this.lighterSprite = sprite;
+
+    stageAnchoredSprite(this, sprite, {
+      shadowWidth: 96,
+      shadowHeight: 18,
+      shadowOffsetY: 8,
+      shadowAlpha: 0.14,
+      restAlpha: LIGHTER_RESTING_ALPHA,
+      entranceOffsetY: 16,
+      entranceMs: 720,
+      breathDy: -5,
+      breathMs: 2400,
+      breathDelayMs: 120,
+    });
+    playSceneEventPulse(this, {
+      kind: "mote",
+      color: PALETTE_HEX.brass,
+      x: sprite.x,
+      y: sprite.y - LIGHTER_SPRITE_HEIGHT * 0.55,
+      depth: LIGHTER_SPRITE_DEPTH + 1,
+      durationMs: 620,
+      ringWidth: 150,
+      ringHeight: 86,
+      count: 8,
+      alpha: 0.14,
+      spreadX: 54,
+      spreadY: 26,
+    });
+  }
+
+  private hideLanternLighter(): void {
+    const sprite = this.lighterSprite;
+    this.clearLighterReplyAnchors();
+    if (!sprite?.scene) {
+      this.lighterSprite = null;
+      return;
+    }
+    this.lighterSprite = null;
+    fadeOutStagedSprite(this, sprite, {
+      durationMs: 520,
+      riseY: -22,
+    });
   }
 
   /** Draw the Scholar-Spirit boss: rotating rings of amber dots */

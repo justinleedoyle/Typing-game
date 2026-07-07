@@ -2859,6 +2859,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.band.setPortrait("band-portrait-runa", "Runa");
     } else if (speakerName === "Forn") {
       this.band.setPortrait("forn", "Forn");
+    } else if (speakerName === "Old Gregor") {
+      this.band.setPortrait("forge-command-golem", "Old Gregor");
     } else {
       this.band.setPortrait(undefined, speakerName);
     }

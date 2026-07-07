@@ -48,7 +48,8 @@ const ONESHOT_Y = MID_Y;
 const OBJECTIVE_X = SATCHEL_X;
 const OBJECTIVE_Y = BAND_H - 38;
 const OBJECTIVE_H = 38;
-const OBJECTIVE_LABEL_W = 68;
+const OBJECTIVE_LABEL_X = 16;
+const OBJECTIVE_TEXT_X = 124;
 const OBJECTIVE_FONT_SIZE = 17;
 const OBJECTIVE_MIN_FONT_SIZE = 13;
 const OBJECTIVE_MAX_TEXT_H = 24;
@@ -778,7 +779,7 @@ export class ConsoleBand {
   private drawObjectiveReadout(scene: Phaser.Scene, W: number): void {
     const width = Math.max(620, W - OBJECTIVE_X - 34);
     this.objectiveWidth = width;
-    this.objectiveTextMaxWidth = width - OBJECTIVE_LABEL_W - 18;
+    this.objectiveTextMaxWidth = width - OBJECTIVE_TEXT_X - 18;
     this.objectiveContainer = scene.add
       .container(OBJECTIVE_X, OBJECTIVE_Y)
       .setVisible(false);
@@ -791,7 +792,7 @@ export class ConsoleBand {
     this.objectiveContainer.add(bg);
 
     this.objectiveLabel = scene.add
-      .text(16, 0, "task", {
+      .text(OBJECTIVE_LABEL_X, 0, "task", {
         fontFamily: SERIF,
         fontSize: "13px",
         fontStyle: "italic",
@@ -801,7 +802,7 @@ export class ConsoleBand {
     this.objectiveContainer.add(this.objectiveLabel);
 
     this.objectiveText = scene.add
-      .text(OBJECTIVE_LABEL_W, 0, "", {
+      .text(OBJECTIVE_TEXT_X, 0, "", {
         fontFamily: SERIF,
         fontSize: `${OBJECTIVE_FONT_SIZE}px`,
         color: "#f3ead2",

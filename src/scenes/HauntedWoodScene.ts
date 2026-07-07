@@ -676,7 +676,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.setAmbientMistFieldAlpha(0.2, 520);
     this.showPathCue(0);
     this.time.delayedCall(760, () => this.stageWrenAtPathEntrance());
-    this.time.delayedCall(2800, () => this.startPathExploration());
+    this.time.delayedCall(1700, () => this.startPathExploration());
   }
 
   private startPathExploration(): void {

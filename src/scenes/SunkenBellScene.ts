@@ -41,6 +41,7 @@ import {
   playClaimLine,
   playActorAttention,
   playMeterPulse,
+  playPortalArrivalWake,
   playRealmClearResonance,
   playSceneEventPulse,
   stageContainerEntrance,
@@ -1187,6 +1188,10 @@ export class SunkenBellScene extends Phaser.Scene {
     // BeatClock stays not-running here; gating engages only once start() is
     // called at the end of Olin's exchange.
     this.narration.say("sunken_intro_arrival");
+    playPortalArrivalWake(this, this.wrenContainer, {
+      kind: "bubble",
+      color: BELL_BURST_COLOR,
+    });
     this.band.setObjective("Light the descent lanterns before the bell teaches its rhythm.");
     this.showDescentLanterns();
     this.time.delayedCall(2500, () => this.startDescent());

@@ -53,6 +53,7 @@ import {
   playClaimLine,
   playActorAttention,
   playMeterPulse,
+  playPortalArrivalWake,
   playRealmClearResonance,
   playSceneEventPulse,
   stageContainerEntrance,
@@ -675,6 +676,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private startAct1Arrival(): void {
     this.narration.say("forge_intro_arrival");
+    playPortalArrivalWake(this, this.wrenContainer, {
+      kind: "ember",
+      color: PALETTE_HEX.ember,
+      ringWidth: 148,
+      ringHeight: 42,
+    });
     this.band.setObjective("Type each catwalk word to reach Gregor's station.");
     this.showCatwalkCue(0, this.catwalkCueX(0));
     this.time.delayedCall(2600, () => this.startCatwalkBeats(0));

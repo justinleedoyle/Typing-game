@@ -288,6 +288,19 @@ export interface SceneEventPulseOptions {
   spreadY?: number;
 }
 
+export interface PortalArrivalWakeOptions {
+  kind?: AmbientKind;
+  color?: number;
+  depth?: number;
+  offsetX?: number;
+  offsetY?: number;
+  ringWidth?: number;
+  ringHeight?: number;
+  durationMs?: number;
+  count?: number;
+  alpha?: number;
+}
+
 export interface TrueNameSealOptions {
   x?: number;
   y?: number;
@@ -606,6 +619,74 @@ export function stageContainerEntrance(
       });
     },
   });
+}
+
+/** One-shot arrival residue for realm entry. It makes "the portal closes
+ *  behind you" visible at Wren's feet without adding a persistent UI object. */
+export function playPortalArrivalWake(
+  scene: Phaser.Scene,
+  target: WakeTarget,
+  opts: PortalArrivalWakeOptions = {},
+): void {
+  if (!target.active || !target.scene) return;
+
+  const kind = opts.kind ?? "mote";
+  const color = opts.color ?? colorFor(kind);
+  const x = target.x + (opts.offsetX ?? 0);
+  const y = target.y + (opts.offsetY ?? -10);
+  const depth = opts.depth ?? -0.25;
+  const width = opts.ringWidth ?? 168;
+  const height = opts.ringHeight ?? 56;
+  const duration = opts.durationMs ?? 720;
+  const alpha = opts.alpha ?? 0.58;
+
+  const ring = scene.add
+    .graphics()
+    .setPosition(x, y)
+    .setDepth(depth)
+    .setAlpha(alpha);
+  ring.lineStyle(3, color, 0.52);
+  ring.strokeEllipse(0, 0, width, height);
+  ring.lineStyle(1, color, 0.34);
+  ring.strokeEllipse(0, 0, width * 0.66, height * 0.62);
+  ring.lineBetween(-width * 0.22, 0, width * 0.22, 0);
+  scene.tweens.add({
+    targets: ring,
+    alpha: 0,
+    scaleX: 0.42,
+    scaleY: 0.34,
+    y: y - 8,
+    duration,
+    ease: "Sine.easeIn",
+    onComplete: () => ring.destroy(),
+  });
+
+  const count = opts.count ?? 12;
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.18, 0.18);
+    const startX = x + Math.cos(angle) * width * Phaser.Math.FloatBetween(0.34, 0.52);
+    const startY = y + Math.sin(angle) * height * Phaser.Math.FloatBetween(0.28, 0.5);
+    const particle = scene.add.graphics().setDepth(depth + 0.05).setAlpha(0.72);
+    drawParticle(
+      particle,
+      kind,
+      color,
+      Phaser.Math.FloatBetween(2.2, 4.6),
+      Math.max(0.2, alphaFor(kind)),
+    );
+    particle.setPosition(startX, startY);
+    scene.tweens.add({
+      targets: particle,
+      x: x + (startX - x) * 0.18 + Phaser.Math.FloatBetween(-8, 8),
+      y: y - 16 + Phaser.Math.FloatBetween(-12, 10),
+      alpha: 0,
+      scaleX: particle.scaleX * 0.54,
+      scaleY: particle.scaleY * 0.54,
+      duration: duration + Phaser.Math.Between(-90, 120),
+      ease: "Sine.easeIn",
+      onComplete: () => particle.destroy(),
+    });
+  }
 }
 
 /** A short scene-wide resonance for realm-clear payoffs, drawn behind the

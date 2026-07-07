@@ -51,6 +51,7 @@ import {
   playBodyTypePulse,
   playClaimLine,
   playActorAttention,
+  playPortalArrivalWake,
   playRealmClearResonance,
   playSceneEventPulse,
   stageContainerEntrance,
@@ -716,6 +717,10 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private startAct1(): void {
     this.narration.say("sky_intro_arrival");
+    playPortalArrivalWake(this, this.wrenContainer, {
+      kind: "mote",
+      color: 0xf5c842,
+    });
     this.band.setObjective("Type each path word to cross the floating stones.");
     this.setAmbientLanternFieldAlpha(0.12, 520);
     this.showPathCue("balance");

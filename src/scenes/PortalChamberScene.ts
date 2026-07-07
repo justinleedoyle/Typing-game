@@ -173,7 +173,8 @@ const HUB_STATIONS = {
   },
 } as const;
 const PORTAL_CALL_WORD_Y = HUB_STATIONS.portalFloor.y - 360;
-const HUB_PASSIVE_CAPTION_MS = 5_400;
+const HUB_FIRST_ARRIVAL_CAPTION_MS = 6_400;
+const HUB_SHORT_CAPTION_MS = 2_600;
 
 // Maps the last-cleared realm to its Runa desk-line ID in runaLines.ts. The
 // line text now lives there (single source of truth); the hub renders it via
@@ -420,7 +421,7 @@ export class PortalChamberScene extends Phaser.Scene {
       // "you're new here" state). On returns the desk reflections carry Runa.
       if (!REALM_SEQUENCE.some((id) => state.realms[id]?.cleared)) {
         this.narration.say("hub_first_arrival");
-        this.narration.clearAfter(HUB_PASSIVE_CAPTION_MS);
+        this.narration.clearAfter(HUB_FIRST_ARRIVAL_CAPTION_MS);
       } else {
         this.narration.clear();
       }
@@ -451,7 +452,7 @@ export class PortalChamberScene extends Phaser.Scene {
         this.zoneTargets.push(battleTarget);
         this.stageHubTarget(battleTarget, 80);
         this.narration.say("hub_all_cleared");
-        this.narration.clearAfter(HUB_PASSIVE_CAPTION_MS);
+        this.narration.clearAfter(HUB_SHORT_CAPTION_MS);
       } else {
         // Battle cleared — show begin again target (New Game+).
         let releaseAnchor = (): void => {};
@@ -480,7 +481,7 @@ export class PortalChamberScene extends Phaser.Scene {
         this.zoneTargets.push(ngPlusTarget);
         this.stageHubTarget(ngPlusTarget, 80);
         this.narration.say("hub_post_battle");
-        this.narration.clearAfter(HUB_PASSIVE_CAPTION_MS);
+        this.narration.clearAfter(HUB_SHORT_CAPTION_MS);
       }
     }
 

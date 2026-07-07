@@ -105,6 +105,8 @@ const BATTLE_WORD_BANK = [
 // §5.5.11 — counter-loadout: how long Wren has to type a facet's defense word
 // before it lands (uncountered facets only). "Tune on live build."
 const FACET_CHALLENGE_MS = 6000;
+const FINALE_START_DELAY_MS = 450;
+const FINALE_FIRST_WAVE_DELAY_MS = 900;
 const FINALE_ENEMY_WORD_ATTACH_DELAY_MS = 140;
 const FINALE_ENEMY_WORD_OFFSET_Y = -88;
 const FINALE_ENEMY_ANCHOR_SOURCE_OFFSET_Y = -54;
@@ -776,7 +778,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.ambientHandle = playAmbientBattle();
 
     // Begin
-    this.time.delayedCall(800, () => this.startInitialFinalePhase());
+    this.time.delayedCall(FINALE_START_DELAY_MS, () => this.startInitialFinalePhase());
   }
 
   private startInitialFinalePhase(): void {
@@ -2042,7 +2044,7 @@ export class GreatBattleScene extends Phaser.Scene {
       });
     }
 
-    this.time.delayedCall(2200, () => this.runNextWave());
+    this.time.delayedCall(FINALE_FIRST_WAVE_DELAY_MS, () => this.runNextWave());
   }
 
   private runNextWave(): void {

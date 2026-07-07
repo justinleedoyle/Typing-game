@@ -696,6 +696,7 @@ export class GreatBattleScene extends Phaser.Scene {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: [],
+      maxOneShots: 0,
       satchelLabel: "",
     });
     const band = this.band;

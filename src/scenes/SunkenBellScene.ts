@@ -374,6 +374,7 @@ export class SunkenBellScene extends Phaser.Scene {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,
+      maxOneShots: 0,
       satchelLabel: "",
     });
     const band = this.band;

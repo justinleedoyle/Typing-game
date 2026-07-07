@@ -1025,10 +1025,16 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private stageHubTarget(target: TextWordTarget, delayMs: number): void {
+    const durationMs = 230;
     target.playEntryWake({
       delayMs,
-      durationMs: 230,
+      durationMs,
       offsetY: 10,
+    });
+    target.playIdleFloat({
+      delayMs: delayMs + durationMs + 140,
+      dy: -2,
+      durationMs: 1900,
     });
   }
 

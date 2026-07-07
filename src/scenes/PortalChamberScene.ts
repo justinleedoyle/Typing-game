@@ -519,8 +519,9 @@ export class PortalChamberScene extends Phaser.Scene {
       {
         fontSize: 19,
         stationPulse: HUB_STATIONS.desk,
+        frame: "banner",
         entryDelayMs: 110,
-        idleAlpha: 0.76,
+        idleAlpha: 0.84,
       },
     );
     this.registerNavTarget(

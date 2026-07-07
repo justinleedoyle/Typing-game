@@ -1192,7 +1192,6 @@ export class SunkenBellScene extends Phaser.Scene {
       kind: "bubble",
       color: BELL_BURST_COLOR,
     });
-    this.band.setObjective("Light the descent lanterns before the bell teaches its rhythm.");
     this.showDescentLanterns();
     this.time.delayedCall(2500, () => this.startDescent());
   }
@@ -1200,6 +1199,7 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Act 1: The Descent (lanterns) ────────────────────────────────────────
 
   private startDescent(): void {
+    this.band.setObjective("Light the descent lanterns before the bell teaches its rhythm.");
     let lit = 0;
 
     DESCENT_LANTERN_WORDS.forEach((word, i) => {

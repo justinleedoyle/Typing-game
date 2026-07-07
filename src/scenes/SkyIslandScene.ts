@@ -721,7 +721,6 @@ export class SkyIslandScene extends Phaser.Scene {
       kind: "mote",
       color: 0xf5c842,
     });
-    this.band.setObjective("Type each path word to cross the floating stones.");
     this.setAmbientLanternFieldAlpha(0.12, 520);
     this.showPathCue("balance");
     this.time.delayedCall(780, () => this.stageWrenAtPathEntrance());
@@ -743,6 +742,9 @@ export class SkyIslandScene extends Phaser.Scene {
       "A paper lantern hangs right across the path, still lit. Lift it aside gently.",
       "Stepping stones. The gaps are wide, the island hums below your feet.",
     ];
+    if (idx === 0) {
+      this.band.setObjective("Type each path word to cross the floating stones.");
+    }
     this.showPathCue(beat);
     this.setNarrator(narrations[idx] ?? "");
     const wordPos = this.pathWordPosition(beat);

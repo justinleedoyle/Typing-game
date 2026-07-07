@@ -1596,8 +1596,21 @@ export class GreatBattleScene extends Phaser.Scene {
     base.strokeRoundedRect(-WALL_WARD.width / 2 + 74, 5, WALL_WARD.width - 148, 18, 8);
     base.lineStyle(1, 0x8b6ad8, 0.18);
     base.lineBetween(-WALL_WARD.width / 2 + 116, 14, WALL_WARD.width / 2 - 116, 14);
-    base.lineStyle(1, UI_HEX.brass, 0.18);
-    base.strokeEllipse(0, 12, WALL_WARD.width * 0.74, WALL_WARD.height * 0.56);
+    base.lineStyle(2, UI_HEX.brass, 0.22);
+    const arcHalf = WALL_WARD.width * 0.36;
+    let previousX = -arcHalf;
+    let previousY = 18;
+    for (let step = 1; step <= 24; step++) {
+      const t = -1 + (step / 24) * 2;
+      const nextX = t * arcHalf;
+      const nextY = 14 + Math.abs(t) * 12;
+      base.lineBetween(previousX, previousY, nextX, nextY);
+      previousX = nextX;
+      previousY = nextY;
+    }
+    base.lineStyle(1, 0x8b6ad8, 0.13);
+    base.lineBetween(-arcHalf + 28, 26, -arcHalf - 48, 38);
+    base.lineBetween(arcHalf - 28, 26, arcHalf + 48, 38);
 
     for (let i = -4; i <= 4; i++) {
       const tickX = i * 92;
@@ -1680,7 +1693,7 @@ export class GreatBattleScene extends Phaser.Scene {
       depth: 6,
       durationMs: mode === "breach" ? 580 : 460,
       ringWidth: mode === "breach" ? WALL_WARD.width * 0.88 : WALL_WARD.width * 0.72,
-      ringHeight: mode === "breach" ? WALL_WARD.height * 1.45 : WALL_WARD.height,
+      ringHeight: mode === "breach" ? 58 : 34,
       count: mode === "breach" ? 12 : 8,
       alpha: mode === "breach" ? 0.12 : 0.075,
       spreadX: WALL_WARD.width * 0.32,
@@ -1968,12 +1981,14 @@ export class GreatBattleScene extends Phaser.Scene {
     playSceneEventPulse(this, {
       kind: "ash",
       color: 0xc9a14a,
-      x: this.scale.width / 2,
-      y: 690,
-      ringWidth: 1200,
-      ringHeight: 190,
-      count: 16,
-      alpha: 0.11,
+      x: WALL_WARD.x,
+      y: WALL_WARD.y + 18,
+      ringWidth: WALL_WARD.width * 0.76,
+      ringHeight: 34,
+      count: 10,
+      alpha: 0.075,
+      spreadX: WALL_WARD.width * 0.32,
+      spreadY: 24,
     });
     this.playWallWardPulse("arrival");
 

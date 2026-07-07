@@ -684,7 +684,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     });
     this.band.setObjective("Type each catwalk word to reach Gregor's station.");
     this.showCatwalkCue(0, this.catwalkCueX(0));
-    this.time.delayedCall(2600, () => this.startCatwalkBeats(0));
+    this.time.delayedCall(1900, () => this.startCatwalkBeats(0));
   }
 
   private startCatwalkBeats(idx: number): void {

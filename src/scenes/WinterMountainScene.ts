@@ -767,7 +767,6 @@ export class WinterMountainScene extends Phaser.Scene {
       kind: "snow",
       color: PALETTE_HEX.frost,
     });
-    this.band.setObjective("Type each trail word to move through the pass.");
     this.showRiverCue("lift");
     this.time.delayedCall(520, () => this.stageWrenAtTrailEntrance());
     this.time.delayedCall(1500, () => this.runRiverBeats(0));
@@ -790,6 +789,9 @@ export class WinterMountainScene extends Phaser.Scene {
       "The ice looks thin here. Place your feet carefully.",
       "A low branch catches the light. Duck under it.",
     ];
+    if (idx === 0) {
+      this.band.setObjective("Type each trail word to move through the pass.");
+    }
     this.showRiverCue(beat);
     this.setNarrator(narrations[idx]);
     const wordPos = this.riverWordPosition(beat);

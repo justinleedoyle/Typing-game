@@ -672,7 +672,6 @@ export class HauntedWoodScene extends Phaser.Scene {
       kind: "mist",
       color: 0xd8e2cf,
     });
-    this.band.setObjective("Type the path words to reach the lantern in the trees.");
     this.setAmbientMistFieldAlpha(0.2, 520);
     this.showPathCue(0);
     this.time.delayedCall(760, () => this.stageWrenAtPathEntrance());
@@ -696,6 +695,9 @@ export class HauntedWoodScene extends Phaser.Scene {
       }
       const beat = beats[i];
       if (!beat) return;
+      if (i === 0) {
+        this.band.setObjective("Type the path words to reach the lantern in the trees.");
+      }
       this.showPathCue(i);
       const wordPos = this.pathWordPosition(i);
       const target = this.makeWord({

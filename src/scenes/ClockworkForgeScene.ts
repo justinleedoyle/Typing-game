@@ -682,7 +682,6 @@ export class ClockworkForgeScene extends Phaser.Scene {
       ringWidth: 148,
       ringHeight: 42,
     });
-    this.band.setObjective("Type each catwalk word to reach Gregor's station.");
     this.showCatwalkCue(0, this.catwalkCueX(0));
     this.time.delayedCall(1900, () => this.startCatwalkBeats(0));
   }
@@ -700,6 +699,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const narration = CATWALK_NARRATIONS[idx];
     const cueX = this.catwalkCueX(idx);
     const wordPos = this.catwalkWordPosition(idx);
+    if (idx === 0) {
+      this.band.setObjective("Type each catwalk word to reach Gregor's station.");
+    }
     this.showCatwalkCue(idx, cueX);
     const target = this.makeWord({
       scene: this,

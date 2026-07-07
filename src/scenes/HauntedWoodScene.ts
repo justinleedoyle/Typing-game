@@ -727,7 +727,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private pathWordPosition(idx: number): { x: number; y: number } {
     const cue = this.pathCue;
     if (!cue?.scene) return { x: this.scale.width / 2, y: this.scale.height / 2 };
-    if (idx === 0) return { x: cue.x - 132, y: cue.y - 118 };
+    if (idx === 0) return { x: cue.x + 36, y: cue.y - 116 };
     if (idx === 1) return { x: cue.x + 204, y: cue.y - 76 };
     return { x: cue.x + 214, y: cue.y - 124 };
   }
@@ -735,7 +735,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private pathWrenPosition(idx: number): { x: number; y: number } {
     const cue = this.pathCue;
     if (!cue?.scene) return { x: WREN_X, y: WOOD_PATH_STAGE_Y };
-    if (idx === 0) return { x: cue.x - 72, y: WOOD_PATH_STAGE_Y };
+    if (idx === 0) return { x: cue.x - 112, y: WOOD_PATH_STAGE_Y };
     if (idx === 1) return { x: cue.x - 24, y: WOOD_PATH_STAGE_Y - 10 };
     return { x: cue.x + 54, y: WOOD_PATH_STAGE_Y - 2 };
   }
@@ -743,7 +743,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private stageWrenAtPathEntrance(): void {
     const cue = this.pathCue;
     if (!cue?.scene) return;
-    this.moveWrenTo(cue.x - 232, WOOD_PATH_STAGE_Y + 4, {
+    this.moveWrenTo(cue.x - 262, WOOD_PATH_STAGE_Y + 4, {
       durationMs: 820,
       quiet: true,
     });
@@ -887,6 +887,10 @@ export class HauntedWoodScene extends Phaser.Scene {
     roots.lineStyle(2, 0x7e8a63, 0.24);
     roots.lineBetween(-98, 24, -62, 16);
     roots.lineBetween(44, -1, 74, 9);
+    roots.lineStyle(4, 0xb7c6a0, 0.26);
+    roots.lineBetween(-10, -6, 30, -23);
+    roots.lineStyle(2, 0xf0d98a, 0.22);
+    roots.lineBetween(2, -2, 34, -16);
 
     roots.fillStyle(0x4d5f3f, 0.62);
     roots.fillEllipse(-120, 17, 28, 10);
@@ -899,6 +903,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     roots.fillStyle(0xb7c6a0, 0.24);
     roots.fillCircle(-124, 12, 3);
     roots.fillCircle(-106, 22, 2.5);
+    roots.fillCircle(28, -20, 3);
     roots.fillCircle(110, 5, 3);
     roots.fillCircle(126, -2, 2.2);
     c.add(roots);
@@ -1014,6 +1019,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     if (!cue?.scene) return;
     this.releasePathCueWordAnchor();
     const sourceOffsetY = idx === 1 ? -34 : idx === 2 ? -76 : -44;
+    const sourceOffsetX = idx === 0 ? 28 : 0;
     this.pathCueWordAnchor = attachWordBodyAnchor(
       this,
       cue,
@@ -1022,6 +1028,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         color: PALETTE_HEX.moss,
         alpha: 0.14,
         depth: 7,
+        sourceOffsetX,
         sourceOffsetY,
         targetOffsetY: 24,
       },

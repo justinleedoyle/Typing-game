@@ -432,9 +432,9 @@ export class PortalChamberScene extends Phaser.Scene {
           word: "defend hearthward",
           x: this.scale.width / 2,
           y: PORTAL_CALL_WORD_Y,
-          fontSize: 38,
+          fontSize: 36,
           outline: true,
-          frame: "banner",
+          idleAlpha: 0.92,
           onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),
           onAdvance: () => this.pulseStationTyping(HUB_STATIONS.portalFloor),
           onComplete: () => {
@@ -456,9 +456,9 @@ export class PortalChamberScene extends Phaser.Scene {
           word: "begin again",
           x: this.scale.width / 2,
           y: PORTAL_CALL_WORD_Y,
-          fontSize: 36,
+          fontSize: 34,
           outline: true,
-          frame: "banner",
+          idleAlpha: 0.9,
           onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),
           onAdvance: () => this.pulseStationTyping(HUB_STATIONS.portalFloor),
           onComplete: () => {
@@ -501,7 +501,6 @@ export class PortalChamberScene extends Phaser.Scene {
         {
           fontSize: 18,
           priority: -1,
-          frame: "banner",
           stationPulse: HUB_STATIONS.portalFloor,
           entryDelayMs: 130,
           idleAlpha: 0.76,
@@ -517,7 +516,6 @@ export class PortalChamberScene extends Phaser.Scene {
       () => this.enterZone("desk"),
       {
         fontSize: 19,
-        frame: "banner",
         stationPulse: HUB_STATIONS.desk,
         entryDelayMs: 110,
         idleAlpha: 0.76,
@@ -530,7 +528,6 @@ export class PortalChamberScene extends Phaser.Scene {
       () => this.enterZone("shelf"),
       {
         fontSize: 19,
-        frame: "banner",
         stationPulse: HUB_STATIONS.shelf,
         entryDelayMs: 150,
         idleAlpha: 0.76,
@@ -545,7 +542,6 @@ export class PortalChamberScene extends Phaser.Scene {
       () => this.enterZone("account"),
       {
         fontSize: 17,
-        frame: "banner",
         stationPulse: HUB_STATIONS.account,
         entryDelayMs: 190,
         idleAlpha: 0.72,
@@ -854,7 +850,6 @@ export class PortalChamberScene extends Phaser.Scene {
       () => this.enterZone("portals"),
       {
         fontSize: 20,
-        frame: "banner",
         stationPulse: HUB_STATIONS.portalFloor,
         entryDelayMs,
         idleAlpha: 0.76,
@@ -1357,7 +1352,6 @@ export class PortalChamberScene extends Phaser.Scene {
       fontSize: 20,
       priority: -1,
       outline: true,
-      frame: "banner",
       idleAlpha: 0.76,
       onClaim: () => this.focusStation(HUB_STATIONS.almanac),
       onAdvance: () => this.pulseStationTyping(HUB_STATIONS.almanac),
@@ -2100,7 +2094,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.desk.width,
       HUB_STATIONS.desk.height,
       "runa's desk",
-      { alpha: 0.075, labelAlpha: 0 },
+      { alpha: 0.035, labelAlpha: 0 },
     );
     this.drawStationPlaque(
       HUB_STATIONS.almanac.x,
@@ -2108,7 +2102,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.almanac.width,
       HUB_STATIONS.almanac.height,
       "almanac",
-      { alpha: 0.08, labelAlpha: 0 },
+      { alpha: 0.04, labelAlpha: 0 },
     );
     this.drawStationPlaque(
       HUB_STATIONS.shelf.x,
@@ -2116,7 +2110,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.shelf.width,
       HUB_STATIONS.shelf.height,
       "your shelf",
-      { alpha: 0.11, labelAlpha: 0 },
+      { alpha: 0.055, labelAlpha: 0 },
     );
     this.drawStationPlaque(
       HUB_STATIONS.account.x,
@@ -2125,7 +2119,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.account.height,
       "account",
       {
-        alpha: 0.17,
+        alpha: 0.07,
         labelAlpha: 0,
       },
     );

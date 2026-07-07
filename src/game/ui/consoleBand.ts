@@ -160,6 +160,8 @@ export class ConsoleBand {
       .setScrollFactor(0)
       .setDepth(DEPTH);
 
+    const maxOneShots = Math.max(0, opts.maxOneShots ?? 3);
+
     this.drawSurface(scene, W);
     this.drawPortraitFrame(scene);
     this.setPortrait(opts.portraitKey, opts.portraitName);
@@ -169,8 +171,7 @@ export class ConsoleBand {
 
     this.satchelAnchor = { x: SATCHEL_X, y: top + TILE_Y };
     this.metersAnchor = { x: METERS_RIGHT, y: top + METERS_CY };
-    const n = opts.maxOneShots ?? 3;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < maxOneShots; i++) {
       this.oneShotSlots.push({ x: ONESHOT_X0 + i * ONESHOT_DX, y: top + ONESHOT_Y });
     }
 
@@ -392,19 +393,15 @@ export class ConsoleBand {
     g.fillStyle(0x0f0c08, 0.14);
     g.fillRoundedRect(142, 42, 336, 104, 10);
     g.fillRoundedRect(SATCHEL_X - 22, 42, 414, 104, 10);
-    g.fillRoundedRect(ONESHOT_X0 - 48, 42, W - ONESHOT_X0 - PAD + 48, 104, 10);
     g.lineStyle(1, UI_HEX.frame, 0.2);
     g.strokeRoundedRect(142, 42, 336, 104, 10);
     g.strokeRoundedRect(SATCHEL_X - 22, 42, 414, 104, 10);
-    g.strokeRoundedRect(ONESHOT_X0 - 48, 42, W - ONESHOT_X0 - PAD + 48, 104, 10);
     g.lineStyle(1, UI_HEX.brass, 0.12);
     g.beginPath();
     g.moveTo(164, 63);
     g.lineTo(454, 63);
     g.moveTo(SATCHEL_X, 63);
     g.lineTo(SATCHEL_X + 370, 63);
-    g.moveTo(ONESHOT_X0 - 24, 63);
-    g.lineTo(W - PAD - 22, 63);
     g.strokePath();
     g.lineStyle(1, 0x6e5a36, 0.12);
     for (let y = 24; y < BAND_H - 18; y += 31) {

@@ -368,6 +368,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,
+      maxOneShots: this.combat.oneShots.filter(isOffensiveOneShot).length,
     });
     const band = this.band;
 

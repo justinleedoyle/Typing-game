@@ -735,6 +735,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.redrawCandles();
     this.stageFinaleMeterObject(candleLabel, 70, { offsetY: 5 });
     this.stageFinaleMeterObject(this.candleGroup, 95, { offsetY: 8 });
+    this.band.setObjective("Guard the last wall; keep the candles lit.");
 
     // Untethered Wind: slow enemy advance by ~15%
     if (satchel.includes("untethered-wind")) {

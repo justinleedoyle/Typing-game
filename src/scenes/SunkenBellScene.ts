@@ -114,11 +114,14 @@ const GHOST_SPRITE_HEIGHT = 136;
 const WARDEN_SPRITE_HEIGHT = 320;
 
 // Painted NPC display heights (px). Olin is a small hunched figure — the old
-// procedural body (head ~742px down to staff foot ~870px) spanned ~130px, so
-// ~180px reads as a slightly-larger painted figure on the same pew. King
-// Aurland is a tall, freed-king beat — drawn larger and standing. Tune on live.
-const OLIN_SPRITE_HEIGHT = 180;
+// procedural body (head ~742px down to staff foot ~870px) spanned ~130px; the
+// living-scene pass stages him higher so the teaching beat belongs to the world,
+// not the bottom console band. King Aurland is a tall, freed-king beat — drawn
+// larger and standing. Tune on live.
+const OLIN_SPRITE_HEIGHT = 205;
 const AURLAND_SPRITE_HEIGHT = 360;
+const OLIN_X = 430;
+const OLIN_PEW_Y = 780;
 
 // The Warden's painted sprite sits at the same anchor the procedural bell used
 // (trapezoid centred at bx, vertical mid-point ~by+110). Keep these in sync with
@@ -2303,9 +2306,13 @@ export class SunkenBellScene extends Phaser.Scene {
     const olin = this.olinImage;
     if (!olin?.scene) return { x: this.scale.width / 2, y: this.scale.height - 340 };
     const bounds = olin.getBounds();
+    const wrenX = this.wrenContainer?.scene ? this.wrenContainer.x : WREN_X;
     return {
-      x: Math.max(330, Math.min(this.scale.width - 330, bounds.right + 170)),
-      y: Math.max(330, Math.min(this.scale.height - 360, bounds.top + 66)),
+      x: Math.max(
+        330,
+        Math.min(this.scale.width - 330, Phaser.Math.Linear(bounds.right, wrenX, 0.38)),
+      ),
+      y: Math.max(330, Math.min(this.scale.height - 430, bounds.top + bounds.height * 0.42)),
     };
   }
 
@@ -3764,16 +3771,30 @@ export class SunkenBellScene extends Phaser.Scene {
   private drawOlin(): void {
     if (this.olinImage) return;
     // Wooden pew (kept procedural — the sprite is just Olin himself).
-    const g = this.add.graphics();
-    g.fillStyle(0x1a2030, 1);
-    g.fillRect(200, 820, 300, 20);
-    g.fillRect(200, 820, 10, 60);
-    g.fillRect(490, 820, 10, 60);
+    const g = this.add.graphics().setDepth(1.5);
+    g.fillStyle(0x101923, 0.9);
+    g.fillRoundedRect(OLIN_X - 184, OLIN_PEW_Y, 368, 22, 5);
+    g.fillStyle(0x121827, 0.82);
+    g.fillRect(OLIN_X - 176, OLIN_PEW_Y + 18, 12, 58);
+    g.fillRect(OLIN_X + 164, OLIN_PEW_Y + 18, 12, 58);
+    g.lineStyle(1.5, 0x4ab8d6, 0.18);
+    g.lineBetween(OLIN_X - 176, OLIN_PEW_Y + 3, OLIN_X + 176, OLIN_PEW_Y + 3);
     // Painted Old Olin — a small hunched figure, feet on the pew top. Replaces
     // the old procedural body/head/staff silhouette.
-    const sprite = this.add.image(300, 822, "olin").setOrigin(0.5, 1);
+    const sprite = this.add.image(OLIN_X, OLIN_PEW_Y + 2, "olin").setOrigin(0.5, 1);
     sprite.setScale(OLIN_SPRITE_HEIGHT / sprite.height);
     this.olinImage = sprite;
-    addIdleBreath(this, sprite, { dy: -2, durationMs: 2600, delayMs: 300 });
+    stageAnchoredSprite(this, sprite, {
+      shadowWidth: 116,
+      shadowHeight: 20,
+      shadowOffsetY: 6,
+      shadowAlpha: 0.18,
+      restAlpha: 0.96,
+      entranceOffsetY: 12,
+      entranceMs: 620,
+      breathDy: -2,
+      breathMs: 2600,
+      breathDelayMs: 300,
+    });
   }
 }

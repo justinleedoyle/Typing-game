@@ -139,7 +139,9 @@ function displayedSatchelTileCount(
 }
 
 function satchelShelfWidthFor(displayedCount: number, labelText: string): number {
-  if (labelText.trim() === "") return SATCHEL_SHELF_FULL_W;
+  const trimmedLabel = labelText.trim();
+  if (trimmedLabel === "") return SATCHEL_SHELF_FULL_W;
+  if (trimmedLabel === "satchel" && displayedCount === 0) return 0;
   const rowW =
     displayedCount > 0
       ? displayedCount * TILE + Math.max(0, displayedCount - 1) * TILE_GAP
@@ -438,6 +440,7 @@ export class ConsoleBand {
     satchelShelfW: number,
   ): void {
     this.bandWidth = W;
+    const showSatchelShelf = satchelShelfW > 0;
     const g = scene.add.graphics();
     // Soft cast shadow rising onto the world, so the band reads as foreground.
     g.fillStyle(0x000000, 0.32);
@@ -454,20 +457,26 @@ export class ConsoleBand {
     if (showMeterShelf) {
       g.fillRoundedRect(142, 42, 336, 104, 10);
     }
-    g.fillRoundedRect(SATCHEL_X - 22, 42, satchelShelfW, 104, 10);
+    if (showSatchelShelf) {
+      g.fillRoundedRect(SATCHEL_X - 22, 42, satchelShelfW, 104, 10);
+    }
     g.lineStyle(1, UI_HEX.frame, 0.2);
     if (showMeterShelf) {
       g.strokeRoundedRect(142, 42, 336, 104, 10);
     }
-    g.strokeRoundedRect(SATCHEL_X - 22, 42, satchelShelfW, 104, 10);
+    if (showSatchelShelf) {
+      g.strokeRoundedRect(SATCHEL_X - 22, 42, satchelShelfW, 104, 10);
+    }
     g.lineStyle(1, UI_HEX.brass, 0.12);
     g.beginPath();
     if (showMeterShelf) {
       g.moveTo(164, 63);
       g.lineTo(454, 63);
     }
-    g.moveTo(SATCHEL_X, 63);
-    g.lineTo(SATCHEL_X + Math.max(0, satchelShelfW - 44), 63);
+    if (showSatchelShelf) {
+      g.moveTo(SATCHEL_X, 63);
+      g.lineTo(SATCHEL_X + Math.max(0, satchelShelfW - 44), 63);
+    }
     g.strokePath();
     g.lineStyle(1, 0x6e5a36, 0.12);
     for (let y = 24; y < BAND_H - 18; y += 31) {
@@ -600,16 +609,6 @@ export class ConsoleBand {
     divider.fillRect(DIVIDER_X, PAD, 1, BAND_H - PAD * 2);
     this.container.add(divider);
 
-    const label = scene.add
-      .text(SATCHEL_X, SATCHEL_LABEL_Y, labelText, {
-        fontFamily: SERIF,
-        fontStyle: "italic",
-        fontSize: "15px",
-        color: "#a59b89",
-      })
-      .setOrigin(0, 0.5);
-    this.container.add(label);
-
     // Only relics with a loadable icon get a tile — no empty boxes for an id
     // whose art is missing or not yet preloaded; the row stays contiguous.
     const drawable = iconIds.filter((id) => {
@@ -620,6 +619,18 @@ export class ConsoleBand {
     const overflowCount = drawable.length - visibleDrawable.length;
     const displayedCount = visibleDrawable.length + (overflowCount > 0 ? 1 : 0);
     this.satchelTileCount = displayedCount;
+    const trimmedLabel = labelText.trim();
+    if (trimmedLabel !== "" && (trimmedLabel !== "satchel" || displayedCount > 0)) {
+      const label = scene.add
+        .text(SATCHEL_X, SATCHEL_LABEL_Y, labelText, {
+          fontFamily: SERIF,
+          fontStyle: "italic",
+          fontSize: "15px",
+          color: "#a59b89",
+        })
+        .setOrigin(0, 0.5);
+      this.container.add(label);
+    }
     if (displayedCount > 0) {
       this.playSatchelRowWake(displayedCount);
     }

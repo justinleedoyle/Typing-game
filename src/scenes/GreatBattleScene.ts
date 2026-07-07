@@ -2102,7 +2102,7 @@ export class GreatBattleScene extends Phaser.Scene {
       }
     }
 
-    const xPositions = [this.scale.width * 0.25, this.scale.width * 0.5, this.scale.width * 0.75];
+    const xPositions = this.waveSpawnXs(waveDef);
 
     for (let i = 0; i < 3; i++) {
       this.spawnEnemy(waveDef, xPositions[i]!, words[i]!, this.currentWaveIdx);
@@ -2127,6 +2127,16 @@ export class GreatBattleScene extends Phaser.Scene {
     }
 
     this.watchForWaveClear(waveDef);
+  }
+
+  private waveSpawnXs(waveDef: WaveDef): number[] {
+    if (waveDef.realmId === "winter-mountain") {
+      // Wolves are broad enough that the default center lane covers Wren.
+      // Keep the three-target wave, but make the pack pour around the ward.
+      return [0.22, 0.64, 0.84].map((ratio) => this.scale.width * ratio);
+    }
+
+    return [0.25, 0.5, 0.75].map((ratio) => this.scale.width * ratio);
   }
 
   // §5.5.11 — hunters-horn: jitter one live enemy graphic briefly

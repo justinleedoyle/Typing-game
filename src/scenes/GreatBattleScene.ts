@@ -4154,23 +4154,33 @@ export class GreatBattleScene extends Phaser.Scene {
       this.ambientHandle?.stop();
     }
 
-    // Remove againText from quietLordContainer and place it at world coords
-    // The container was at (width/2, 0); againText was at (0, 280) within it
+    // Remove againText from the fading Quiet Lord body and place it at world
+    // coords. The container was at (width/2, 0); againText was at (0, 280)
+    // within it. Destroy the old body/aura shell after the word detaches so
+    // Phase 3 reads as the final word's seal, not leftover boss chrome.
     this.quietLordContainer.remove(this.againText);
+    this.quietLordContainer.destroy();
+    if (this.strikeLineGraphic?.scene) {
+      this.strikeLineGraphic.destroy();
+    }
     this.againText.setPosition(this.scale.width / 2, 300);
     this.againText.setColor("#d4b8ff");
     this.againText.setDepth(10);
+    this.drawAgainSeal();
     this.attendSpeaker("Again");
     playSceneEventPulse(this, {
       kind: "mote",
       color: 0xd4b8ff,
       x: this.againText.x,
-      y: this.againText.y + 130,
-      depth: 3,
-      ringWidth: 680,
-      ringHeight: 220,
-      count: 14,
-      alpha: 0.12,
+      y: this.againText.y + 72,
+      depth: 6,
+      ringWidth: 330,
+      ringHeight: 82,
+      spreadX: 150,
+      spreadY: 34,
+      count: 10,
+      alpha: 0.1,
+      durationMs: 560,
     });
 
     // Tween to center
@@ -4191,6 +4201,54 @@ export class GreatBattleScene extends Phaser.Scene {
     dimOverlay.fillRect(0, 0, this.scale.width, this.scale.height);
 
     this.time.delayedCall(800, () => this.deliverFinalPhrase());
+  }
+
+  private drawAgainSeal(): void {
+    const seal = this.add
+      .container(this.againText.x, this.againText.y + 68)
+      .setDepth(7)
+      .setAlpha(0)
+      .setScale(0.92);
+
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.24);
+    shadow.fillEllipse(0, 18, 360, 34);
+
+    const sigil = this.add.graphics();
+    sigil.lineStyle(2, 0xd4b8ff, 0.34);
+    sigil.strokeEllipse(0, 0, 318, 62);
+    sigil.lineStyle(1, UI_HEX.brass, 0.28);
+    sigil.strokeEllipse(0, 0, 246, 38);
+    sigil.lineBetween(-122, 0, 122, 0);
+    sigil.lineBetween(0, -18, 0, 18);
+    sigil.fillStyle(0xd4b8ff, 0.2);
+    sigil.fillCircle(0, 0, 5);
+    sigil.fillStyle(UI_HEX.brass, 0.22);
+    sigil.fillCircle(-154, 0, 4);
+    sigil.fillCircle(154, 0, 4);
+
+    seal.add([shadow, sigil]);
+    this.tweens.add({
+      targets: seal,
+      alpha: 0.82,
+      scale: 1,
+      duration: 420,
+      ease: "Sine.easeOut",
+    });
+
+    addContainerWake(this, seal, {
+      kind: "mote",
+      intervalMs: 560,
+      spreadX: 150,
+      spreadY: 22,
+      color: 0xd4b8ff,
+      alpha: 0.12,
+      size: 2.6,
+      depth: 7.2,
+      driftX: 16,
+      driftY: -34,
+      durationMs: 1050,
+    });
   }
 
   private deliverFinalPhrase(): void {

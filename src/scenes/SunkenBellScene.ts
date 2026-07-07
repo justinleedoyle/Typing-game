@@ -3770,18 +3770,28 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private drawOlin(): void {
     if (this.olinImage) return;
-    // Wooden pew (kept procedural — the sprite is just Olin himself).
-    const g = this.add.graphics().setDepth(1.5);
-    g.fillStyle(0x101923, 0.9);
-    g.fillRoundedRect(OLIN_X - 184, OLIN_PEW_Y, 368, 22, 5);
-    g.fillStyle(0x121827, 0.82);
-    g.fillRect(OLIN_X - 176, OLIN_PEW_Y + 18, 12, 58);
-    g.fillRect(OLIN_X + 164, OLIN_PEW_Y + 18, 12, 58);
-    g.lineStyle(1.5, 0x4ab8d6, 0.18);
-    g.lineBetween(OLIN_X - 176, OLIN_PEW_Y + 3, OLIN_X + 176, OLIN_PEW_Y + 3);
+    // Quiet stone shelf for Olin's teaching beat. Keep it low-contrast so it
+    // reads as part of the submerged ruin instead of a UI/debug platform.
+    const g = this.add.graphics().setDepth(0.85);
+    g.fillStyle(0x061018, 0.34);
+    g.fillEllipse(OLIN_X, OLIN_PEW_Y + 21, 326, 42);
+    g.fillStyle(0x26363a, 0.48);
+    g.fillRoundedRect(OLIN_X - 146, OLIN_PEW_Y + 2, 292, 18, 9);
+    g.fillStyle(0x4a6268, 0.2);
+    g.fillRoundedRect(OLIN_X - 132, OLIN_PEW_Y + 5, 72, 4, 2);
+    g.fillRoundedRect(OLIN_X - 34, OLIN_PEW_Y + 4, 112, 5, 2);
+    g.fillStyle(0x0b1822, 0.3);
+    g.fillRoundedRect(OLIN_X - 106, OLIN_PEW_Y + 18, 28, 20, 4);
+    g.fillRoundedRect(OLIN_X + 84, OLIN_PEW_Y + 17, 26, 18, 4);
+    g.lineStyle(1.25, 0x7fc6d1, 0.13);
+    g.lineBetween(OLIN_X - 130, OLIN_PEW_Y + 2, OLIN_X - 18, OLIN_PEW_Y + 2);
+    g.lineBetween(OLIN_X + 20, OLIN_PEW_Y + 2, OLIN_X + 132, OLIN_PEW_Y + 2);
     // Painted Old Olin — a small hunched figure, feet on the pew top. Replaces
     // the old procedural body/head/staff silhouette.
-    const sprite = this.add.image(OLIN_X, OLIN_PEW_Y + 2, "olin").setOrigin(0.5, 1);
+    const sprite = this.add
+      .image(OLIN_X, OLIN_PEW_Y + 2, "olin")
+      .setOrigin(0.5, 1)
+      .setDepth(2);
     sprite.setScale(OLIN_SPRITE_HEIGHT / sprite.height);
     this.olinImage = sprite;
     stageAnchoredSprite(this, sprite, {

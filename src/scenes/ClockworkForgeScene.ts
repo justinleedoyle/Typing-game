@@ -3716,6 +3716,27 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // Soft cast shadow under the deck.
     g.fillStyle(0x000000, 0.3);
     g.fillRect(0, top + 34, w, 12);
+
+    // Foreground lip: the deck body is intentionally behind Wren and the cue
+    // props, but a thin front edge in front of them keeps feet/obstacles visually
+    // tucked into the walkway instead of pasted over a flat stripe.
+    const lip = this.add.graphics().setDepth(4);
+    lip.fillStyle(0x0d0907, 0.58);
+    lip.fillRect(0, top + 28, w, 8);
+    lip.lineStyle(2, 0x725238, 0.34);
+    lip.lineBetween(0, top + 28, w, top + 28);
+    lip.lineStyle(1, 0xf0a35b, 0.16);
+    lip.lineBetween(0, top + 31, w, top + 31);
+    lip.fillStyle(0x000000, 0.18);
+    lip.fillRect(0, top + 36, w, 10);
+
+    for (const px of plateXs) {
+      lip.fillStyle(0x050403, 0.28);
+      lip.fillEllipse(px, top + 35, 120, 10);
+      lip.fillStyle(PALETTE_HEX.ember, 0.18);
+      lip.fillCircle(px - 58, top + 31, 2.2);
+      lip.fillCircle(px + 58, top + 31, 2.2);
+    }
   }
 
   private drawWren(x: number, y: number): void {

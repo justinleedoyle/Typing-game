@@ -961,6 +961,7 @@ export class AlmanacScene extends Phaser.Scene {
       this.attachNavigationAnchor(this.prevTarget, -1);
       this.typingInput.register(this.prevTarget);
       this.prevTarget.playEntryWake({ delayMs: 70, durationMs: 230, offsetY: 10 });
+      this.prevTarget.playIdleFloat({ delayMs: 420, dy: -2, durationMs: 1850 });
     }
 
     if (hasNext) {
@@ -979,6 +980,7 @@ export class AlmanacScene extends Phaser.Scene {
       this.attachNavigationAnchor(this.nextTarget, 1);
       this.typingInput.register(this.nextTarget);
       this.nextTarget.playEntryWake({ delayMs: 105, durationMs: 230, offsetY: 10 });
+      this.nextTarget.playIdleFloat({ delayMs: 485, dy: -2, durationMs: 1940 });
     }
 
     this.closeTarget = new TextWordTarget({
@@ -996,6 +998,7 @@ export class AlmanacScene extends Phaser.Scene {
     this.attachNavigationAnchor(this.closeTarget, 0);
     this.typingInput.register(this.closeTarget);
     this.closeTarget.playEntryWake({ delayMs: 140, durationMs: 230, offsetY: 10 });
+    this.closeTarget.playIdleFloat({ delayMs: 550, dy: -2, durationMs: 2030 });
   }
 
   private attachNavigationAnchor(

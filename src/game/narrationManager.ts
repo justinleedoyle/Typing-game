@@ -262,6 +262,30 @@ export class NarrationManager {
     root.setAlpha(0);
   }
 
+  /** Fade-clear the current caption later, but only if no newer line replaced it. */
+  clearAfter(delayMs: number, fadeMs = 320): void {
+    const lineKey = this.renderedLineKey;
+    if (!lineKey) return;
+    this.scene.time.delayedCall(delayMs, () => {
+      if (this.renderedLineKey !== lineKey || this.text.text.trim().length === 0) return;
+      const root = this.container ?? this.text;
+      this.scene.tweens.killTweensOf(root);
+      if (fadeMs <= 0) {
+        this.clear();
+        return;
+      }
+      this.scene.tweens.add({
+        targets: root,
+        alpha: 0,
+        duration: fadeMs,
+        ease: "Sine.easeIn",
+        onComplete: () => {
+          if (this.renderedLineKey === lineKey) this.clear();
+        },
+      });
+    });
+  }
+
   /** Current visible caption — used by scenes that gate logic on "is the
    *  narrator already saying this?" */
   currentText(): string {

@@ -171,7 +171,7 @@ const HUB_STATIONS = {
     height: ACCOUNT_STATION.height,
   },
 } as const;
-const PORTAL_CALL_WORD_Y = HUB_STATIONS.portalFloor.y - 318;
+const PORTAL_CALL_WORD_Y = HUB_STATIONS.portalFloor.y - 360;
 
 // Maps the last-cleared realm to its Runa desk-line ID in runaLines.ts. The
 // line text now lives there (single source of truth); the hub renders it via
@@ -432,8 +432,9 @@ export class PortalChamberScene extends Phaser.Scene {
           word: "defend hearthward",
           x: this.scale.width / 2,
           y: PORTAL_CALL_WORD_Y,
-          fontSize: 42,
+          fontSize: 38,
           outline: true,
+          frame: "banner",
           onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),
           onAdvance: () => this.pulseStationTyping(HUB_STATIONS.portalFloor),
           onComplete: () => {
@@ -455,8 +456,9 @@ export class PortalChamberScene extends Phaser.Scene {
           word: "begin again",
           x: this.scale.width / 2,
           y: PORTAL_CALL_WORD_Y,
-          fontSize: 38,
+          fontSize: 36,
           outline: true,
+          frame: "banner",
           onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),
           onAdvance: () => this.pulseStationTyping(HUB_STATIONS.portalFloor),
           onComplete: () => {
@@ -502,7 +504,7 @@ export class PortalChamberScene extends Phaser.Scene {
           frame: "banner",
           stationPulse: HUB_STATIONS.portalFloor,
           entryDelayMs: 130,
-          idleAlpha: 0.66,
+          idleAlpha: 0.76,
         },
       );
     }
@@ -515,9 +517,10 @@ export class PortalChamberScene extends Phaser.Scene {
       () => this.enterZone("desk"),
       {
         fontSize: 19,
+        frame: "banner",
         stationPulse: HUB_STATIONS.desk,
         entryDelayMs: 110,
-        idleAlpha: 0.56,
+        idleAlpha: 0.76,
       },
     );
     this.registerNavTarget(
@@ -527,9 +530,10 @@ export class PortalChamberScene extends Phaser.Scene {
       () => this.enterZone("shelf"),
       {
         fontSize: 19,
+        frame: "banner",
         stationPulse: HUB_STATIONS.shelf,
         entryDelayMs: 150,
-        idleAlpha: 0.64,
+        idleAlpha: 0.76,
       },
     );
     // Keep the first portal view quiet: one account station target reveals
@@ -541,9 +545,10 @@ export class PortalChamberScene extends Phaser.Scene {
       () => this.enterZone("account"),
       {
         fontSize: 17,
+        frame: "banner",
         stationPulse: HUB_STATIONS.account,
         entryDelayMs: 190,
-        idleAlpha: 0.58,
+        idleAlpha: 0.72,
       },
     );
   }
@@ -849,9 +854,10 @@ export class PortalChamberScene extends Phaser.Scene {
       () => this.enterZone("portals"),
       {
         fontSize: 20,
+        frame: "banner",
         stationPulse: HUB_STATIONS.portalFloor,
         entryDelayMs,
-        idleAlpha: 0.52,
+        idleAlpha: 0.76,
       },
     );
   }
@@ -1351,7 +1357,8 @@ export class PortalChamberScene extends Phaser.Scene {
       fontSize: 20,
       priority: -1,
       outline: true,
-      idleAlpha: 0.6,
+      frame: "banner",
+      idleAlpha: 0.76,
       onClaim: () => this.focusStation(HUB_STATIONS.almanac),
       onAdvance: () => this.pulseStationTyping(HUB_STATIONS.almanac),
       onComplete: () => {

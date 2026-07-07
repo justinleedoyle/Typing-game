@@ -38,6 +38,9 @@ const TILE = 36;
 const TILE_GAP = 8;
 const TILE_Y = MID_Y + 6;
 const MAX_VISIBLE_SATCHEL_TILES = 8;
+const SATCHEL_SHELF_FULL_W = 414;
+const SATCHEL_SHELF_MIN_W = 138;
+const SATCHEL_SHELF_CONTENT_PAD_W = 26;
 const SATCHEL_WAKE_DELAY_MS = 180;
 const BAND_ENTRY_WAKE_DELAY_MS = 90;
 // One-shot card slots
@@ -122,6 +125,31 @@ function noticeColorsFor(label: string): NoticeColors {
   }
 }
 
+function displayedSatchelTileCount(
+  scene: Phaser.Scene,
+  iconIds: readonly string[],
+): number {
+  const drawableCount = iconIds.filter((id) => {
+    const icon = satchelIconFor(id);
+    return icon !== null && scene.textures.exists(icon.key);
+  }).length;
+  const visibleCount = Math.min(drawableCount, MAX_VISIBLE_SATCHEL_TILES);
+  const overflowCount = drawableCount - visibleCount;
+  return visibleCount + (overflowCount > 0 ? 1 : 0);
+}
+
+function satchelShelfWidthFor(displayedCount: number, labelText: string): number {
+  if (labelText.trim() === "") return SATCHEL_SHELF_FULL_W;
+  const rowW =
+    displayedCount > 0
+      ? displayedCount * TILE + Math.max(0, displayedCount - 1) * TILE_GAP
+      : 0;
+  return Math.min(
+    SATCHEL_SHELF_FULL_W,
+    Math.max(SATCHEL_SHELF_MIN_W, rowW + SATCHEL_SHELF_CONTENT_PAD_W),
+  );
+}
+
 export class ConsoleBand {
   /** World Y of the band's top edge — scenes keep the action above this. */
   readonly bandTopY: number;
@@ -150,6 +178,7 @@ export class ConsoleBand {
   private renderedPortraitKey = "";
   private portraitInitialized = false;
   private satchelTileCount = 0;
+  private satchelShelfWidth = SATCHEL_SHELF_FULL_W;
   private readonly satchelIconTiles = new Map<string, Phaser.GameObjects.Container>();
 
   constructor(scene: Phaser.Scene, opts: ConsoleBandOptions = {}) {
@@ -164,11 +193,17 @@ export class ConsoleBand {
       .setDepth(DEPTH);
 
     const maxOneShots = Math.max(0, opts.maxOneShots ?? 3);
+    const passiveIconIds = opts.passiveIconIds ?? [];
+    const satchelLabel = opts.satchelLabel ?? "satchel";
+    this.satchelShelfWidth = satchelShelfWidthFor(
+      displayedSatchelTileCount(scene, passiveIconIds),
+      satchelLabel,
+    );
 
-    this.drawSurface(scene, W, opts.showMeterShelf ?? true);
+    this.drawSurface(scene, W, opts.showMeterShelf ?? true, this.satchelShelfWidth);
     this.drawPortraitFrame(scene);
     this.setPortrait(opts.portraitKey, opts.portraitName);
-    this.drawSatchel(scene, opts.passiveIconIds ?? [], opts.satchelLabel ?? "satchel");
+    this.drawSatchel(scene, passiveIconIds, satchelLabel);
     this.drawObjectiveReadout(scene, W);
     this.playBandEntryWake();
 
@@ -396,7 +431,12 @@ export class ConsoleBand {
     return "#e8dcc0";
   }
 
-  private drawSurface(scene: Phaser.Scene, W: number, showMeterShelf: boolean): void {
+  private drawSurface(
+    scene: Phaser.Scene,
+    W: number,
+    showMeterShelf: boolean,
+    satchelShelfW: number,
+  ): void {
     this.bandWidth = W;
     const g = scene.add.graphics();
     // Soft cast shadow rising onto the world, so the band reads as foreground.
@@ -414,12 +454,12 @@ export class ConsoleBand {
     if (showMeterShelf) {
       g.fillRoundedRect(142, 42, 336, 104, 10);
     }
-    g.fillRoundedRect(SATCHEL_X - 22, 42, 414, 104, 10);
+    g.fillRoundedRect(SATCHEL_X - 22, 42, satchelShelfW, 104, 10);
     g.lineStyle(1, UI_HEX.frame, 0.2);
     if (showMeterShelf) {
       g.strokeRoundedRect(142, 42, 336, 104, 10);
     }
-    g.strokeRoundedRect(SATCHEL_X - 22, 42, 414, 104, 10);
+    g.strokeRoundedRect(SATCHEL_X - 22, 42, satchelShelfW, 104, 10);
     g.lineStyle(1, UI_HEX.brass, 0.12);
     g.beginPath();
     if (showMeterShelf) {
@@ -427,7 +467,7 @@ export class ConsoleBand {
       g.lineTo(454, 63);
     }
     g.moveTo(SATCHEL_X, 63);
-    g.lineTo(SATCHEL_X + 370, 63);
+    g.lineTo(SATCHEL_X + Math.max(0, satchelShelfW - 44), 63);
     g.strokePath();
     g.lineStyle(1, 0x6e5a36, 0.12);
     for (let y = 24; y < BAND_H - 18; y += 31) {
@@ -700,7 +740,7 @@ export class ConsoleBand {
     const hasTiles = this.satchelTileCount > 0;
     const rowW = hasTiles
       ? this.satchelTileCount * TILE + Math.max(0, this.satchelTileCount - 1) * TILE_GAP
-      : 414;
+      : Math.max(TILE, this.satchelShelfWidth - 20);
     const x = SATCHEL_X - 10;
     const y = TILE_Y - TILE / 2 - 10;
     const wake = this.scene.add.graphics().setAlpha(0);

@@ -517,7 +517,7 @@ export class PortalChamberScene extends Phaser.Scene {
         fontSize: 19,
         stationPulse: HUB_STATIONS.desk,
         entryDelayMs: 110,
-        idleAlpha: 0.52,
+        idleAlpha: 0.56,
       },
     );
     this.registerNavTarget(
@@ -529,7 +529,7 @@ export class PortalChamberScene extends Phaser.Scene {
         fontSize: 19,
         stationPulse: HUB_STATIONS.shelf,
         entryDelayMs: 150,
-        idleAlpha: 0.56,
+        idleAlpha: 0.64,
       },
     );
     // Keep the first portal view quiet: one account station target reveals
@@ -543,7 +543,7 @@ export class PortalChamberScene extends Phaser.Scene {
         fontSize: 17,
         stationPulse: HUB_STATIONS.account,
         entryDelayMs: 190,
-        idleAlpha: 0.44,
+        idleAlpha: 0.58,
       },
     );
   }
@@ -2109,7 +2109,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.shelf.width,
       HUB_STATIONS.shelf.height,
       "your shelf",
-      { alpha: 0.07, labelAlpha: 0 },
+      { alpha: 0.11, labelAlpha: 0 },
     );
     this.drawStationPlaque(
       HUB_STATIONS.account.x,
@@ -2118,7 +2118,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.account.height,
       "account",
       {
-        alpha: 0.12,
+        alpha: 0.17,
         labelAlpha: 0,
       },
     );

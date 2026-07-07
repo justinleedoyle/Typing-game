@@ -1328,24 +1328,30 @@ export class SunkenBellScene extends Phaser.Scene {
 
     const tether = this.add.graphics();
     const tetherDrop = centerLantern ? 176 : 148;
-    tether.lineStyle(1.5, 0x7daebc, centerLantern ? 0.48 : 0.34);
+    tether.lineStyle(3, 0x071a20, centerLantern ? 0.42 : 0.3);
     tether.lineBetween(0, -tetherDrop, 0, -38);
-    tether.lineStyle(1, 0xd7fbff, centerLantern ? 0.28 : 0.18);
+    tether.lineStyle(1.5, 0x3f6973, centerLantern ? 0.42 : 0.28);
+    tether.lineBetween(0, -tetherDrop, 0, -38);
+    tether.lineStyle(1, 0x6d9aa4, centerLantern ? 0.24 : 0.14);
     for (let linkY = -tetherDrop + 18; linkY < -52; linkY += 24) {
       tether.strokeEllipse(0, linkY, 8, 16);
     }
-    tether.lineStyle(2, 0x8fb8bc, centerLantern ? 0.4 : 0.28);
+    tether.lineStyle(3, 0x071a20, centerLantern ? 0.36 : 0.24);
+    tether.lineBetween(-28, -tetherDrop - 8, 28, -tetherDrop - 8);
+    tether.lineStyle(2, 0x5a7f7d, centerLantern ? 0.34 : 0.22);
     tether.lineBetween(-28, -tetherDrop - 8, 28, -tetherDrop - 8);
     tether.strokeCircle(0, -tetherDrop - 2, 7);
-    tether.lineStyle(1.3, 0xf3ead2, centerLantern ? 0.34 : 0.24);
+    tether.lineStyle(1.3, 0xa9c3bd, centerLantern ? 0.24 : 0.16);
     tether.lineBetween(-22, -38, 22, -38);
     container.add(tether);
 
     const glow = this.add.graphics().setAlpha(centerLantern ? 0.74 : 0.58);
-    glow.fillStyle(0x74d5df, centerLantern ? 0.13 : 0.08);
-    glow.fillEllipse(0, 4, centerLantern ? 132 : 106, centerLantern ? 138 : 118);
-    glow.lineStyle(2, 0x74d5df, centerLantern ? 0.22 : 0.13);
-    glow.strokeEllipse(0, 4, centerLantern ? 110 : 88, centerLantern ? 118 : 102);
+    glow.fillStyle(0x3d8d95, centerLantern ? 0.1 : 0.06);
+    glow.fillEllipse(0, 8, centerLantern ? 112 : 92, centerLantern ? 122 : 100);
+    glow.fillStyle(0xc9a14a, centerLantern ? 0.08 : 0.05);
+    glow.fillEllipse(0, 6, centerLantern ? 54 : 44, centerLantern ? 76 : 64);
+    glow.lineStyle(1.2, 0x70a8ad, centerLantern ? 0.14 : 0.08);
+    glow.strokeEllipse(0, 7, centerLantern ? 92 : 74, centerLantern ? 104 : 86);
     container.add(glow);
 
     const body = this.add.graphics();
@@ -1353,8 +1359,8 @@ export class SunkenBellScene extends Phaser.Scene {
     container.add(body);
 
     const flame = this.add.graphics().setAlpha(centerLantern ? 0.88 : 0.72);
-    flame.fillStyle(0xc9a14a, centerLantern ? 0.58 : 0.45);
-    flame.fillEllipse(0, 4, centerLantern ? 30 : 24, centerLantern ? 42 : 36);
+    flame.fillStyle(0xc9a14a, centerLantern ? 0.48 : 0.36);
+    flame.fillEllipse(0, 4, centerLantern ? 28 : 22, centerLantern ? 40 : 34);
     flame.fillStyle(0xf3ead2, centerLantern ? 0.84 : 0.72);
     flame.fillEllipse(0, 2, centerLantern ? 12 : 10, centerLantern ? 24 : 20);
     container.add(flame);
@@ -1410,23 +1416,31 @@ export class SunkenBellScene extends Phaser.Scene {
     centerLantern: boolean,
   ): void {
     g.clear();
-    const bodyAlpha = lit ? 0.96 : centerLantern ? 0.9 : 0.8;
-    const rimAlpha = lit ? 0.86 : centerLantern ? 0.68 : 0.48;
+    const bodyAlpha = lit ? 0.96 : centerLantern ? 0.86 : 0.74;
+    const rimAlpha = lit ? 0.82 : centerLantern ? 0.48 : 0.34;
     const cageWidth = centerLantern ? 48 : 42;
     const shoulderWidth = cageWidth + 10;
     const bottomY = centerLantern ? 44 : 40;
-    const cageColor = lit ? 0x274a52 : 0x203a46;
+    const cageColor = lit ? 0x274a52 : 0x173039;
 
-    g.fillStyle(0x142833, bodyAlpha * 0.82);
+    g.fillStyle(0x06171d, bodyAlpha * 0.42);
+    g.fillEllipse(0, 31, shoulderWidth + 12, 11);
+
+    g.fillStyle(0x102832, bodyAlpha * 0.94);
     g.fillEllipse(0, -31, shoulderWidth, 18);
-    g.lineStyle(2, 0xd7fbff, rimAlpha * 0.72);
+    g.lineStyle(3, 0x06171d, bodyAlpha * 0.74);
+    g.strokeEllipse(0, -31, shoulderWidth, 18);
+    g.lineStyle(1.5, 0x699ca2, rimAlpha * 0.56);
     g.strokeEllipse(0, -31, shoulderWidth, 18);
 
     g.fillStyle(cageColor, bodyAlpha);
     g.fillRoundedRect(-cageWidth / 2, -30, cageWidth, 58, 11);
     g.fillTriangle(-cageWidth / 2 + 6, 22, cageWidth / 2 - 6, 22, 0, bottomY);
 
-    g.lineStyle(2, 0xf3ead2, rimAlpha);
+    g.fillStyle(0xc9a14a, lit ? 0.22 : centerLantern ? 0.14 : 0.1);
+    g.fillRoundedRect(-cageWidth / 2 + 8, -19, cageWidth - 16, 36, 8);
+
+    g.lineStyle(3, 0x06171d, bodyAlpha * 0.72);
     g.strokeRoundedRect(-cageWidth / 2, -30, cageWidth, 58, 11);
     g.beginPath();
     g.moveTo(-cageWidth / 2 + 6, 22);
@@ -1435,16 +1449,29 @@ export class SunkenBellScene extends Phaser.Scene {
     g.closePath();
     g.strokePath();
 
-    g.lineStyle(1, 0x9fdce7, lit ? 0.74 : centerLantern ? 0.56 : 0.42);
+    g.lineStyle(1.6, 0x8db7ae, rimAlpha);
+    g.strokeRoundedRect(-cageWidth / 2, -30, cageWidth, 58, 11);
+    g.beginPath();
+    g.moveTo(-cageWidth / 2 + 6, 22);
+    g.lineTo(cageWidth / 2 - 6, 22);
+    g.lineTo(0, bottomY);
+    g.closePath();
+    g.strokePath();
+
+    g.lineStyle(1.4, 0x06171d, 0.45);
+    g.lineBetween(-12, -20, -12, 25);
+    g.lineBetween(0, -22, 0, bottomY - 5);
+    g.lineBetween(12, -20, 12, 25);
+    g.lineStyle(1, 0x75adb6, lit ? 0.58 : centerLantern ? 0.36 : 0.26);
     g.lineBetween(-12, -20, -12, 25);
     g.lineBetween(0, -22, 0, bottomY - 5);
     g.lineBetween(12, -20, 12, 25);
 
-    g.lineStyle(1.2, 0xf3ead2, lit ? 0.44 : 0.26);
+    g.lineStyle(1.2, 0x90b4ad, lit ? 0.38 : 0.2);
     g.lineBetween(-cageWidth / 2 + 5, -5, cageWidth / 2 - 5, -5);
     g.lineBetween(-cageWidth / 2 + 7, 15, cageWidth / 2 - 7, 15);
 
-    g.fillStyle(0xd7fbff, lit ? 0.68 : 0.38);
+    g.fillStyle(0xd7fbff, lit ? 0.56 : 0.24);
     g.fillCircle(0, bottomY + 2, centerLantern ? 3.8 : 3.2);
   }
 

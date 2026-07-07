@@ -75,6 +75,8 @@ export interface ConsoleBandOptions {
    *  its own bottom meter (Winter's candles, Bell's breath) docks that meter at
    *  `satchelAnchor` and relabels the zone. */
   satchelLabel?: string;
+  /** Draw the left meter shelf. Disable only for scenes with no meter HUD. */
+  showMeterShelf?: boolean;
 }
 
 interface NoticeColors {
@@ -162,7 +164,7 @@ export class ConsoleBand {
 
     const maxOneShots = Math.max(0, opts.maxOneShots ?? 3);
 
-    this.drawSurface(scene, W);
+    this.drawSurface(scene, W, opts.showMeterShelf ?? true);
     this.drawPortraitFrame(scene);
     this.setPortrait(opts.portraitKey, opts.portraitName);
     this.drawSatchel(scene, opts.passiveIconIds ?? [], opts.satchelLabel ?? "satchel");
@@ -376,7 +378,7 @@ export class ConsoleBand {
     return initials.toUpperCase();
   }
 
-  private drawSurface(scene: Phaser.Scene, W: number): void {
+  private drawSurface(scene: Phaser.Scene, W: number, showMeterShelf: boolean): void {
     this.bandWidth = W;
     const g = scene.add.graphics();
     // Soft cast shadow rising onto the world, so the band reads as foreground.
@@ -391,15 +393,21 @@ export class ConsoleBand {
     // scenes from reading as a flat empty HUD slab while staying behind meters,
     // relic icons, one-shot cards, and the objective strip.
     g.fillStyle(0x0f0c08, 0.14);
-    g.fillRoundedRect(142, 42, 336, 104, 10);
+    if (showMeterShelf) {
+      g.fillRoundedRect(142, 42, 336, 104, 10);
+    }
     g.fillRoundedRect(SATCHEL_X - 22, 42, 414, 104, 10);
     g.lineStyle(1, UI_HEX.frame, 0.2);
-    g.strokeRoundedRect(142, 42, 336, 104, 10);
+    if (showMeterShelf) {
+      g.strokeRoundedRect(142, 42, 336, 104, 10);
+    }
     g.strokeRoundedRect(SATCHEL_X - 22, 42, 414, 104, 10);
     g.lineStyle(1, UI_HEX.brass, 0.12);
     g.beginPath();
-    g.moveTo(164, 63);
-    g.lineTo(454, 63);
+    if (showMeterShelf) {
+      g.moveTo(164, 63);
+      g.lineTo(454, 63);
+    }
     g.moveTo(SATCHEL_X, 63);
     g.lineTo(SATCHEL_X + 370, 63);
     g.strokePath();

@@ -19,6 +19,7 @@ import { playClaim } from "../audio/claim";
 import { setAudioLevel } from "../audio/context";
 import {
   addAmbientDrift,
+  addBackdropDrift,
   addContainerWake,
   addLivingLight,
   attachWordBodyAnchor,
@@ -35,6 +36,7 @@ import {
 import { TypingInputController } from "../game/typingInput";
 import { cornerTicks, UI_CSS, UI_HEX } from "../game/ui/uiTheme";
 import { TextWordTarget } from "../game/wordTarget";
+import hubBackdrop from "../../art/references/hub-portal-chamber-clean.png";
 
 interface SettingsSceneData {
   store: SaveStore;
@@ -107,15 +109,13 @@ export class SettingsScene extends Phaser.Scene {
     this.renameBuffer = "";
   }
 
+  preload(): void {
+    this.load.image("settings-hub-backdrop", hubBackdrop);
+  }
+
   create(): void {
     this.cameras.main.fadeIn(350, 11, 10, 15);
-
-    // Dim ink wash so the menu reads as its own quiet room, matching the
-    // Almanac's "stepped out of the world for a moment" treatment.
-    const g = this.add.graphics();
-    g.fillStyle(0x0b0a0f, 0.95);
-    g.fillRect(0, 0, this.scale.width, this.scale.height);
-    g.setDepth(-20);
+    this.drawLedgerBackdrop();
 
     addAmbientDrift(this, {
       kind: "mote",
@@ -213,6 +213,28 @@ export class SettingsScene extends Phaser.Scene {
 
     this.renderMenu();
     this.playSettingsEntryWake();
+  }
+
+  private drawLedgerBackdrop(): void {
+    const backdrop = this.add
+      .image(0, 0, "settings-hub-backdrop")
+      .setOrigin(0)
+      .setDisplaySize(this.scale.width, this.scale.height)
+      .setAlpha(0.38)
+      .setDepth(-100);
+    addBackdropDrift(this, backdrop, {
+      durationMs: 22000,
+      driftX: -2,
+      driftY: -1,
+      scale: 1.008,
+    });
+
+    // The ledger belongs to the Portal Chamber, but the menu still needs the
+    // same calm contrast it had as a standalone settings screen.
+    const wash = this.add.graphics();
+    wash.fillStyle(0x0b0a0f, 0.76);
+    wash.fillRect(0, 0, this.scale.width, this.scale.height);
+    wash.setDepth(-90);
   }
 
   private startSettingsSourceWakes(): void {

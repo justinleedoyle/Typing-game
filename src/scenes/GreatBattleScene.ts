@@ -260,10 +260,10 @@ function finaleEnemyArtForRealm(realmId: string): FinaleEnemyArtSpec {
       return {
         textureKey: "finale-wolf-pack",
         height: 150,
-        shadowWidth: 240,
-        shadowHeight: 22,
+        shadowWidth: 226,
+        shadowHeight: 14,
         shadowY: 72,
-        shadowAlpha: 0.24,
+        shadowAlpha: 0.08,
         spriteY: -6,
         alpha: 0.98,
         tint: 0xdfeaff,
@@ -2530,20 +2530,26 @@ export class GreatBattleScene extends Phaser.Scene {
     const footing = this.add.graphics();
 
     if (realmId === "winter-mountain") {
-      footing.fillStyle(0x071018, 0.22);
-      footing.fillEllipse(10, 75, 238, 22);
-      footing.fillStyle(0xbfd3e4, 0.12);
-      footing.fillEllipse(10, 69, 216, 14);
-      footing.lineStyle(3, 0xe6f3ff, 0.14);
-      footing.lineBetween(-104, 61, -50, 59);
-      footing.lineBetween(-24, 60, 34, 59);
-      footing.lineBetween(76, 61, 124, 60);
-      footing.lineStyle(1.5, 0x9fd7ff, 0.16);
-      footing.lineBetween(-92, 72, -34, 75);
-      footing.lineBetween(18, 75, 88, 72);
-      footing.fillStyle(0xe6f3ff, 0.14);
-      footing.fillCircle(-72, 62, 2.4);
-      footing.fillCircle(64, 61, 2.2);
+      footing.fillStyle(0xbfd3e4, 0.04);
+      footing.fillEllipse(8, 72, 184, 12);
+      footing.fillStyle(0x071018, 0.05);
+      footing.fillEllipse(12, 79, 194, 10);
+      footing.lineStyle(2, 0xe6f3ff, 0.075);
+      footing.lineBetween(-104, 62, -76, 61);
+      footing.lineBetween(-52, 60, -16, 59);
+      footing.lineBetween(26, 60, 62, 59);
+      footing.lineBetween(92, 62, 122, 61);
+      footing.lineStyle(1.2, 0x9fd7ff, 0.08);
+      footing.lineBetween(-88, 72, -50, 74);
+      footing.lineBetween(-10, 75, 34, 73);
+      footing.lineBetween(72, 74, 108, 72);
+      footing.fillStyle(0xe6f3ff, 0.085);
+      footing.fillCircle(-76, 62, 1.9);
+      footing.fillCircle(-24, 61, 1.5);
+      footing.fillCircle(54, 60, 1.8);
+      footing.fillStyle(0xbfd3e4, 0.06);
+      footing.fillEllipse(-36, 68, 22, 4);
+      footing.fillEllipse(48, 69, 24, 4);
       body.add(footing);
       return;
     }

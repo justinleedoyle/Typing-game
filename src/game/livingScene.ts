@@ -1201,8 +1201,6 @@ export function attachWordBodyAnchor(
     g.clear();
     g.lineStyle(lineWidth, color, alpha);
     g.lineBetween(fromX, fromY, toX, toY);
-    g.fillStyle(color, alpha * 0.7);
-    g.fillCircle(toX, toY, 2.5);
   };
 
   const handle: WordBodyAnchorHandle = {

@@ -898,16 +898,16 @@ export class GreatBattleScene extends Phaser.Scene {
     playSceneEventPulse(this, {
       kind: "mote",
       color: 0xd8e9ff,
-      x: this.scale.width / 2,
-      y: 650,
+      x: WALL_WARD.x,
+      y: WALL_WARD.y - 26,
       depth: 5,
       durationMs: 720,
-      ringWidth: 1320,
-      ringHeight: 220,
-      count: 14,
-      alpha: 0.085,
-      spreadX: 560,
-      spreadY: 64,
+      ringWidth: WALL_WARD.width * 0.58,
+      ringHeight: 62,
+      count: 10,
+      alpha: 0.07,
+      spreadX: WALL_WARD.width * 0.26,
+      spreadY: 28,
     });
   }
 
@@ -916,33 +916,34 @@ export class GreatBattleScene extends Phaser.Scene {
     playSceneEventPulse(this, {
       kind: "mote",
       color: 0xfff1ad,
-      x: this.scale.width / 2,
-      y: 650,
+      x: WALL_WARD.x,
+      y: WALL_WARD.y - 32,
       depth: 5,
       durationMs: 700,
-      ringWidth: 1220,
-      ringHeight: 190,
-      count: 12,
-      alpha: 0.075,
-      spreadX: 520,
-      spreadY: 58,
+      ringWidth: WALL_WARD.width * 0.54,
+      ringHeight: 56,
+      count: 10,
+      alpha: 0.065,
+      spreadX: WALL_WARD.width * 0.24,
+      spreadY: 26,
     });
   }
 
   private playSabotageWrenchWaveCue(): void {
+    this.playWallWardPulse("hold");
     playSceneEventPulse(this, {
       kind: "ember",
       color: PALETTE_HEX.ember,
-      x: this.scale.width / 2,
-      y: 716,
+      x: WALL_WARD.x,
+      y: WALL_WARD.y - 20,
       depth: 5,
       durationMs: 520,
-      ringWidth: 1040,
-      ringHeight: 150,
-      count: 9,
-      alpha: 0.07,
-      spreadX: 420,
-      spreadY: 42,
+      ringWidth: WALL_WARD.width * 0.5,
+      ringHeight: 54,
+      count: 8,
+      alpha: 0.065,
+      spreadX: WALL_WARD.width * 0.22,
+      spreadY: 24,
     });
   }
 
@@ -2071,12 +2072,14 @@ export class GreatBattleScene extends Phaser.Scene {
     playSceneEventPulse(this, {
       kind: "ash",
       color: 0xc9a14a,
-      x: this.scale.width / 2,
-      y: 720,
-      ringWidth: 1120,
-      ringHeight: 170,
-      count: 12,
-      alpha: 0.1,
+      x: WALL_WARD.x,
+      y: WALL_WARD.y - 24,
+      ringWidth: WALL_WARD.width * 0.6,
+      ringHeight: 64,
+      count: 10,
+      alpha: 0.075,
+      spreadX: WALL_WARD.width * 0.28,
+      spreadY: 28,
     });
     this.playWallWardPulse("wave");
 

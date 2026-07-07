@@ -1148,13 +1148,25 @@ export class GreatBattleScene extends Phaser.Scene {
     return new TextWordTarget({ outline: true, depth: 6, ...opts });
   }
 
-  private registerActiveTarget(target: TextWordTarget): void {
+  private registerActiveTarget(
+    target: TextWordTarget,
+    opts: { idleFloat?: boolean; idleIndex?: number } = {},
+  ): void {
+    const entryMs = 180;
     this.typingInput.register(target);
     this.activeTargets.push(target);
     target.playEntryWake({
-      durationMs: 180,
+      durationMs: entryMs,
       offsetY: 0,
     });
+    if (opts.idleFloat) {
+      const idleIndex = opts.idleIndex ?? 0;
+      target.playIdleFloat({
+        delayMs: entryMs + 120 + idleIndex * 70,
+        dy: -2,
+        durationMs: 1800 + idleIndex * 90,
+      });
+    }
   }
 
   private lordDuelWordPosition(
@@ -3228,7 +3240,7 @@ export class GreatBattleScene extends Phaser.Scene {
         ),
       );
     }
-    this.registerActiveTarget(target);
+    this.registerActiveTarget(target, { idleFloat: true });
   }
 
   private showFacetSigil(facet: Facet, mode: "countered" | "threat"): void {
@@ -3515,7 +3527,7 @@ export class GreatBattleScene extends Phaser.Scene {
         });
       },
     });
-    this.registerActiveTarget(target);
+    this.registerActiveTarget(target, { idleFloat: true, idleIndex: idx });
   }
 
   private startPhase2b(): void {
@@ -3543,7 +3555,7 @@ export class GreatBattleScene extends Phaser.Scene {
           this.time.delayedCall(600, () => this.runPhase2bRounds());
         },
       });
-      this.registerActiveTarget(bindTarget);
+      this.registerActiveTarget(bindTarget, { idleFloat: true });
       return;
     }
 
@@ -3583,7 +3595,7 @@ export class GreatBattleScene extends Phaser.Scene {
         sourceY: 548,
         ringRadius: 36,
       });
-      this.registerActiveTarget(flankTarget);
+      this.registerActiveTarget(flankTarget, { idleFloat: true });
       return;
     }
 
@@ -3646,7 +3658,7 @@ export class GreatBattleScene extends Phaser.Scene {
           }
         },
       });
-      this.registerActiveTarget(target);
+      this.registerActiveTarget(target, { idleFloat: true, idleIndex: i });
     }
 
     // §5.5.9 — lantern-moth: lights throne when shadow falls (injected ~halfway through)
@@ -3694,7 +3706,7 @@ export class GreatBattleScene extends Phaser.Scene {
         sourceY: wordPos.y + 46,
         ringRadius: 38,
       });
-      this.registerActiveTarget(bonusTarget);
+      this.registerActiveTarget(bonusTarget, { idleFloat: true });
     });
   }
 
@@ -3749,7 +3761,7 @@ export class GreatBattleScene extends Phaser.Scene {
       sourceY: 510,
       ringRadius: 36,
     });
-    this.registerActiveTarget(bonusTarget);
+    this.registerActiveTarget(bonusTarget, { idleFloat: true });
     this.time.delayedCall(5200, () => {
       if (companion.scene) this.dismissFinaleCompanionAction(companion, 330, 510);
     });
@@ -3838,7 +3850,7 @@ export class GreatBattleScene extends Phaser.Scene {
         });
       },
     }, swirl);
-    this.registerActiveTarget(defenseTarget);
+    this.registerActiveTarget(defenseTarget, { idleFloat: true });
   }
 
   // §5.5.9 — wisp-cat: extra phrase target spawns mid-phase (flank)
@@ -3876,7 +3888,7 @@ export class GreatBattleScene extends Phaser.Scene {
       sourceY: 550,
       ringRadius: 36,
     });
-    this.registerActiveTarget(flankTarget);
+    this.registerActiveTarget(flankTarget, { idleFloat: true });
   }
 
   private onPhase2Round1Done(): void {
@@ -3939,7 +3951,7 @@ export class GreatBattleScene extends Phaser.Scene {
           }
         },
       });
-      this.registerActiveTarget(target);
+      this.registerActiveTarget(target, { idleFloat: true, idleIndex: i });
     }
   }
 
@@ -4053,7 +4065,7 @@ export class GreatBattleScene extends Phaser.Scene {
       color: this.isForceDuel ? UI_HEX.ember : UI_HEX.brass,
       ringRadius: 44,
     });
-    this.registerActiveTarget(target);
+    this.registerActiveTarget(target, { idleFloat: true, idleIndex: idx });
   }
 
   // §5.5.11 kindness duel: a slip during a counter beat costs a candle, but at
@@ -4213,7 +4225,7 @@ export class GreatBattleScene extends Phaser.Scene {
         });
       },
     });
-    this.registerActiveTarget(target);
+    this.registerActiveTarget(target, { idleFloat: true, idleIndex: idx });
     this.brassSongbirdActiveTarget = target;
 
     // §5.5.9 — brass-songbird: if Wren stalls >4s on a word, sing the next 3 letters

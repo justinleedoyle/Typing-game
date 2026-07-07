@@ -95,11 +95,12 @@ const ARCHES: readonly ArchSpec[] = [
 const REALM_SEQUENCE = ARCHES.map((a) => a.id);
 
 // Wren's X position when standing in each zone — aligned to the painted
-// desk (left), portal floor (centre) and display cabinet (right).
+// desk (left), portal floor (centre), and utility stations. Shelf uses the
+// cabinet's approach lane so the expanded keepsakes stay on the shelves.
 const ZONE_X: Record<Zone, number> = {
   desk:    300,
   portals: 990,
-  shelf:   1660,
+  shelf:   1510,
   account: 1660,
 };
 const WREN_Y = 900;

@@ -725,7 +725,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.setAmbientLanternFieldAlpha(0.12, 520);
     this.showPathCue("balance");
     this.time.delayedCall(780, () => this.stageWrenAtPathEntrance());
-    this.time.delayedCall(2800, () => this.runPathBeats(0));
+    this.time.delayedCall(1500, () => this.runPathBeats(0));
   }
 
   /** Three exploration beats: balance / lantern / stepping */

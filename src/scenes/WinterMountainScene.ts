@@ -44,6 +44,7 @@ import {
   playBodyTypePulse,
   playClaimLine,
   playActorAttention,
+  playPortalArrivalWake,
   pulseUiObject,
   playRealmClearResonance,
   playSceneEventPulse,
@@ -762,6 +763,10 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private startAct1(): void {
     this.narration.say("winter_intro_arrival");
+    playPortalArrivalWake(this, this.wrenContainer, {
+      kind: "snow",
+      color: PALETTE_HEX.frost,
+    });
     this.band.setObjective("Type each trail word to move through the pass.");
     this.showRiverCue("lift");
     this.time.delayedCall(520, () => this.stageWrenAtTrailEntrance());

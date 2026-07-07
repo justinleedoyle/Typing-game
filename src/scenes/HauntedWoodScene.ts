@@ -52,6 +52,7 @@ import {
   playBodyImpact,
   playBodyTypePulse,
   playClaimLine,
+  playPortalArrivalWake,
   playRealmClearResonance,
   playSceneEventPulse,
   stageCompanionCameo,
@@ -667,6 +668,10 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startArrival(): void {
     this.narration.say("wood_intro_arrival");
+    playPortalArrivalWake(this, this.wrenContainer, {
+      kind: "mist",
+      color: 0xd8e2cf,
+    });
     this.band.setObjective("Type the path words to reach the lantern in the trees.");
     this.setAmbientMistFieldAlpha(0.2, 520);
     this.showPathCue(0);

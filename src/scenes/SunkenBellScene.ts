@@ -367,15 +367,13 @@ export class SunkenBellScene extends Phaser.Scene {
     this.graceSaves = this.combat.gracePool;
 
     // UI cohesion — the console band houses the meters + the Bell's "air" stake.
-    // The breath meter is a bespoke bottom gauge, so it docks into the band's
-    // satchel zone (satchelLabel:"" — like Winter's candles); the passive relics
-    // earned in earlier realms still surface as icon tiles in that zone.
+    // Passive relics own the satchel lane; the breath meter uses the otherwise
+    // empty right-side slot so late-game icon overflows never collide with it.
     this.band = new ConsoleBand(this, {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,
-      maxOneShots: 0,
-      satchelLabel: "",
+      maxOneShots: 1,
     });
     const band = this.band;
 
@@ -427,10 +425,12 @@ export class SunkenBellScene extends Phaser.Scene {
     this.offbeatRing.x = WREN_X;
     this.offbeatRing.y = ringY;
 
-    // Air gauge — docked into the console band's satchel zone (the bespoke
-    // bottom meter, like Winter's candles), offset right of the passive relic
-    // tiles. Hidden until choir-wave combat begins. Depth > the band surface.
-    this.breathAnchor = { x: band.satchelAnchor.x + 330, y: band.satchelAnchor.y };
+    // Air gauge — docked into the Bell's empty one-shot slot. Hidden until
+    // choir-wave combat begins. Depth > the band surface.
+    this.breathAnchor = band.oneShotSlots[0] ?? {
+      x: band.satchelAnchor.x + 520,
+      y: band.satchelAnchor.y,
+    };
     this.breathBar = this.add.graphics().setDepth(1500).setAlpha(0);
     this.breathLabel = this.add
       .text(this.breathAnchor.x, this.breathAnchor.y - 38, "air", {

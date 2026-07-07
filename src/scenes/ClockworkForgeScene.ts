@@ -3663,38 +3663,38 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private drawCatwalk(): void {
-    // A suspended iron walkway for Wren to stand on. It needs real THICKNESS +
-    // visible supports so Wren reads as standing on a structure, not floating —
-    // but without the old bright brass railing + grating dashes that read as a UI
-    // overlay across the painting.
+    // A suspended iron walkway for Wren to stand on. Keep it tied to Wren's
+    // actual foot line; a taller full-width plate reads like UI chrome over the
+    // painting instead of a ledge inside the forge.
     const g = this.add.graphics().setDepth(-4);
     const w = this.scale.width;
-    const top = CATWALK_Y;
+    const surfaceY = CATWALK_Y + 20;
     // Support trusses descending toward the foundry floor (drawn first, so the
     // deck sits in front of them and they read as holding it up).
-    g.fillStyle(0x191310, 1);
+    g.fillStyle(0x17100d, 0.74);
     for (const sx of [150, 470, 820, 1100, 1450, 1770]) {
-      g.fillRect(sx, top + 34, 12, 150);
-      g.fillRect(sx + 30, top + 34, 12, 150);
+      g.fillRect(sx, surfaceY + 14, 9, 132);
+      g.fillRect(sx + 30, surfaceY + 14, 9, 132);
       // a cross-brace
-      g.lineStyle(3, 0x191310, 1);
+      g.lineStyle(2, 0x17100d, 0.74);
       g.beginPath();
-      g.moveTo(sx + 6, top + 44);
-      g.lineTo(sx + 36, top + 150);
-      g.moveTo(sx + 36, top + 44);
-      g.lineTo(sx + 6, top + 150);
+      g.moveTo(sx + 4, surfaceY + 24);
+      g.lineTo(sx + 34, surfaceY + 124);
+      g.moveTo(sx + 34, surfaceY + 24);
+      g.lineTo(sx + 4, surfaceY + 124);
       g.strokePath();
     }
-    // Deck — a solid plate with thickness: top surface (where Wren stands), a
-    // darker front face, a warm forge-lit top edge, and a dark underline.
-    g.fillStyle(0x2a211b, 1); // front face / body
-    g.fillRect(0, top, w, 34);
-    g.fillStyle(0x3a2e24, 1); // top deck surface
-    g.fillRect(0, top, w, 13);
-    g.fillStyle(0x5a4632, 0.85); // warm top highlight edge
-    g.fillRect(0, top, w, 3);
-    g.fillStyle(0x120e0b, 1); // dark underline at the deck's bottom
-    g.fillRect(0, top + 31, w, 3);
+    // Deck — slim top rail, shallow front face, and a soft under-shadow. The
+    // foot line is the readable surface; the rest stays transparent enough for
+    // the painted machinery to remain visible.
+    g.fillStyle(0x271e17, 0.9);
+    g.fillRect(0, surfaceY - 5, w, 17);
+    g.fillStyle(0x3a2d21, 0.82);
+    g.fillRect(0, surfaceY - 5, w, 6);
+    g.fillStyle(0x76573b, 0.42);
+    g.fillRect(0, surfaceY - 4, w, 2);
+    g.fillStyle(0x0d0907, 0.72);
+    g.fillRect(0, surfaceY + 10, w, 3);
     // Local plates/rivets at the three obstacle beats keep the catwalk from
     // reading as a flat UI stripe and give Wren clear places to step through.
     const plateXs = [
@@ -3706,40 +3706,40 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.scale.width / 2,
     ];
     for (const px of plateXs) {
-      g.fillStyle(0x120e0b, 0.22);
-      g.fillEllipse(px, top + 22, 118, 12);
-      g.fillStyle(0x6a5038, 0.24);
-      g.fillRoundedRect(px - 76, top + 5, 152, 5, 3);
-      g.lineStyle(1.5, 0x7d6043, 0.24);
-      g.lineBetween(px - 84, top + 2, px - 84, top + 31);
-      g.lineBetween(px + 84, top + 2, px + 84, top + 31);
+      g.fillStyle(0x120e0b, 0.2);
+      g.fillEllipse(px, surfaceY + 8, 112, 8);
+      g.fillStyle(0x7d6043, 0.18);
+      g.fillRoundedRect(px - 70, surfaceY - 3, 140, 4, 2);
+      g.lineStyle(1.2, 0x7d6043, 0.2);
+      g.lineBetween(px - 78, surfaceY - 5, px - 78, surfaceY + 11);
+      g.lineBetween(px + 78, surfaceY - 5, px + 78, surfaceY + 11);
       g.fillStyle(PALETTE_HEX.ember, 0.2);
-      g.fillCircle(px - 54, top + 18, 2.3);
-      g.fillCircle(px + 54, top + 18, 2.3);
+      g.fillCircle(px - 54, surfaceY + 5, 2.1);
+      g.fillCircle(px + 54, surfaceY + 5, 2.1);
     }
     // Soft cast shadow under the deck.
-    g.fillStyle(0x000000, 0.3);
-    g.fillRect(0, top + 34, w, 12);
+    g.fillStyle(0x000000, 0.2);
+    g.fillRect(0, surfaceY + 13, w, 9);
 
     // Foreground lip: the deck body is intentionally behind Wren and the cue
     // props, but a thin front edge in front of them keeps feet/obstacles visually
     // tucked into the walkway instead of pasted over a flat stripe.
     const lip = this.add.graphics().setDepth(4);
-    lip.fillStyle(0x0d0907, 0.58);
-    lip.fillRect(0, top + 28, w, 8);
-    lip.lineStyle(2, 0x725238, 0.34);
-    lip.lineBetween(0, top + 28, w, top + 28);
-    lip.lineStyle(1, 0xf0a35b, 0.16);
-    lip.lineBetween(0, top + 31, w, top + 31);
-    lip.fillStyle(0x000000, 0.18);
-    lip.fillRect(0, top + 36, w, 10);
+    lip.fillStyle(0x0d0907, 0.5);
+    lip.fillRect(0, surfaceY + 6, w, 5);
+    lip.lineStyle(2, 0x725238, 0.32);
+    lip.lineBetween(0, surfaceY + 5, w, surfaceY + 5);
+    lip.lineStyle(1, 0xf0a35b, 0.14);
+    lip.lineBetween(0, surfaceY + 8, w, surfaceY + 8);
+    lip.fillStyle(0x000000, 0.14);
+    lip.fillRect(0, surfaceY + 11, w, 8);
 
     for (const px of plateXs) {
       lip.fillStyle(0x050403, 0.28);
-      lip.fillEllipse(px, top + 35, 120, 10);
+      lip.fillEllipse(px, surfaceY + 11, 112, 7);
       lip.fillStyle(PALETTE_HEX.ember, 0.18);
-      lip.fillCircle(px - 58, top + 31, 2.2);
-      lip.fillCircle(px + 58, top + 31, 2.2);
+      lip.fillCircle(px - 58, surfaceY + 8, 2);
+      lip.fillCircle(px + 58, surfaceY + 8, 2);
     }
   }
 

@@ -770,7 +770,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.band.setObjective("Type each trail word to move through the pass.");
     this.showRiverCue("lift");
     this.time.delayedCall(520, () => this.stageWrenAtTrailEntrance());
-    this.time.delayedCall(2600, () => this.runRiverBeats(0));
+    this.time.delayedCall(1500, () => this.runRiverBeats(0));
   }
 
   /** Three short exploration beats: lift / step / duck */

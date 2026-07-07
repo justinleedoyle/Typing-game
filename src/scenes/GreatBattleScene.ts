@@ -698,6 +698,7 @@ export class GreatBattleScene extends Phaser.Scene {
       passiveIconIds: [],
       maxOneShots: 0,
       satchelLabel: "",
+      showMeterShelf: false,
     });
     const band = this.band;
 
@@ -713,7 +714,8 @@ export class GreatBattleScene extends Phaser.Scene {
     // Candle HUD, docked into the band.
     const satchel = this.store.get().satchel;
     const meterY = band.bandTopY + 112;
-    this.candleGroup = this.add.container(520, meterY).setDepth(1500);
+    const candleX = band.satchelAnchor.x + 90;
+    this.candleGroup = this.add.container(candleX, meterY).setDepth(1500);
     const finaleHudLabel: Phaser.Types.GameObjects.Text.TextStyle = {
       fontFamily: SERIF,
       fontStyle: "italic",
@@ -721,7 +723,7 @@ export class GreatBattleScene extends Phaser.Scene {
       color: "#a59b89",
     };
     const candleLabel = this.add
-      .text(520, meterY - 40, "candles", finaleHudLabel)
+      .text(candleX, meterY - 40, "candles", finaleHudLabel)
       .setOrigin(0.5)
       .setDepth(1500);
     this.redrawCandles();

@@ -149,6 +149,7 @@ export class TextWordTarget implements WordTarget {
   private suffixMasked = false;
   private bannerW = 0;
   private bannerH = 0;
+  private idleFloatTween: Phaser.Tweens.Tween | null = null;
   // Tier 4 `unseal`: number of cursor-resets to PARDON (keep progress) before
   // the target resets for real. `resetForgivenPending` collapses the two
   // resetCursor() calls a single miss triggers (the target's own resetOnMiss +
@@ -472,6 +473,32 @@ export class TextWordTarget implements WordTarget {
     });
   }
 
+  /** Persistent, very small resting motion for static room targets. Combat
+   *  owners generally drive position themselves, so scenes opt into this only
+   *  for anchored hub/study labels after their entrance has settled. */
+  playIdleFloat(opts: {
+    delayMs?: number;
+    dy?: number;
+    durationMs?: number;
+  } = {}): void {
+    const delayMs = opts.delayMs ?? 0;
+    const dy = opts.dy ?? -3;
+    const durationMs = opts.durationMs ?? 1800;
+
+    this.opts.scene.time.delayedCall(delayMs, () => {
+      if (!this.container.scene || this.complete) return;
+      this.idleFloatTween?.stop();
+      this.idleFloatTween = this.opts.scene.tweens.add({
+        targets: this.container,
+        y: this.container.y + dy,
+        duration: durationMs,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.easeInOut",
+      });
+    });
+  }
+
   setCandidate(candidate: boolean): void {
     this.candidate = candidate;
     this.applyDim();
@@ -496,6 +523,8 @@ export class TextWordTarget implements WordTarget {
   }
 
   destroy(): void {
+    this.idleFloatTween?.stop();
+    this.idleFloatTween = null;
     this.container.destroy();
   }
 

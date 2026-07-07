@@ -669,10 +669,17 @@ export class OpeningScene extends Phaser.Scene {
   }
 
   private stageStudyTarget(target: TextWordTarget): void {
+    const delayMs = 80;
+    const durationMs = 250;
     target.playEntryWake({
-      delayMs: 80,
-      durationMs: 250,
+      delayMs,
+      durationMs,
       offsetY: 12,
+    });
+    target.playIdleFloat({
+      delayMs: delayMs + durationMs + 120,
+      dy: -2,
+      durationMs: 1850,
     });
   }
 

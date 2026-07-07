@@ -320,13 +320,15 @@ export class ConsoleBand {
         ease: "Sine.easeOut",
       });
     } else if (trimmedName.length > 0) {
+      const fallbackText = this.fallbackPortraitText(trimmedName);
       const fallback = this.scene.add
-        .text(PORTRAIT_CX, MID_Y - 2, this.initialsForName(trimmedName), {
+        .text(PORTRAIT_CX, MID_Y - 2, fallbackText, {
           fontFamily: SERIF,
-          fontSize: "28px",
+          fontSize: this.fallbackPortraitFontSize(trimmedName),
           fontStyle: "italic",
-          color: "#e8dcc0",
+          color: this.fallbackPortraitColor(trimmedName),
           align: "center",
+          wordWrap: { width: PORTRAIT_W - 10 },
         })
         .setOrigin(0.5)
         .setAlpha(0.68);
@@ -376,6 +378,21 @@ export class ConsoleBand {
     const parts = name.split(/[\s-]+/).filter(Boolean);
     const initials = parts.map((part) => part[0]).join("").slice(0, 2);
     return initials.toUpperCase();
+  }
+
+  private fallbackPortraitText(name: string): string {
+    if (name === "Again") return "Again";
+    return this.initialsForName(name);
+  }
+
+  private fallbackPortraitFontSize(name: string): string {
+    if (name === "Again") return "22px";
+    return "28px";
+  }
+
+  private fallbackPortraitColor(name: string): string {
+    if (name === "Again") return "#d4b8ff";
+    return "#e8dcc0";
   }
 
   private drawSurface(scene: Phaser.Scene, W: number, showMeterShelf: boolean): void {

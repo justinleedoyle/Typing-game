@@ -137,12 +137,12 @@ const DESK_REFLECTION_CARD = {
 } as const;
 const ACCOUNT_PANEL = {
   x: 1788,
-  y: 228,
+  y: 234,
   width: 216,
-  height: 126,
-  statusY: 188,
-  authY: 228,
-  settingsY: 268,
+  height: 148,
+  statusY: 184,
+  authY: 232,
+  settingsY: 280,
 } as const;
 const ACCOUNT_STATION = {
   x: ACCOUNT_PANEL.x,
@@ -503,8 +503,9 @@ export class PortalChamberScene extends Phaser.Scene {
           fontSize: 18,
           priority: -1,
           stationPulse: HUB_STATIONS.portalFloor,
+          frame: "banner",
           entryDelayMs: 130,
-          idleAlpha: 0.76,
+          idleAlpha: 0.84,
         },
       );
     }
@@ -530,8 +531,9 @@ export class PortalChamberScene extends Phaser.Scene {
       {
         fontSize: 19,
         stationPulse: HUB_STATIONS.shelf,
+        frame: "banner",
         entryDelayMs: 150,
-        idleAlpha: 0.76,
+        idleAlpha: 0.84,
       },
     );
     // Keep the first portal view quiet: one account station target reveals
@@ -544,8 +546,9 @@ export class PortalChamberScene extends Phaser.Scene {
       {
         fontSize: 17,
         stationPulse: HUB_STATIONS.account,
+        frame: "banner",
         entryDelayMs: 190,
-        idleAlpha: 0.72,
+        idleAlpha: 0.84,
       },
     );
   }
@@ -852,8 +855,9 @@ export class PortalChamberScene extends Phaser.Scene {
       {
         fontSize: 20,
         stationPulse: HUB_STATIONS.portalFloor,
+        frame: "banner",
         entryDelayMs,
-        idleAlpha: 0.76,
+        idleAlpha: 0.84,
       },
     );
   }
@@ -1353,6 +1357,7 @@ export class PortalChamberScene extends Phaser.Scene {
       fontSize: 20,
       priority: -1,
       outline: true,
+      frame: "banner",
       idleAlpha: 0.76,
       onClaim: () => this.focusStation(HUB_STATIONS.almanac),
       onAdvance: () => this.pulseStationTyping(HUB_STATIONS.almanac),
@@ -1412,7 +1417,9 @@ export class PortalChamberScene extends Phaser.Scene {
       {
         fontSize: 18,
         stationPulse: HUB_STATIONS.account,
+        frame: "banner",
         entryDelayMs: 70,
+        idleAlpha: 0.88,
       },
     );
     this.registerPortalReturnTarget(130);
@@ -1433,6 +1440,8 @@ export class PortalChamberScene extends Phaser.Scene {
       fontSize: 18,
       priority: -1,
       outline: true,
+      frame: "banner",
+      idleAlpha: 0.88,
       onClaim: () => this.focusStation(HUB_STATIONS.account),
       onAdvance: () => this.pulseStationTyping(HUB_STATIONS.account),
       onComplete: () => {
@@ -1456,7 +1465,7 @@ export class PortalChamberScene extends Phaser.Scene {
 
   private drawAccountStationPanel(): void {
     const panel = this.add.graphics().setDepth(0);
-    panel.fillStyle(UI_HEX.panel, 0.26);
+    panel.fillStyle(UI_HEX.panel, 0.44);
     panel.fillRoundedRect(
       ACCOUNT_PANEL.x - ACCOUNT_PANEL.width / 2,
       ACCOUNT_PANEL.y - ACCOUNT_PANEL.height / 2,
@@ -1464,7 +1473,7 @@ export class PortalChamberScene extends Phaser.Scene {
       ACCOUNT_PANEL.height,
       9,
     );
-    panel.lineStyle(1, UI_HEX.brass, 0.34);
+    panel.lineStyle(1.5, UI_HEX.brass, 0.58);
     panel.strokeRoundedRect(
       ACCOUNT_PANEL.x - ACCOUNT_PANEL.width / 2,
       ACCOUNT_PANEL.y - ACCOUNT_PANEL.height / 2,
@@ -1472,7 +1481,7 @@ export class PortalChamberScene extends Phaser.Scene {
       ACCOUNT_PANEL.height,
       9,
     );
-    panel.lineStyle(1, UI_HEX.brass, 0.16);
+    panel.lineStyle(1, UI_HEX.brass, 0.3);
     panel.lineBetween(
       ACCOUNT_PANEL.x - ACCOUNT_PANEL.width / 2 + 22,
       ACCOUNT_PANEL.statusY + 19,
@@ -1488,7 +1497,7 @@ export class PortalChamberScene extends Phaser.Scene {
       width: 1,
     })
       .setPosition(ACCOUNT_PANEL.x, ACCOUNT_PANEL.y)
-      .setAlpha(0.38)
+      .setAlpha(0.58)
       .setDepth(0.1);
     this.accountDisplayObjects.push(corners);
     this.stageAccountObject(corners, 55, { offsetY: 8 });

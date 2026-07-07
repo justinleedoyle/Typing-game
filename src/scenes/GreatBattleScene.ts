@@ -89,6 +89,12 @@ const WALL_WARD = {
   width: 960,
   height: 88,
 } as const;
+const QUIET_LORD_FOOT_Y = 660;
+const QUIET_LORD_AURA_Y = QUIET_LORD_FOOT_Y - 250;
+const QUIET_LORD_NAME_Y = QUIET_LORD_FOOT_Y - 280;
+const QUIET_LORD_EYE_Y = QUIET_LORD_FOOT_Y - 370;
+const QUIET_LORD_CLAIM_Y = QUIET_LORD_FOOT_Y - 70;
+const QUIET_LORD_HIT_Y = QUIET_LORD_FOOT_Y - 52;
 
 const BATTLE_WORD_BANK = [
   "hold", "stand", "speak", "word", "voice", "again",
@@ -945,7 +951,7 @@ export class GreatBattleScene extends Phaser.Scene {
     playBodyImpact(this, this.quietLordContainer, {
       kind: "bubble",
       color: 0xa7d2dd,
-      offsetY: 508,
+      offsetY: QUIET_LORD_HIT_Y,
       depth: 7,
       ringRadius: 70,
       count: 14,
@@ -961,7 +967,7 @@ export class GreatBattleScene extends Phaser.Scene {
     playBodyImpact(this, this.quietLordContainer, {
       kind: "ember",
       color: UI_HEX.ember,
-      offsetY: 508,
+      offsetY: QUIET_LORD_HIT_Y,
       depth: 8,
       ringRadius: stronger ? 84 : 58,
       count: stronger ? 16 : 10,
@@ -1121,7 +1127,7 @@ export class GreatBattleScene extends Phaser.Scene {
     playBodyImpact(this, this.quietLordContainer, {
       kind: "mote",
       color: 0x9fcbd1,
-      offsetY: 508,
+      offsetY: QUIET_LORD_HIT_Y,
       depth: 7,
       ringRadius: 54,
       count: 10,
@@ -1220,12 +1226,12 @@ export class GreatBattleScene extends Phaser.Scene {
   private quietLordBodyTarget(): { x: number; y: number } {
     const lord = this.quietLordContainer;
     if (!lord?.scene) {
-      return { x: this.scale.width / 2, y: 560 };
+      return { x: this.scale.width / 2, y: QUIET_LORD_FOOT_Y };
     }
-    return { x: lord.x, y: lord.y + 560 };
+    return { x: lord.x, y: lord.y + QUIET_LORD_FOOT_Y };
   }
 
-  private quietLordClaimOrigin(offsetX = 0, offsetY = 490): { x: number; y: number } {
+  private quietLordClaimOrigin(offsetX = 0, offsetY = QUIET_LORD_CLAIM_Y): { x: number; y: number } {
     const lord = this.quietLordContainer;
     if (!lord?.scene) {
       return { x: this.scale.width / 2 + offsetX, y: offsetY };
@@ -1277,7 +1283,7 @@ export class GreatBattleScene extends Phaser.Scene {
           kind,
           color,
           offsetX: fx.pulseOffsetX ?? sideOffset,
-          offsetY: 508,
+          offsetY: QUIET_LORD_HIT_Y,
           depth: 7,
           ringRadius: fx.ringRadius ?? 34,
           durationMs: 250,
@@ -1290,7 +1296,7 @@ export class GreatBattleScene extends Phaser.Scene {
           kind,
           color,
           offsetX: sideOffset,
-          offsetY: 508,
+          offsetY: QUIET_LORD_HIT_Y,
           depth: 7,
           ringRadius: (fx.ringRadius ?? 42) + 18,
           count: 12,
@@ -1361,7 +1367,7 @@ export class GreatBattleScene extends Phaser.Scene {
         originalOnAdvance?.(cursor, wordLength);
       },
       onComplete: () => {
-        const hit = this.quietLordClaimOrigin(sideOffset, 508);
+        const hit = this.quietLordClaimOrigin(sideOffset, QUIET_LORD_HIT_Y);
         this.clearTargetAnchor(target);
         playClaimLine(
           this,
@@ -1375,7 +1381,7 @@ export class GreatBattleScene extends Phaser.Scene {
           kind: fx.kind,
           color: fx.color,
           offsetX: sideOffset,
-          offsetY: 508,
+          offsetY: QUIET_LORD_HIT_Y,
           depth: 7,
           ringRadius: (fx.ringRadius ?? 40) + 18,
           count: 12,
@@ -2967,7 +2973,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.drawQuietLord(this.isForceDuel, this.isKindnessDuel);
 
     const lordX = this.quietLordContainer.x;
-    const lordY = this.quietLordContainer.y + 560;
+    const lordY = this.quietLordContainer.y + QUIET_LORD_FOOT_Y;
     playSceneEventPulse(this, {
       kind: "mist",
       color: this.isForceDuel ? 0x9b2424 : 0x6b5ea8,
@@ -3004,25 +3010,27 @@ export class GreatBattleScene extends Phaser.Scene {
 
     const aura = this.add.graphics();
     aura.fillStyle(forceDuel ? 0x5a1010 : 0x2a2038, forceDuel ? 0.2 : 0.14);
-    aura.fillEllipse(0, 310, 280, 520);
+    aura.fillEllipse(0, QUIET_LORD_AURA_Y, 280, 520);
     aura.lineStyle(2, forceDuel ? 0x9b2424 : 0x4b3d7a, 0.32);
-    aura.strokeEllipse(0, 310, 230, 480);
+    aura.strokeEllipse(0, QUIET_LORD_AURA_Y, 230, 480);
 
-    const shadow = addLocalGroundShadow(this, 190, 30, {
-      y: 560,
+    const groundSeal = this.drawQuietLordGroundSeal(forceDuel);
+
+    const shadow = addLocalGroundShadow(this, 230, 34, {
+      y: QUIET_LORD_FOOT_Y + 5,
       alpha: forceDuel ? 0.5 : 0.4,
     });
 
     const lordFigure = this.add.container(0, 0);
-    const lordSprite = makeQuietLordSprite(this).setPosition(0, 560);
+    const lordSprite = makeQuietLordSprite(this).setPosition(0, QUIET_LORD_FOOT_Y);
     if (forceDuel) lordSprite.setTint(0xffd0d0);
 
     const eyes = this.add.graphics();
     const eyeColor = forceDuel ? 0xa01010 : 0x4a1010;
     const eyeAlpha = forceDuel ? 1.0 : 0.85;
     eyes.fillStyle(eyeColor, eyeAlpha);
-    eyes.fillEllipse(-28, 190, 20, 12);
-    eyes.fillEllipse(28, 190, 20, 12);
+    eyes.fillEllipse(-28, QUIET_LORD_EYE_Y, 20, 12);
+    eyes.fillEllipse(28, QUIET_LORD_EYE_Y, 20, 12);
     lordFigure.add([lordSprite, eyes]);
 
     // §5.5.11 — ≥3 kindness relics: Lord is slightly smaller (he shrinks rather than cracks)
@@ -3030,17 +3038,31 @@ export class GreatBattleScene extends Phaser.Scene {
       this.quietLordContainer.setScale(0.82);
     }
 
-    this.quietLordContainer.add([aura, shadow, lordFigure]);
+    this.quietLordContainer.add([aura, groundSeal, shadow, lordFigure]);
     addIdleBreath(this, lordFigure, {
-      dy: forceDuel ? -6 : -4,
+      dy: forceDuel ? -5 : -3,
       durationMs: forceDuel ? 1800 : 2400,
+    });
+    addContainerWake(this, this.quietLordContainer, {
+      kind: forceDuel ? "ember" : "mist",
+      intervalMs: 680,
+      spreadX: 165,
+      spreadY: 28,
+      offsetY: QUIET_LORD_FOOT_Y - 22,
+      color: forceDuel ? 0x9b2424 : 0x8b6ad8,
+      alpha: forceDuel ? 0.1 : 0.08,
+      size: 3,
+      depth: 4.4,
+      driftX: 18,
+      driftY: -36,
+      durationMs: 1080,
     });
 
     // The accumulating word, WITHOUT its period (§5.5.10): the realms revealed
     // it letter by letter (A → Ag → … → Again, no period); the period only
     // clicks into place at the win seal (runPeriodSeal). With strikethrough.
     this.againText = this.add
-      .text(0, 280, "Again", {
+      .text(0, QUIET_LORD_NAME_Y, "Again", {
         fontFamily: SERIF,
         fontSize: "52px",
         color: "#3a3060",
@@ -3062,6 +3084,28 @@ export class GreatBattleScene extends Phaser.Scene {
       duration: 1200,
       ease: "Sine.easeOut",
     });
+  }
+
+  private drawQuietLordGroundSeal(forceDuel: boolean): Phaser.GameObjects.Graphics {
+    const seal = this.add.graphics();
+    const y = QUIET_LORD_FOOT_Y + 12;
+    const sigilColor = forceDuel ? 0x9b2424 : 0x8b6ad8;
+
+    seal.fillStyle(0x000000, forceDuel ? 0.28 : 0.22);
+    seal.fillEllipse(0, y + 10, 384, 46);
+    seal.lineStyle(2, sigilColor, forceDuel ? 0.34 : 0.28);
+    seal.strokeEllipse(0, y, 340, 58);
+    seal.lineStyle(1, UI_HEX.brass, 0.22);
+    seal.strokeEllipse(0, y, 258, 36);
+    seal.lineBetween(-122, y, 122, y);
+    seal.lineBetween(0, y - 18, 0, y + 18);
+    seal.fillStyle(UI_HEX.brass, 0.22);
+    seal.fillCircle(-166, y, 4);
+    seal.fillCircle(166, y, 4);
+    seal.fillStyle(sigilColor, forceDuel ? 0.18 : 0.14);
+    seal.fillCircle(0, y, 5);
+
+    return seal;
   }
 
   private updateStrikeLinePosition(): void {
@@ -4155,8 +4199,7 @@ export class GreatBattleScene extends Phaser.Scene {
     }
 
     // Remove againText from the fading Quiet Lord body and place it at world
-    // coords. The container was at (width/2, 0); againText was at (0, 280)
-    // within it. Destroy the old body/aura shell after the word detaches so
+    // coords. Destroy the old body/aura shell after the word detaches so
     // Phase 3 reads as the final word's seal, not leftover boss chrome.
     this.quietLordContainer.remove(this.againText);
     this.quietLordContainer.destroy();

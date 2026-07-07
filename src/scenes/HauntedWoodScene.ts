@@ -3308,17 +3308,29 @@ export class HauntedWoodScene extends Phaser.Scene {
     c.add(sprite);
 
     const g = this.add.graphics();
-    // Lantern post
-    g.lineStyle(2, 0x3a3630, 0.85);
+    // A small ghost-lantern tethered to Inga. Keep it prop-like and warm so
+    // it doesn't read as a UI selection marker in still screenshots.
+    g.lineStyle(2, 0x4b4030, 0.78);
     g.beginPath();
-    g.moveTo(30, -60);
-    g.lineTo(30, 40);
+    g.moveTo(26, -58);
+    g.lineTo(26, 26);
     g.strokePath();
-    // Lantern box
-    g.lineStyle(1, 0xc9a14a, 0.7);
-    g.strokeRect(22, -76, 16, 18);
-    g.fillStyle(0xc9a14a, 0.3);
-    g.fillRect(22, -76, 16, 18);
+    g.lineStyle(1.5, 0x7e6a42, 0.72);
+    g.beginPath();
+    g.arc(26, -65, 11, Math.PI * 0.08, Math.PI * 0.92, true);
+    g.strokePath();
+    g.fillStyle(0xf0d78a, 0.14);
+    g.fillCircle(26, -67, 27);
+    g.fillStyle(0xf0d78a, 0.2);
+    g.fillRoundedRect(14, -79, 24, 30, 6);
+    g.lineStyle(1.5, 0xc9a14a, 0.6);
+    g.strokeRoundedRect(14, -79, 24, 30, 6);
+    g.lineStyle(1, 0xfaf4e8, 0.38);
+    g.strokeRoundedRect(18, -75, 16, 22, 4);
+    g.fillStyle(0xf6a35d, 0.75);
+    g.fillEllipse(26, -62, 8, 14);
+    g.fillStyle(0xfaf4e8, 0.68);
+    g.fillEllipse(26, -64, 4, 8);
     c.add(g);
     this.ingaFigure = c;
     stageContainerEntrance(this, c, {

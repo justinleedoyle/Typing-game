@@ -3100,7 +3100,9 @@ export class GreatBattleScene extends Phaser.Scene {
       .text(0, QUIET_LORD_NAME_Y, "Again", {
         fontFamily: SERIF,
         fontSize: "52px",
-        color: "#3a3060",
+        color: "#8f79d6",
+        stroke: "#0b0814",
+        strokeThickness: 5,
       })
       .setOrigin(0.5)
       .setDepth(5);
@@ -3150,7 +3152,7 @@ export class GreatBattleScene extends Phaser.Scene {
     const tx = ql.x + this.againText.x;
     const ty = ql.y + this.againText.y;
     const hw = this.againText.width / 2;
-    this.strikeLineGraphic.lineStyle(3, 0x3a3060, 1);
+    this.strikeLineGraphic.lineStyle(3, 0x2f2457, 0.96);
     this.strikeLineGraphic.beginPath();
     this.strikeLineGraphic.moveTo(tx - hw, ty);
     this.strikeLineGraphic.lineTo(tx + hw, ty);

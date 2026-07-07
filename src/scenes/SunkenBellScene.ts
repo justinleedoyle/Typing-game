@@ -2687,14 +2687,20 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private registerActiveTarget(...targets: TextWordTarget[]): void {
-    for (const target of targets) {
+    const entryMs = 180;
+    targets.forEach((target, index) => {
       this.typingInput.register(target);
       this.activeTargets.push(target);
       target.playEntryWake({
-        durationMs: 180,
+        durationMs: entryMs,
         offsetY: 0,
       });
-    }
+      target.playIdleFloat({
+        delayMs: entryMs + 120 + index * 70,
+        dy: -2,
+        durationMs: 1800 + index * 90,
+      });
+    });
   }
 
   private playWrenTypingPulse(): void {

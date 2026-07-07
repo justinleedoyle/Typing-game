@@ -2504,9 +2504,20 @@ export class GreatBattleScene extends Phaser.Scene {
     sprite.setScale(spec.height / sprite.height);
     if (spec.tint) sprite.setTint(spec.tint);
     if (spec.alpha !== undefined) sprite.setAlpha(spec.alpha);
-    if (spec.flipX) sprite.setFlipX(true);
+    if (this.shouldFlipFinaleEnemySprite(realmId, spec, x)) sprite.setFlipX(true);
     body.add(sprite);
     return { container: c, body };
+  }
+
+  private shouldFlipFinaleEnemySprite(
+    realmId: string,
+    spec: FinaleEnemyArtSpec,
+    x: number,
+  ): boolean {
+    if (realmId === "winter-mountain") {
+      return x >= this.scale.width / 2;
+    }
+    return spec.flipX === true;
   }
 
   private addFinaleEnemyContactMark(

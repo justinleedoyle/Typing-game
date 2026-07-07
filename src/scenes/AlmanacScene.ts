@@ -7,7 +7,6 @@ import {
 } from "../game/almanacLorePages";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { UI_CSS, UI_HEX } from "../game/ui/uiTheme";
-import { drawStaticQuietLordFragment } from "../game/quietLordIntrusion";
 import { REALM_LORE, REALM_ORDER } from "../game/realmLore";
 import { RELICS } from "../game/relics";
 import type { SaveStore } from "../game/saveState";
@@ -616,10 +615,9 @@ export class AlmanacScene extends Phaser.Scene {
       });
     }
 
-    // Quiet Lord fragment — same scratched-out visual as the boss-defeat
-    // reveal and the mid-realm intrusion (§5.5.10): cream serif with a dark
-    // quill cross-out stroke. It gets the same one-shot page-settle as the
-    // surrounding text, with no looping animation.
+    // Quiet Lord fragment — recorded as an in-page omen, not as the global
+    // full-screen intrusion treatment. The old cream-on-ink scratch effect
+    // reads like stray overlay chrome when it sits on parchment.
     this.addPageText(
       RIGHT_PAGE_X,
       TOP_TEXT_Y + 360,
@@ -632,18 +630,7 @@ export class AlmanacScene extends Phaser.Scene {
     );
     const fragment = QUIET_LORD_FRAGMENTS[cleared] ?? "";
     if (fragment) {
-      const { text: fragText, stroke: fragStroke } =
-        drawStaticQuietLordFragment(this, {
-          x: RIGHT_PAGE_X,
-          y: TOP_TEXT_Y + 410,
-          text: fragment,
-          fontSize: 44,
-          depth: 10,
-        });
-      this.pageTexts.push(fragText, fragStroke);
-      const delayMs = this.nextPageWakeDelay();
-      this.stagePageObject(fragText, delayMs);
-      this.stagePageObject(fragStroke, delayMs);
+      this.addOverviewQuietLordRecord(RIGHT_PAGE_X, TOP_TEXT_Y + 402, fragment);
     } else {
       this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 410, "...quiet, for now", {
         fontSize: "26px",
@@ -664,6 +651,44 @@ export class AlmanacScene extends Phaser.Scene {
     );
 
     this.renderPageFooter();
+  }
+
+  private addOverviewQuietLordRecord(x: number, y: number, fragment: string): void {
+    const c = this.add.container(x, y).setDepth(10);
+    const width = 254;
+    const height = 74;
+    const g = this.add.graphics();
+
+    g.fillStyle(UI_HEX.parchmentDark, 0.28);
+    g.fillRoundedRect(0, 0, width, height, 9);
+    g.lineStyle(1.5, UI_HEX.brass, 0.28);
+    g.strokeRoundedRect(0, 0, width, height, 9);
+    g.lineStyle(1, UI_HEX.brass, 0.15);
+    g.lineBetween(18, height - 15, width - 18, height - 15);
+    c.add(g);
+
+    const label = this.add.text(22, 10, "recorded fragment", {
+      fontFamily: SERIF,
+      fontSize: "15px",
+      fontStyle: "italic",
+      color: PAGE_INK_DIM,
+    });
+    c.add(label);
+
+    const text = this.add.text(22, 30, fragment, {
+      fontFamily: SERIF,
+      fontSize: "32px",
+      color: PAGE_INK,
+    });
+    c.add(text);
+
+    const slash = this.add.graphics();
+    slash.lineStyle(4, 0x21172a, 0.8);
+    slash.lineBetween(18, 48, Math.min(width - 18, 30 + text.width), 48);
+    c.add(slash);
+
+    this.pageTexts.push(c);
+    this.stagePageObject(c, this.nextPageWakeDelay());
   }
 
   private addOverviewRealmMark(

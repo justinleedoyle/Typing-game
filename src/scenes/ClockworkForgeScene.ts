@@ -703,6 +703,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.band.setObjective("Type each catwalk word to reach Gregor's station.");
     }
     this.showCatwalkCue(idx, cueX);
+    this.setNarrator(narration);
     const target = this.makeWord({
       scene: this,
       word,
@@ -723,7 +724,6 @@ export class ClockworkForgeScene extends Phaser.Scene {
         });
         this.releaseCatwalkCueWordAnchor();
         this.pulseCatwalkCue(true);
-        this.setNarrator(narration);
         this.time.delayedCall(1400, () => this.startCatwalkBeats(idx + 1));
       },
     });
@@ -2635,6 +2635,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private drawSteamPipeCue(x: number): Phaser.GameObjects.Container {
     const c = this.add.container(x, CATWALK_Y - 36).setDepth(-2).setAlpha(0);
     const pipe = this.add.graphics();
+    pipe.fillStyle(0x060403, 0.32);
+    pipe.fillEllipse(98, 54, 126, 13);
     pipe.lineStyle(18, 0x090706, 0.46);
     pipe.lineBetween(-142, -86, 124, -86);
     pipe.lineStyle(14, 0x1a1411, 0.96);
@@ -2651,25 +2653,52 @@ export class ClockworkForgeScene extends Phaser.Scene {
     pipe.fillEllipse(88, -62, 66, 13);
     pipe.lineStyle(2, 0xf0c074, 0.42);
     pipe.strokeEllipse(88, -68, 42, 18);
+    pipe.fillStyle(0xe0a15d, 0.34);
+    pipe.fillCircle(88, -68, 3.5);
+    pipe.fillCircle(105, -75, 2.4);
+    pipe.lineStyle(2, PALETTE_HEX.ember, 0.28);
+    pipe.lineBetween(63, -112, 45, -119);
+    pipe.lineBetween(110, -111, 125, -119);
     c.add(pipe);
+
     const steam = this.add.graphics();
-    steam.fillStyle(0xf3dfbd, 0.32);
-    steam.fillEllipse(96, -20, 82, 126);
-    steam.fillStyle(0xd7c3a1, 0.24);
-    steam.fillEllipse(68, 8, 48, 82);
-    steam.fillEllipse(124, 12, 54, 92);
-    steam.fillStyle(0xffffff, 0.16);
-    steam.fillEllipse(98, -44, 50, 78);
-    steam.lineStyle(2, 0xf5d195, 0.28);
-    steam.lineBetween(82, -70, 72, 38);
-    steam.lineBetween(112, -66, 128, 42);
+    // Keep the jet as loose vapor strokes instead of a filled column; a solid
+    // oval reads like selection UI against the painted forge.
+    steam.lineStyle(5, 0xf3dfbd, 0.18);
+    steam.lineBetween(82, -62, 68, 18);
+    steam.lineBetween(98, -63, 92, 31);
+    steam.lineBetween(113, -62, 126, 20);
+    steam.lineStyle(2, 0xf5d195, 0.3);
+    steam.lineBetween(74, -51, 56, -28);
+    steam.lineBetween(122, -49, 142, -31);
+    steam.lineBetween(71, 8, 46, 20);
+    steam.lineBetween(122, 9, 148, 21);
+    steam.fillStyle(0xf3dfbd, 0.12);
+    steam.fillEllipse(86, -41, 42, 16);
+    steam.fillEllipse(109, -17, 52, 18);
+    steam.fillEllipse(78, 9, 40, 15);
+    steam.fillEllipse(121, 24, 45, 14);
+    steam.fillStyle(0xffffff, 0.09);
+    steam.fillEllipse(95, -56, 26, 10);
+    steam.fillEllipse(96, 31, 36, 12);
     c.add(steam);
+
+    const deckCue = this.add.graphics();
+    deckCue.fillStyle(0x140c08, 0.6);
+    deckCue.fillRoundedRect(52, 42, 90, 13, 5);
+    deckCue.lineStyle(2, 0x7d6043, 0.36);
+    deckCue.strokeRoundedRect(52, 42, 90, 13, 5);
+    deckCue.fillStyle(PALETTE_HEX.ember, 0.3);
+    deckCue.fillCircle(69, 48, 2.8);
+    deckCue.fillCircle(125, 48, 2.8);
+    c.add(deckCue);
+
     this.tweens.add({
       targets: steam,
-      y: -12,
-      scaleY: 1.16,
-      alpha: 0.72,
-      duration: 760,
+      x: { from: -4, to: 5 },
+      y: -8,
+      alpha: 0.64,
+      duration: 680,
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",

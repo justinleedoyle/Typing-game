@@ -542,10 +542,10 @@ export class PortalChamberScene extends Phaser.Scene {
         idleAlpha: 0.84,
       },
     );
-    // Keep the first portal view quiet: one account station target reveals
+    // Keep the first portal view quiet: one profile station target reveals
     // settings/sign-in controls after the player intentionally focuses it.
     this.registerNavTarget(
-      "account",
+      "profile",
       ACCOUNT_STATION.x,
       ACCOUNT_STATION.y,
       () => this.enterZone("account"),
@@ -2133,7 +2133,7 @@ export class PortalChamberScene extends Phaser.Scene {
       HUB_STATIONS.account.y,
       HUB_STATIONS.account.width,
       HUB_STATIONS.account.height,
-      "account",
+      "profile",
       {
         alpha: 0.07,
         labelAlpha: 0,

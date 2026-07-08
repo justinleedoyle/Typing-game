@@ -829,13 +829,17 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private drawRootPathCue(): Phaser.GameObjects.Container {
     const c = this.add.container(this.scale.width / 2 - 22, WOOD_ROOT_CUE_Y).setDepth(1).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 300, 26, { y: 24, alpha: 0.24 }));
+    c.add(addLocalGroundShadow(this, 286, 24, { y: 24, alpha: 0.13 }));
     const roots = this.add.graphics();
-    roots.fillStyle(0x0c100c, 0.52);
-    roots.fillEllipse(-16, 22, 290, 42);
-    roots.fillStyle(0x172015, 0.52);
-    roots.fillEllipse(-72, 13, 126, 26);
-    roots.fillEllipse(62, 16, 156, 28);
+    roots.fillStyle(0x0c100c, 0.31);
+    roots.fillEllipse(-18, 22, 274, 36);
+    roots.fillStyle(0x141b12, 0.28);
+    roots.fillEllipse(-86, 15, 98, 22);
+    roots.fillEllipse(54, 18, 132, 24);
+    roots.fillStyle(0x242016, 0.16);
+    roots.fillTriangle(-138, 28, -104, 9, -72, 28);
+    roots.fillTriangle(-28, 29, 8, 8, 56, 30);
+    roots.fillTriangle(70, 26, 114, 4, 148, 18);
 
     roots.lineStyle(22, 0x11140e, 0.96);
     roots.beginPath();
@@ -863,14 +867,14 @@ export class HauntedWoodScene extends Phaser.Scene {
     roots.moveTo(-106, 28);
     roots.lineTo(-58, 15);
     roots.lineTo(-12, -4);
-    roots.lineTo(24, -22);
+    roots.lineTo(12, -11);
     roots.strokePath();
     roots.lineStyle(10, 0x2a2419, 0.96);
     roots.beginPath();
     roots.moveTo(-104, 25);
     roots.lineTo(-56, 12);
     roots.lineTo(-12, -6);
-    roots.lineTo(22, -22);
+    roots.lineTo(10, -11);
     roots.strokePath();
 
     roots.lineStyle(10, 0x11140e, 0.86);
@@ -894,11 +898,14 @@ export class HauntedWoodScene extends Phaser.Scene {
     roots.lineStyle(2, 0x7e8a63, 0.24);
     roots.lineBetween(-98, 24, -62, 16);
     roots.lineBetween(44, -1, 74, 9);
-    roots.lineStyle(3, 0x91a67a, 0.22);
+    roots.lineStyle(2.5, 0x586b48, 0.12);
     roots.lineBetween(-12, -7, 18, -20);
     roots.lineBetween(3, -2, 29, -14);
-    roots.lineStyle(1.5, 0xf0d98a, 0.18);
-    roots.lineBetween(7, -5, 24, -13);
+    roots.lineStyle(3.5, 0x15180f, 0.34);
+    roots.lineBetween(-16, -2, 20, -17);
+    roots.lineStyle(1.2, 0x6b7555, 0.12);
+    roots.lineBetween(-42, 8, -18, 2);
+    roots.lineBetween(72, 14, 98, 6);
 
     roots.fillStyle(0x12170f, 0.58);
     roots.fillEllipse(-118, 20, 46, 12);
@@ -918,16 +925,23 @@ export class HauntedWoodScene extends Phaser.Scene {
     roots.fillStyle(0xa8b98d, 0.18);
     roots.fillEllipse(-119, 14, 12, 4);
     roots.fillEllipse(-103, 22, 14, 4);
-    roots.fillEllipse(27, -21, 12, 4);
     roots.fillEllipse(109, 2, 13, 4);
     roots.fillEllipse(127, -4, 10, 3);
 
-    roots.fillStyle(0x6d7b55, 0.18);
-    roots.fillEllipse(5, -1, 38, 7);
-    roots.fillStyle(0x9aa47c, 0.14);
-    roots.fillEllipse(-2, -3, 10, 3);
-    roots.fillEllipse(14, -8, 12, 3);
-    roots.fillEllipse(23, -12, 8, 2.5);
+    roots.fillStyle(0x6d7b55, 0.045);
+    roots.fillEllipse(-2, 0, 18, 4);
+    roots.fillStyle(0x9aa47c, 0.055);
+    roots.fillEllipse(-10, -1, 5, 2);
+    roots.fillStyle(0xd2b76a, 0.1);
+    roots.fillCircle(-66, 18, 1.5);
+    roots.fillCircle(104, 8, 1.5);
+    roots.fillStyle(0x0d100c, 0.9);
+    roots.fillEllipse(4, -17, 64, 18);
+    roots.lineStyle(7, 0x1f1a12, 0.88);
+    roots.lineBetween(-38, -12, 0, -19);
+    roots.lineBetween(0, -19, 42, -10);
+    roots.lineStyle(2, 0x4b4430, 0.28);
+    roots.lineBetween(-26, -15, 12, -20);
     c.add(roots);
     return c;
   }
@@ -1040,8 +1054,8 @@ export class HauntedWoodScene extends Phaser.Scene {
     const cue = this.pathCue;
     if (!cue?.scene) return;
     this.releasePathCueWordAnchor();
+    if (idx === 0) return;
     const sourceOffsetY = idx === 1 ? -34 : idx === 2 ? -76 : -44;
-    const sourceOffsetX = idx === 0 ? 28 : 0;
     this.pathCueWordAnchor = attachWordBodyAnchor(
       this,
       cue,
@@ -1050,7 +1064,6 @@ export class HauntedWoodScene extends Phaser.Scene {
         color: PALETTE_HEX.moss,
         alpha: 0.14,
         depth: 7,
-        sourceOffsetX,
         sourceOffsetY,
         targetOffsetY: 24,
       },

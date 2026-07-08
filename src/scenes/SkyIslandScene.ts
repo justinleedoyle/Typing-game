@@ -1071,10 +1071,10 @@ export class SkyIslandScene extends Phaser.Scene {
       { x: 42, y: 49, w: 64, h: 14 },
       { x: 128, y: 45, w: 66, h: 14 },
     ].forEach((shadow) => {
-      bridge.fillStyle(0x17120f, 0.07);
+      bridge.fillStyle(0x17120f, 0.13);
       bridge.fillEllipse(shadow.x, shadow.y, shadow.w, shadow.h);
     });
-    bridge.lineStyle(2, 0x211b15, 0.14);
+    bridge.lineStyle(2.4, 0x211b15, 0.22);
     bridge.lineBetween(-174, 36, 178, 14);
     bridge.lineBetween(-166, 62, 182, 42);
     bridge.lineStyle(1.2, 0xf3ead2, 0.018);
@@ -1119,22 +1119,58 @@ export class SkyIslandScene extends Phaser.Scene {
       ],
     ];
     bridgeStones.forEach((points, i) => {
+      const center = points.reduce(
+        (acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }),
+        { x: 0, y: 0 },
+      );
+      center.x /= points.length;
+      center.y /= points.length;
+      const compactPoints = points.map((point) => ({
+        x: center.x + (point.x - center.x) * 0.86,
+        y: center.y + (point.y - center.y) * 0.78,
+      }));
+      if (i >= 2) {
+        bridge.fillStyle(0x17120f, 0.08);
+        bridge.fillEllipse(center.x, center.y + 11, 44, 8);
+        bridge.lineStyle(1.8, 0x211b15, 0.18);
+        bridge.lineBetween(
+          compactPoints[0]!.x + 5,
+          compactPoints[0]!.y + 9,
+          compactPoints[3]!.x - 8,
+          compactPoints[3]!.y + 8,
+        );
+        bridge.lineStyle(1, 0xb6a66e, 0.08);
+        bridge.lineBetween(
+          compactPoints[1]!.x + 6,
+          compactPoints[1]!.y + 5,
+          compactPoints[2]!.x - 7,
+          compactPoints[2]!.y + 4,
+        );
+        return;
+      }
       drawStone(
         bridge,
-        points,
-        i % 2 === 0 ? 0x817758 : 0x766d52,
-        0.2,
-        0.055,
-        0.9,
+        compactPoints,
+        i % 2 === 0 ? 0x5f5a43 : 0x6a6249,
+        i === 1 || i === 2 ? 0.82 : 0.72,
+        0.24,
+        1.35,
         0x201d18,
       );
-      const midX = (points[1]!.x + points[3]!.x) / 2;
-      bridge.lineStyle(0.9, 0x191611, 0.075);
-      bridge.lineBetween(midX - 12, points[1]!.y + 14, midX + 10, points[4]!.y - 7);
-      bridge.fillStyle(0xf3ead2, 0.014);
-      bridge.fillEllipse(midX - 7, points[1]!.y + 7, 20, 5);
+      const midX = (compactPoints[1]!.x + compactPoints[3]!.x) / 2;
+      bridge.lineStyle(1.2, 0x191611, 0.28);
+      bridge.lineBetween(midX - 12, compactPoints[1]!.y + 12, midX + 10, compactPoints[4]!.y - 6);
+      bridge.lineStyle(2.2, 0x272117, 0.32);
+      bridge.lineBetween(
+        compactPoints[5]!.x + 5,
+        compactPoints[5]!.y - 2,
+        compactPoints[4]!.x - 3,
+        compactPoints[4]!.y - 5,
+      );
+      bridge.fillStyle(0xf3ead2, 0.055);
+      bridge.fillEllipse(midX - 7, compactPoints[1]!.y + 6, 14, 3.5);
     });
-    bridge.fillStyle(0xb6a66e, 0.025);
+    bridge.fillStyle(0xb6a66e, 0.06);
     bridge.fillEllipse(-134, 49, 18, 5);
     bridge.fillEllipse(44, 52, 16, 4);
     bridge.fillEllipse(137, 40, 17, 5);

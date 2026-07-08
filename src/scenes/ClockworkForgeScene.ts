@@ -2526,8 +2526,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
       g.strokePath();
     };
 
-    g.fillStyle(0x070504, 0.44);
-    g.fillEllipse(2, 28, 216, 26);
+    g.fillStyle(0x070504, 0.52);
+    g.fillEllipse(2, 27, 218, 24);
     fillPoly(
       [
         { x: -103, y: -10 },
@@ -2537,11 +2537,11 @@ export class ClockworkForgeScene extends Phaser.Scene {
         { x: 86, y: 23 },
         { x: -88, y: 23 },
       ],
-      0x090605,
-      0.74,
+      0x080605,
+      0.82,
     );
-    g.fillStyle(PALETTE_HEX.ember, 0.12);
-    g.fillEllipse(20, 14, 154, 18);
+    g.fillStyle(PALETTE_HEX.ember, 0.07);
+    g.fillEllipse(20, 14, 142, 14);
 
     const slats: Array<Array<{ x: number; y: number }>> = [
       [
@@ -2576,18 +2576,18 @@ export class ClockworkForgeScene extends Phaser.Scene {
       ],
     ];
     for (const slat of slats) {
-      fillPoly(slat, 0x241a13, 0.98);
-      strokePoly(slat, 0x6f5134, 0.46, 2);
+      fillPoly(slat, 0x1b130f, 0.98);
+      strokePoly(slat, 0x5e432c, 0.24, 1.4);
     }
 
     g.lineStyle(3, 0x120d0a, 0.88);
     for (const gx of [-64, -23, 18, 59]) {
       g.lineBetween(gx, -22, gx + 4, 20);
     }
-    g.lineStyle(2, 0xa97848, 0.36);
+    g.lineStyle(1.5, 0x8f6844, 0.2);
     g.lineBetween(-88, -9, 86, -17);
     g.lineBetween(-88, 15, 77, 11);
-    g.lineStyle(2, PALETTE_HEX.ember, 0.36);
+    g.lineStyle(1.5, PALETTE_HEX.ember, 0.16);
     g.lineBetween(-74, 21, 78, 19);
 
     const liftedCorner = [
@@ -2596,28 +2596,35 @@ export class ClockworkForgeScene extends Phaser.Scene {
       { x: 93, y: -24 },
       { x: 63, y: -15 },
     ];
-    fillPoly(liftedCorner, 0x2e2218, 0.98);
-    strokePoly(liftedCorner, 0x91683d, 0.58, 2);
-    g.lineStyle(2, 0xf0c074, 0.26);
+    fillPoly(liftedCorner, 0x241811, 0.98);
+    strokePoly(liftedCorner, 0x705033, 0.3, 1.5);
+    g.lineStyle(1.5, 0xd99a5a, 0.16);
     g.lineBetween(62, -29, 98, -41);
-    g.lineStyle(2, 0x0d0907, 0.58);
+    g.lineStyle(2, 0x0d0907, 0.66);
     g.lineBetween(63, -15, 92, -24);
 
-    g.fillStyle(0xb98554, 0.58);
+    g.fillStyle(0x9b7048, 0.38);
     for (const bolt of [
-      { x: -82, y: -5, r: 3 },
-      { x: -45, y: 11, r: 2.5 },
-      { x: -4, y: -8, r: 2.4 },
-      { x: 36, y: 8, r: 2.4 },
-      { x: 72, y: -7, r: 2.8 },
+      { x: -82, y: -5, r: 2.6 },
+      { x: -45, y: 11, r: 2.2 },
+      { x: -4, y: -8, r: 2.1 },
+      { x: 36, y: 8, r: 2.1 },
+      { x: 72, y: -7, r: 2.4 },
     ]) {
       g.fillCircle(bolt.x, bolt.y, bolt.r);
       g.fillStyle(0x140d08, 0.45);
       g.fillCircle(bolt.x + 1, bolt.y + 1, bolt.r * 0.45);
-      g.fillStyle(0xb98554, 0.58);
+      g.fillStyle(0x9b7048, 0.38);
     }
 
-    g.lineStyle(2, PALETTE_HEX.ember, 0.3);
+    g.fillStyle(0x070504, 0.18);
+    g.fillEllipse(-40, 2, 44, 10);
+    g.fillEllipse(36, -3, 52, 9);
+    g.fillStyle(0xb78356, 0.13);
+    g.fillEllipse(-62, -15, 32, 5);
+    g.fillEllipse(54, 15, 38, 5);
+
+    g.lineStyle(1.5, PALETTE_HEX.ember, 0.16);
     g.lineBetween(102, -38, 116, -44);
     g.lineBetween(100, -31, 117, -30);
     c.add(g);

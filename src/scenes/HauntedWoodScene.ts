@@ -894,25 +894,40 @@ export class HauntedWoodScene extends Phaser.Scene {
     roots.lineStyle(2, 0x7e8a63, 0.24);
     roots.lineBetween(-98, 24, -62, 16);
     roots.lineBetween(44, -1, 74, 9);
-    roots.lineStyle(4, 0xb7c6a0, 0.26);
-    roots.lineBetween(-10, -6, 30, -23);
-    roots.lineStyle(2, 0xf0d98a, 0.22);
-    roots.lineBetween(2, -2, 34, -16);
+    roots.lineStyle(3, 0x91a67a, 0.22);
+    roots.lineBetween(-12, -7, 18, -20);
+    roots.lineBetween(3, -2, 29, -14);
+    roots.lineStyle(1.5, 0xf0d98a, 0.18);
+    roots.lineBetween(7, -5, 24, -13);
 
-    roots.fillStyle(0x4d5f3f, 0.62);
-    roots.fillEllipse(-120, 17, 28, 10);
-    roots.fillEllipse(-82, 0, 38, 12);
-    roots.fillEllipse(68, 24, 46, 12);
-    roots.fillEllipse(118, 3, 34, 10);
-    roots.fillStyle(0x2c3428, 0.82);
-    roots.fillEllipse(-38, 26, 38, 14);
-    roots.fillEllipse(34, 32, 46, 12);
-    roots.fillStyle(0xb7c6a0, 0.24);
-    roots.fillCircle(-124, 12, 3);
-    roots.fillCircle(-106, 22, 2.5);
-    roots.fillCircle(28, -20, 3);
-    roots.fillCircle(110, 5, 3);
-    roots.fillCircle(126, -2, 2.2);
+    roots.fillStyle(0x12170f, 0.58);
+    roots.fillEllipse(-118, 20, 46, 12);
+    roots.fillEllipse(-40, 29, 52, 14);
+    roots.fillEllipse(40, 34, 62, 13);
+    roots.fillEllipse(116, 7, 50, 12);
+
+    roots.fillStyle(0x435236, 0.5);
+    roots.fillTriangle(-132, 18, -116, 12, -96, 22);
+    roots.fillTriangle(-92, 3, -74, -4, -54, 3);
+    roots.fillTriangle(58, 25, 83, 18, 108, 28);
+    roots.fillTriangle(101, 4, 125, -4, 145, 6);
+    roots.fillStyle(0x60704b, 0.3);
+    roots.fillTriangle(-126, 12, -113, 8, -99, 15);
+    roots.fillTriangle(68, 20, 86, 16, 99, 23);
+
+    roots.fillStyle(0xa8b98d, 0.18);
+    roots.fillEllipse(-119, 14, 12, 4);
+    roots.fillEllipse(-103, 22, 14, 4);
+    roots.fillEllipse(27, -21, 12, 4);
+    roots.fillEllipse(109, 2, 13, 4);
+    roots.fillEllipse(127, -4, 10, 3);
+
+    roots.fillStyle(0x6d7b55, 0.18);
+    roots.fillEllipse(5, -1, 38, 7);
+    roots.fillStyle(0x9aa47c, 0.14);
+    roots.fillEllipse(-2, -3, 10, 3);
+    roots.fillEllipse(14, -8, 12, 3);
+    roots.fillEllipse(23, -12, 8, 2.5);
     c.add(roots);
     return c;
   }

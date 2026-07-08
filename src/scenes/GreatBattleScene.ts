@@ -3134,19 +3134,39 @@ export class GreatBattleScene extends Phaser.Scene {
     const y = QUIET_LORD_FOOT_Y + 12;
     const sigilColor = forceDuel ? 0x9b2424 : 0x8b6ad8;
 
-    seal.fillStyle(0x000000, forceDuel ? 0.28 : 0.22);
-    seal.fillEllipse(0, y + 10, 384, 46);
-    seal.lineStyle(2, sigilColor, forceDuel ? 0.34 : 0.28);
-    seal.strokeEllipse(0, y, 340, 58);
-    seal.lineStyle(1, UI_HEX.brass, 0.22);
-    seal.strokeEllipse(0, y, 258, 36);
-    seal.lineBetween(-122, y, 122, y);
-    seal.lineBetween(0, y - 18, 0, y + 18);
-    seal.fillStyle(UI_HEX.brass, 0.22);
-    seal.fillCircle(-166, y, 4);
-    seal.fillCircle(166, y, 4);
-    seal.fillStyle(sigilColor, forceDuel ? 0.18 : 0.14);
-    seal.fillCircle(0, y, 5);
+    seal.fillStyle(0x000000, forceDuel ? 0.32 : 0.26);
+    seal.fillEllipse(0, y + 13, 372, 46);
+    seal.fillStyle(forceDuel ? 0x2a0808 : 0x141021, forceDuel ? 0.2 : 0.16);
+    seal.fillEllipse(0, y + 7, 270, 28);
+
+    // Broken floor marks keep the contact point ominous without reading as a
+    // clean platform ring under the boss sprite.
+    seal.lineStyle(2, sigilColor, forceDuel ? 0.3 : 0.24);
+    for (const crack of [
+      [-178, y + 5, -116, y - 7, -64, y - 1],
+      [-142, y + 18, -72, y + 10, -20, y + 17],
+      [32, y - 4, 98, y - 12, 164, y + 2],
+      [56, y + 19, 118, y + 12, 184, y + 20],
+    ] as const) {
+      seal.beginPath();
+      seal.moveTo(crack[0], crack[1]);
+      seal.lineTo(crack[2], crack[3]);
+      seal.lineTo(crack[4], crack[5]);
+      seal.strokePath();
+    }
+    seal.lineStyle(1, UI_HEX.brass, 0.16);
+    for (const seam of [
+      [-118, y + 2, -56, y + 4],
+      [52, y + 5, 116, y + 1],
+      [-34, y + 20, 34, y + 17],
+    ] as const) {
+      seal.lineBetween(seam[0], seam[1], seam[2], seam[3]);
+    }
+    seal.fillStyle(UI_HEX.brass, 0.2);
+    seal.fillCircle(-154, y + 4, 3.2);
+    seal.fillCircle(152, y + 7, 3.2);
+    seal.fillStyle(sigilColor, forceDuel ? 0.22 : 0.16);
+    seal.fillCircle(0, y + 8, 5);
 
     return seal;
   }

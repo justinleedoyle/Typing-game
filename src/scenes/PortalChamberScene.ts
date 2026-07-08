@@ -207,6 +207,8 @@ export class PortalChamberScene extends Phaser.Scene {
   private accountDisplayObjects: Phaser.GameObjects.GameObject[] = [];
   private difficultyNotice?: Phaser.GameObjects.Container;
   private portalFloorCallGlow?: Phaser.GameObjects.Container;
+  private portalFloorCallWakeTimer?: Phaser.Time.TimerEvent;
+  private portalFloorCallWakeObjects: Phaser.GameObjects.GameObject[] = [];
   private stationTypingPulseTimes = new WeakMap<StationSpec, number>();
   private portalTypingPulseTimes = new Map<string, number>();
   private ambientHandle?: AmbientHandle;
@@ -236,6 +238,8 @@ export class PortalChamberScene extends Phaser.Scene {
     this.accountDisplayObjects = [];
     this.difficultyNotice = undefined;
     this.portalFloorCallGlow = undefined;
+    this.portalFloorCallWakeTimer = undefined;
+    this.portalFloorCallWakeObjects = [];
     this.stationTypingPulseTimes = new WeakMap();
     this.portalTypingPulseTimes = new Map();
     this.showPortalRevisits = false;
@@ -367,6 +371,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.stationWordAnchorReleases = [];
     this.portalFloorCallGlow?.destroy();
     this.portalFloorCallGlow = undefined;
+    this.clearPortalFloorCallWake();
     this.clearDeskDisplay();
     this.clearAccountDisplay();
     for (const t of this.zoneTargets) {
@@ -448,6 +453,7 @@ export class PortalChamberScene extends Phaser.Scene {
         });
         releaseAnchor = this.attachPortalFloorCallAnchor(battleTarget, 0x8b6ad8);
         this.showPortalFloorCallGlow(0x8b6ad8);
+        this.showPortalFloorCallWake(0x8b6ad8);
         this.typingInput.register(battleTarget);
         this.zoneTargets.push(battleTarget);
         this.stageHubTarget(battleTarget, 80);
@@ -470,6 +476,7 @@ export class PortalChamberScene extends Phaser.Scene {
             releaseAnchor();
             this.portalFloorCallGlow?.destroy();
             this.portalFloorCallGlow = undefined;
+            this.clearPortalFloorCallWake();
             this.playHubActorAction(HUB_STATIONS.portalFloor.x);
             this.pulseStation(HUB_STATIONS.portalFloor);
             this.startNewGame();
@@ -477,6 +484,7 @@ export class PortalChamberScene extends Phaser.Scene {
         });
         releaseAnchor = this.attachPortalFloorCallAnchor(ngPlusTarget, UI_HEX.brass);
         this.showPortalFloorCallGlow(UI_HEX.brass);
+        this.showPortalFloorCallWake(UI_HEX.brass);
         this.typingInput.register(ngPlusTarget);
         this.zoneTargets.push(ngPlusTarget);
         this.stageHubTarget(ngPlusTarget, 80);
@@ -694,6 +702,109 @@ export class PortalChamberScene extends Phaser.Scene {
       ease: "Sine.easeInOut",
     });
     this.portalFloorCallGlow = glow;
+  }
+
+  private showPortalFloorCallWake(color: number): void {
+    this.clearPortalFloorCallWake();
+
+    const clearedArches = ARCHES.filter(
+      (arch) => this.store.get().realms[arch.id]?.cleared === true,
+    );
+    if (clearedArches.length === 0) return;
+
+    let archIdx = 0;
+    this.playPortalFloorCallWakeThread(clearedArches[archIdx], color);
+    this.portalFloorCallWakeTimer = this.time.addEvent({
+      delay: 760,
+      loop: true,
+      callback: () => {
+        if (this.activeZone !== "portals" || this.enteringGreatBattle || this.restartingNewGame) {
+          return;
+        }
+        archIdx = (archIdx + 1) % clearedArches.length;
+        this.playPortalFloorCallWakeThread(clearedArches[archIdx], color);
+      },
+    });
+  }
+
+  private clearPortalFloorCallWake(): void {
+    this.portalFloorCallWakeTimer?.remove(false);
+    this.portalFloorCallWakeTimer = undefined;
+    for (const obj of [...this.portalFloorCallWakeObjects]) {
+      obj.destroy();
+    }
+    this.portalFloorCallWakeObjects = [];
+  }
+
+  private trackPortalFloorCallWakeObject<T extends Phaser.GameObjects.GameObject>(obj: T): T {
+    this.portalFloorCallWakeObjects.push(obj);
+    obj.once(Phaser.GameObjects.Events.DESTROY, () => {
+      const idx = this.portalFloorCallWakeObjects.indexOf(obj);
+      if (idx >= 0) this.portalFloorCallWakeObjects.splice(idx, 1);
+    });
+    return obj;
+  }
+
+  private playPortalFloorCallWakeThread(arch: ArchSpec, color: number): void {
+    const fromX = arch.x;
+    const fromY = arch.baseY - arch.height / 2 + 34;
+    const toX = HUB_STATIONS.portalFloor.x;
+    const toY = HUB_STATIONS.portalFloor.y - 268;
+    const bendX = (fromX + toX) / 2;
+    const bendY = Math.min(fromY, toY) - 44;
+
+    const thread = this.trackPortalFloorCallWakeObject(
+      this.add.graphics().setDepth(5.35).setAlpha(0.58),
+    );
+    thread.lineStyle(1.5, color, 0.18);
+    thread.lineBetween(fromX, fromY, bendX, bendY);
+    thread.lineBetween(bendX, bendY, toX, toY);
+    thread.fillStyle(color, 0.22);
+    thread.fillCircle(toX, toY, 3.5);
+    this.tweens.add({
+      targets: thread,
+      alpha: 0,
+      duration: 620,
+      ease: "Sine.easeOut",
+      onComplete: () => thread.destroy(),
+    });
+
+    const glow = this.archGlows.get(arch.id);
+    if (glow?.visible) {
+      const baseAlpha = glow.alpha;
+      this.tweens.add({
+        targets: glow,
+        alpha: Math.min(0.38, baseAlpha + 0.16),
+        duration: 190,
+        yoyo: true,
+        ease: "Sine.easeOut",
+        onComplete: () => glow.setAlpha(baseAlpha),
+      });
+    }
+
+    for (let i = 0; i < 4; i += 1) {
+      const startX = fromX + Phaser.Math.Between(-28, 28);
+      const startY = fromY + Phaser.Math.Between(-32, 26);
+      const targetX = toX + Phaser.Math.Between(-54, 54);
+      const targetY = toY + Phaser.Math.Between(-20, 24);
+      const mote = this.trackPortalFloorCallWakeObject(
+        this.add.graphics().setPosition(startX, startY).setDepth(5.55).setAlpha(0.52),
+      );
+      mote.fillStyle(i % 2 === 0 ? UI_HEX.brass : color, 0.72);
+      mote.fillCircle(0, 0, Phaser.Math.FloatBetween(2.1, 3.7));
+      this.tweens.add({
+        targets: mote,
+        x: targetX,
+        y: targetY,
+        alpha: 0,
+        scaleX: 0.34,
+        scaleY: 0.34,
+        duration: 560 + i * 34,
+        delay: i * 42,
+        ease: "Sine.easeIn",
+        onComplete: () => mote.destroy(),
+      });
+    }
   }
 
   private enterSettings(): void {
@@ -1123,6 +1234,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.narration.clear();
     this.portalFloorCallGlow?.destroy();
     this.portalFloorCallGlow = undefined;
+    this.clearPortalFloorCallWake();
     this.playHubActorAction(HUB_STATIONS.portalFloor.x);
     this.pulseStation(HUB_STATIONS.portalFloor);
     this.playGreatBattleEntryWake();
@@ -1774,11 +1886,8 @@ export class PortalChamberScene extends Phaser.Scene {
       g.strokePath();
       g.lineStyle(1.5, PALETTE_HEX.brass, 0.2);
       g.lineBetween(spec.x - 44, bottomY - 18, spec.x + 44, bottomY - 18);
-      sprite.setVisible(true);
-      sprite.setTint(PALETTE_HEX.brass);
-      sprite.setAlpha(0.18);
-      sprite.setScale((spec.width * 0.38) / 168, (spec.height * 0.42) / 338);
-      if (!sprite.anims.isPlaying) sprite.play("portal-spin");
+      sprite.setVisible(false);
+      if (sprite.anims.isPlaying) sprite.stop();
       return;
     }
 

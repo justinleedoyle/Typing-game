@@ -1742,26 +1742,42 @@ export class PortalChamberScene extends Phaser.Scene {
     }
 
     if (state === "cleared") {
-      // Warm amber ring under the painted arch — revisitable cue.
-      const archMidY = spec.baseY - spec.height + spec.width / 2;
-      const radius = spec.width / 2;
+      // Dormant amber trace — cleared portals should read as stamped passages,
+      // not five active blue panes competing with the main floor call.
+      const archTopY = spec.baseY - spec.height + 54;
+      const shoulderY = archTopY + spec.width * 0.3;
+      const bottomY = spec.baseY - 8;
+      const leftX = spec.x - spec.width * 0.31;
+      const rightX = spec.x + spec.width * 0.31;
       if (glow) {
         this.drawPortalGlow(
           glow,
-          { ...spec, width: spec.width * 0.62, height: spec.height * 0.58 },
+          { ...spec, width: spec.width * 0.34, height: spec.height * 0.28 },
           PALETTE_HEX.brass,
-          0.3,
+          0.16,
         );
         glow.setVisible(true);
       }
-      g.lineStyle(2, PALETTE_HEX.brass, 0.35);
+      g.lineStyle(2, PALETTE_HEX.brass, 0.3);
       g.beginPath();
-      g.arc(spec.x, archMidY + 60, radius * 0.55, 0, Math.PI * 2);
+      g.moveTo(leftX, bottomY);
+      g.lineTo(leftX, shoulderY);
+      g.arc(spec.x, shoulderY, spec.width * 0.31, Math.PI, 0);
+      g.lineTo(rightX, bottomY);
       g.strokePath();
+      g.lineStyle(1.25, PALETTE_HEX.brass, 0.18);
+      g.beginPath();
+      g.moveTo(leftX + 18, bottomY - 12);
+      g.lineTo(leftX + 18, shoulderY + 20);
+      g.arc(spec.x, shoulderY + 20, spec.width * 0.31 - 18, Math.PI, 0);
+      g.lineTo(rightX - 18, bottomY - 12);
+      g.strokePath();
+      g.lineStyle(1.5, PALETTE_HEX.brass, 0.2);
+      g.lineBetween(spec.x - 44, bottomY - 18, spec.x + 44, bottomY - 18);
       sprite.setVisible(true);
       sprite.setTint(PALETTE_HEX.brass);
-      sprite.setAlpha(0.36);
-      sprite.setScale((spec.width * 0.7) / 168, (spec.height * 0.68) / 338);
+      sprite.setAlpha(0.18);
+      sprite.setScale((spec.width * 0.38) / 168, (spec.height * 0.42) / 338);
       if (!sprite.anims.isPlaying) sprite.play("portal-spin");
       return;
     }

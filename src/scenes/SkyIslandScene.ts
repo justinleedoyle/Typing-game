@@ -996,8 +996,8 @@ export class SkyIslandScene extends Phaser.Scene {
     c.add(rocks);
 
     const landing = this.add.graphics().setAngle(-4);
-    landing.fillStyle(0x151611, 0.62);
-    landing.fillEllipse(-244, -44, 146, 34);
+    landing.fillStyle(0x17120f, 0.22);
+    landing.fillEllipse(-244, -42, 150, 30);
     drawStone(
       landing,
       [
@@ -1009,29 +1009,29 @@ export class SkyIslandScene extends Phaser.Scene {
         { x: -258, y: -44 },
         { x: -310, y: -52 },
       ],
-      0x4b4e42,
-      1,
-      0.28,
-      3,
+      0x6a634b,
+      0.74,
+      0.13,
+      1.4,
       0x222018,
     );
-    landing.fillStyle(0x7b805f, 0.2);
-    landing.fillEllipse(-260, -72, 52, 12);
-    landing.lineStyle(1.5, 0x1e211d, 0.42);
-    landing.lineBetween(-290, -63, -246, -70);
-    landing.lineBetween(-230, -79, -204, -66);
-    landing.lineBetween(-276, -55, -236, -58);
-    landing.lineBetween(-246, -82, -214, -75);
-    landing.lineStyle(4, 0x2b2318, 0.84);
-    landing.lineBetween(-306, -72, -184, -70);
-    landing.lineStyle(2, PALETTE_HEX.brass, 0.2);
-    landing.lineBetween(-300, -80, -190, -78);
-    landing.lineStyle(5, 0x2b2318, 0.9);
-    landing.lineBetween(-308, -82, -300, -38);
-    landing.lineBetween(-184, -80, -190, -38);
-    landing.fillStyle(PALETTE_HEX.brass, 0.36);
-    landing.fillCircle(-304, -82, 3.5);
-    landing.fillCircle(-186, -80, 3.5);
+    landing.fillStyle(0x9b9168, 0.1);
+    landing.fillEllipse(-260, -72, 48, 10);
+    landing.fillEllipse(-218, -61, 38, 8);
+    landing.lineStyle(1.1, 0x241f17, 0.24);
+    landing.lineBetween(-292, -62, -252, -68);
+    landing.lineBetween(-232, -78, -205, -66);
+    landing.lineBetween(-276, -55, -238, -58);
+    landing.lineBetween(-248, -82, -216, -76);
+    landing.lineStyle(1, 0xd6c386, 0.055);
+    landing.lineBetween(-289, -75, -252, -80);
+    landing.lineBetween(-218, -82, -194, -75);
+    landing.fillStyle(0x2a2418, 0.28);
+    landing.fillCircle(-306, -59, 3);
+    landing.fillCircle(-191, -64, 2.5);
+    landing.fillStyle(0xb8a66f, 0.11);
+    landing.fillCircle(-282, -74, 2);
+    landing.fillCircle(-228, -58, 1.8);
     c.add(landing);
 
     const entrance = this.add.graphics().setAngle(-5);
@@ -1066,77 +1066,78 @@ export class SkyIslandScene extends Phaser.Scene {
 
     const bridge = this.add.graphics().setAngle(-3);
     [
-      { x: -122, y: 58, w: 92, h: 22 },
-      { x: -38, y: 54, w: 98, h: 23 },
-      { x: 48, y: 50, w: 96, h: 22 },
-      { x: 136, y: 47, w: 96, h: 22 },
+      { x: -124, y: 55, w: 62, h: 14 },
+      { x: -44, y: 52, w: 66, h: 15 },
+      { x: 42, y: 49, w: 64, h: 14 },
+      { x: 128, y: 45, w: 66, h: 14 },
     ].forEach((shadow) => {
-      bridge.fillStyle(0x17120f, 0.22);
+      bridge.fillStyle(0x17120f, 0.07);
       bridge.fillEllipse(shadow.x, shadow.y, shadow.w, shadow.h);
     });
-    bridge.lineStyle(3, 0x211b15, 0.58);
-    bridge.lineBetween(-176, 35, 184, 12);
-    bridge.lineBetween(-168, 71, 188, 48);
-    bridge.lineStyle(1.5, PALETTE_HEX.brass, 0.08);
-    bridge.lineBetween(-176, 29, 184, 6);
-    const bridgeSlabs = [
+    bridge.lineStyle(2, 0x211b15, 0.14);
+    bridge.lineBetween(-174, 36, 178, 14);
+    bridge.lineBetween(-166, 62, 182, 42);
+    bridge.lineStyle(1.2, 0xf3ead2, 0.018);
+    bridge.lineBetween(-142, 32, -62, 28);
+    bridge.lineBetween(44, 20, 132, 18);
+    const bridgeStones = [
       [
-        { x: -166, y: 40 },
-        { x: -145, y: 23 },
-        { x: -106, y: 17 },
-        { x: -78, y: 30 },
-        { x: -86, y: 56 },
-        { x: -129, y: 68 },
-        { x: -162, y: 58 },
+        { x: -156, y: 39 },
+        { x: -139, y: 25 },
+        { x: -104, y: 21 },
+        { x: -82, y: 32 },
+        { x: -93, y: 49 },
+        { x: -130, y: 56 },
+        { x: -153, y: 50 },
       ],
       [
-        { x: -90, y: 44 },
-        { x: -64, y: 24 },
-        { x: -25, y: 16 },
-        { x: 8, y: 29 },
-        { x: 2, y: 55 },
-        { x: -45, y: 67 },
-        { x: -84, y: 60 },
+        { x: -78, y: 42 },
+        { x: -58, y: 28 },
+        { x: -20, y: 23 },
+        { x: 3, y: 34 },
+        { x: -5, y: 50 },
+        { x: -44, y: 58 },
+        { x: -75, y: 52 },
       ],
       [
-        { x: -4, y: 40 },
-        { x: 24, y: 20 },
-        { x: 68, y: 18 },
-        { x: 98, y: 31 },
-        { x: 90, y: 55 },
-        { x: 43, y: 64 },
-        { x: 4, y: 58 },
+        { x: 8, y: 38 },
+        { x: 29, y: 24 },
+        { x: 65, y: 22 },
+        { x: 87, y: 33 },
+        { x: 78, y: 49 },
+        { x: 40, y: 56 },
+        { x: 11, y: 51 },
       ],
       [
-        { x: 90, y: 39 },
-        { x: 118, y: 20 },
-        { x: 163, y: 20 },
-        { x: 196, y: 33 },
-        { x: 181, y: 58 },
-        { x: 132, y: 65 },
-        { x: 98, y: 56 },
+        { x: 96, y: 36 },
+        { x: 119, y: 23 },
+        { x: 158, y: 23 },
+        { x: 182, y: 34 },
+        { x: 168, y: 51 },
+        { x: 132, y: 58 },
+        { x: 101, y: 50 },
       ],
     ];
-    bridgeSlabs.forEach((points, i) => {
+    bridgeStones.forEach((points, i) => {
       drawStone(
         bridge,
         points,
-        i % 2 === 0 ? 0x5b5847 : 0x68604a,
-        0.68,
+        i % 2 === 0 ? 0x817758 : 0x766d52,
         0.2,
-        1.8,
+        0.055,
+        0.9,
         0x201d18,
       );
       const midX = (points[1]!.x + points[3]!.x) / 2;
-      bridge.lineStyle(1.1, 0x191611, 0.26);
-      bridge.lineBetween(midX - 16, points[1]!.y + 17, midX + 13, points[4]!.y - 9);
-      bridge.fillStyle(0xf3ead2, 0.035);
-      bridge.fillEllipse(midX - 9, points[1]!.y + 8, 32, 7);
+      bridge.lineStyle(0.9, 0x191611, 0.075);
+      bridge.lineBetween(midX - 12, points[1]!.y + 14, midX + 10, points[4]!.y - 7);
+      bridge.fillStyle(0xf3ead2, 0.014);
+      bridge.fillEllipse(midX - 7, points[1]!.y + 7, 20, 5);
     });
-    bridge.fillStyle(0xb1a26d, 0.08);
-    bridge.fillEllipse(-136, 52, 28, 7);
-    bridge.fillEllipse(46, 55, 24, 6);
-    bridge.fillEllipse(142, 43, 26, 7);
+    bridge.fillStyle(0xb6a66e, 0.025);
+    bridge.fillEllipse(-134, 49, 18, 5);
+    bridge.fillEllipse(44, 52, 16, 4);
+    bridge.fillEllipse(137, 40, 17, 5);
     c.add(bridge);
     return c;
   }

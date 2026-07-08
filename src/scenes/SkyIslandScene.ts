@@ -935,22 +935,64 @@ export class SkyIslandScene extends Phaser.Scene {
     c.add(air);
 
     const rocks = this.add.graphics().setAngle(-3);
-    rocks.fillStyle(0x252a2b, 0.92);
-    rocks.fillEllipse(-252, 32, 104, 38);
-    rocks.fillStyle(0x3d423e, 0.92);
-    rocks.fillEllipse(-156, 18, 122, 46);
-    rocks.fillEllipse(156, 22, 130, 50);
-    rocks.fillStyle(0x6d7159, 0.34);
-    rocks.fillEllipse(-252, 22, 56, 14);
-    rocks.fillEllipse(-158, 6, 66, 16);
-    rocks.fillEllipse(158, 9, 72, 18);
-    rocks.lineStyle(2, 0x181613, 0.34);
-    rocks.strokeEllipse(-252, 32, 82, 26);
-    rocks.strokeEllipse(-156, 18, 100, 30);
-    rocks.strokeEllipse(156, 22, 104, 32);
-    rocks.lineStyle(1.5, 0xc7b886, 0.14);
-    rocks.lineBetween(-194, 6, -154, 14);
-    rocks.lineBetween(126, 14, 176, 8);
+    [
+      { x: -256, y: 38, w: 128, h: 24 },
+      { x: -154, y: 30, w: 142, h: 28 },
+      { x: 154, y: 35, w: 150, h: 30 },
+    ].forEach((shadow) => {
+      rocks.fillStyle(0x17120f, 0.18);
+      rocks.fillEllipse(shadow.x, shadow.y, shadow.w, shadow.h);
+    });
+    [
+      {
+        fill: 0x5e5a45,
+        points: [
+          { x: -316, y: 15 },
+          { x: -286, y: -4 },
+          { x: -246, y: -8 },
+          { x: -202, y: 5 },
+          { x: -190, y: 31 },
+          { x: -231, y: 44 },
+          { x: -292, y: 39 },
+        ],
+      },
+      {
+        fill: 0x6b634b,
+        points: [
+          { x: -220, y: -3 },
+          { x: -184, y: -23 },
+          { x: -124, y: -20 },
+          { x: -83, y: -3 },
+          { x: -94, y: 28 },
+          { x: -148, y: 43 },
+          { x: -204, y: 29 },
+        ],
+      },
+      {
+        fill: 0x73694f,
+        points: [
+          { x: 88, y: -7 },
+          { x: 125, y: -27 },
+          { x: 182, y: -24 },
+          { x: 229, y: -6 },
+          { x: 219, y: 29 },
+          { x: 162, y: 47 },
+          { x: 104, y: 31 },
+        ],
+      },
+    ].forEach((stone, i) => {
+      drawStone(rocks, stone.points, stone.fill, 0.62, 0.16, 1.4, 0x201d18);
+      rocks.fillStyle(0xf3ead2, 0.035);
+      const highlight = i === 2 ? { x: 135, y: -15, w: 52, h: 8 } : i === 1 ? { x: -178, y: -12, w: 44, h: 7 } : { x: -286, y: 3, w: 36, h: 6 };
+      rocks.fillEllipse(highlight.x, highlight.y, highlight.w, highlight.h);
+    });
+    rocks.lineStyle(1.2, 0x1b1712, 0.24);
+    rocks.lineBetween(-292, 15, -250, 24);
+    rocks.lineBetween(-181, -4, -138, 8);
+    rocks.lineBetween(124, 1, 176, -5);
+    rocks.lineStyle(1.1, 0x9b8f65, 0.13);
+    rocks.lineBetween(-205, 20, -172, 18);
+    rocks.lineBetween(180, 19, 214, 13);
     c.add(rocks);
 
     const landing = this.add.graphics().setAngle(-4);
@@ -1029,7 +1071,7 @@ export class SkyIslandScene extends Phaser.Scene {
       { x: 48, y: 50, w: 96, h: 22 },
       { x: 136, y: 47, w: 96, h: 22 },
     ].forEach((shadow) => {
-      bridge.fillStyle(0x17120f, 0.6);
+      bridge.fillStyle(0x17120f, 0.22);
       bridge.fillEllipse(shadow.x, shadow.y, shadow.w, shadow.h);
     });
     bridge.lineStyle(3, 0x211b15, 0.58);
@@ -1079,19 +1121,19 @@ export class SkyIslandScene extends Phaser.Scene {
       drawStone(
         bridge,
         points,
-        i % 2 === 0 ? 0x45473c : 0x514f41,
-        1,
-        0.36,
-        2.5,
+        i % 2 === 0 ? 0x5b5847 : 0x68604a,
+        0.68,
+        0.2,
+        1.8,
         0x201d18,
       );
       const midX = (points[1]!.x + points[3]!.x) / 2;
-      bridge.lineStyle(1.4, 0x191611, 0.42);
+      bridge.lineStyle(1.1, 0x191611, 0.26);
       bridge.lineBetween(midX - 16, points[1]!.y + 17, midX + 13, points[4]!.y - 9);
-      bridge.fillStyle(0xf3ead2, 0.055);
+      bridge.fillStyle(0xf3ead2, 0.035);
       bridge.fillEllipse(midX - 9, points[1]!.y + 8, 32, 7);
     });
-    bridge.fillStyle(0x7d8061, 0.18);
+    bridge.fillStyle(0xb1a26d, 0.08);
     bridge.fillEllipse(-136, 52, 28, 7);
     bridge.fillEllipse(46, 55, 24, 6);
     bridge.fillEllipse(142, 43, 26, 7);

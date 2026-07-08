@@ -3780,11 +3780,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private drawWren(x: number, y: number): void {
-    const c = this.add.container(x, y);
+    const c = this.add.container(x, y).setDepth(6);
     this.wrenContainer = c;
     c.add(addLocalGroundShadow(this, 92, 18, { y: 6, alpha: 0.32 }));
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
+    c.add(this.makeCatwalkFootLock());
     stageContainerEntrance(this, c, {
       breathDy: -3,
       breathMs: 1900,
@@ -3803,6 +3804,24 @@ export class ClockworkForgeScene extends Phaser.Scene {
       driftY: -34,
       durationMs: 840,
     });
+  }
+
+  private makeCatwalkFootLock(): Phaser.GameObjects.Graphics {
+    const g = this.add.graphics();
+    // Drawn inside Wren's feet-origin container and after the sprite, so the
+    // catwalk visually tucks around the boots instead of passing behind them.
+    g.fillStyle(0x050403, 0.36);
+    g.fillEllipse(0, 5, 118, 12);
+    g.fillStyle(0x17100d, 0.54);
+    g.fillRoundedRect(-56, -2, 112, 8, 3);
+    g.lineStyle(1.5, 0x8a6040, 0.32);
+    g.lineBetween(-50, -3, 50, -3);
+    g.lineStyle(1, 0xf0a35b, 0.14);
+    g.lineBetween(-42, 2, 42, 2);
+    g.fillStyle(PALETTE_HEX.ember, 0.2);
+    g.fillCircle(-40, 2, 2);
+    g.fillCircle(40, 2, 2);
+    return g;
   }
 
   /** Add the painted golem sprite into a container. The local heat base keeps

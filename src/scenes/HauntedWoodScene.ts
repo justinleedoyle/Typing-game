@@ -734,7 +734,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private pathWordPosition(idx: number): { x: number; y: number } {
     const cue = this.pathCue;
     if (!cue?.scene) return { x: this.scale.width / 2, y: this.scale.height / 2 };
-    if (idx === 0) return { x: cue.x + 36, y: cue.y - 116 };
+    if (idx === 0) return { x: cue.x - 58, y: cue.y - 116 };
     if (idx === 1) return { x: cue.x + 204, y: cue.y - 76 };
     return { x: cue.x + 214, y: cue.y - 124 };
   }
@@ -928,20 +928,40 @@ export class HauntedWoodScene extends Phaser.Scene {
     roots.fillEllipse(109, 2, 13, 4);
     roots.fillEllipse(127, -4, 10, 3);
 
-    roots.fillStyle(0x6d7b55, 0.045);
-    roots.fillEllipse(-2, 0, 18, 4);
-    roots.fillStyle(0x9aa47c, 0.055);
-    roots.fillEllipse(-10, -1, 5, 2);
-    roots.fillStyle(0xd2b76a, 0.1);
-    roots.fillCircle(-66, 18, 1.5);
-    roots.fillCircle(104, 8, 1.5);
     roots.fillStyle(0x0d100c, 0.9);
-    roots.fillEllipse(4, -17, 64, 18);
-    roots.lineStyle(7, 0x1f1a12, 0.88);
-    roots.lineBetween(-38, -12, 0, -19);
-    roots.lineBetween(0, -19, 42, -10);
-    roots.lineStyle(2, 0x4b4430, 0.28);
-    roots.lineBetween(-26, -15, 12, -20);
+    roots.fillEllipse(-4, -18, 86, 22);
+    roots.fillStyle(0x14160f, 0.74);
+    roots.fillTriangle(-53, -7, -14, -25, 23, -10);
+    roots.fillTriangle(-10, -13, 35, -27, 72, -7);
+    roots.lineStyle(8, 0x1f1a12, 0.92);
+    roots.lineBetween(-52, -10, -8, -22);
+    roots.lineBetween(-8, -22, 52, -8);
+    roots.lineStyle(3.5, 0x0b0d09, 0.55);
+    roots.lineBetween(-44, -4, -3, -16);
+    roots.lineBetween(8, -18, 48, -4);
+    roots.lineStyle(1.5, 0x4b4430, 0.16);
+    roots.lineBetween(-35, -15, 8, -21);
+    roots.lineBetween(18, -16, 58, -10);
+    roots.fillStyle(0x070907, 0.84);
+    roots.fillEllipse(9, -18, 58, 28);
+    roots.lineStyle(6, 0x0d100c, 0.86);
+    roots.lineBetween(-22, -13, 10, -22);
+    roots.lineBetween(6, -22, 40, -13);
+    roots.fillStyle(0x080a07, 0.66);
+    roots.fillEllipse(12, 2, 82, 23);
+    roots.lineStyle(10, 0x11140e, 0.82);
+    roots.lineBetween(-36, 9, 14, -1);
+    roots.lineBetween(8, -2, 64, 8);
+    roots.lineStyle(2, 0x343121, 0.16);
+    roots.lineBetween(-24, 4, 18, -4);
+    roots.lineBetween(20, -2, 54, 5);
+    roots.fillStyle(0x050705, 0.96);
+    roots.fillEllipse(22, -56, 48, 34);
+    roots.fillStyle(0x10140d, 0.82);
+    roots.fillTriangle(-3, -48, 21, -72, 49, -48);
+    roots.lineStyle(3, 0x252216, 0.24);
+    roots.lineBetween(5, -51, 22, -66);
+    roots.lineBetween(24, -65, 43, -50);
     c.add(roots);
     return c;
   }

@@ -89,6 +89,10 @@ const LANTERN_SPIRIT_HEIGHT = 124;
 const SCHOLAR_SPIRIT_HEIGHT = 160;
 const SPIRIT_WORD_ATTACH_DELAY_MS = 140;
 const SPIRIT_ARRIVAL_SETTLE_SCALE = 0.026;
+const FIRST_SPIRIT_LANTERN_SOURCES = [
+  { x: 720, y: 440 },
+  { x: 1200, y: 400 },
+] as const;
 // Painted Scholar Etta — a small amber book-spirit child shown during her side
 // encounter. Smallish (~280px) and translucent (resting alpha 0.9). Positioning
 // is tune-later: left of centre (x≈520) so she's clear of the centred typed
@@ -219,6 +223,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private wrenSprite!: Phaser.GameObjects.Image;
   private lighterSprite: Phaser.GameObjects.Image | null = null;
   private lighterReplyAnchors: WordBodyAnchorHandle[] = [];
+  private firstSpiritsEmergeFromLanterns = false;
 
   // Fork / companion flags
   private fork1Choice: "help-etta" | "steal-flame" | null = null;
@@ -290,6 +295,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.pathWordAnchors = [];
     this.lighterSprite = null;
     this.lighterReplyAnchors = [];
+    this.firstSpiritsEmergeFromLanterns = false;
     this.ambientLanterns = [];
     this.revisitMemoryCue = null;
     this.revisitMemoryWordAnchor = null;
@@ -1243,9 +1249,49 @@ export class SkyIslandScene extends Phaser.Scene {
         s.almanacLore.push("the-lantern-lighters-vigil");
       }
     });
-    this.setNarrator("The Lantern-Lighter's Vigil — a page appears in the Almanac.");
-    this.time.delayedCall(1600, () => this.hideLanternLighter());
+    this.setNarrator(
+      "The Lantern-Lighter raises its light toward the tower path. Its lanterns flare, and pale shapes answer from within.",
+      "Lantern-Lighter",
+    );
+    this.playLighterWarningHandoff();
     this.time.delayedCall(2000, () => this.startFirstSpiritEncounterFixed());
+  }
+
+  /** The Lantern-Lighter's warning becomes the physical source of the first wave. */
+  private playLighterWarningHandoff(): void {
+    this.firstSpiritsEmergeFromLanterns = true;
+
+    playActorAttention(this, this.lighterSprite, {
+      tint: PALETTE_HEX.brass,
+      scale: 1.04,
+      durationMs: 300,
+    });
+    playSceneEventPulse(this, {
+      kind: "mote",
+      color: 0xf5c842,
+      x: this.lighterSprite?.x ?? this.scale.width / 2,
+      y: (this.lighterSprite?.y ?? this.scale.height / 2) - 88,
+      depth: LIGHTER_SPRITE_DEPTH + 1,
+      ringWidth: 180,
+      ringHeight: 86,
+      count: 9,
+      alpha: 0.16,
+      durationMs: 560,
+    });
+    playWrenFocus(this.wrenSprite);
+
+    this.ambientLanterns.forEach((lantern, index) => {
+      if (!lantern.scene) return;
+      const restingAlpha = lantern.alpha;
+      this.tweens.add({
+        targets: lantern,
+        alpha: { from: restingAlpha, to: 0.96 },
+        duration: 180,
+        delay: index * 70,
+        yoyo: true,
+        ease: "Sine.easeInOut",
+      });
+    });
   }
 
   // ─── First lantern-spirit encounter ──────────────────────────────────────
@@ -1274,17 +1320,26 @@ export class SkyIslandScene extends Phaser.Scene {
       { x: 620, y: 780 },
       { x: 1300, y: 780 },
     ];
+    const emergeFromLanterns = this.firstSpiritsEmergeFromLanterns;
+    this.firstSpiritsEmergeFromLanterns = false;
     this.spirits = [];
     positions.forEach((pos, i) => {
+      const source = emergeFromLanterns
+        ? FIRST_SPIRIT_LANTERN_SOURCES[i]
+        : undefined;
       this.spawnSpirit(
-        pos.x < this.scale.width / 2 ? -120 : this.scale.width + 120,
+        source?.x ?? (pos.x < this.scale.width / 2 ? -120 : this.scale.width + 120),
         pos.x,
         pos.y,
         words[i] ?? "lantern",
         i * 300,
         20000,
+        source?.y,
       );
     });
+    if (emergeFromLanterns) {
+      this.time.delayedCall(480, () => this.hideLanternLighter());
+    }
   }
 
   private onFirstEncounterCleared(): void {
@@ -2739,8 +2794,9 @@ export class SkyIslandScene extends Phaser.Scene {
     word: string,
     delay: number,
     advanceMs: number,
+    startY = targetY,
   ): void {
-    const container = this.add.container(startX, targetY).setDepth(18);
+    const container = this.add.container(startX, startY).setDepth(18);
 
     container.add(this.makeLanternSpiritLumenBase());
 
@@ -2791,6 +2847,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.tweens.add({
       targets: container,
       x: targetX,
+      y: targetY,
       alpha: 1,
       duration: 800,
       delay,

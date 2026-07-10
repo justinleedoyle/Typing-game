@@ -2462,6 +2462,56 @@ export class PortalChamberScene extends Phaser.Scene {
       this.wrenContainer.y - 112,
       color,
     );
+    this.playHubArrivalMaterialize(sourceX, color);
+  }
+
+  /** A realm return resolves at the portal floor before the hub settles. This
+   * keeps the existing source-to-Wren flecks from reading as a detached overlay. */
+  private playHubArrivalMaterialize(sourceX: number, color: number): void {
+    if (!this.wrenContainer?.active || !this.wrenSprite?.active) return;
+
+    const landingX = this.wrenContainer.x;
+    const landingY = WREN_Y;
+    const faceLeft = sourceX < landingX;
+    this.tweens.killTweensOf(this.wrenContainer);
+    setWrenPose(this.wrenSprite, "front", faceLeft);
+    this.wrenContainer
+      .setPosition(landingX, landingY + 16)
+      .setScale(0.92)
+      .setAlpha(0);
+
+    this.time.delayedCall(150, () => {
+      if (!this.wrenContainer?.active || !this.wrenSprite?.active) return;
+      playSceneEventPulse(this, {
+        kind: "mote",
+        color,
+        x: landingX,
+        y: landingY - 8,
+        depth: 8,
+        durationMs: 460,
+        ringWidth: 116,
+        ringHeight: 34,
+        count: 5,
+        alpha: 0.075,
+        spreadX: 38,
+        spreadY: 12,
+      });
+      this.tweens.add({
+        targets: this.wrenContainer,
+        y: landingY,
+        alpha: 1,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 460,
+        ease: "Sine.easeOut",
+        onComplete: () => {
+          if (!this.wrenContainer?.active || !this.wrenSprite?.active) return;
+          setWrenPose(this.wrenSprite, "front", faceLeft);
+          playWrenFocus(this.wrenSprite, { faceLeft, durationMs: 150 });
+          addIdleBreath(this, this.wrenContainer, { dy: -4, durationMs: 2100 });
+        },
+      });
+    });
   }
 
   private playHubInitialRoomWake(): void {

@@ -476,6 +476,13 @@ interface Enemy {
   waveIdx: number;
 }
 
+interface FinalPhraseWordTrace {
+  prop: Phaser.GameObjects.Container;
+  claim(): void;
+  advance(): void;
+  dissolve(): void;
+}
+
 // ─── Scene ─────────────────────────────────────────────────────────────────────
 
 export class GreatBattleScene extends Phaser.Scene {
@@ -1248,9 +1255,12 @@ export class GreatBattleScene extends Phaser.Scene {
     const cx = this.againText?.x ?? this.scale.width / 2;
     const cy = this.againText?.y ?? 430;
     const path = [
-      { x: -390, y: 216 },
-      { x: -250, y: 260 },
-      { x: -90, y: 222 },
+      // Physical stepping points on the rising courtyard path from Wren to
+      // the scar. Keep the first word clear of Wren's silhouette so its trace
+      // reads as a placed mark, not a second layer on the actor.
+      { x: -330, y: 300 },
+      { x: -190, y: 250 },
+      { x: -60, y: 195 },
     ] as const;
     const point = path[index % path.length]!;
     return {
@@ -1501,12 +1511,161 @@ export class GreatBattleScene extends Phaser.Scene {
     return target;
   }
 
+  /** A short-lived ground mark lets each final phrase word read as part of the courtyard. */
+  private createFinalPhraseWordTrace(
+    x: number,
+    y: number,
+    word: string,
+  ): FinalPhraseWordTrace {
+    const halfWidth = Math.max(68, Math.min(126, word.length * 16 + 28));
+    const floorY = 30;
+    const trace = this.add.container(x, y).setDepth(5).setAlpha(0).setScale(0.96);
+    const paving = this.add.graphics();
+    const fragments = this.add.graphics().setAlpha(0.64);
+
+    paving.fillStyle(0x0b0a0d, 0.34);
+    paving.fillPoints(
+      [
+        { x: -halfWidth + 8, y: floorY + 18 },
+        { x: -halfWidth + 26, y: floorY + 2 },
+        { x: -halfWidth / 3, y: floorY - 7 },
+        { x: halfWidth - 18, y: floorY + 1 },
+        { x: halfWidth + 4, y: floorY + 17 },
+        { x: halfWidth - 14, y: floorY + 29 },
+        { x: -halfWidth / 2, y: floorY + 34 },
+        { x: -halfWidth + 18, y: floorY + 29 },
+      ],
+      true,
+    );
+    paving.fillStyle(0x2a2427, 0.78);
+    paving.fillPoints(
+      [
+        { x: -halfWidth + 4, y: floorY + 10 },
+        { x: -halfWidth + 26, y: floorY - 7 },
+        { x: -halfWidth / 4, y: floorY - 14 },
+        { x: halfWidth - 22, y: floorY - 6 },
+        { x: halfWidth - 3, y: floorY + 10 },
+        { x: halfWidth - 20, y: floorY + 20 },
+        { x: -halfWidth / 2, y: floorY + 25 },
+        { x: -halfWidth + 18, y: floorY + 21 },
+      ],
+      true,
+    );
+    paving.fillStyle(0x3a3030, 0.38);
+    paving.fillPoints(
+      [
+        { x: -halfWidth + 30, y: floorY - 4 },
+        { x: -halfWidth / 3, y: floorY - 11 },
+        { x: -halfWidth / 2 + 9, y: floorY + 5 },
+        { x: -halfWidth + 35, y: floorY + 11 },
+      ],
+      true,
+    );
+    paving.lineStyle(1.5, 0x100d12, 0.76);
+    paving.beginPath();
+    paving.moveTo(-halfWidth + 20, floorY + 13);
+    paving.lineTo(-halfWidth / 2 + 2, floorY + 2);
+    paving.lineTo(-halfWidth / 5, floorY + 12);
+    paving.lineTo(halfWidth / 7, floorY + 1);
+    paving.lineTo(halfWidth / 2, floorY + 11);
+    paving.lineTo(halfWidth - 20, floorY + 3);
+    paving.strokePath();
+    paving.beginPath();
+    paving.moveTo(-halfWidth / 4, floorY + 12);
+    paving.lineTo(-halfWidth / 7, floorY + 28);
+    paving.lineTo(halfWidth / 12, floorY + 20);
+    paving.lineTo(halfWidth / 6, floorY + 32);
+    paving.strokePath();
+    paving.lineStyle(1, UI_HEX.brass, 0.16);
+    paving.lineBetween(-halfWidth + 32, floorY - 1, -halfWidth / 3, floorY - 7);
+    paving.lineBetween(halfWidth / 3, floorY + 2, halfWidth - 24, floorY + 8);
+
+    fragments.fillStyle(0x120d15, 0.62);
+    fragments.fillTriangle(-halfWidth - 9, floorY + 14, -halfWidth + 1, floorY + 10, -halfWidth + 4, floorY + 19);
+    fragments.fillTriangle(halfWidth + 6, floorY + 17, halfWidth + 15, floorY + 10, halfWidth + 19, floorY + 21);
+    fragments.fillStyle(PALETTE_HEX.ember, 0.38);
+    fragments.fillCircle(-halfWidth / 3, floorY + 23, 2.2);
+    fragments.fillCircle(halfWidth / 2, floorY + 18, 1.8);
+    fragments.fillStyle(0xd4b8ff, 0.22);
+    fragments.fillCircle(-halfWidth / 7, floorY + 5, 1.6);
+    fragments.fillCircle(halfWidth / 5, floorY + 26, 1.5);
+    trace.add([paving, fragments]);
+
+    this.tweens.add({
+      targets: trace,
+      alpha: 0.88,
+      scale: 1,
+      duration: 220,
+      ease: "Sine.easeOut",
+    });
+
+    let dissolved = false;
+    const pulse = (color: number, radius: number, durationMs: number): void => {
+      if (dissolved || !trace.scene) return;
+      playBodyTypePulse(this, trace, {
+        kind: "ember",
+        color,
+        offsetY: floorY + 10,
+        depth: 6,
+        ringRadius: radius,
+        durationMs,
+      });
+      this.tweens.add({
+        targets: fragments,
+        alpha: { from: 0.64, to: 0.96 },
+        duration: Math.max(120, durationMs - 30),
+        yoyo: true,
+        ease: "Sine.easeOut",
+      });
+    };
+
+    return {
+      prop: trace,
+      claim: () => {
+        pulse(UI_HEX.brass, Math.min(42, halfWidth * 0.38), 260);
+        this.tweens.add({
+          targets: trace,
+          scaleX: { from: 1, to: 1.025 },
+          scaleY: { from: 1, to: 1.012 },
+          duration: 160,
+          yoyo: true,
+          ease: "Sine.easeOut",
+        });
+      },
+      advance: () => pulse(0xd4b8ff, Math.min(34, halfWidth * 0.3), 210),
+      dissolve: () => {
+        if (dissolved || !trace.scene) return;
+        dissolved = true;
+        playBodyImpact(this, trace, {
+          kind: "ember",
+          color: PALETTE_HEX.ember,
+          offsetY: floorY + 10,
+          depth: 6,
+          ringRadius: Math.min(44, halfWidth * 0.42),
+          count: 6,
+          durationMs: 280,
+        });
+        this.tweens.add({
+          targets: trace,
+          alpha: 0,
+          scaleX: 0.9,
+          scaleY: 0.82,
+          y: trace.y + 8,
+          duration: 240,
+          ease: "Sine.easeIn",
+          onComplete: () => trace.destroy(),
+        });
+      },
+    };
+  }
+
   /** Final phrase words rebuild the revealed `Again`, rather than floating alone. */
   private makeFinalPhraseWord(opts: TextWordTargetOptions): TextWordTarget {
     const originalOnClaim = opts.onClaim;
     const originalOnAdvance = opts.onAdvance;
     const originalOnComplete = opts.onComplete;
     const phraseColor = 0xd4b8ff;
+    const trace = this.createFinalPhraseWordTrace(opts.x, opts.y, opts.word);
 
     let target!: TextWordTarget;
     target = this.makeWord({
@@ -1517,14 +1676,16 @@ export class GreatBattleScene extends Phaser.Scene {
           this,
           from.x,
           from.y,
-          opts.x,
-          opts.y + 10,
+          trace.prop.x,
+          trace.prop.y + 40,
           { color: phraseColor, depth: 8, durationMs: 440 },
         );
+        trace.claim();
         this.pulseWrenDefender("hold");
         originalOnClaim?.(mods);
       },
       onAdvance: (cursor, wordLength) => {
+        trace.advance();
         playBodyTypePulse(this, this.againText, {
           kind: "mote",
           color: phraseColor,
@@ -1537,6 +1698,15 @@ export class GreatBattleScene extends Phaser.Scene {
       },
       onComplete: () => {
         this.clearTargetAnchor(target);
+        playClaimLine(
+          this,
+          trace.prop.x,
+          trace.prop.y + 40,
+          this.againText.x,
+          this.againText.y + 4,
+          { color: phraseColor, depth: 8, durationMs: 300 },
+        );
+        trace.dissolve();
         playBodyImpact(this, this.againText, {
           kind: "mote",
           color: phraseColor,

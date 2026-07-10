@@ -95,6 +95,7 @@ const QUIET_LORD_NAME_Y = QUIET_LORD_FOOT_Y - 280;
 const QUIET_LORD_EYE_Y = QUIET_LORD_FOOT_Y - 370;
 const QUIET_LORD_CLAIM_Y = QUIET_LORD_FOOT_Y - 70;
 const QUIET_LORD_HIT_Y = QUIET_LORD_FOOT_Y - 52;
+const FINAL_AGAIN_FONT_SIZE = 64;
 
 const BATTLE_WORD_BANK = [
   "hold", "stand", "speak", "word", "voice", "again",
@@ -1245,11 +1246,16 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private finalPhraseWordPosition(index: number): { x: number; y: number } {
     const cx = this.againText?.x ?? this.scale.width / 2;
-    const cy = this.againText?.y ?? 300;
-    const offsets = [-225, 225, 0];
+    const cy = this.againText?.y ?? 430;
+    const path = [
+      { x: -390, y: 216 },
+      { x: -250, y: 260 },
+      { x: -90, y: 222 },
+    ] as const;
+    const point = path[index % path.length]!;
     return {
-      x: cx + offsets[index % offsets.length]!,
-      y: cy + 232 + (index % 2) * 30,
+      x: cx + point.x,
+      y: cy + point.y,
     };
   }
 
@@ -1506,14 +1512,16 @@ export class GreatBattleScene extends Phaser.Scene {
     target = this.makeWord({
       ...opts,
       onClaim: (mods) => {
+        const from = this.wrenDefenderClaimOrigin();
         playClaimLine(
           this,
+          from.x,
+          from.y,
           opts.x,
-          opts.y - 10,
-          this.againText.x,
-          this.againText.y + 24,
+          opts.y + 10,
           { color: phraseColor, depth: 8, durationMs: 440 },
         );
+        this.pulseWrenDefender("hold");
         originalOnClaim?.(mods);
       },
       onAdvance: (cursor, wordLength) => {
@@ -1538,6 +1546,7 @@ export class GreatBattleScene extends Phaser.Scene {
           count: 10,
           durationMs: 430,
         });
+        this.pulseWrenDefender("clean");
         originalOnComplete();
       },
     });
@@ -1729,12 +1738,16 @@ export class GreatBattleScene extends Phaser.Scene {
     this.dismissWrenDefender(durationMs);
   }
 
-  private drawWrenDefender(): void {
+  private drawWrenDefender(
+    x: number = WALL_WARD.x,
+    y: number = WALL_WARD.y + 10,
+    depth: number = 1.8,
+  ): void {
     this.dismissWrenDefender(0);
 
     const c = this.add
-      .container(WALL_WARD.x, WALL_WARD.y + 10)
-      .setDepth(1.8)
+      .container(x, y)
+      .setDepth(depth)
       .setAlpha(0);
     c.add(addLocalGroundShadow(this, 122, 22, { y: 5, alpha: 0.34 }));
 
@@ -4261,27 +4274,30 @@ export class GreatBattleScene extends Phaser.Scene {
       this.ambientHandle?.stop();
     }
 
-    // Remove againText from the fading Quiet Lord body and place it at world
-    // coords. Destroy the old body/aura shell after the word detaches so
-    // Phase 3 reads as the final word's seal, not leftover boss chrome.
+    // Pull the surviving word out of the Quiet Lord, then bring Wren back into
+    // the courtyard. The final phrase now travels between a visible speaker
+    // and a wounded remnant instead of resolving as text floating over the UI.
     this.quietLordContainer.remove(this.againText);
     this.quietLordContainer.destroy();
     if (this.strikeLineGraphic?.scene) {
       this.strikeLineGraphic.destroy();
     }
-    this.againText.setPosition(this.scale.width / 2, 300);
+    const remnantX = this.scale.width / 2 + 120;
+    const remnantY = 430;
+    this.drawWrenDefender(this.scale.width / 2 - 320, 806, 6);
+    this.againText.setPosition(remnantX, remnantY);
     this.againText.setColor("#d4b8ff");
     this.againText.setDepth(10);
-    this.drawAgainSeal();
+    this.drawAgainRemnant();
     this.attendSpeaker("Again");
     playSceneEventPulse(this, {
       kind: "mote",
       color: 0xd4b8ff,
       x: this.againText.x,
-      y: this.againText.y + 72,
+      y: this.againText.y + 62,
       depth: 6,
-      ringWidth: 330,
-      ringHeight: 82,
+      ringWidth: 280,
+      ringHeight: 68,
       spreadX: 150,
       spreadY: 34,
       count: 10,
@@ -4289,15 +4305,15 @@ export class GreatBattleScene extends Phaser.Scene {
       durationMs: 560,
     });
 
-    // Tween to center
+    // Let the remnant settle into the scar while Wren steps into frame.
     this.tweens.add({
       targets: this.againText,
-      x: this.scale.width / 2,
-      y: 300,
+      x: remnantX,
+      y: remnantY,
       duration: 600,
       ease: "Sine.easeOut",
       onComplete: () => {
-        this.againText.setStyle({ fontSize: "72px" });
+        this.againText.setStyle({ fontSize: `${FINAL_AGAIN_FONT_SIZE}px` });
       },
     });
 
@@ -4309,50 +4325,76 @@ export class GreatBattleScene extends Phaser.Scene {
     this.time.delayedCall(800, () => this.deliverFinalPhrase());
   }
 
-  private drawAgainSeal(): void {
-    const seal = this.add
+  private drawAgainRemnant(): void {
+    const remnant = this.add
       .container(this.againText.x, this.againText.y + 68)
       .setDepth(7)
       .setAlpha(0)
       .setScale(0.92);
 
-    const shadow = this.add.graphics();
-    shadow.fillStyle(0x000000, 0.24);
-    shadow.fillEllipse(0, 18, 360, 34);
+    const scar = this.add.graphics();
+    scar.fillStyle(0x05040a, 0.4);
+    scar.fillPoints([
+      new Phaser.Geom.Point(-194, 18),
+      new Phaser.Geom.Point(-148, -7),
+      new Phaser.Geom.Point(-82, 4),
+      new Phaser.Geom.Point(-28, -12),
+      new Phaser.Geom.Point(36, 1),
+      new Phaser.Geom.Point(92, -9),
+      new Phaser.Geom.Point(154, 5),
+      new Phaser.Geom.Point(196, 22),
+      new Phaser.Geom.Point(132, 34),
+      new Phaser.Geom.Point(52, 29),
+      new Phaser.Geom.Point(-26, 37),
+      new Phaser.Geom.Point(-112, 31),
+    ], true);
+    scar.fillStyle(0x21172f, 0.38);
+    scar.fillTriangle(-142, 5, -112, -30, -86, 11);
+    scar.fillTriangle(-32, 3, -6, -42, 20, 6);
+    scar.fillTriangle(86, 7, 118, -25, 142, 14);
 
-    const sigil = this.add.graphics();
-    sigil.lineStyle(2, 0xd4b8ff, 0.34);
-    sigil.strokeEllipse(0, 0, 318, 62);
-    sigil.lineStyle(1, UI_HEX.brass, 0.28);
-    sigil.strokeEllipse(0, 0, 246, 38);
-    sigil.lineBetween(-122, 0, 122, 0);
-    sigil.lineBetween(0, -18, 0, 18);
-    sigil.fillStyle(0xd4b8ff, 0.2);
-    sigil.fillCircle(0, 0, 5);
-    sigil.fillStyle(UI_HEX.brass, 0.22);
-    sigil.fillCircle(-154, 0, 4);
-    sigil.fillCircle(154, 0, 4);
+    scar.lineStyle(2, 0xd4b8ff, 0.4);
+    for (const crack of [
+      [-182, 18, -120, 6, -70, 15],
+      [-96, 28, -38, 8, 18, 20],
+      [24, 20, 78, 5, 152, 18],
+      [-8, -5, -2, -26, 6, -39],
+    ] as const) {
+      scar.beginPath();
+      scar.moveTo(crack[0], crack[1]);
+      scar.lineTo(crack[2], crack[3]);
+      scar.lineTo(crack[4], crack[5]);
+      scar.strokePath();
+    }
+    scar.lineStyle(1, UI_HEX.brass, 0.28);
+    scar.lineBetween(-146, 24, -78, 14);
+    scar.lineBetween(42, 16, 116, 25);
+    scar.fillStyle(0xd4b8ff, 0.24);
+    scar.fillCircle(-64, 13, 4);
+    scar.fillCircle(74, 10, 3.5);
+    scar.fillStyle(UI_HEX.brass, 0.24);
+    scar.fillCircle(164, 20, 3);
 
-    seal.add([shadow, sigil]);
+    remnant.add(scar);
     this.tweens.add({
-      targets: seal,
+      targets: remnant,
       alpha: 0.82,
       scale: 1,
       duration: 420,
       ease: "Sine.easeOut",
     });
 
-    addContainerWake(this, seal, {
+    addContainerWake(this, remnant, {
       kind: "mote",
-      intervalMs: 560,
-      spreadX: 150,
-      spreadY: 22,
+      intervalMs: 520,
+      spreadX: 165,
+      spreadY: 28,
       color: 0xd4b8ff,
-      alpha: 0.12,
+      alpha: 0.14,
       size: 2.6,
       depth: 7.2,
-      driftX: 16,
-      driftY: -34,
+      driftX: 22,
+      driftY: -40,
       durationMs: 1050,
     });
   }
@@ -4454,13 +4496,13 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private runPeriodSeal(onDone: () => void): void {
-    // The period, slammed in at the right edge of the centered "Again". Same
+    // The period, slammed in at the right edge of the grounded "Again". Same
     // serif/size/colour so it reads as the word completing, not a new element.
-    const rightEdge = this.scale.width / 2 + this.againText.width / 2;
+    const rightEdge = this.againText.x + this.againText.width / 2;
     const period = this.add
       .text(rightEdge, this.againText.y, ".", {
         fontFamily: SERIF,
-        fontSize: "72px",
+        fontSize: `${FINAL_AGAIN_FONT_SIZE}px`,
         color: "#d4b8ff",
       })
       .setOrigin(0, 0.5)

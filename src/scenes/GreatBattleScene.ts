@@ -7,6 +7,7 @@ import { playPeriodSnapSting } from "../audio/quietLordSting";
 import { getRunaLine } from "../audio/runaLines";
 import { NarrationManager } from "../game/narrationManager";
 import { ConsoleBand } from "../game/ui/consoleBand";
+import { preloadSatchelIcons } from "../game/ui/satchelIcons";
 import { cornerTicks, UI_HEX } from "../game/ui/uiTheme";
 import { flashDamageVignette } from "../game/vfx";
 import { flashQuietLordFragment } from "../game/quietLordIntrusion";
@@ -629,6 +630,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.load.image("finale-companion-brass-songbird", brassSongbirdSprite);
     this.load.image("finale-companion-lantern-moth", lanternMothSprite);
     this.load.image("finale-companion-wisp-cat", wispCatSprite);
+    preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadQuietLord(this);
     preloadWren(this);
   }
@@ -715,6 +717,7 @@ export class GreatBattleScene extends Phaser.Scene {
       maxOneShots: 0,
       satchelLabel: "",
       showMeterShelf: false,
+      showAnsweringKeepsake: true,
     });
     const band = this.band;
 

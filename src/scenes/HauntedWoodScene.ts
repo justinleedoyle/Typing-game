@@ -54,6 +54,7 @@ import {
   playClaimLine,
   playPortalArrivalWake,
   playRealmClearResonance,
+  playRealmReturnDeparture,
   playSceneEventPulse,
   stageCompanionCameo,
   stageContainerEntrance,
@@ -1879,16 +1880,22 @@ export class HauntedWoodScene extends Phaser.Scene {
     });
 
     this.showAlmanacStamp(() => {
-      this.cameras.main.fadeOut(700, 14, 18, 14);
-      this.cameras.main.once(
-        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-        () => {
-          this.scene.start("PortalChamberScene", {
-            store: this.store,
-            arrival: "haunted-wood",
-          });
-        },
-      );
+      playRealmReturnDeparture(this, this.wrenContainer, {
+        kind: "mist",
+        color: PALETTE_HEX.moss,
+      });
+      this.time.delayedCall(360, () => {
+        this.cameras.main.fadeOut(700, 14, 18, 14);
+        this.cameras.main.once(
+          Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+          () => {
+            this.scene.start("PortalChamberScene", {
+              store: this.store,
+              arrival: "haunted-wood",
+            });
+          },
+        );
+      });
     });
   }
 

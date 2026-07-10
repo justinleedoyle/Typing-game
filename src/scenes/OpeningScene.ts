@@ -22,6 +22,7 @@ import {
 import { cornerTicks, UI_HEX } from "../game/ui/uiTheme";
 import openingBackdrop from "../../art/references/opening-typewriter-study-clean.png";
 import { makeQuietLordSprite, preloadQuietLord } from "../game/quietLord";
+import { makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
 import runaSprite from "../../art/runa/runa-front.png";
 import siblingSprite from "../../art/sibling/sibling-front.png";
 
@@ -68,6 +69,7 @@ export class OpeningScene extends Phaser.Scene {
   private quietLordSprite: Phaser.GameObjects.Image | null = null;
   private runaActor: Phaser.GameObjects.Container | null = null;
   private siblingActor: Phaser.GameObjects.Container | null = null;
+  private openingWren: Phaser.GameObjects.Container | null = null;
   private siblingKeepsake: Phaser.GameObjects.Graphics | null = null;
   private studyTypingPulseTimes = new WeakMap<StudyResponsePoint, number>();
   private studyWordAnchorReleases: Array<() => void> = [];
@@ -92,6 +94,7 @@ export class OpeningScene extends Phaser.Scene {
     this.quietLordSprite = null;
     this.runaActor = null;
     this.siblingActor = null;
+    this.openingWren = null;
     this.siblingKeepsake = null;
     this.studyTypingPulseTimes = new WeakMap();
     this.studyWordAnchorReleases = [];
@@ -107,6 +110,7 @@ export class OpeningScene extends Phaser.Scene {
     this.load.image("runa-sprite", runaSprite);
     this.load.image("sibling-sprite", siblingSprite);
     preloadQuietLord(this);
+    preloadWren(this);
   }
 
   create(): void {
@@ -188,6 +192,7 @@ export class OpeningScene extends Phaser.Scene {
       this.clearStudyWordAnchors();
       this.clearIdentityChoiceCards();
       this.siblingKeepsake = null;
+      this.openingWren = null;
     });
 
     // ── Beat sequence ────────────────────────────────────────────────────────
@@ -483,7 +488,7 @@ export class OpeningScene extends Phaser.Scene {
         s.typewriterAwakened = true;
       });
       this.playOpeningPortalTravel();
-      this.time.delayedCall(260, () => {
+      this.time.delayedCall(560, () => {
         this.cameras.main.fadeOut(700, 11, 10, 15);
         this.cameras.main.once(
           Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
@@ -500,6 +505,7 @@ export class OpeningScene extends Phaser.Scene {
 
   private playOpeningPortalTravel(): void {
     const portal = STUDY_RESPONSE.portal;
+    const wren = this.stageOpeningWrenDeparture();
     this.playStudyPulse(portal, {
       scale: 1.62,
       durationMs: 700,
@@ -549,6 +555,14 @@ export class OpeningScene extends Phaser.Scene {
 
     this.playOpeningPortalFlecks(STUDY_RESPONSE.name, portal, 5, 0);
     this.playOpeningPortalFlecks(STUDY_RESPONSE.typewriter, portal, 7, 90);
+    if (wren?.active) {
+      this.playOpeningPortalFlecks(
+        { x: wren.x, y: wren.y - 112, color: PALETTE_HEX.cream },
+        portal,
+        8,
+        30,
+      );
+    }
     if (this.siblingActor?.active) {
       this.playOpeningPortalFlecks(
         { x: this.siblingActor.x, y: this.siblingActor.y - 150, color: PALETTE_HEX.brass },
@@ -557,6 +571,37 @@ export class OpeningScene extends Phaser.Scene {
         40,
       );
     }
+  }
+
+  /** Wren only enters the study's visible staging for the final crossing, so
+   * the player becomes the source of the portal handoff rather than a fade. */
+  private stageOpeningWrenDeparture(): Phaser.GameObjects.Container | null {
+    if (this.openingWren?.scene) return this.openingWren;
+
+    const actor = this.add.container(982, 936).setDepth(0).setAlpha(0);
+    const sprite = makeWrenSprite(this);
+    actor.add(addLocalGroundShadow(this, 92, 22, { y: 6, alpha: 0.3 }));
+    actor.add(sprite);
+    this.openingWren = actor;
+
+    this.tweens.add({
+      targets: actor,
+      alpha: 0.96,
+      duration: 120,
+      ease: "Sine.easeOut",
+    });
+    setWrenPose(sprite, "walk");
+    this.tweens.add({
+      targets: actor,
+      x: PORTAL_TARGET.x - 20,
+      y: PORTAL_TARGET.y + 130,
+      alpha: 0.14,
+      scaleX: 0.9,
+      scaleY: 0.9,
+      duration: 520,
+      ease: "Sine.easeIn",
+    });
+    return actor;
   }
 
   private playOpeningPortalFlecks(

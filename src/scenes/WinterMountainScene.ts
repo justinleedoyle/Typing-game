@@ -47,6 +47,7 @@ import {
   playPortalArrivalWake,
   pulseUiObject,
   playRealmClearResonance,
+  playRealmReturnDeparture,
   playSceneEventPulse,
   stageContainerEntrance,
   stageAnchoredSprite,
@@ -2909,14 +2910,20 @@ export class WinterMountainScene extends Phaser.Scene {
     });
 
     this.showAlmanacStamp(() => {
-      this.cameras.main.fadeOut(700, 11, 10, 15);
-      this.cameras.main.once(
-        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-        () => this.scene.start("PortalChamberScene", {
-          store: this.store,
-          arrival: "winter-mountain",
-        }),
-      );
+      playRealmReturnDeparture(this, this.wrenContainer, {
+        kind: "snow",
+        color: PALETTE_HEX.frost,
+      });
+      this.time.delayedCall(360, () => {
+        this.cameras.main.fadeOut(700, 11, 10, 15);
+        this.cameras.main.once(
+          Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+          () => this.scene.start("PortalChamberScene", {
+            store: this.store,
+            arrival: "winter-mountain",
+          }),
+        );
+      });
     });
   }
 

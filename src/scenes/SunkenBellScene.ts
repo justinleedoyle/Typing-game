@@ -486,6 +486,10 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Revisit mode ────────────────────────────────────────────────────────
 
   private startRevisit(): void {
+    playPortalArrivalWake(this, this.wrenContainer, {
+      kind: "bubble",
+      color: BELL_BURST_COLOR,
+    });
     // Revisit mode: don't start the BeatClock at all — isInWindow() returns
     // true when the clock isn't running, so input flows freely.
 

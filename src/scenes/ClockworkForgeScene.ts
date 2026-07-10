@@ -486,6 +486,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── Revisit mode ────────────────────────────────────────────────────────────
 
   private startRevisit(): void {
+    playPortalArrivalWake(this, this.wrenContainer, {
+      kind: "ember",
+      color: PALETTE_HEX.ember,
+      ringWidth: 148,
+      ringHeight: 42,
+    });
     const choices = this.store.get().realms["clockwork-forge"]?.choices ?? {};
     const ending = choices["ending"] ?? "";
     let narratorLine: string;

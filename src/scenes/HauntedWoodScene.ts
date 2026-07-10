@@ -472,6 +472,10 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Revisit mode ────────────────────────────────────────────────────────
 
   private startRevisit(): void {
+    playPortalArrivalWake(this, this.wrenContainer, {
+      kind: "mist",
+      color: 0xd8e2cf,
+    });
     const choices = this.store.get().realms["haunted-wood"]?.choices ?? {};
     let narratorLine: string;
     let words: string[];

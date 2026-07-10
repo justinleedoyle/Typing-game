@@ -173,6 +173,7 @@ const HUB_STATIONS = {
   },
 } as const;
 const PORTAL_CALL_WORD_Y = HUB_STATIONS.portalFloor.y - 360;
+const PORTAL_CALL_SOURCE_Y = HUB_STATIONS.portalFloor.y - 100;
 const HUB_FIRST_ARRIVAL_CAPTION_MS = 6_400;
 const HUB_SHORT_CAPTION_MS = 2_600;
 
@@ -325,9 +326,6 @@ export class PortalChamberScene extends Phaser.Scene {
     });
 
     this.ambientHandle = playAmbientHub();
-
-    // Persistent (non-zone) targets.
-    this.addAlmanacTarget();
 
     // Enter the portals zone initially.
     this.enterZone("portals", false);
@@ -647,7 +645,7 @@ export class PortalChamberScene extends Phaser.Scene {
   ): () => void {
     const source = this.add.zone(
       HUB_STATIONS.portalFloor.x,
-      HUB_STATIONS.portalFloor.y - 268,
+      PORTAL_CALL_SOURCE_Y,
       1,
       1,
     );
@@ -679,23 +677,21 @@ export class PortalChamberScene extends Phaser.Scene {
   private showPortalFloorCallGlow(color: number): void {
     this.portalFloorCallGlow?.destroy();
     const glow = this.add
-      .container(HUB_STATIONS.portalFloor.x, HUB_STATIONS.portalFloor.y - 268)
+      .container(HUB_STATIONS.portalFloor.x, PORTAL_CALL_SOURCE_Y)
       .setDepth(-4.5)
-      .setAlpha(0.62);
+      .setAlpha(0.54);
     const g = this.add.graphics();
-    g.fillStyle(color, 0.08);
-    g.fillEllipse(0, 0, 320, 108);
-    g.lineStyle(2, color, 0.28);
-    g.strokeEllipse(0, 0, 360, 132);
-    g.lineStyle(1, UI_HEX.brass, 0.24);
-    g.strokeEllipse(0, 0, 230, 72);
+    g.fillStyle(color, 0.07);
+    g.fillEllipse(0, 0, 360, 92);
+    g.fillStyle(UI_HEX.brass, 0.035);
+    g.fillEllipse(0, 0, 236, 54);
     glow.add(g);
 
     this.tweens.add({
       targets: glow,
-      alpha: { from: 0.42, to: 0.72 },
-      scaleX: { from: 0.98, to: 1.04 },
-      scaleY: { from: 0.98, to: 1.06 },
+      alpha: { from: 0.38, to: 0.62 },
+      scaleX: { from: 0.98, to: 1.035 },
+      scaleY: { from: 0.98, to: 1.04 },
       duration: 1850,
       yoyo: true,
       repeat: -1,
@@ -749,7 +745,7 @@ export class PortalChamberScene extends Phaser.Scene {
     const fromX = arch.x;
     const fromY = arch.baseY - arch.height / 2 + 34;
     const toX = HUB_STATIONS.portalFloor.x;
-    const toY = HUB_STATIONS.portalFloor.y - 268;
+    const toY = PORTAL_CALL_SOURCE_Y;
     const bendX = (fromX + toX) / 2;
     const bendY = Math.min(fromY, toY) - 44;
 
@@ -826,6 +822,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.playDeskReflectionWake();
     this.playRunaAttention();
 
+    this.registerDeskAlmanacTarget();
     this.registerPortalReturnTarget(70);
   }
 
@@ -1463,9 +1460,9 @@ export class PortalChamberScene extends Phaser.Scene {
     }
   }
 
-  // ─── Persistent targets ───────────────────────────────────────────────────
+  // ─── Desk-owned actions ───────────────────────────────────────────────────
 
-  private addAlmanacTarget(): void {
+  private registerDeskAlmanacTarget(): void {
     let releaseAnchor = (): void => {};
     const target = new TextWordTarget({
       scene: this,
@@ -1487,11 +1484,11 @@ export class PortalChamberScene extends Phaser.Scene {
       },
     });
     releaseAnchor = this.attachStationWordAnchor(target, HUB_STATIONS.almanac, {
-      persistent: true,
       alpha: 0.07,
     });
     this.typingInput.register(target);
-    this.stageHubTarget(target, 170);
+    this.zoneTargets.push(target);
+    this.stageHubTarget(target, 110);
   }
 
   private async renderAccountStatus(): Promise<void> {
@@ -1786,12 +1783,17 @@ export class PortalChamberScene extends Phaser.Scene {
       (id) => !state.realms[id]?.cleared,
     );
     const nextIdx = firstUnclearedIdx === -1 ? REALM_SEQUENCE.length : firstUnclearedIdx;
+    const allRealmsCleared = nextIdx >= REALM_SEQUENCE.length;
 
     ARCHES.forEach((arch, i) => {
       const isNext    = i === nextIdx;
       const isCleared = state.realms[arch.id]?.cleared === true;
       const isLocked  = i > nextIdx;
-      this.renderArch(arch, isNext ? "next" : isCleared ? "cleared" : isLocked ? "locked" : "dark");
+      this.renderArch(
+        arch,
+        isNext ? "next" : isCleared ? "cleared" : isLocked ? "locked" : "dark",
+        allRealmsCleared,
+      );
     });
   }
 
@@ -1839,6 +1841,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private renderArch(
     spec: ArchSpec,
     state: "next" | "cleared" | "dark" | "locked",
+    quietCleared = false,
   ): void {
     const g = this.archGraphics.get(spec.id);
     const glow = this.archGlows.get(spec.id);
@@ -1854,6 +1857,12 @@ export class PortalChamberScene extends Phaser.Scene {
     }
 
     if (state === "cleared") {
+      if (quietCleared) {
+        glow?.setVisible(false);
+        sprite.setVisible(false);
+        if (sprite.anims.isPlaying) sprite.stop();
+        return;
+      }
       // Dormant amber trace — cleared portals should read as stamped passages,
       // not five active blue panes competing with the main floor call.
       const archTopY = spec.baseY - spec.height + 54;

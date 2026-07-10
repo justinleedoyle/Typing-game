@@ -316,9 +316,11 @@ export class PortalChamberScene extends Phaser.Scene {
       onClaim: () => playClaim(),
     });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
+    this.events.on(Phaser.Scenes.Events.RESUME, this.resumeAfterAlmanac, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
+      this.events.off(Phaser.Scenes.Events.RESUME, this.resumeAfterAlmanac, this);
       this.ambientHandle?.stop();
       this.clearPersistentStationWordAnchors();
       this.difficultyNotice?.destroy();
@@ -1696,11 +1698,29 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private openAlmanac(): void {
-    this.openUtilityScene("AlmanacScene", HUB_STATIONS.almanac, {
-      kind: "book",
-      includeRuna: true,
-      playChime: true,
+    if (this.openingUtilityScene) return;
+    this.openingUtilityScene = true;
+    playChime();
+    this.playHubActorAction(HUB_STATIONS.almanac.x, true);
+    this.pulseStation(HUB_STATIONS.almanac);
+    this.playUtilityStationExitWake(HUB_STATIONS.almanac, "book");
+    this.time.delayedCall(210, () => {
+      // The Almanac is a book on Runa's desk, not a separate destination. Keep
+      // the chamber rendered beneath it and give the overlay exclusive typing.
+      this.typingInput.reset();
+      this.input.keyboard?.off("keydown", this.onKeyDown, this);
+      this.scene.launch("AlmanacScene", { store: this.store, overlay: true });
+      this.scene.pause();
     });
+  }
+
+  private resumeAfterAlmanac(): void {
+    if (!this.openingUtilityScene) return;
+    this.openingUtilityScene = false;
+    this.input.keyboard?.on("keydown", this.onKeyDown, this);
+    // Rebuild the desk targets after the completed `almanac` word is gone, but
+    // retain Wren's exact desk position and all chamber actors beneath the book.
+    this.enterZone("desk", false);
   }
 
   // ─── Input ────────────────────────────────────────────────────────────────

@@ -30,6 +30,9 @@ type AlmanacPageEntry =
 
 interface AlmanacSceneData {
   store: SaveStore;
+  /** When opened at Runa's desk, the chamber stays paused and visible beneath
+   *  this book. The fallback remains for isolated scene use. */
+  overlay?: boolean;
 }
 
 const PAGE_INK = UI_CSS.ink; // "#2a1f12" — shared with the dialogue-card ink
@@ -118,6 +121,7 @@ export class AlmanacScene extends Phaser.Scene {
   private navTypingPulseTimes = new Map<string, number>();
   private pageWakeIndex = 0;
   private closing = false;
+  private overlay = false;
 
   constructor() {
     super("AlmanacScene");
@@ -125,6 +129,7 @@ export class AlmanacScene extends Phaser.Scene {
 
   init(data: AlmanacSceneData): void {
     this.store = data.store;
+    this.overlay = data.overlay === true;
     this.currentPage = 0;
     this.pageTexts = [];
     this.pageStack = [];
@@ -146,9 +151,10 @@ export class AlmanacScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.fadeIn(350, 11, 10, 15);
 
-    // Dim backdrop so the chamber feels behind the book.
+    // The paused chamber remains physically behind the book. This is only a
+    // reading shadow, not a replacement black screen.
     const g = this.add.graphics();
-    g.fillStyle(0x0b0a0f, 0.92);
+    g.fillStyle(0x0b0a0f, this.overlay ? 0.64 : 0.92);
     g.fillRect(0, 0, this.scale.width, this.scale.height);
     g.setDepth(-20);
 
@@ -1335,6 +1341,11 @@ export class AlmanacScene extends Phaser.Scene {
       this.cameras.main.once(
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
         () => {
+          if (this.overlay) {
+            this.scene.stop();
+            this.scene.resume("PortalChamberScene");
+            return;
+          }
           this.scene.start("PortalChamberScene", { store: this.store });
         },
       );

@@ -42,6 +42,7 @@ import {
   addAmbientDrift,
   addBackdropDrift,
   addContainerWake,
+  addIdleBreath,
   attachWordBodyAnchor,
   dismissCompanionCameo,
   fadeOutStagedSprite,
@@ -186,6 +187,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
+  private wrenFootLock: Phaser.GameObjects.Graphics | null = null;
   private catwalkCue: Phaser.GameObjects.Container | null = null;
   private catwalkCueIndex: number | null = null;
   private catwalkCueWordAnchor: WordBodyAnchorHandle | null = null;
@@ -247,6 +249,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.tutorialWordAnchors = [];
     this.fornWordAnchors = [];
     this.forkChoiceWordAnchors = [];
+    this.wrenFootLock = null;
     this.catwalkCue = null;
     this.catwalkCueIndex = null;
     this.catwalkCueWordAnchor = null;
@@ -951,7 +954,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.setNarrator(
       "You descend to the foundry floor. The heat is immense. Iron shapes move through the dark.",
     );
-    this.time.delayedCall(2000, () => this.startWave1());
+    this.time.delayedCall(460, () => this.descendWrenToFoundry(() => {
+      this.time.delayedCall(260, () => this.startWave1());
+    }));
   }
 
   private startWave1(): void {
@@ -2512,6 +2517,108 @@ export class ClockworkForgeScene extends Phaser.Scene {
     });
   }
 
+  /** Stage the written descent so the first foundry-floor wave starts where Wren is. */
+  private descendWrenToFoundry(onComplete: () => void): void {
+    if (!this.wrenContainer?.scene) {
+      onComplete();
+      return;
+    }
+
+    const start = { x: this.wrenContainer.x, y: this.wrenContainer.y };
+    const route = this.drawFoundryDescentRoute(start);
+    const steps = [
+      { x: start.x + 118, y: start.y + 90 },
+      { x: start.x + 38, y: start.y + 210 },
+      { x: this.scale.width / 2, y: FLOOR_Y },
+    ];
+
+    this.tweens.add({
+      targets: route,
+      alpha: 0.82,
+      duration: 220,
+      ease: "Sine.easeOut",
+    });
+    this.tweens.killTweensOf(this.wrenContainer);
+
+    const walkStep = (idx: number): void => {
+      const next = steps[idx];
+      setWrenPose(this.wrenSprite, "walk", next.x < this.wrenContainer.x);
+      this.tweens.add({
+        targets: this.wrenContainer,
+        x: next.x,
+        y: next.y,
+        duration: idx === steps.length - 1 ? 500 : 360,
+        ease: "Sine.easeInOut",
+        onComplete: () => {
+          if (idx < steps.length - 1) {
+            playClack();
+            walkStep(idx + 1);
+            return;
+          }
+          this.swapWrenFootingToFoundry();
+          setWrenPose(this.wrenSprite, "front");
+          playClack();
+          playBodyImpact(this, this.wrenContainer, {
+            kind: "ember",
+            color: PALETTE_HEX.ember,
+            offsetY: -6,
+            depth: 44,
+            ringRadius: 34,
+            count: 7,
+            durationMs: 360,
+          });
+          addIdleBreath(this, this.wrenContainer, { dy: -4, durationMs: 2200 });
+          this.tweens.add({
+            targets: route,
+            alpha: 0,
+            duration: 280,
+            delay: 180,
+            ease: "Sine.easeIn",
+            onComplete: () => route.destroy(),
+          });
+          onComplete();
+        },
+      });
+    };
+
+    walkStep(0);
+  }
+
+  /** A temporary set of low steel steps carries the catwalk into the foreground foundry. */
+  private drawFoundryDescentRoute(start: { x: number; y: number }): Phaser.GameObjects.Container {
+    const c = this.add.container(0, 0).setDepth(2).setAlpha(0);
+    const g = this.add.graphics();
+    const steps = [
+      { x: start.x + 118, y: start.y + 96, width: 116 },
+      { x: start.x + 38, y: start.y + 216, width: 126 },
+      { x: this.scale.width / 2, y: FLOOR_Y + 2, width: 148 },
+    ];
+
+    g.lineStyle(3, 0x2b1a12, 0.68);
+    for (let i = 0; i < steps.length - 1; i += 1) {
+      g.lineBetween(steps[i].x, steps[i].y + 5, steps[i + 1].x, steps[i + 1].y + 5);
+    }
+    for (const step of steps) {
+      g.fillStyle(0x100b09, 0.76);
+      g.fillRoundedRect(step.x - step.width / 2, step.y - 8, step.width, 16, 4);
+      g.lineStyle(2, 0x725238, 0.42);
+      g.lineBetween(step.x - step.width / 2 + 8, step.y - 5, step.x + step.width / 2 - 8, step.y - 5);
+      g.lineStyle(1, PALETTE_HEX.ember, 0.24);
+      g.lineBetween(step.x - step.width / 2 + 16, step.y + 2, step.x + step.width / 2 - 16, step.y + 2);
+      g.fillStyle(PALETTE_HEX.ember, 0.28);
+      g.fillCircle(step.x - step.width / 2 + 14, step.y + 1, 2.4);
+      g.fillCircle(step.x + step.width / 2 - 14, step.y + 1, 2.4);
+    }
+    c.add(g);
+    return c;
+  }
+
+  private swapWrenFootingToFoundry(): void {
+    this.wrenFootLock?.destroy();
+    this.wrenFootLock = this.makeFoundryFootLock();
+    this.wrenContainer.add(this.wrenFootLock);
+  }
+
   private resetWrenToFront(): void {
     if (!this.wrenSprite?.scene) return;
     this.tweens.killTweensOf(this.wrenSprite);
@@ -3819,7 +3926,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
     c.add(addLocalGroundShadow(this, 92, 18, { y: 6, alpha: 0.32 }));
     this.wrenSprite = makeWrenSprite(this);
     c.add(this.wrenSprite);
-    c.add(this.makeCatwalkFootLock());
+    this.wrenFootLock = this.makeCatwalkFootLock();
+    c.add(this.wrenFootLock);
     stageContainerEntrance(this, c, {
       breathDy: -3,
       breathMs: 1900,
@@ -3855,6 +3963,20 @@ export class ClockworkForgeScene extends Phaser.Scene {
     g.fillStyle(PALETTE_HEX.ember, 0.2);
     g.fillCircle(-40, 2, 2);
     g.fillCircle(40, 2, 2);
+    return g;
+  }
+
+  private makeFoundryFootLock(): Phaser.GameObjects.Graphics {
+    const g = this.add.graphics();
+    g.fillStyle(0x060403, 0.36);
+    g.fillEllipse(0, 6, 118, 16);
+    g.fillStyle(PALETTE_HEX.ember, 0.13);
+    g.fillEllipse(0, 2, 84, 10);
+    g.lineStyle(1.5, 0x6e442c, 0.32);
+    g.lineBetween(-48, 3, -18, -2);
+    g.lineBetween(10, -2, 48, 4);
+    g.lineStyle(1, PALETTE_HEX.ember, 0.22);
+    g.lineBetween(-8, 4, 10, 0);
     return g;
   }
 

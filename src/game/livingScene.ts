@@ -754,6 +754,78 @@ export function playRealmClearResonance(
   }
 }
 
+/** The source half of a realm-to-hub return. This follows the Almanac stamp,
+ * then lets the hub's arrival effect complete the same trip at the portal floor. */
+export function playRealmReturnDeparture(
+  scene: Phaser.Scene,
+  actor: Phaser.GameObjects.Container,
+  opts: { kind: AmbientKind; color: number; durationMs?: number; depth?: number },
+): void {
+  if (!actor?.active || !actor.scene) return;
+
+  const duration = opts.durationMs ?? 360;
+  const depth = opts.depth ?? 54;
+  const x = actor.x;
+  const y = actor.y + 8;
+  const seal = scene.add.graphics().setPosition(x, y).setDepth(depth).setAlpha(0.74);
+  seal.fillStyle(0x09080d, 0.34);
+  seal.fillEllipse(0, 0, 118, 28);
+  seal.lineStyle(2, opts.color, 0.58);
+  seal.strokeEllipse(0, 0, 112, 26);
+  seal.lineStyle(1, opts.color, 0.34);
+  seal.strokeEllipse(0, 0, 66, 15);
+  seal.lineBetween(-28, 0, 28, 0);
+  seal.lineBetween(0, -8, 0, 8);
+  scene.tweens.add({
+    targets: seal,
+    alpha: 0,
+    scaleX: 0.42,
+    scaleY: 0.34,
+    duration,
+    ease: "Sine.easeIn",
+    onComplete: () => seal.destroy(),
+  });
+
+  for (let i = 0; i < 8; i += 1) {
+    const angle = (i / 8) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.2, 0.2);
+    const fleck = scene.add.graphics().setDepth(depth + 0.1).setAlpha(0.7);
+    drawParticle(
+      fleck,
+      opts.kind,
+      opts.color,
+      Phaser.Math.FloatBetween(2.2, 4.2),
+      0.68,
+    );
+    fleck.setPosition(
+      x + Math.cos(angle) * Phaser.Math.FloatBetween(34, 66),
+      y + Math.sin(angle) * Phaser.Math.FloatBetween(10, 28),
+    );
+    scene.tweens.add({
+      targets: fleck,
+      x: x + Phaser.Math.FloatBetween(-8, 8),
+      y: y + Phaser.Math.FloatBetween(-6, 6),
+      alpha: 0,
+      scaleX: 0.28,
+      scaleY: 0.28,
+      duration: duration - 20 + i * 10,
+      delay: i * 12,
+      ease: "Sine.easeIn",
+      onComplete: () => fleck.destroy(),
+    });
+  }
+
+  scene.tweens.killTweensOf(actor);
+  scene.tweens.add({
+    targets: actor,
+    y: actor.y - 14,
+    alpha: 0.14,
+    scaleX: actor.scaleX * 0.9,
+    scaleY: actor.scaleY * 0.9,
+    duration,
+    ease: "Sine.easeIn",
+  });
+}
+
 /** A restrained scene-level pulse for wave/boss arrivals. It sits below active
  *  words and actors, so the painted world answers the event without becoming a
  *  second UI layer or hiding the typing targets. */

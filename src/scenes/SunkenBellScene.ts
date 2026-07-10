@@ -43,6 +43,7 @@ import {
   playMeterPulse,
   playPortalArrivalWake,
   playRealmClearResonance,
+  playRealmReturnDeparture,
   playSceneEventPulse,
   stageContainerEntrance,
   stageAnchoredSprite,
@@ -2760,16 +2761,22 @@ export class SunkenBellScene extends Phaser.Scene {
     });
 
     this.showAlmanacStamp(() => {
-      this.cameras.main.fadeOut(700, 8, 24, 32);
-      this.cameras.main.once(
-        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-        () => {
-          this.scene.start("PortalChamberScene", {
-            store: this.store,
-            arrival: "sunken-bell",
-          });
-        },
-      );
+      playRealmReturnDeparture(this, this.wrenContainer, {
+        kind: "bubble",
+        color: PALETTE_HEX.frost,
+      });
+      this.time.delayedCall(360, () => {
+        this.cameras.main.fadeOut(700, 8, 24, 32);
+        this.cameras.main.once(
+          Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+          () => {
+            this.scene.start("PortalChamberScene", {
+              store: this.store,
+              arrival: "sunken-bell",
+            });
+          },
+        );
+      });
     });
   }
 

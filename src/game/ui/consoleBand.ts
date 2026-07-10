@@ -11,6 +11,7 @@
 
 import Phaser from "phaser";
 import { SERIF } from "../palette";
+import { RELICS } from "../relics";
 import { satchelIconFor } from "./satchelIcons";
 import { UI_HEX } from "./uiTheme";
 
@@ -43,6 +44,12 @@ const SATCHEL_SHELF_MIN_W = 138;
 const SATCHEL_SHELF_CONTENT_PAD_W = 26;
 const SATCHEL_WAKE_DELAY_MS = 180;
 const BAND_ENTRY_WAKE_DELAY_MS = 90;
+// A single, temporary keepsake answer lives beside (rather than inside) the
+// satchel row, so a scene can retain its own meter in the same shelf.
+const ANSWERING_KEEP_ICON_X = SATCHEL_X + 212;
+const ANSWERING_KEEP_TEXT_X = ANSWERING_KEEP_ICON_X + TILE / 2 + 12;
+const ANSWERING_KEEP_TEXT_W = 132;
+const ANSWERING_KEEP_LABEL_Y = 75;
 // One-shot card slots
 const ONESHOT_X0 = 1010;
 const ONESHOT_DX = 250;
@@ -81,6 +88,8 @@ export interface ConsoleBandOptions {
   satchelLabel?: string;
   /** Draw the left meter shelf. Disable only for scenes with no meter HUD. */
   showMeterShelf?: boolean;
+  /** Show one temporary icon/name for the keepsake answering a notice item. */
+  showAnsweringKeepsake?: boolean;
 }
 
 interface NoticeColors {
@@ -182,6 +191,10 @@ export class ConsoleBand {
   private satchelTileCount = 0;
   private satchelShelfWidth = SATCHEL_SHELF_FULL_W;
   private readonly satchelIconTiles = new Map<string, Phaser.GameObjects.Container>();
+  private answeringKeepsakeLabel?: Phaser.GameObjects.Text;
+  private answeringKeepsakeName?: Phaser.GameObjects.Text;
+  private answeringKeepsakeIcon?: Phaser.GameObjects.Container;
+  private answeringKeepsakeItemId = "";
 
   constructor(scene: Phaser.Scene, opts: ConsoleBandOptions = {}) {
     this.scene = scene;
@@ -206,6 +219,7 @@ export class ConsoleBand {
     this.drawPortraitFrame(scene);
     this.setPortrait(opts.portraitKey, opts.portraitName);
     this.drawSatchel(scene, passiveIconIds, satchelLabel);
+    if (opts.showAnsweringKeepsake) this.drawAnsweringKeepsake(scene);
     this.drawObjectiveReadout(scene, W);
     this.playBandEntryWake();
 
@@ -245,6 +259,7 @@ export class ConsoleBand {
     this.noticeTimer = this.scene.time.delayedCall(opts.durationMs ?? 1900, () => {
       this.noticeActive = false;
       this.noticeTimer = null;
+      this.clearAnsweringKeepsake();
       this.renderObjective("task", this.objectiveValue);
     });
   }
@@ -704,6 +719,32 @@ export class ConsoleBand {
     }
   }
 
+  /** A scene with a sparse satchel shelf can opt into one momentary keepsake
+   *  answer without rendering an empty row of passive tiles. */
+  private drawAnsweringKeepsake(scene: Phaser.Scene): void {
+    this.answeringKeepsakeLabel = scene.add
+      .text(ANSWERING_KEEP_TEXT_X, ANSWERING_KEEP_LABEL_Y, "answering", {
+        fontFamily: SERIF,
+        fontStyle: "italic",
+        fontSize: "12px",
+        color: "#a59b89",
+      })
+      .setOrigin(0, 0.5)
+      .setVisible(false);
+    this.answeringKeepsakeName = scene.add
+      .text(ANSWERING_KEEP_TEXT_X, TILE_Y, "", {
+        fontFamily: SERIF,
+        fontSize: "12px",
+        color: "#f3ead2",
+        wordWrap: { width: ANSWERING_KEEP_TEXT_W },
+      })
+      .setFixedSize(ANSWERING_KEEP_TEXT_W, TILE + 6)
+      .setOrigin(0, 0.5)
+      .setVisible(false);
+    this.container.add(this.answeringKeepsakeLabel);
+    this.container.add(this.answeringKeepsakeName);
+  }
+
   private playSatchelRowWake(count: number): void {
     const rowW = count * TILE + Math.max(0, count - 1) * TILE_GAP;
     const wake = this.scene.add.graphics().setAlpha(0);
@@ -742,6 +783,8 @@ export class ConsoleBand {
   }
 
   private playNoticeSatchelWake(label: string, itemId?: string): void {
+    if (this.showAnsweringKeepsake(itemId)) return;
+    this.clearAnsweringKeepsake();
     const tile = itemId ? this.satchelIconTiles.get(itemId) : undefined;
     if (tile) {
       this.playSatchelTileWake(tile);
@@ -775,6 +818,60 @@ export class ConsoleBand {
       ease: "Sine.easeOut",
       onComplete: () => wake.destroy(),
     });
+  }
+
+  private showAnsweringKeepsake(itemId?: string): boolean {
+    if (!itemId || !this.answeringKeepsakeLabel || !this.answeringKeepsakeName) {
+      return false;
+    }
+    const icon = satchelIconFor(itemId);
+    if (!icon || !this.scene.textures.exists(icon.key)) return false;
+
+    if (this.answeringKeepsakeItemId !== itemId) {
+      this.answeringKeepsakeIcon?.destroy();
+      const iconContainer = this.scene.add
+        .container(ANSWERING_KEEP_ICON_X, TILE_Y)
+        .setAlpha(0);
+      const tile = this.scene.add.graphics();
+      tile.fillStyle(0x0f0c08, 1);
+      tile.fillRoundedRect(-TILE / 2, -TILE / 2, TILE, TILE, 5);
+      tile.lineStyle(1, UI_HEX.frame, 0.9);
+      tile.strokeRoundedRect(-TILE / 2, -TILE / 2, TILE, TILE, 5);
+      iconContainer.add(tile);
+
+      const image = this.scene.add.image(0, 0, icon.key);
+      image.setScale(Math.min((TILE - 6) / image.width, (TILE - 6) / image.height));
+      iconContainer.add(image);
+      this.container.add(iconContainer);
+      this.answeringKeepsakeIcon = iconContainer;
+      this.answeringKeepsakeItemId = itemId;
+      this.answeringKeepsakeLabel.setVisible(true);
+      this.answeringKeepsakeName
+        .setText(RELICS[itemId]?.name ?? itemId)
+        .setVisible(true)
+        .setAlpha(0.72);
+      this.scene.tweens.add({
+        targets: [iconContainer, this.answeringKeepsakeName],
+        alpha: 1,
+        duration: 160,
+        ease: "Sine.easeOut",
+      });
+    }
+
+    const keepsake = this.answeringKeepsakeIcon;
+    if (!keepsake) return false;
+    this.playSatchelTileWake(keepsake);
+    this.container.bringToTop(this.answeringKeepsakeLabel);
+    this.container.bringToTop(this.answeringKeepsakeName);
+    return true;
+  }
+
+  private clearAnsweringKeepsake(): void {
+    this.answeringKeepsakeIcon?.destroy();
+    this.answeringKeepsakeIcon = undefined;
+    this.answeringKeepsakeItemId = "";
+    this.answeringKeepsakeLabel?.setVisible(false);
+    this.answeringKeepsakeName?.setText("").setVisible(false);
   }
 
   private playSatchelTileWake(tile: Phaser.GameObjects.Container): void {

@@ -55,6 +55,7 @@ import {
   playMeterPulse,
   playPortalArrivalWake,
   playRealmClearResonance,
+  playRealmReturnDeparture,
   playSceneEventPulse,
   stageContainerEntrance,
   stageAnchoredSprite,
@@ -1994,16 +1995,22 @@ export class ClockworkForgeScene extends Phaser.Scene {
     });
 
     this.showAlmanacStamp(() => {
-      this.cameras.main.fadeOut(700, 26, 16, 8);
-      this.cameras.main.once(
-        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-        () => {
-          this.scene.start("PortalChamberScene", {
-            store: this.store,
-            arrival: "clockwork-forge",
-          });
-        },
-      );
+      playRealmReturnDeparture(this, this.wrenContainer, {
+        kind: "ember",
+        color: PALETTE_HEX.brass,
+      });
+      this.time.delayedCall(360, () => {
+        this.cameras.main.fadeOut(700, 26, 16, 8);
+        this.cameras.main.once(
+          Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+          () => {
+            this.scene.start("PortalChamberScene", {
+              store: this.store,
+              arrival: "clockwork-forge",
+            });
+          },
+        );
+      });
     });
   }
 

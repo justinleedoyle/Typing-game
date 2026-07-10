@@ -1211,9 +1211,12 @@ export class PortalChamberScene extends Phaser.Scene {
   private onEnterPortal(sceneKey: string, revisit: boolean): void {
     playChime();
     this.narration.clear();
+    // The selected target is complete, so leave the room input-quiet while Wren
+    // crosses the visible space into the painted threshold.
+    this.typingInput.reset();
     this.flashPortalForScene(sceneKey);
     this.playPortalTravel(sceneKey);
-    this.time.delayedCall(240, () => {
+    this.time.delayedCall(560, () => {
       this.cameras.main.fadeOut(500, 11, 10, 15);
       this.cameras.main.once(
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
@@ -1413,15 +1416,19 @@ export class PortalChamberScene extends Phaser.Scene {
 
     if (!this.wrenContainer?.active) return;
     const startX = this.wrenContainer.x;
-    const startY = this.wrenContainer.y;
+    const thresholdX = arch.x;
+    const thresholdY = arch.baseY;
     this.tweens.killTweensOf(this.wrenContainer);
+    if (this.wrenSprite?.active) {
+      setWrenPose(this.wrenSprite, "walk", thresholdX < startX);
+    }
     this.tweens.add({
       targets: this.wrenContainer,
-      x: startX + (cx - startX) * 0.08,
-      y: startY - 8,
-      alpha: 0.86,
-      duration: 320,
-      ease: "Sine.easeInOut",
+      x: thresholdX,
+      y: thresholdY,
+      alpha: 0.18,
+      duration: 520,
+      ease: "Sine.easeIn",
     });
   }
 

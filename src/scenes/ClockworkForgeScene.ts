@@ -114,6 +114,7 @@ type ForgeChoiceCueKey = "apprentice" | "standDown" | "fight";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CATWALK_Y = 440;
+const TUTORIAL_GOLEM_Y = CATWALK_Y + 20;
 const FLOOR_Y = 780;
 
 const GOLEM_ADVANCE_MS = 15000;
@@ -796,7 +797,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       "Old Gregor",
     );
     // Spawn a tutorial golem that doesn't advance
-    const tutorialGolem = this.spawnStaticGolem(860, FLOOR_Y, false);
+    const tutorialGolem = this.spawnStaticGolem(860, TUTORIAL_GOLEM_Y, false);
 
     const wordPos = this.staticGolemWordPosition(tutorialGolem, "turn");
     const target = this.makeStaticGolemWord(tutorialGolem, {
@@ -894,7 +895,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
     );
     this.band.setObjective("Redirect the training golem before it reaches Wren.");
 
-    const golem = this.spawnAdvancingGolem(1060, FLOOR_Y, "walk", GOLEM_ADVANCE_MS * 1.4, false);
+    const golem = this.spawnAdvancingGolem(
+      1060,
+      TUTORIAL_GOLEM_Y,
+      "walk",
+      GOLEM_ADVANCE_MS * 1.4,
+      false,
+    );
 
     this.waveActive = true;
     this.time.delayedCall(2000, () => {

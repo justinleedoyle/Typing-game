@@ -549,6 +549,10 @@ export class SkyIslandScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private startRevisit(): void {
+    playPortalArrivalWake(this, this.wrenContainer, {
+      kind: "mote",
+      color: 0xf5c842,
+    });
     const choices = this.store.get().realms["sky-island"]?.choices ?? {};
     let narratorLine: string;
     let words: string[];

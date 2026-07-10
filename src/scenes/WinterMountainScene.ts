@@ -578,6 +578,10 @@ export class WinterMountainScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private startRevisit(): void {
+    playPortalArrivalWake(this, this.wrenContainer, {
+      kind: "snow",
+      color: PALETTE_HEX.frost,
+    });
     const choices = this.store.get().realms["winter-mountain"]?.choices ?? {};
     let narratorLine: string;
     let words: string[];

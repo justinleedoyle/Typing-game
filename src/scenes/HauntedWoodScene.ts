@@ -127,6 +127,8 @@ const GHOST_BURST_COLOR = 0xdde8dd;
 const WOOD_GHOST_SPRITE_HEIGHT = 124;
 const GHOST_KING_SPRITE_HEIGHT = 232;
 const INGA_GHOST_SPRITE_HEIGHT = 92;
+const INGA_FOREGROUND = { x: 560, y: 760 } as const;
+const INGA_TREE_LINE = { x: 390, y: 642, alpha: 0.44, scale: 0.74 } as const;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1049,7 +1051,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private startIngaNPC(): void {
     this.band.setObjective("Answer Inga and follow her toward the shrine.");
-    this.drawInga(560, 760);
+    this.drawInga(INGA_FOREGROUND.x, INGA_FOREGROUND.y);
 
     this.store.update((s) => {
       if (!s.almanacLore.includes("the-crossroads-ghost")) {
@@ -1085,6 +1087,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Act 2 — Through the Wood ─────────────────────────────────────────────
 
   private startAct2(): void {
+    this.stageIngaAtTreeLine();
     this.setAmbientMistFieldAlpha(0.78, 900);
     this.setNarrator("The crossroads. Shapes drift between the trees.");
     // Schedule first mist roll during Act 2
@@ -1095,6 +1098,82 @@ export class HauntedWoodScene extends Phaser.Scene {
       loop: true,
     });
     this.time.delayedCall(1200, () => this.startCrossroads1());
+  }
+
+  /** Keep Inga present at the crossroads without leaving her as a combat prop. */
+  private stageIngaAtTreeLine(): void {
+    const inga = this.ingaFigure;
+    if (!inga?.scene) return;
+
+    this.tweens.killTweensOf(inga);
+    playBodyImpact(this, inga, {
+      kind: "mist",
+      color: PALETTE_HEX.moss,
+      offsetY: -42,
+      depth: 5,
+      ringRadius: 26,
+      count: 6,
+      durationMs: 360,
+    });
+    this.tweens.add({
+      targets: inga,
+      x: INGA_TREE_LINE.x,
+      y: INGA_TREE_LINE.y,
+      alpha: INGA_TREE_LINE.alpha,
+      scaleX: INGA_TREE_LINE.scale,
+      scaleY: INGA_TREE_LINE.scale,
+      duration: 820,
+      ease: "Sine.easeInOut",
+      onComplete: () => {
+        if (!inga.scene) return;
+        addIdleBreath(this, inga, { dy: -2, durationMs: 3600 });
+      },
+    });
+    addContainerWake(this, inga, {
+      kind: "mist",
+      intervalMs: 760,
+      spreadX: 26,
+      spreadY: 12,
+      offsetY: -46,
+      color: PALETTE_HEX.moss,
+      alpha: 0.08,
+      size: 3.2,
+      depth: 2,
+      driftX: 22,
+      driftY: -20,
+      durationMs: 980,
+    });
+  }
+
+  private returnIngaToForeground(): void {
+    const inga = this.ingaFigure;
+    if (!inga?.scene) return;
+
+    this.tweens.killTweensOf(inga);
+    this.tweens.add({
+      targets: inga,
+      x: INGA_FOREGROUND.x,
+      y: INGA_FOREGROUND.y,
+      alpha: 1,
+      scaleX: 1,
+      scaleY: 1,
+      duration: 820,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!inga.scene) return;
+        addIdleBreath(this, inga, { dy: -3, durationMs: 2600 });
+        this.attendInga();
+      },
+    });
+    playBodyImpact(this, inga, {
+      kind: "mist",
+      color: PALETTE_HEX.moss,
+      offsetY: -42,
+      depth: 5,
+      ringRadius: 26,
+      count: 6,
+      durationMs: 360,
+    });
   }
 
   // Encounter 1: 3 ghosts — west, east, north. Introduces 3 of 4 directions
@@ -1314,7 +1393,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           playChime();
           this.cameras.main.flash(400, 200, 220, 180, false);
           this.setNarrator("Inga stirs. The shrine keeper whispers a name.");
-          this.attendInga();
+          this.returnIngaToForeground();
           this.fadeOutForkCue(this.offeringCue);
           this.offeringCue = null;
           this.time.delayedCall(2000, () => this.startIngaNameReveal());

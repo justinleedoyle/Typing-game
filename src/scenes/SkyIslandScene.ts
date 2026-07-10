@@ -133,7 +133,7 @@ const PATH_BEATS = ["balance", "lantern", "stepping"] as const;
 const SKY_WREN_STAGE_X = 960;
 const SKY_WREN_STAGE_Y = 826;
 const SKY_BALANCE_CUE_Y = 776;
-const SKY_LANTERN_CUE_Y = 748;
+const SKY_LANTERN_CUE_Y = 640;
 const SKY_STEPPING_CUE_Y = 788;
 
 /** Lantern-Lighter typed conversation */
@@ -797,12 +797,12 @@ export class SkyIslandScene extends Phaser.Scene {
     this.pathCueBeat = beat;
     this.tweens.add({
       targets: cue,
-      alpha: beat === "balance" ? 0.97 : 0.88,
+      alpha: beat === "balance" ? 0.97 : beat === "lantern" ? 0.98 : 0.88,
       y: beat === "balance" ? cue.y : cue.y - 8,
       duration: 380,
       ease: "Sine.easeOut",
       onComplete: () => {
-        if (beat !== "balance") addIdleBreath(this, cue, { dy: -3, durationMs: 2700 });
+        if (beat === "stepping") addIdleBreath(this, cue, { dy: -3, durationMs: 2700 });
       },
     });
   }
@@ -815,7 +815,7 @@ export class SkyIslandScene extends Phaser.Scene {
       case "balance":
         return { x: cue.x - 238, y: cue.y - 118 };
       case "lantern":
-        return { x: cue.x + 100, y: cue.y - 108 };
+        return { x: cue.x + 118, y: cue.y - 30 };
       case "stepping":
         return { x: cue.x + 206, y: cue.y - 100 };
     }
@@ -829,7 +829,7 @@ export class SkyIslandScene extends Phaser.Scene {
       case "balance":
         return { x: cue.x - 112, y: cue.y + 56 };
       case "lantern":
-        return { x: cue.x + 18, y: cue.y + 86 };
+        return { x: cue.x - 92, y: cue.y + 92 };
       case "stepping":
         return { x: cue.x + 138, y: cue.y + 34 };
     }
@@ -992,63 +992,79 @@ export class SkyIslandScene extends Phaser.Scene {
   private drawPathLanternCue(): Phaser.GameObjects.Container {
     const c = this.add.container(this.scale.width / 2 + 22, SKY_LANTERN_CUE_Y).setDepth(-1).setAlpha(0);
     const cord = this.add.graphics();
-    cord.lineStyle(1.4, 0x8a7060, 0.5);
-    cord.lineBetween(-72, -92, 0, -55);
-    cord.lineBetween(72, -92, 0, -55);
-    cord.lineBetween(0, -118, 0, -55);
-    cord.lineStyle(2, 0xc9a14a, 0.3);
+    cord.lineStyle(4.4, 0x2c241c, 0.72);
+    cord.lineBetween(0, -250, 0, -55);
+    cord.lineStyle(1.5, 0x9b7d57, 0.66);
+    cord.lineBetween(0, -250, 0, -55);
+    cord.lineStyle(2.4, 0x6f4f2a, 0.72);
     cord.lineBetween(-42, -55, 42, -55);
-    cord.lineStyle(1, 0xf7d882, 0.2);
+    cord.lineStyle(1, 0xe2bb68, 0.54);
     cord.lineBetween(-31, -51, 31, -51);
+    cord.fillStyle(0x3d2d20, 0.94);
+    cord.fillCircle(0, -55, 5);
+    cord.lineStyle(1.2, 0xc9a14a, 0.64);
+    cord.strokeCircle(0, -55, 4.5);
     c.add(cord);
 
     const glow = this.add.graphics();
-    glow.fillStyle(0xf5c842, 0.12);
-    glow.fillEllipse(0, -5, 174, 142);
-    glow.fillStyle(0xf5c842, 0.08);
-    glow.fillEllipse(0, -4, 116, 118);
-    glow.lineStyle(2, 0xf5c842, 0.13);
-    glow.strokeEllipse(0, -4, 112, 104);
+    glow.fillStyle(0xf5c842, 0.1);
+    glow.fillEllipse(0, -8, 136, 124);
+    glow.fillStyle(0xffe4a2, 0.08);
+    glow.fillEllipse(0, -7, 94, 100);
     c.add(glow);
 
     const paper = this.add.graphics();
-    paper.fillStyle(0x30251a, 0.28);
-    paper.fillEllipse(5, -8, 80, 100);
-    paper.fillStyle(0xd99c36, 0.36);
-    paper.fillEllipse(0, -12, 76, 96);
-    paper.fillStyle(0xf5d889, 0.24);
-    paper.fillEllipse(0, -12, 54, 82);
-    paper.lineStyle(2.4, 0xfdedb0, 0.68);
-    paper.strokeEllipse(0, -12, 76, 96);
-    paper.lineStyle(1.5, 0xfdedb0, 0.34);
+    paper.fillStyle(0x332419, 0.88);
+    paper.fillEllipse(6, -8, 88, 108);
+    paper.fillStyle(0xb96f27, 0.96);
+    paper.fillEllipse(0, -12, 80, 102);
+    paper.fillStyle(0xe0a644, 0.88);
+    paper.fillEllipse(-2, -12, 58, 88);
+    paper.fillStyle(0xf4c96a, 0.5);
+    paper.fillEllipse(-6, -10, 28, 78);
+    paper.lineStyle(3, 0x4f321d, 0.9);
+    paper.strokeEllipse(0, -12, 80, 102);
+    paper.lineStyle(1.5, 0xffedb0, 0.72);
+    paper.strokeEllipse(-3, -13, 72, 94);
+    paper.lineStyle(1.5, 0x6a431e, 0.72);
     paper.strokeEllipse(0, -36, 58, 18);
     paper.strokeEllipse(0, -15, 70, 22);
     paper.strokeEllipse(0, 8, 62, 18);
-    paper.lineStyle(1.2, 0x8a5d25, 0.5);
+    paper.lineStyle(1.4, 0x6a431e, 0.72);
     paper.lineBetween(-26, -42, -20, 22);
     paper.lineBetween(-12, -48, -9, 31);
     paper.lineBetween(12, -48, 9, 31);
     paper.lineBetween(26, -42, 20, 22);
-    paper.fillStyle(0xb47a2b, 0.82);
+    paper.fillStyle(0x70431f, 0.98);
     paper.fillRoundedRect(-21, -61, 42, 9, 5);
     paper.fillRoundedRect(-22, 34, 44, 8, 5);
-    paper.lineStyle(1.3, 0xfdedb0, 0.36);
+    paper.lineStyle(1.3, 0xe6b660, 0.84);
     paper.strokeRoundedRect(-21, -61, 42, 9, 5);
     paper.strokeRoundedRect(-22, 34, 44, 8, 5);
-    paper.fillStyle(0xffdf83, 0.78);
+    paper.fillStyle(0xffe49b, 0.92);
     paper.fillEllipse(0, -6, 18, 32);
-    paper.lineStyle(1, 0xc07a2d, 0.54);
+    paper.lineStyle(1.3, 0x5e3b21, 0.78);
     paper.lineBetween(0, 42, 0, 67);
-    paper.fillStyle(0xf3c563, 0.72);
+    paper.fillStyle(0xd99c36, 0.94);
     paper.fillCircle(0, 55, 3.5);
     paper.fillEllipse(0, 68, 12, 7);
+    paper.setAngle(-1.2);
     c.add(paper);
 
     this.tweens.add({
-      targets: [glow, paper],
-      scaleX: 1.045,
-      scaleY: 1.07,
-      duration: 1000,
+      targets: glow,
+      alpha: { from: 0.74, to: 1 },
+      scaleX: 1.035,
+      scaleY: 1.05,
+      duration: 1250,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    this.tweens.add({
+      targets: paper,
+      angle: 1.2,
+      duration: 2100,
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
@@ -3350,7 +3366,7 @@ export class SkyIslandScene extends Phaser.Scene {
       case "balance":
         return { x: -244, y: -62 };
       case "lantern":
-        return { x: 0, y: -18 };
+        return { x: 0, y: -12 };
       case "stepping":
         return { x: 206, y: 4 };
       default:

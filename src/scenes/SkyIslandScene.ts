@@ -798,10 +798,12 @@ export class SkyIslandScene extends Phaser.Scene {
     this.tweens.add({
       targets: cue,
       alpha: beat === "balance" ? 0.97 : 0.88,
-      y: cue.y - 8,
+      y: beat === "balance" ? cue.y : cue.y - 8,
       duration: 380,
       ease: "Sine.easeOut",
-      onComplete: () => addIdleBreath(this, cue, { dy: -3, durationMs: 2700 }),
+      onComplete: () => {
+        if (beat !== "balance") addIdleBreath(this, cue, { dy: -3, durationMs: 2700 });
+      },
     });
   }
 
@@ -894,287 +896,96 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private drawBalanceBridgeCue(): Phaser.GameObjects.Container {
-    const c = this.add.container(this.scale.width / 2 - 92, SKY_BALANCE_CUE_Y).setDepth(-1).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 426, 32, { y: 35, alpha: 0.18 }));
-    const drawStone = (
-      g: Phaser.GameObjects.Graphics,
-      points: Array<{ x: number; y: number }>,
-      fill: number,
-      fillAlpha: number,
-      strokeAlpha: number,
-      lineWidth = 2,
-      stroke = 0xd6c386,
-    ): void => {
-      if (points.length === 0) return;
-      const first = points[0];
-      if (first === undefined) return;
-      g.fillStyle(fill, fillAlpha);
-      g.lineStyle(lineWidth, stroke, strokeAlpha);
-      g.beginPath();
-      g.moveTo(first.x, first.y);
-      for (let i = 1; i < points.length; i += 1) {
-        const point = points[i];
-        if (point !== undefined) g.lineTo(point.x, point.y);
-      }
-      g.closePath();
-      g.fillPath();
-      g.strokePath();
-    };
-
-    const air = this.add.graphics();
-    air.lineStyle(2, 0xf3ead2, 0.035);
-    air.lineBetween(-270, 42, -178, 30);
-    air.lineBetween(-178, 30, -92, 50);
-    air.lineBetween(-92, 50, 18, 22);
-    air.lineBetween(18, 22, 96, 6);
-    air.lineBetween(96, 6, 186, 20);
-    air.lineStyle(1.5, PALETTE_HEX.brass, 0.035);
-    air.lineBetween(-250, 40, -194, 33);
-    air.lineBetween(-156, 38, -108, 47);
-    air.lineBetween(92, 10, 146, 18);
-    c.add(air);
-
-    const rocks = this.add.graphics().setAngle(-3);
-    [
-      { x: -256, y: 38, w: 128, h: 24 },
-      { x: -154, y: 30, w: 142, h: 28 },
-      { x: 154, y: 35, w: 150, h: 30 },
-    ].forEach((shadow) => {
-      rocks.fillStyle(0x17120f, 0.18);
-      rocks.fillEllipse(shadow.x, shadow.y, shadow.w, shadow.h);
-    });
-    [
+    const c = this.add
+      .container(this.scale.width / 2 - 92, SKY_BALANCE_CUE_Y)
+      .setDepth(-1)
+      .setAlpha(0);
+    const stones = this.add.graphics().setAngle(-3);
+    const footholds = [
       {
-        fill: 0x5e5a45,
+        fill: 0x575342,
         points: [
-          { x: -316, y: 15 },
-          { x: -286, y: -4 },
-          { x: -246, y: -8 },
-          { x: -202, y: 5 },
-          { x: -190, y: 31 },
-          { x: -231, y: 44 },
-          { x: -292, y: 39 },
+          { x: -298, y: -26 },
+          { x: -276, y: -39 },
+          { x: -235, y: -37 },
+          { x: -214, y: -23 },
+          { x: -226, y: -7 },
+          { x: -268, y: -3 },
+          { x: -296, y: -12 },
         ],
       },
       {
-        fill: 0x6b634b,
+        fill: 0x625c46,
         points: [
-          { x: -220, y: -3 },
-          { x: -184, y: -23 },
-          { x: -124, y: -20 },
-          { x: -83, y: -3 },
-          { x: -94, y: 28 },
-          { x: -148, y: 43 },
-          { x: -204, y: 29 },
+          { x: -220, y: -5 },
+          { x: -198, y: -18 },
+          { x: -157, y: -16 },
+          { x: -136, y: -2 },
+          { x: -148, y: 14 },
+          { x: -188, y: 18 },
+          { x: -216, y: 9 },
         ],
       },
       {
-        fill: 0x73694f,
+        fill: 0x6b6248,
         points: [
-          { x: 88, y: -7 },
-          { x: 125, y: -27 },
-          { x: 182, y: -24 },
-          { x: 229, y: -6 },
-          { x: 219, y: 29 },
-          { x: 162, y: 47 },
-          { x: 104, y: 31 },
+          { x: -143, y: 15 },
+          { x: -120, y: 2 },
+          { x: -79, y: 4 },
+          { x: -58, y: 19 },
+          { x: -70, y: 34 },
+          { x: -111, y: 37 },
+          { x: -139, y: 29 },
         ],
       },
-    ].forEach((stone, i) => {
-      drawStone(rocks, stone.points, stone.fill, 0.62, 0.16, 1.4, 0x201d18);
-      rocks.fillStyle(0xf3ead2, 0.035);
-      const highlight = i === 2 ? { x: 135, y: -15, w: 52, h: 8 } : i === 1 ? { x: -178, y: -12, w: 44, h: 7 } : { x: -286, y: 3, w: 36, h: 6 };
-      rocks.fillEllipse(highlight.x, highlight.y, highlight.w, highlight.h);
-    });
-    rocks.lineStyle(1.2, 0x1b1712, 0.24);
-    rocks.lineBetween(-292, 15, -250, 24);
-    rocks.lineBetween(-181, -4, -138, 8);
-    rocks.lineBetween(124, 1, 176, -5);
-    rocks.lineStyle(1.1, 0x9b8f65, 0.13);
-    rocks.lineBetween(-205, 20, -172, 18);
-    rocks.lineBetween(180, 19, 214, 13);
-    c.add(rocks);
-
-    const landing = this.add.graphics().setAngle(-4);
-    landing.fillStyle(0x17120f, 0.22);
-    landing.fillEllipse(-244, -42, 150, 30);
-    drawStone(
-      landing,
-      [
-        { x: -314, y: -67 },
-        { x: -279, y: -84 },
-        { x: -223, y: -86 },
-        { x: -177, y: -74 },
-        { x: -191, y: -52 },
-        { x: -258, y: -44 },
-        { x: -310, y: -52 },
-      ],
-      0x6a634b,
-      0.74,
-      0.13,
-      1.4,
-      0x222018,
-    );
-    landing.fillStyle(0x9b9168, 0.1);
-    landing.fillEllipse(-260, -72, 48, 10);
-    landing.fillEllipse(-218, -61, 38, 8);
-    landing.lineStyle(1.1, 0x241f17, 0.24);
-    landing.lineBetween(-292, -62, -252, -68);
-    landing.lineBetween(-232, -78, -205, -66);
-    landing.lineBetween(-276, -55, -238, -58);
-    landing.lineBetween(-248, -82, -216, -76);
-    landing.lineStyle(1, 0xd6c386, 0.055);
-    landing.lineBetween(-289, -75, -252, -80);
-    landing.lineBetween(-218, -82, -194, -75);
-    landing.fillStyle(0x2a2418, 0.28);
-    landing.fillCircle(-306, -59, 3);
-    landing.fillCircle(-191, -64, 2.5);
-    landing.fillStyle(0xb8a66f, 0.11);
-    landing.fillCircle(-282, -74, 2);
-    landing.fillCircle(-228, -58, 1.8);
-    c.add(landing);
-
-    const entrance = this.add.graphics().setAngle(-5);
-    entrance.lineStyle(7, 0x221a13, 0.9);
-    entrance.lineBetween(-280, 10, -140, -4);
-    entrance.lineStyle(2, PALETTE_HEX.brass, 0.09);
-    entrance.lineBetween(-282, -18, -142, -28);
-    entrance.lineBetween(-282, 18, -142, 6);
-    entrance.lineStyle(4, 0x2b2318, 0.88);
-    entrance.lineBetween(-282, -20, -282, 24);
-    entrance.lineBetween(-142, -30, -142, 12);
-    [
-      [
-        { x: -266, y: -6 },
-        { x: -228, y: -13 },
-        { x: -217, y: 8 },
-        { x: -254, y: 15 },
-      ],
-      [
-        { x: -213, y: -13 },
-        { x: -169, y: -18 },
-        { x: -158, y: 3 },
-        { x: -202, y: 9 },
-      ],
-    ].forEach((points, i) =>
-      drawStone(entrance, points, i === 0 ? 0x514d3f : 0x5d5644, 1, 0.18, 1.5, 0x201b15),
-    );
-    entrance.lineStyle(1.4, 0x1b1712, 0.34);
-    entrance.lineBetween(-250, -1, -230, 4);
-    entrance.lineBetween(-198, -10, -178, -5);
-    c.add(entrance);
-
-    const bridge = this.add.graphics().setAngle(-3);
-    [
-      { x: -124, y: 55, w: 62, h: 14 },
-      { x: -44, y: 52, w: 66, h: 15 },
-      { x: 42, y: 49, w: 64, h: 14 },
-      { x: 128, y: 45, w: 66, h: 14 },
-    ].forEach((shadow) => {
-      bridge.fillStyle(0x17120f, 0.13);
-      bridge.fillEllipse(shadow.x, shadow.y, shadow.w, shadow.h);
-    });
-    bridge.lineStyle(2.4, 0x211b15, 0.22);
-    bridge.lineBetween(-174, 36, 178, 14);
-    bridge.lineBetween(-166, 62, 182, 42);
-    bridge.lineStyle(1.2, 0xf3ead2, 0.018);
-    bridge.lineBetween(-142, 32, -62, 28);
-    bridge.lineBetween(44, 20, 132, 18);
-    const bridgeStones = [
-      [
-        { x: -156, y: 39 },
-        { x: -139, y: 25 },
-        { x: -104, y: 21 },
-        { x: -82, y: 32 },
-        { x: -93, y: 49 },
-        { x: -130, y: 56 },
-        { x: -153, y: 50 },
-      ],
-      [
-        { x: -78, y: 42 },
-        { x: -58, y: 28 },
-        { x: -20, y: 23 },
-        { x: 3, y: 34 },
-        { x: -5, y: 50 },
-        { x: -44, y: 58 },
-        { x: -75, y: 52 },
-      ],
-      [
-        { x: 8, y: 38 },
-        { x: 29, y: 24 },
-        { x: 65, y: 22 },
-        { x: 87, y: 33 },
-        { x: 78, y: 49 },
-        { x: 40, y: 56 },
-        { x: 11, y: 51 },
-      ],
-      [
-        { x: 96, y: 36 },
-        { x: 119, y: 23 },
-        { x: 158, y: 23 },
-        { x: 182, y: 34 },
-        { x: 168, y: 51 },
-        { x: 132, y: 58 },
-        { x: 101, y: 50 },
-      ],
+      {
+        fill: 0x5f5942,
+        points: [
+          { x: -66, y: 34 },
+          { x: -43, y: 21 },
+          { x: -3, y: 23 },
+          { x: 18, y: 38 },
+          { x: 6, y: 52 },
+          { x: -34, y: 55 },
+          { x: -62, y: 48 },
+        ],
+      },
     ];
-    bridgeStones.forEach((points, i) => {
-      const center = points.reduce(
-        (acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }),
-        { x: 0, y: 0 },
+
+    footholds.forEach((foothold, index) => {
+      const centerX =
+        foothold.points.reduce((sum, point) => sum + point.x, 0) / foothold.points.length;
+      const lowerY = Math.max(...foothold.points.map((point) => point.y));
+      stones.fillStyle(0x18130f, 0.24);
+      stones.fillEllipse(centerX + 2, lowerY + 6, 66, 11);
+      stones.fillStyle(foothold.fill, 0.96);
+      stones.lineStyle(1.5, 0x262119, 0.48);
+      stones.fillPoints(foothold.points, true);
+      stones.strokePoints(foothold.points, true);
+      stones.lineStyle(1.1, 0xb9aa72, 0.12);
+      stones.lineBetween(
+        foothold.points[1]!.x + 7,
+        foothold.points[1]!.y + 5,
+        foothold.points[2]!.x - 7,
+        foothold.points[2]!.y + 5,
       );
-      center.x /= points.length;
-      center.y /= points.length;
-      const compactPoints = points.map((point) => ({
-        x: center.x + (point.x - center.x) * 0.86,
-        y: center.y + (point.y - center.y) * 0.78,
-      }));
-      if (i >= 2) {
-        bridge.fillStyle(0x17120f, 0.08);
-        bridge.fillEllipse(center.x, center.y + 11, 44, 8);
-        bridge.lineStyle(1.8, 0x211b15, 0.18);
-        bridge.lineBetween(
-          compactPoints[0]!.x + 5,
-          compactPoints[0]!.y + 9,
-          compactPoints[3]!.x - 8,
-          compactPoints[3]!.y + 8,
-        );
-        bridge.lineStyle(1, 0xb6a66e, 0.08);
-        bridge.lineBetween(
-          compactPoints[1]!.x + 6,
-          compactPoints[1]!.y + 5,
-          compactPoints[2]!.x - 7,
-          compactPoints[2]!.y + 4,
-        );
-        return;
-      }
-      drawStone(
-        bridge,
-        compactPoints,
-        i % 2 === 0 ? 0x5f5a43 : 0x6a6249,
-        i === 1 || i === 2 ? 0.82 : 0.72,
-        0.24,
-        1.35,
-        0x201d18,
+      stones.lineStyle(1.2, 0x211c16, 0.38);
+      stones.lineBetween(
+        centerX - 9,
+        foothold.points[1]!.y + 9,
+        centerX + (index % 2 === 0 ? 7 : 12),
+        lowerY - 4,
       );
-      const midX = (compactPoints[1]!.x + compactPoints[3]!.x) / 2;
-      bridge.lineStyle(1.2, 0x191611, 0.28);
-      bridge.lineBetween(midX - 12, compactPoints[1]!.y + 12, midX + 10, compactPoints[4]!.y - 6);
-      bridge.lineStyle(2.2, 0x272117, 0.32);
-      bridge.lineBetween(
-        compactPoints[5]!.x + 5,
-        compactPoints[5]!.y - 2,
-        compactPoints[4]!.x - 3,
-        compactPoints[4]!.y - 5,
-      );
-      bridge.fillStyle(0xf3ead2, 0.055);
-      bridge.fillEllipse(midX - 7, compactPoints[1]!.y + 6, 14, 3.5);
     });
-    bridge.fillStyle(0xb6a66e, 0.06);
-    bridge.fillEllipse(-134, 49, 18, 5);
-    bridge.fillEllipse(44, 52, 16, 4);
-    bridge.fillEllipse(137, 40, 17, 5);
-    c.add(bridge);
+
+    stones.fillStyle(0x7c744f, 0.42);
+    stones.fillEllipse(-275, -15, 18, 5);
+    stones.fillEllipse(-113, 25, 16, 4);
+    stones.fillEllipse(-28, 43, 13, 4);
+    stones.fillStyle(0x394326, 0.72);
+    stones.fillEllipse(-207, 4, 12, 5);
+    stones.fillEllipse(-84, 23, 10, 4);
+    c.add(stones);
     return c;
   }
 
@@ -1284,6 +1095,22 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private pulsePathCue(completion: boolean): void {
     if (!this.pathCue?.scene) return;
+    if (this.pathCueBeat === "balance") {
+      playActorAttention(this, this.wrenContainer, {
+        scale: completion ? 1.025 : 1.012,
+        durationMs: completion ? 220 : 150,
+      });
+      playBodyImpact(this, this.wrenContainer, {
+        kind: "mote",
+        color: PALETTE_HEX.brass,
+        offsetY: -10,
+        depth: 58,
+        ringRadius: completion ? 30 : 20,
+        count: completion ? 7 : 4,
+        durationMs: completion ? 400 : 220,
+      });
+      return;
+    }
     const sourceOffset = this.pathCueSourceOffset();
     playActorAttention(this, this.pathCue, {
       scale: completion ? 1.035 : 1.018,
@@ -3440,6 +3267,8 @@ export class SkyIslandScene extends Phaser.Scene {
     const onClaim = opts.onClaim;
     const onAdvance = opts.onAdvance;
     const onComplete = opts.onComplete;
+    const balanceBeat = this.pathCueBeat === "balance";
+    const feedbackBody = balanceBeat ? this.wrenContainer : cue;
     let anchor: WordBodyAnchorHandle | null = null;
     const releaseAnchor = (): void => {
       if (!anchor) return;
@@ -3462,36 +3291,36 @@ export class SkyIslandScene extends Phaser.Scene {
           cue.y + sourceOffset.y,
           { color: PALETTE_HEX.brass, depth: 58 },
         );
-        playActorAttention(this, cue, {
+        playActorAttention(this, feedbackBody, {
           tint: PALETTE_HEX.brass,
-          scale: 1.022,
+          scale: balanceBeat ? 1.012 : 1.022,
           durationMs: 180,
         });
         onClaim?.(mods);
       },
       onAdvance: (cursor, wordLength) => {
         const sourceOffset = this.pathCueSourceOffset();
-        playBodyTypePulse(this, cue, {
+        playBodyTypePulse(this, feedbackBody, {
           kind: "mote",
           color: PALETTE_HEX.brass,
-          offsetX: sourceOffset.x,
-          offsetY: sourceOffset.y,
+          offsetX: balanceBeat ? 0 : sourceOffset.x,
+          offsetY: balanceBeat ? -24 : sourceOffset.y,
           depth: 58,
-          ringRadius: 28,
+          ringRadius: balanceBeat ? 22 : 28,
         });
         onAdvance?.(cursor, wordLength);
       },
       onComplete: () => {
         releaseAnchor();
         const sourceOffset = this.pathCueSourceOffset();
-        playBodyImpact(this, cue, {
+        playBodyImpact(this, feedbackBody, {
           kind: "mote",
           color: PALETTE_HEX.brass,
-          offsetX: sourceOffset.x,
-          offsetY: sourceOffset.y,
+          offsetX: balanceBeat ? 0 : sourceOffset.x,
+          offsetY: balanceBeat ? -20 : sourceOffset.y,
           depth: 58,
-          ringRadius: 48,
-          count: 10,
+          ringRadius: balanceBeat ? 36 : 48,
+          count: balanceBeat ? 8 : 10,
         });
         onComplete();
       },

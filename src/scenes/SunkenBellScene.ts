@@ -158,6 +158,8 @@ export class SunkenBellScene extends Phaser.Scene {
   private aurlandImage?: Phaser.GameObjects.Image;
   /** Old Olin's painted sprite during the Act 1 teaching beat. */
   private olinImage?: Phaser.GameObjects.Image;
+  /** Olin's low stone pew, dismissed with him when the ghost wave begins. */
+  private olinPew?: Phaser.GameObjects.Graphics;
   private glassFishCompanion: Phaser.GameObjects.Container | null = null;
   private doorChantCue: Phaser.GameObjects.Container | null = null;
   private doorForceCue: Phaser.GameObjects.Container | null = null;
@@ -465,6 +467,8 @@ export class SunkenBellScene extends Phaser.Scene {
       this.dismissRevisitMemoryCue(false);
       this.olinImage?.destroy();
       this.olinImage = undefined;
+      this.olinPew?.destroy();
+      this.olinPew = undefined;
       this.aurlandImage?.destroy();
       this.aurlandImage = undefined;
     });
@@ -1667,6 +1671,8 @@ export class SunkenBellScene extends Phaser.Scene {
     playWaveSting();
     this.cameras.main.shake(140, 0.003);
     this.pulseBellWave();
+    this.dismissOlin();
+    this.setBandSpeaker("Runa");
     this.ghosts = [];
     this.band.setObjective("Drive back the tide-ghosts before the air runs out.");
     // Combat begins — the air stake goes live for the choir waves.
@@ -2508,6 +2514,35 @@ export class SunkenBellScene extends Phaser.Scene {
       durationMs: 1000,
       ease: "Sine.easeOut",
     });
+  }
+
+  /** Olin leaves the pew as the quiet teaching beat gives way to combat. */
+  private dismissOlin(): void {
+    const sprite = this.olinImage;
+    const pew = this.olinPew;
+    if (!sprite && !pew) return;
+
+    this.clearOlinWordAnchors();
+    this.olinImage = undefined;
+    this.olinPew = undefined;
+
+    if (sprite) {
+      fadeOutStagedSprite(this, sprite, {
+        durationMs: 620,
+        ease: "Sine.easeIn",
+      });
+    }
+    if (pew) {
+      this.tweens.add({
+        targets: pew,
+        alpha: 0,
+        duration: 500,
+        ease: "Sine.easeIn",
+        onComplete: () => {
+          if (pew.scene) pew.destroy();
+        },
+      });
+    }
   }
 
   private startFork2ClaimTongue(): void {
@@ -3847,6 +3882,7 @@ export class SunkenBellScene extends Phaser.Scene {
     // Quiet stone shelf for Olin's teaching beat. Keep it low-contrast so it
     // reads as part of the submerged ruin instead of a UI/debug platform.
     const g = this.add.graphics().setDepth(0.85);
+    this.olinPew = g;
     g.fillStyle(0x061018, 0.34);
     g.fillEllipse(OLIN_X, OLIN_PEW_Y + 21, 326, 42);
     g.fillStyle(0x26363a, 0.48);

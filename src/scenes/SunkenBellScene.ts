@@ -1203,12 +1203,25 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startDescent(): void {
     this.band.setObjective("Light the descent lanterns before the bell teaches its rhythm.");
-    let lit = 0;
+    let index = 0;
 
-    DESCENT_LANTERN_WORDS.forEach((word, i) => {
-      const pos = DESCENT_LANTERN_POSITIONS[i];
-      const lantern = this.showDescentLantern(i);
-      if (!pos || !lantern) return;
+    const advance = (): void => {
+      if (index >= DESCENT_LANTERN_WORDS.length) {
+        this.time.delayedCall(320, () => {
+          this.swimWrenToX(WREN_X, () => {
+            this.resetWrenToFront();
+            this.time.delayedCall(360, () => this.startOlinNPC());
+          });
+        });
+        return;
+      }
+
+      const lanternIndex = index;
+      const word = DESCENT_LANTERN_WORDS[lanternIndex];
+      const pos = DESCENT_LANTERN_POSITIONS[lanternIndex];
+      const lantern = this.showDescentLantern(lanternIndex);
+      if (!word || !pos || !lantern) return;
+      this.activateDescentLantern(lantern);
       let lanternAnchor: WordBodyAnchorHandle | null = null;
       const releaseLanternAnchor = (): void => {
         if (!lanternAnchor) return;
@@ -1216,7 +1229,7 @@ export class SunkenBellScene extends Phaser.Scene {
         lanternAnchor = null;
       };
 
-      const wordPos = this.descentLanternWordPosition(i);
+      const wordPos = this.descentLanternWordPosition(lanternIndex);
       const target = this.makeWord({
         scene: this,
         word,
@@ -1224,7 +1237,7 @@ export class SunkenBellScene extends Phaser.Scene {
         y: wordPos.y,
         fontSize: 36,
         onClaim: () => {
-          this.swimWrenTowardDescentLantern(i);
+          this.swimWrenTowardDescentLantern(lanternIndex);
           playWrenFocus(this.wrenSprite, {
             faceLeft: wordPos.x < this.wrenContainer.x,
           });
@@ -1236,20 +1249,16 @@ export class SunkenBellScene extends Phaser.Scene {
           });
           releaseLanternAnchor();
           this.lightDescentLantern(lantern);
-          lit += 1;
-          if (lit >= DESCENT_LANTERN_WORDS.length) {
-            this.time.delayedCall(320, () => {
-              this.swimWrenToX(WREN_X, () => {
-                this.resetWrenToFront();
-                this.time.delayedCall(360, () => this.startOlinNPC());
-              });
-            });
-          }
+          this.clearActiveTargets();
+          index += 1;
+          this.time.delayedCall(520, advance);
         },
       });
       lanternAnchor = this.attachDescentLanternWordAnchor(lantern, target);
       this.registerActiveTarget(target);
-    });
+    };
+
+    advance();
   }
 
   private descentLanternWordPosition(index: number): { x: number; y: number } {
@@ -1345,7 +1354,7 @@ export class SunkenBellScene extends Phaser.Scene {
     tether.lineBetween(-22, -38, 22, -38);
     container.add(tether);
 
-    const glow = this.add.graphics().setAlpha(centerLantern ? 0.74 : 0.58);
+    const glow = this.add.graphics().setAlpha(centerLantern ? 0.24 : 0.2);
     glow.fillStyle(0x3d8d95, centerLantern ? 0.1 : 0.06);
     glow.fillEllipse(0, 8, centerLantern ? 112 : 92, centerLantern ? 122 : 100);
     glow.fillStyle(0xc9a14a, centerLantern ? 0.08 : 0.05);
@@ -1358,7 +1367,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.drawDescentLanternCage(body, false, centerLantern);
     container.add(body);
 
-    const flame = this.add.graphics().setAlpha(centerLantern ? 0.88 : 0.72);
+    const flame = this.add.graphics().setAlpha(0.12);
     flame.fillStyle(0xc9a14a, centerLantern ? 0.48 : 0.36);
     flame.fillEllipse(0, 4, centerLantern ? 28 : 22, centerLantern ? 40 : 34);
     flame.fillStyle(0xf3ead2, centerLantern ? 0.84 : 0.72);
@@ -1396,18 +1405,28 @@ export class SunkenBellScene extends Phaser.Scene {
         durationMs: 2600 + index * 220,
       }),
     });
+    return { container, glow, body, flame, center: centerLantern };
+  }
+
+  private activateDescentLantern(lantern: DescentLantern): void {
+    this.tweens.killTweensOf([lantern.glow, lantern.flame]);
+    lantern.glow.setAlpha(0.56).setScale(1);
+    lantern.flame.setAlpha(0.42).setScale(1);
     this.tweens.add({
-      targets: [glow, flame],
-      scaleX: 1.08,
-      scaleY: 1.14,
-      alpha: 0.9,
-      duration: 900 + index * 120,
+      targets: [lantern.glow, lantern.flame],
+      scaleX: 1.06,
+      scaleY: 1.1,
+      alpha: 0.7,
+      duration: 820,
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
     });
-
-    return { container, glow, body, flame, center: centerLantern };
+    playActorAttention(this, lantern.container, {
+      tint: BELL_BURST_COLOR,
+      scale: 1.018,
+      durationMs: 220,
+    });
   }
 
   private drawDescentLanternCage(
@@ -1480,7 +1499,34 @@ export class SunkenBellScene extends Phaser.Scene {
     this.drawDescentLanternCage(lantern.body, true, lantern.center);
     lantern.glow.setAlpha(0.9).setScale(1.16);
     lantern.flame.setAlpha(1).setScale(1.18, 1.28);
+    this.tweens.add({
+      targets: [lantern.glow, lantern.flame],
+      alpha: { from: 0.78, to: 1 },
+      scaleX: "+=0.04",
+      scaleY: "+=0.06",
+      duration: 1050,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
     this.pulseDescentLantern(lantern, true);
+  }
+
+  private dismissDescentLanterns(): void {
+    this.clearDescentLanternWordAnchors();
+    for (const lantern of this.descentLanterns) {
+      if (!lantern?.container.scene) continue;
+      this.tweens.killTweensOf([lantern.container, lantern.glow, lantern.flame]);
+      this.tweens.add({
+        targets: lantern.container,
+        alpha: 0,
+        y: lantern.container.y - 18,
+        duration: 420,
+        ease: "Sine.easeIn",
+        onComplete: () => lantern.container.destroy(),
+      });
+    }
+    this.descentLanterns = [];
   }
 
   private pulseDescentLantern(
@@ -1537,6 +1583,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startOlinNPC(): void {
     this.clearActiveTargets();
+    this.dismissDescentLanterns();
     this.band.setObjective("Answer Old Olin to learn the bell's rhythm.");
     // Draw Olin — hunched silhouette on a pew
     this.drawOlin();

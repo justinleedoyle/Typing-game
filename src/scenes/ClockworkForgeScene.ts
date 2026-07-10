@@ -114,7 +114,6 @@ type ForgeChoiceCueKey = "apprentice" | "standDown" | "fight";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CATWALK_Y = 440;
-const TUTORIAL_GOLEM_Y = CATWALK_Y + 20;
 const FLOOR_Y = 780;
 
 const GOLEM_ADVANCE_MS = 15000;
@@ -126,6 +125,9 @@ const GOLEM_ADVANCE_MS = 15000;
 // COMMAND_GOLEM_SPRITE_HEIGHT × 1.8. Tune on live.
 const GOLEM_SPRITE_HEIGHT = 172;
 const COMMAND_GOLEM_SPRITE_HEIGHT = 150;
+const CATWALK_SURFACE_Y = CATWALK_Y + 20;
+const TUTORIAL_GOLEM_GROUND_Y = GOLEM_SPRITE_HEIGHT / 2 + 6;
+const TUTORIAL_GOLEM_Y = CATWALK_SURFACE_Y - TUTORIAL_GOLEM_GROUND_Y;
 
 // Smith Forn's standing portrait — a believable character height (px). He's a
 // narration NPC, so this only affects his on-screen figure, not any hit/word
@@ -797,7 +799,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
       "Old Gregor",
     );
     // Spawn a tutorial golem that doesn't advance
-    const tutorialGolem = this.spawnStaticGolem(860, TUTORIAL_GOLEM_Y, false);
+    const tutorialGolem = this.spawnStaticGolem(
+      1340,
+      TUTORIAL_GOLEM_Y,
+      false,
+      TUTORIAL_GOLEM_GROUND_Y,
+    );
 
     const wordPos = this.staticGolemWordPosition(tutorialGolem, "turn");
     const target = this.makeStaticGolemWord(tutorialGolem, {
@@ -901,6 +908,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       "walk",
       GOLEM_ADVANCE_MS * 1.4,
       false,
+      TUTORIAL_GOLEM_GROUND_Y,
     );
 
     this.waveActive = true;
@@ -2010,9 +2018,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── Golem spawning ───────────────────────────────────────────────────────────
 
   /** Spawn a static (non-advancing) tutorial golem. Returns the golem object. */
-  private spawnStaticGolem(x: number, y: number, _isBoss: boolean): StaticGolem {
+  private spawnStaticGolem(
+    x: number,
+    y: number,
+    _isBoss: boolean,
+    groundY = 16,
+  ): StaticGolem {
     const container = this.add.container(x, y);
-    const sprite = this.drawGolemInto(container, false);
+    const sprite = this.drawGolemInto(container, false, groundY);
     this.idleBob(container);
     return { container, sprite };
   }
@@ -2027,11 +2040,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
     word: string,
     advanceMs: number,
     isCapitalized: boolean,
+    groundY = 16,
   ): MovingWordEnemy {
     const startX = x < this.scale.width / 2 ? -120 : this.scale.width + 120;
     const container = this.add.container(startX, y);
     container.setAlpha(0);
-    const sprite = this.drawGolemInto(container, false);
+    const sprite = this.drawGolemInto(container, false, groundY);
     addContainerWake(this, container, {
       kind: "ember",
       intervalMs: 190,
@@ -3838,9 +3852,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private drawGolemInto(
     c: Phaser.GameObjects.Container,
     _isBoss: boolean,
+    groundY = 16,
   ): Phaser.GameObjects.Image {
-    c.add(addLocalGroundShadow(this, 190, 34, { y: 16, alpha: 0.46 }));
-    c.add(this.makeGolemFoundryBase(false));
+    c.add(addLocalGroundShadow(this, 190, 34, { y: groundY, alpha: 0.46 }));
+    c.add(this.makeGolemFoundryBase(false, groundY + 2));
     const sprite = this.add.image(0, 0, "forge-golem");
     sprite.setScale(GOLEM_SPRITE_HEIGHT / sprite.height);
     c.add(sprite);
@@ -3862,10 +3877,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
     return sprite;
   }
 
-  private makeGolemFoundryBase(isBoss: boolean): Phaser.GameObjects.Graphics {
+  private makeGolemFoundryBase(
+    isBoss: boolean,
+    emberY = isBoss ? 16 : 18,
+  ): Phaser.GameObjects.Graphics {
     const g = this.add.graphics();
     const width = isBoss ? 190 : 174;
-    const emberY = isBoss ? 16 : 18;
     g.fillStyle(0x090604, 0.22);
     g.fillEllipse(0, emberY, width, isBoss ? 42 : 36);
     g.fillStyle(PALETTE_HEX.ember, isBoss ? 0.16 : 0.14);

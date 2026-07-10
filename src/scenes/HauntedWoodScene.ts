@@ -337,7 +337,6 @@ export class HauntedWoodScene extends Phaser.Scene {
         maxDurationMs: 13000,
       }),
     );
-    this.drawShrine();
     this.wrenContainer = this.drawWren(WREN_X, WREN_Y);
     playSceneEventPulse(this, {
       kind: "mist",
@@ -820,148 +819,72 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.tweens.add({
       targets: cue,
       alpha: idx === 0 ? 0.96 : 0.82,
-      y: cue.y - 7,
+      y: idx === 0 ? cue.y : cue.y - 7,
       duration: 400,
       ease: "Sine.easeOut",
-      onComplete: () => addIdleBreath(this, cue, { dy: -3, durationMs: 3100 }),
+      onComplete: () => {
+        if (idx !== 0) addIdleBreath(this, cue, { dy: -3, durationMs: 3100 });
+      },
     });
   }
 
   private drawRootPathCue(): Phaser.GameObjects.Container {
-    const c = this.add.container(this.scale.width / 2 - 22, WOOD_ROOT_CUE_Y).setDepth(1).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 286, 24, { y: 24, alpha: 0.13 }));
-    const roots = this.add.graphics();
-    roots.fillStyle(0x0c100c, 0.31);
-    roots.fillEllipse(-18, 22, 274, 36);
-    roots.fillStyle(0x141b12, 0.28);
-    roots.fillEllipse(-86, 15, 98, 22);
-    roots.fillEllipse(54, 18, 132, 24);
-    roots.fillStyle(0x242016, 0.16);
-    roots.fillTriangle(-138, 28, -104, 9, -72, 28);
-    roots.fillTriangle(-28, 29, 8, 8, 56, 30);
-    roots.fillTriangle(70, 26, 114, 4, 148, 18);
+    const c = this.add
+      .container(this.scale.width / 2 - 22, WOOD_ROOT_CUE_Y)
+      .setDepth(-1)
+      .setAlpha(0);
+    const roots = this.add.graphics().setAngle(-2);
 
-    roots.lineStyle(22, 0x11140e, 0.96);
+    roots.fillStyle(0x090c09, 0.2);
+    roots.fillEllipse(-86, 23, 92, 12);
+    roots.fillEllipse(12, 20, 118, 13);
+    roots.fillEllipse(108, 14, 74, 10);
+
+    roots.lineStyle(9, 0x11140e, 0.72);
     roots.beginPath();
-    roots.moveTo(-136, 18);
-    roots.lineTo(-96, 2);
-    roots.lineTo(-58, -10);
-    roots.lineTo(-20, 6);
-    roots.lineTo(28, 25);
-    roots.lineTo(76, 21);
-    roots.lineTo(136, 0);
+    roots.moveTo(-150, 24);
+    roots.lineTo(-105, 12);
+    roots.lineTo(-62, 18);
+    roots.lineTo(-18, 7);
+    roots.lineTo(32, 19);
+    roots.lineTo(91, 7);
+    roots.lineTo(146, 15);
     roots.strokePath();
-    roots.lineStyle(15, 0x30271c, 0.98);
+    roots.lineStyle(3, 0x33291d, 0.56);
     roots.beginPath();
-    roots.moveTo(-132, 15);
-    roots.lineTo(-94, 0);
-    roots.lineTo(-58, -12);
+    roots.moveTo(-148, 21);
+    roots.lineTo(-104, 9);
+    roots.lineTo(-62, 15);
     roots.lineTo(-18, 4);
-    roots.lineTo(30, 22);
-    roots.lineTo(74, 18);
-    roots.lineTo(132, -2);
+    roots.lineTo(33, 16);
+    roots.lineTo(91, 4);
+    roots.lineTo(144, 12);
     roots.strokePath();
 
-    roots.lineStyle(15, 0x11140e, 0.92);
+    roots.lineStyle(7, 0x10130d, 0.64);
     roots.beginPath();
-    roots.moveTo(-106, 28);
-    roots.lineTo(-58, 15);
-    roots.lineTo(-12, -4);
-    roots.lineTo(12, -11);
+    roots.moveTo(-70, 15);
+    roots.lineTo(-47, -3);
+    roots.lineTo(-18, -10);
     roots.strokePath();
-    roots.lineStyle(10, 0x2a2419, 0.96);
     roots.beginPath();
-    roots.moveTo(-104, 25);
-    roots.lineTo(-56, 12);
-    roots.lineTo(-12, -6);
-    roots.lineTo(10, -11);
+    roots.moveTo(31, 17);
+    roots.lineTo(55, -1);
+    roots.lineTo(87, -11);
     roots.strokePath();
+    roots.lineStyle(2, 0x403522, 0.46);
+    roots.lineBetween(-67, 12, -44, -5);
+    roots.lineBetween(34, 14, 57, -3);
 
-    roots.lineStyle(10, 0x11140e, 0.86);
-    roots.beginPath();
-    roots.moveTo(10, 18);
-    roots.lineTo(48, -2);
-    roots.lineTo(94, 16);
-    roots.strokePath();
-    roots.lineStyle(6, 0x2b261a, 0.9);
-    roots.beginPath();
-    roots.moveTo(12, 15);
-    roots.lineTo(48, -4);
-    roots.lineTo(92, 13);
-    roots.strokePath();
+    roots.fillStyle(0x303c28, 0.52);
+    roots.fillEllipse(-119, 17, 20, 6);
+    roots.fillEllipse(-55, 12, 14, 5);
+    roots.fillEllipse(72, 5, 18, 5);
+    roots.fillEllipse(126, 11, 16, 5);
+    roots.fillStyle(0x70805a, 0.18);
+    roots.fillEllipse(-115, 14, 9, 3);
+    roots.fillEllipse(76, 2, 8, 3);
 
-    roots.lineStyle(3, 0x67573a, 0.5);
-    roots.lineBetween(-118, 12, -88, 3);
-    roots.lineBetween(-52, -8, -22, 3);
-    roots.lineBetween(34, 19, 72, 15);
-    roots.lineBetween(82, 10, 118, -2);
-    roots.lineStyle(2, 0x7e8a63, 0.24);
-    roots.lineBetween(-98, 24, -62, 16);
-    roots.lineBetween(44, -1, 74, 9);
-    roots.lineStyle(2.5, 0x586b48, 0.12);
-    roots.lineBetween(-12, -7, 18, -20);
-    roots.lineBetween(3, -2, 29, -14);
-    roots.lineStyle(3.5, 0x15180f, 0.34);
-    roots.lineBetween(-16, -2, 20, -17);
-    roots.lineStyle(1.2, 0x6b7555, 0.12);
-    roots.lineBetween(-42, 8, -18, 2);
-    roots.lineBetween(72, 14, 98, 6);
-
-    roots.fillStyle(0x12170f, 0.58);
-    roots.fillEllipse(-118, 20, 46, 12);
-    roots.fillEllipse(-40, 29, 52, 14);
-    roots.fillEllipse(40, 34, 62, 13);
-    roots.fillEllipse(116, 7, 50, 12);
-
-    roots.fillStyle(0x435236, 0.5);
-    roots.fillTriangle(-132, 18, -116, 12, -96, 22);
-    roots.fillTriangle(-92, 3, -74, -4, -54, 3);
-    roots.fillTriangle(58, 25, 83, 18, 108, 28);
-    roots.fillTriangle(101, 4, 125, -4, 145, 6);
-    roots.fillStyle(0x60704b, 0.3);
-    roots.fillTriangle(-126, 12, -113, 8, -99, 15);
-    roots.fillTriangle(68, 20, 86, 16, 99, 23);
-
-    roots.fillStyle(0xa8b98d, 0.18);
-    roots.fillEllipse(-119, 14, 12, 4);
-    roots.fillEllipse(-103, 22, 14, 4);
-    roots.fillEllipse(109, 2, 13, 4);
-    roots.fillEllipse(127, -4, 10, 3);
-
-    roots.fillStyle(0x0d100c, 0.9);
-    roots.fillEllipse(-4, -18, 86, 22);
-    roots.fillStyle(0x14160f, 0.74);
-    roots.fillTriangle(-53, -7, -14, -25, 23, -10);
-    roots.fillTriangle(-10, -13, 35, -27, 72, -7);
-    roots.lineStyle(8, 0x1f1a12, 0.92);
-    roots.lineBetween(-52, -10, -8, -22);
-    roots.lineBetween(-8, -22, 52, -8);
-    roots.lineStyle(3.5, 0x0b0d09, 0.55);
-    roots.lineBetween(-44, -4, -3, -16);
-    roots.lineBetween(8, -18, 48, -4);
-    roots.lineStyle(1.5, 0x4b4430, 0.16);
-    roots.lineBetween(-35, -15, 8, -21);
-    roots.lineBetween(18, -16, 58, -10);
-    roots.fillStyle(0x070907, 0.84);
-    roots.fillEllipse(9, -18, 58, 28);
-    roots.lineStyle(6, 0x0d100c, 0.86);
-    roots.lineBetween(-22, -13, 10, -22);
-    roots.lineBetween(6, -22, 40, -13);
-    roots.fillStyle(0x080a07, 0.66);
-    roots.fillEllipse(12, 2, 82, 23);
-    roots.lineStyle(10, 0x11140e, 0.82);
-    roots.lineBetween(-36, 9, 14, -1);
-    roots.lineBetween(8, -2, 64, 8);
-    roots.lineStyle(2, 0x343121, 0.16);
-    roots.lineBetween(-24, 4, 18, -4);
-    roots.lineBetween(20, -2, 54, 5);
-    roots.fillStyle(0x050705, 0.96);
-    roots.fillEllipse(22, -56, 48, 34);
-    roots.fillStyle(0x10140d, 0.82);
-    roots.fillTriangle(-3, -48, 21, -72, 49, -48);
-    roots.lineStyle(3, 0x252216, 0.24);
-    roots.lineBetween(5, -51, 22, -66);
-    roots.lineBetween(24, -65, 43, -50);
     c.add(roots);
     return c;
   }
@@ -1030,6 +953,22 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private pulsePathCue(completion: boolean): void {
     if (!this.pathCue?.scene) return;
+    if (this.pathCueIndex === 0) {
+      playActorAttention(this, this.wrenContainer, {
+        scale: completion ? 1.025 : 1.012,
+        durationMs: completion ? 220 : 150,
+      });
+      playBodyImpact(this, this.wrenContainer, {
+        kind: "mist",
+        color: 0xd7ded8,
+        offsetY: -22,
+        depth: 58,
+        ringRadius: completion ? 32 : 20,
+        count: completion ? 7 : 4,
+        durationMs: completion ? 400 : 220,
+      });
+      return;
+    }
     playActorAttention(this, this.pathCue, {
       scale: completion ? 1.035 : 1.018,
       durationMs: completion ? 260 : 180,
@@ -1310,6 +1249,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Fork 1 — The Crossroads Shrine ──────────────────────────────────────
 
   private startFork1(): void {
+    this.drawShrine();
     this.narration.say("wood_fork1_intro");
     this.band.setObjective("Choose an offering or the bone-flute.");
     this.showFork1Cues();
@@ -3213,7 +3153,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private drawShrine(): void {
     const sx = 960;
     const sy = 810;
-    const c = this.add.container(sx, sy).setDepth(-1);
+    const c = this.add.container(sx, sy + 12).setDepth(-1).setAlpha(0);
     this.shrineFigure = c;
 
     c.add(addLocalGroundShadow(this, 150, 18, { y: 14, alpha: 0.18 }));
@@ -3308,7 +3248,14 @@ export class HauntedWoodScene extends Phaser.Scene {
       repeat: -1,
       ease: "Sine.easeInOut",
     });
-    addIdleBreath(this, c, { dy: -2, durationMs: 4200 });
+    this.tweens.add({
+      targets: c,
+      alpha: 1,
+      y: sy,
+      duration: 480,
+      ease: "Sine.easeOut",
+      onComplete: () => addIdleBreath(this, c, { dy: -2, durationMs: 4200 }),
+    });
   }
 
   private drawWren(x: number, y: number): Phaser.GameObjects.Container {

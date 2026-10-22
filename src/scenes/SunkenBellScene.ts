@@ -1,3 +1,6 @@
+import { installChapterMenu } from "../game/ui/pauseMenu";
+import { ChapterReading } from "../game/ui/chapterReading";
+import { reducedFlashes, reducedMotion } from "../game/presentation";
 import Phaser from "phaser";
 import { type AmbientHandle, playAmbientBell } from "../audio/ambient";
 import { playChime } from "../audio/chime";
@@ -140,6 +143,8 @@ export class SunkenBellScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
+  private reading!: ChapterReading;
+  private chapterMenu?: ReturnType<typeof installChapterMenu>;
   private band!: ConsoleBand;
   private ghosts: MovingWordEnemy[] = [];
   private activeTargets: TextWordTarget[] = [];
@@ -267,6 +272,12 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.chapterMenu = installChapterMenu(this, {
+      store: this.store,
+      hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),
+      onLeave: () => this.scene.start("PortalChamberScene", { store: this.store }),
+      leaveHint: "Returning to the chamber starts this realm again. Your completed journeys and collected keepsakes stay saved.",
+    });
     this.cameras.main.fadeIn(600, 8, 24, 32);
     const backdrop = this.add
       .image(0, 0, "sunken-bell-backdrop")
@@ -389,13 +400,14 @@ export class SunkenBellScene extends Phaser.Scene {
       framed: true,
       onSpeak: (speakerName) => this.attendSpeaker(speakerName),
     });
+    this.reading = new ChapterReading(this, () => Math.max(316, this.narration.bottom() + 40));
     // Bell is "quiet listening" — softer per-keystroke feedback than the
     // Winter Mountain default. 120ms / 0.002 shake instead of 80ms / 0.002.
     this.typingInput.setKeystrokeHooks({
       onCorrect: () => bobWrenSprite(this.wrenSprite),
       onMiss: () => {
         flashWrenMiss(this.wrenSprite);
-        this.cameras.main.shake(120, 0.002);
+        if (!reducedMotion(this)) this.cameras.main.shake(120, 0.002);
       },
       onClaim: () => playClaim(),
     });
@@ -456,7 +468,9 @@ export class SunkenBellScene extends Phaser.Scene {
     });
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
-    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.reading.destroy();
+      this.chapterMenu?.destroy();
       this.typingInput.reset();
       this.beatClock.stop();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
@@ -510,7 +524,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
     this.setNarrator(narratorLine);
     this.band.setObjective("Type the bell memory to return to the Almanac.");
-    this.time.delayedCall(2400, () => this.deliverRevisitPassage(words));
+    this.readThen(() => this.deliverRevisitPassage(words));
   }
 
   private deliverRevisitPassage(words: string[]): void {
@@ -710,7 +724,7 @@ export class SunkenBellScene extends Phaser.Scene {
     // Tier 4 — warm-light (Firefly Lantern / Beacon Spark / Pelt) shortens the
     // per-toll echo-dim so words stay readable a little longer. Bounded to ≤33%,
     // so the dim never disappears (it stays a real read-ahead hazard).
-    this.cameras.main.flash(300 * (1 - this.combat.warmLight), 0, 0, 0, false);
+    if (!reducedFlashes(this)) this.cameras.main.flash(300 * (1 - this.combat.warmLight), 0, 0, 0, false);
   }
 
   /** Half-beat "answer now" pulse for the antiphon wave — ember, so it reads
@@ -840,7 +854,7 @@ export class SunkenBellScene extends Phaser.Scene {
       return;
     }
     this.playBreathGaspCue();
-    this.cameras.main.flash(280, 0, 0, 0, false);
+    if (!reducedFlashes(this)) this.cameras.main.flash(280, 0, 0, 0, false);
     playWrenHurt(this.wrenSprite, { knockX: 0 });
     playDamageThud();
     flashDamageVignette(this);
@@ -895,7 +909,7 @@ export class SunkenBellScene extends Phaser.Scene {
    *  legible "your relic just did something" beat, distinct from the harsh
    *  damage cue. */
   private flashGraceCue(label: "held" | "forgiven"): void {
-    this.cameras.main.flash(160, 120, 170, 200, false);
+    if (!reducedFlashes(this)) this.cameras.main.flash(160, 120, 170, 200, false);
     const anchorX = this.wrenContainer?.scene ? this.wrenContainer.x : WREN_X;
     const anchorY = this.wrenContainer?.scene
       ? Math.max(300, Math.min(this.scale.height - 330, this.wrenContainer.y - 116))
@@ -1067,11 +1081,14 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Input ────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
-    // Ctrl+Shift+P: toggle purist mode from inside the realm.
     if (isPuristToggleKey(event)) {
+      event.preventDefault();
       togglePuristMode(this, this.store);
       return;
     }
+    if (event.ctrlKey || event.metaKey) return;
+    if (this.chapterMenu?.handleKey(event)) return;
+    if (this.reading.handleKey(event)) return;
 
     const key = event.key;
     // Backspace / Escape always flow through — reverse or abort, never gated.
@@ -1128,7 +1145,7 @@ export class SunkenBellScene extends Phaser.Scene {
     }
     this.playRhythmStumbleCue(isDesync);
     flashWrenMiss(this.wrenSprite);
-    this.cameras.main.shake(80, 0.0025);
+    if (!reducedMotion(this)) this.cameras.main.shake(80, 0.0025);
     this.typingInput.getStats().record(false);
     if (isDesync) this.typingInput.resetClaimedProgress();
     if (this.breathActive) {
@@ -1205,7 +1222,7 @@ export class SunkenBellScene extends Phaser.Scene {
       color: BELL_BURST_COLOR,
     });
     this.showDescentLanterns();
-    this.time.delayedCall(2500, () => this.startDescent());
+    this.readThen(() => this.startDescent());
   }
 
   // ─── Act 1: The Descent (lanterns) ────────────────────────────────────────
@@ -1598,7 +1615,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.drawOlin();
 
     this.setNarrator("tell me your name, child.", "Old Olin");
-    this.time.delayedCall(600, () => {
+    this.readThen(() => {
       const namePos = this.olinPassageWordPosition();
       const nameTarget = this.makeOlinWord({
         scene: this,
@@ -1612,12 +1629,12 @@ export class SunkenBellScene extends Phaser.Scene {
             "you are listening for the bell. on its toll, you may speak. between tolls, you cannot.",
             "Old Olin",
           );
-          this.time.delayedCall(3000, () => {
+          this.readThen(() => {
             this.setNarrator(
               "i taught the bell its name. i can teach you if you let me.",
               "Old Olin",
             );
-            this.time.delayedCall(800, () => {
+            this.readThen(() => {
               const teachPos = this.olinPassageWordPosition();
               const teachTarget = this.makeOlinWord({
                 scene: this,
@@ -1655,9 +1672,11 @@ export class SunkenBellScene extends Phaser.Scene {
       }
     });
     this.narration.say("sunken_olin_teach_activate");
-    this.beatClock.setTempo(2000);
-    this.beatClock.start();
-    this.time.delayedCall(2000, () => this.startFirstGhostEncounter());
+    this.readThen(() => {
+      this.beatClock.setTempo(2000);
+      this.beatClock.start();
+      this.time.delayedCall(2000, () => this.startFirstGhostEncounter());
+    });
   }
 
   // ─── Act 1: First ghost encounter ────────────────────────────────────────
@@ -1674,7 +1693,7 @@ export class SunkenBellScene extends Phaser.Scene {
     // moments earlier in Act 1 (descent, Olin); fires here because this is
     // where the realm tips into combat.
     playWaveSting();
-    this.cameras.main.shake(140, 0.003);
+    if (!reducedMotion(this)) this.cameras.main.shake(140, 0.003);
     this.pulseBellWave();
     this.dismissOlin();
     this.setBandSpeaker("Runa");
@@ -1711,7 +1730,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startWave1(): void {
     playWaveSting();
-    this.cameras.main.shake(140, 0.003);
+    if (!reducedMotion(this)) this.cameras.main.shake(140, 0.003);
     this.pulseBellWave();
     this.onWaveCleared = () => this.onWave1Cleared();
     this.narration.say("sunken_choir_wave1");
@@ -1744,7 +1763,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startAntiphon(): void {
     playWaveSting();
-    this.cameras.main.shake(140, 0.003);
+    if (!reducedMotion(this)) this.cameras.main.shake(140, 0.003);
     this.pulseBellWave();
     this.ghosts = [];
     // Flip the accept window to the half-beat — answer BETWEEN the tolls.
@@ -1780,7 +1799,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startWave2(): void {
     playWaveSting();
-    this.cameras.main.shake(140, 0.003);
+    if (!reducedMotion(this)) this.cameras.main.shake(140, 0.003);
     this.pulseBellWave();
     this.onWaveCleared = () => this.onWave2Cleared();
     this.narration.say("sunken_choir_wave2");
@@ -2047,7 +2066,7 @@ export class SunkenBellScene extends Phaser.Scene {
     // build had regressed this to a plain lowercase setNarrator("OPEN").)
     this.setNarrator("Force the doors — OPEN, on the toll.");
     this.band.setObjective("Type OPEN on the toll.");
-    this.time.delayedCall(700, () => {
+    this.readThen(() => {
       const pos = this.bellPassageWordPosition(this.doorForceCue, -48, {
         side: "left",
       });
@@ -2061,7 +2080,7 @@ export class SunkenBellScene extends Phaser.Scene {
         burstColor: BELL_BURST_COLOR,
         onComplete: () => {
           this.clearActiveTargets();
-          this.cameras.main.shake(240, 0.006);
+          if (!reducedMotion(this)) this.cameras.main.shake(240, 0.006);
           playDamageThud();
           this.startFork1ForceBreak();
         },
@@ -2106,7 +2125,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.clearActiveTargets();
     this.clearBellForkCues();
     this.setNarrator("The Warden has been waiting.");
-    this.time.delayedCall(2000, () => this.startAct3());
+    this.readThen(() => this.startAct3());
   }
 
   // ─── Act 3: The Bell-Warden ───────────────────────────────────────────────
@@ -2192,14 +2211,14 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startAct3(): void {
     playWaveSting();
-    this.cameras.main.shake(140, 0.003);
+    if (!reducedMotion(this)) this.cameras.main.shake(140, 0.003);
     this.pulseBellWave({ y: 640, ringWidth: 900, ringHeight: 180, count: 14 });
     this.ghosts = [];
     const wardenSprite = this.drawWarden();
     this.playWardenStagePulse(wardenSprite);
     // Phase 1
     this.narration.say("sunken_warden_rise");
-    this.time.delayedCall(1200, () => {
+    this.readThen(() => {
       this.startWardenPhase1(wardenSprite);
     });
   }
@@ -2223,7 +2242,7 @@ export class SunkenBellScene extends Phaser.Scene {
             this.time.delayedCall(800, () => {
               this.setNarrator("Its eyes open.");
               this.flashWardenAwake(wardenSprite, false);
-              this.time.delayedCall(1400, () =>
+              this.readThen(() =>
                 this.startWardenPhase2(wardenSprite),
               );
             });
@@ -2260,7 +2279,7 @@ export class SunkenBellScene extends Phaser.Scene {
     const phrases = ["tide-and-toll", "deep-and-dark", "still-and-stir"];
     let remaining = phrases.length;
 
-    this.time.delayedCall(800, () => {
+    this.readThen(() => {
       phrases.forEach((word, i) => {
         const pos = this.wardenWordPosition(wardenSprite, word, i, phrases.length);
         const target = this.makeWardenWord(wardenSprite, {
@@ -2359,7 +2378,7 @@ export class SunkenBellScene extends Phaser.Scene {
         if (completed) return; // already done, no stumble
         this.clearActiveTargets();
         wordIndex = sentenceCheckpoint;
-        this.cameras.main.flash(200, 0, 0, 0, false);
+        if (!reducedFlashes(this)) this.cameras.main.flash(200, 0, 0, 0, false);
         this.beatClock.onNextBeat(advanceWord);
       });
     };
@@ -2411,7 +2430,7 @@ export class SunkenBellScene extends Phaser.Scene {
       }
     });
     this.narration.say("sunken_warden_defeated");
-    this.time.delayedCall(2000, () => this.startFork2());
+    this.readThen(() => this.startFork2());
   }
 
   // ─── Fork 2 — Beneath the Bell ────────────────────────────────────────────
@@ -2580,7 +2599,7 @@ export class SunkenBellScene extends Phaser.Scene {
     if (this.fork2Choice === "free-aurland") {
       this.setNarrator("A small glass-fish leads the way up through the dark water.");
       this.showGlassFishCompanion();
-      this.time.delayedCall(1000, () => {
+      this.readThen(() => {
         const takePos = this.bellPassageWordPosition(
           this.glassFishCompanion,
           -54,
@@ -2673,7 +2692,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private startTrueNamePassage(): void {
     this.clearActiveTargets();
     this.narration.say("sunken_truename_intro");
-    this.time.delayedCall(800, () => {
+    this.readThen(() => {
       const trueName = "the bell remembers. the deep listens. the kingdom holds.";
       const sealY = this.scale.height / 2 + 118;
       const seal = stageTrueNameSeal(this, {
@@ -3560,7 +3579,7 @@ export class SunkenBellScene extends Phaser.Scene {
           sourceRadius: 32,
           targetRadius: 36,
         });
-        this.cameras.main.flash(300, 0, 0, 0, false);
+        if (!reducedFlashes(this)) this.cameras.main.flash(300, 0, 0, 0, false);
         playWrenHurt(this.wrenSprite, { knockX: 0 });
         playDamageThud();
         flashDamageVignette(this);
@@ -3717,8 +3736,12 @@ export class SunkenBellScene extends Phaser.Scene {
           });
           idx += 1;
           this.clearActiveTargets();
-          if (step.narrator) this.setNarrator(step.narrator);
-          this.time.delayedCall(1200, advance);
+          if (step.narrator) {
+            this.setNarrator(step.narrator);
+            this.readThen(advance);
+          } else {
+            advance();
+          }
         },
       }, -62);
       this.registerActiveTarget(target);
@@ -3778,8 +3801,12 @@ export class SunkenBellScene extends Phaser.Scene {
           });
           idx += 1;
           this.clearActiveTargets();
-          if (step.narrator) this.setNarrator(step.narrator);
-          this.time.delayedCall(1000, advance);
+          if (step.narrator) {
+            this.setNarrator(step.narrator);
+            this.readThen(advance);
+          } else {
+            advance();
+          }
         },
       };
       const target =
@@ -3793,6 +3820,10 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
+
+  private readThen(next: () => void): void {
+    this.reading.show(next, () => this.narration.replay());
+  }
 
   private setNarrator(text: string, speakerName: string | null = null): void {
     this.narration.sayRaw(text, { speakerName });

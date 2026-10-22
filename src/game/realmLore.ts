@@ -38,13 +38,15 @@ export const REALM_LORE: Record<string, RealmLore> = {
       "The second portal opened underwater — or nearly so. The kingdom of Tide-Glass sat on the seafloor, its glass spires green with old light, and its bell had not rung in a hundred years.",
     endings: {
       chant:
-        "He learned the quiet chant of the bell-keepers and rang the bell gently, on the beat, until the drowned things retreated into the dark.",
+        "Wren opened the cathedral doors slowly, on the bell's rhythm. The doors parted with grace, and Wren carried the Quiet Chant onward.",
+      force:
+        "Wren forced the cathedral doors open with OPEN on the toll. A lock-bar came away from the doors and went into the satchel.",
       "free-king":
-        "King Aurland had been imprisoned inside the bell's voice since the silence began. Wren unspoke the binding word by word. The king surfaced, gasping, and pressed his trident token into Wren's palm.",
+        "King Aurland had been imprisoned inside the bell's voice since the silence began. Wren unspoke the binding word by word. The king surfaced, gasping, and pressed a trident token into Wren's palm.",
       "claim-tongue":
-        "He climbed inside the bell and took its iron tongue for himself. The bell went silent for good. The tide receded. He was not sure whether that was a kindness.",
+        "Wren climbed inside the bell and took its iron tongue. The bell went silent for good. The tide receded; whether that was a kindness remained uncertain.",
       glass:
-        "A glass-fish had been following him since the harbor. When he freed King Aurland, the fish darted forward and pressed itself against his satchel.",
+        "A glass-fish had watched from the harbor. When Wren welcomed the creature, it darted forward and tucked itself against the satchel.",
     },
   },
 
@@ -54,15 +56,15 @@ export const REALM_LORE: Record<string, RealmLore> = {
       "The third portal opened in a wall of heat. The Forge had been running for three hundred years with no one at the bellows, and the golems had started giving themselves orders.",
     endings: {
       forn:
-        "The smith Forn had been locked in a gear-room for a week. Wren typed the lock open and Forn walked out, still covered in soot, and handed him his spare hammer.",
+        "Wren helped Forn repair the iron bellows. The old smith pressed a warm hammer into Wren's hands as a deep breath moved through the foundry.",
       cabal:
-        "A cabal of older golems had been sabotaging the furnace to slow production. Wren gave them the sabotage wrench they asked for.",
+        "Wren joined the apprentices and shut a furnace valve. The foundry slowed, and the cabal pressed a sabotage-wrench into Wren's palm.",
       peaceful:
-        "He gave the peaceful order. The golems stood down in unison. The Forge went quiet for the first time in three centuries.",
+        "Wren typed STAND DOWN. The last golems lowered their arms, the Forge grew quiet, and Wren carried away the Master-Key.",
       fought:
-        "He fought his way to the core furnace and pulled the golem-heart from the socket. The golems froze mid-step.",
+        "Wren fought the last two command-golems. When the final golem fell, Wren claimed the Golem-Heart.",
       songbird:
-        "A brass songbird had been sitting in a high corner of the Forge since anyone could remember. When the golems fell silent, it flew down and landed on his shoulder and sang one note.",
+        "A brass songbird had watched from a high corner of the Forge. When Wren welcomed it, the bird landed on Wren's shoulder and sang one note.",
     },
   },
 
@@ -72,15 +74,15 @@ export const REALM_LORE: Record<string, RealmLore> = {
       "The fourth portal opened in golden air. The island had been tethered too low for years, and the lanterns the scholars hung from every surface were running out of moths.",
     endings: {
       "help-etta":
-        "Scholar Etta had been trying to finish her sky-chart for forty years and was very nearly done. Wren typed the last measurements for her. She pressed her ledger into his hands.",
+        "Wren carried Scholar Etta's books back to the shelves. The beacon brightened, and Etta's Ledger came home with Wren.",
       beacon:
-        "He struck the beacon with a beacon-spark that had been sitting uncharged in a cabinet for decades. The light reached the mountain scholars on the next island.",
+        "Wren took a curl of flame from the beacon. The lanterns dipped as the beacon dimmed; Wren carried away the Beacon-Spark.",
       "answer-kindly":
-        "The wind asked him a question in old sky-speech. He answered it kindly. It gave him the wind-phrase scroll and left.",
+        "Wren told the Scholar-Spirit, “you kept the light.” The summit lanterns brightened, and Wren carried away the Wind-Phrase.",
       "cut-tether":
-        "He cut the mooring cord that had kept the island too low. It rose slowly at first, then faster, until the scholars were cheering from the railings.",
+        "Wren pulled the thread binding the spirit to the beacon. The island lurched, then steadied as a freed wind rushed past. Wren kept the Tether-Cord.",
       moth:
-        "A lantern-moth had been watching him from the beacon since he arrived. When the island rose, she flew down and folded her wings against his satchel.",
+        "A lantern-moth had watched from the beacon. When Wren welcomed her, she flew down and folded her wings against the satchel.",
     },
   },
 
@@ -90,15 +92,15 @@ export const REALM_LORE: Record<string, RealmLore> = {
       "The fifth portal opened into fog. The wood had been haunted for two hundred years — not because anything bad lived there, but because no one had told the ghosts they could go.",
     endings: {
       offering:
-        "At the crossroads shrine he left an offering he could not spare. Something warm answered from inside the stone. Inga the ghost-keeper told him her true name.",
+        "At the crossroads shrine, Wren said, “i remember you.” The shrine glowed, and its keeper whispered Inga's name. Wren carried away the Shrine-Token.",
       "bone-flute":
-        "He took the bone flute from the shrine instead of leaving anything. The ghosts recognized it immediately and gave him room.",
+        "Wren took the bone flute from the shrine. The ghosts recognized it immediately and gave Wren room.",
       bargain:
-        "The Ghost-King offered him a bargain: speak your true name, and I will speak mine. Wren did. The ghosts had somewhere to go at last.",
+        "Wren answered the Ghost-King with remembrance: “you are not gone.” The king listened, bowed, and gave Wren the Ghost-King's Promise.",
       "light-grove":
-        "He lit the grove. The light was enough — the ghosts dispersed into it like breath in cold air.",
+        "Wren lit the grove and faced the Ghost-King. The Ash-Vial carried that choice home after the last ward held.",
       "wisp-cat":
-        "The wisp-cat had been circling him since the crossroads. When the bargain was sealed, she pressed her glowing side against his ankle and followed him home.",
+        "The wisp-cat had circled Wren since the crossroads. When Wren welcomed her, she pressed her glowing side against Wren's ankle and followed home.",
     },
   },
 };
@@ -110,6 +112,61 @@ export const REALM_ORDER = [
   "sky-island",
   "haunted-wood",
 ];
+
+export interface RealmPathSummary {
+  primary: string;
+  secondary?: string;
+}
+
+/** Read recorded decisions without guessing from relics or rewriting old saves.
+ * Forge's historical combined ending and earlier lore-key aliases still work.
+ * An absent/unknown choice stays unrecorded instead of inventing a kind path. */
+export function realmPathSummary(
+  realmId: string,
+  choices: Readonly<Record<string, string>> = {},
+): RealmPathSummary {
+  const endings = REALM_LORE[realmId]?.endings;
+  if (!endings) return { primary: "This realm's path is not recorded." };
+  let first: string | undefined = choices.fork1;
+  let second: string | undefined = choices.fork2;
+  switch (realmId) {
+    case "clockwork-forge": {
+      const legacy = /^(forn|cabal)-(peaceful|fought)$/.exec(choices.ending ?? "");
+      first ??= legacy?.[1];
+      second ??= legacy?.[2];
+      break;
+    }
+    case "sunken-bell":
+      if (second === "free-aurland") second = "free-king";
+      break;
+    case "sky-island":
+      if (first === "steal-flame") first = "beacon";
+      break;
+    case "haunted-wood":
+      if (second === "force") second = "light-grove";
+      break;
+  }
+  const validFirst: Record<string, readonly string[]> = {
+    "winter-mountain": ["huntress", "firefly"],
+    "sunken-bell": ["chant", "force"],
+    "clockwork-forge": ["forn", "cabal"],
+    "sky-island": ["help-etta", "beacon"],
+    "haunted-wood": ["offering", "bone-flute"],
+  };
+  const validSecond: Record<string, readonly string[]> = {
+    "winter-mountain": ["bury", "pelt"],
+    "sunken-bell": ["free-king", "claim-tongue"],
+    "clockwork-forge": ["peaceful", "fought"],
+    "sky-island": ["answer-kindly", "cut-tether"],
+    "haunted-wood": ["bargain", "light-grove"],
+  };
+  return {
+    primary: first && validFirst[realmId]?.includes(first)
+      ? endings[first]! : "The first path choice is not recorded.",
+    secondary: second && validSecond[realmId]?.includes(second)
+      ? endings[second]! : "The final path choice is not recorded.",
+  };
+}
 
 
 export interface WinterRealmSummary {

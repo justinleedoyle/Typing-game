@@ -706,6 +706,7 @@ export class OpeningScene extends Phaser.Scene {
   // ── Input ──────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
+    if (event.ctrlKey || event.metaKey) return;
     if (this.chapterMenu?.handleKey(event)) return;
     if (this.reading.handleKey(event)) return;
     if (event.key.length === 1 || event.key === " ") {

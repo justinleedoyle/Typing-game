@@ -1,19 +1,25 @@
 import Phaser from "phaser";
-import { SaveConflictError, type AudioLevel, type SaveStore } from "../saveState";
+import { CloudSaveError, SaveConflictError, type AudioLevel, type Difficulty, type SaveStore } from "../saveState";
 import { setAudioLevel } from "../../audio/context";
-import { installPresentation, PRESENTATION_CHANGED } from "../presentation";
+import { installPresentation, PRESENTATION_CHANGED, rememberLocalSaveNotice, localSaveNotice } from "../presentation";
 import { SERIF } from "../palette";
 import { UI_CSS, UI_HEX } from "./uiTheme";
 import { SceneRunGuard } from "../sceneRunGuard";
+import { difficultyLabel } from "../purist";
+import { navigationAction, cyclePreference } from "./navigationPolicy";
 
 interface ChapterMenuOptions {
   store: SaveStore;
   hasClaim: () => boolean;
   onLeave: () => void;
+  leaveLabel?: string;
+  leaveHint?: string;
 }
 interface PauseData extends ChapterMenuOptions { owner: Phaser.Scene }
 const KEY = "ChapterPauseMenu";
 const AUDIO: AudioLevel[] = ["off", "quiet", "medium", "loud"];
+const DIFFICULTY: Difficulty[] = ["forgiving", "standard", "purist"];
+const ROW_COUNT = 7;
 
 class ChapterPauseMenu extends Phaser.Scene {
   private readonly run = new SceneRunGuard();
@@ -46,8 +52,8 @@ class ChapterPauseMenu extends Phaser.Scene {
     this.add.text(960, 268, "Paused · your words can wait", {
       fontFamily: SERIF, fontSize: "24px", color: UI_CSS.cream,
     }).setOrigin(0.5);
-    for (let i = 0; i < 6; i++) {
-      const row = this.add.text(960, 350 + i * 70, "", {
+    for (let i = 0; i < ROW_COUNT; i++) {
+      const row = this.add.text(960, 326 + i * 62, "", {
         fontFamily: SERIF, fontSize: "30px", color: UI_CSS.cream,
         padding: { x: 30, y: 10 },
       }).setOrigin(0.5).setInteractive({ useHandCursor: true });
@@ -60,7 +66,7 @@ class ChapterPauseMenu extends Phaser.Scene {
         fontFamily: SERIF, fontSize: "22px", color: UI_CSS.cream,
         align: "center", wordWrap: { width: 900 },
       }).setOrigin(0.5);
-    this.add.text(960, 885, "Leaving saves the latest chapter checkpoint. An unfinished fight restarts safely.", {
+    this.add.text(960, 885, this.config.leaveHint ?? "Leaving saves the latest chapter checkpoint. An unfinished fight restarts safely.", {
       fontFamily: SERIF, fontSize: "20px", color: UI_CSS.brass,
       align: "center", wordWrap: { width: 900 },
     }).setOrigin(0.5);
@@ -71,8 +77,8 @@ class ChapterPauseMenu extends Phaser.Scene {
       if (event.key === "Escape") { this.resume(); return; }
       if (this.busy) return;
       if (this.canResolve && event.key.toLowerCase() === "t") { this.chooseSave(); return; }
-      if (event.key === "ArrowUp") { this.selected = (this.selected + 5) % 6; this.render(); }
-      else if (event.key === "ArrowDown") { this.selected = (this.selected + 1) % 6; this.render(); }
+      if (event.key === "ArrowUp") { this.selected = (this.selected + ROW_COUNT - 1) % ROW_COUNT; this.render(); }
+      else if (event.key === "ArrowDown") { this.selected = (this.selected + 1) % ROW_COUNT; this.render(); }
       else if (event.key === "Enter" || event.key === " ") this.activate(1);
       else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         if (this.selected >= 2) this.activate(event.key === "ArrowLeft" ? -1 : 1);
@@ -93,8 +99,8 @@ class ChapterPauseMenu extends Phaser.Scene {
   }
   private render(): void {
     const s = this.config.store.get();
-    const labels = ["Resume", this.config.owner.scene.key === "OpeningScene" ? "Save & return to title" : "Save & return to chamber",
-      `Sound: ${s.audioLevel}`, `Dialogue text: ${s.textScale}`,
+    const labels = ["Resume", this.config.leaveLabel ?? (this.config.owner.scene.key === "OpeningScene" ? "Save & return to title" : "Save & return to chamber"),
+      `Difficulty: ${difficultyLabel(s.difficulty)}`, `Sound: ${s.audioLevel}`, `Dialogue text: ${s.textScale}`,
       `Reduced decorative motion: ${s.reducedMotion ? "on" : "off"}`,
       `Reduced flashes: ${s.reducedFlashes ? "on" : "off"}`];
     this.rows.forEach((row, i) => row.setText(`${i === this.selected ? "›  " : ""}${labels[i]}`)
@@ -105,10 +111,11 @@ class ChapterPauseMenu extends Phaser.Scene {
     if (this.selected === 0) { this.resume(); return; }
     if (this.selected === 1) { void this.leave(); return; }
     store.update(s => {
-      if (this.selected === 2) s.audioLevel = AUDIO[(AUDIO.indexOf(s.audioLevel) + direction + AUDIO.length) % AUDIO.length];
-      if (this.selected === 3) s.textScale = s.textScale === "large" ? "standard" : "large";
-      if (this.selected === 4) s.reducedMotion = !s.reducedMotion;
-      if (this.selected === 5) s.reducedFlashes = !s.reducedFlashes;
+      if (this.selected === 2) s.difficulty = cyclePreference(DIFFICULTY, s.difficulty, direction);
+      if (this.selected === 3) s.audioLevel = cyclePreference(AUDIO, s.audioLevel, direction);
+      if (this.selected === 4) s.textScale = s.textScale === "large" ? "standard" : "large";
+      if (this.selected === 5) s.reducedMotion = !s.reducedMotion;
+      if (this.selected === 6) s.reducedFlashes = !s.reducedFlashes;
     });
     setAudioLevel(store.get().audioLevel);
     owner.events.emit(PRESENTATION_CHANGED);
@@ -132,6 +139,15 @@ class ChapterPauseMenu extends Phaser.Scene {
       onLeave();
     } catch (error) {
       if (!this.run.isCurrent(token)) return;
+      if (error instanceof CloudSaveError) {
+        // SyncedBackend writes locally before attempting remote flush. Only
+        // this typed cloud error permits leaving with the durable local copy.
+        rememberLocalSaveNotice(owner);
+        owner.scene.resume();
+        this.scene.stop();
+        onLeave();
+        return;
+      }
       this.busy = false;
       this.canResolve = error instanceof SaveConflictError;
       this.message.setText(this.canResolve
@@ -165,11 +181,15 @@ export function installChapterMenu(scene: Phaser.Scene, options: ChapterMenuOpti
     fontFamily: SERIF, fontSize: "19px", color: UI_CSS.brass,
     backgroundColor: "#111724", padding: { x: 10, y: 5 },
   }).setOrigin(1, 0).setDepth(1950).setVisible(false);
-  const statusTimer = scene.time.addEvent({ delay: 1200, loop: true, callback: () => {
+  const updateStatus = () => {
     const error = options.store.getLastError();
-    status.setVisible(error !== null);
-    if (error) status.setText("Save needs attention · Esc to retry");
-  } });
+    const notice = localSaveNotice(scene);
+    status.setVisible(error !== null || notice !== null);
+    if (notice) status.setText(notice);
+    else if (error) status.setText("Save needs attention · Esc to retry");
+  };
+  updateStatus();
+  const statusTimer = scene.time.addEvent({ delay: 1200, loop: true, callback: updateStatus });
   let destroyed = false;
   const destroy = () => {
     if (destroyed) return;
@@ -183,9 +203,11 @@ export function installChapterMenu(scene: Phaser.Scene, options: ChapterMenuOpti
   scene.events.once("shutdown", destroy);
   return {
     handleKey(event: KeyboardEvent): boolean {
-      if (event.key !== "Escape" || options.hasClaim()) return false;
+      const action = navigationAction(event, "play", options.hasClaim());
+      if (action === null || action === "cancel-typing") return false;
+      if (action === "ignore") return true;
       event.preventDefault();
-      if (!event.repeat) open();
+      if (action === "pause") open();
       return true;
     },
     destroy,

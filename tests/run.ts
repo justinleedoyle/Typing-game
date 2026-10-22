@@ -29,6 +29,8 @@ await import("./chapterFlow.test.ts");
 await import("./resetSave.test.ts");
 await import("./saveChoice.test.ts");
 await import("./realmLore.test.ts");
+await import("./navigationPolicy.test.ts");
+await import("./homecoming.test.ts");
 
 console.log("\nAll logic test suites passed.");
 // Force a clean exit: saveState.test imports the real supabase client, whose

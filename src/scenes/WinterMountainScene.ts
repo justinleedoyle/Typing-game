@@ -3348,13 +3348,14 @@ export class WinterMountainScene extends Phaser.Scene {
   // ─── Input ────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
-    if (this.chapterMenu?.handleKey(event)) return;
-    if (this.reading.handleKey(event)) return;
-    // Ctrl+Shift+P: toggle purist mode.
     if (isPuristToggleKey(event)) {
+      event.preventDefault();
       togglePuristMode(this, this.store);
       return;
     }
+    if (event.ctrlKey || event.metaKey) return;
+    if (this.chapterMenu?.handleKey(event)) return;
+    if (this.reading.handleKey(event)) return;
     if (event.key === "Shift") {
       this.setShiftHeld(true);
       return;

@@ -34,10 +34,13 @@ export class ChapterReading {
       this.hint.y - this.hint.height / 2, this.hint.width, this.hint.height, 7);
   }
 
-  show(next: () => void, replay: () => void): void {
+  show(next: () => void, replay: (() => void) | null): void {
     this.next = next;
     this.replay = replay;
     this.openedAt = this.scene.time.now;
+    this.hint.setText(replay
+      ? "Enter / Space: continue  ·  R: read again  ·  Esc: pause"
+      : "Enter / Space: continue  ·  Esc: pause");
     this.hint.setVisible(true);
     this.redraw();
     this.plate.setVisible(true);

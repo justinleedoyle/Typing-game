@@ -1,3 +1,6 @@
+import { installChapterMenu } from "../game/ui/pauseMenu";
+import { reducedFlashes, reducedMotion } from "../game/presentation";
+import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import Phaser from "phaser";
 import { type AmbientHandle, playAmbientBattle } from "../audio/ambient";
 import { playChime } from "../audio/chime";
@@ -8,10 +11,10 @@ import { getRunaLine } from "../audio/runaLines";
 import { NarrationManager } from "../game/narrationManager";
 import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
-import { cornerTicks, UI_HEX } from "../game/ui/uiTheme";
+import { UI_HEX } from "../game/ui/uiTheme";
 import { flashDamageVignette } from "../game/vfx";
 import { flashQuietLordFragment } from "../game/quietLordIntrusion";
-import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
+import { PALETTE_HEX, SERIF } from "../game/palette";
 import { candleAfterHit, candleAfterCleanWave } from "../game/winterMechanics";
 import { COMPANION_IDS, selectFinalPhrase } from "../game/relicAlignment";
 import { getActiveRelicEffects } from "../game/relicEffects";
@@ -495,6 +498,7 @@ export class GreatBattleScene extends Phaser.Scene {
   private devFinalePhase?: DevFinalePhase;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
+  private chapterMenu?: ReturnType<typeof installChapterMenu>;
   private band!: ConsoleBand;
   private activeTargets: TextWordTarget[] = [];
   private targetAnchors = new Map<TextWordTarget, WordBodyAnchorHandle>();
@@ -642,6 +646,12 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.chapterMenu = installChapterMenu(this, {
+      store: this.store,
+      hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),
+      onLeave: () => this.scene.start("PortalChamberScene", { store: this.store }),
+      leaveHint: "Returning to the chamber restarts the final battle. Cleared realms and your satchel stay saved.",
+    });
     this.cameras.main.fadeIn(700, 11, 10, 15);
 
     const backdrop = this.add
@@ -777,7 +787,7 @@ export class GreatBattleScene extends Phaser.Scene {
           this.playShrineForgivenessCue();
           return;
         }
-        this.cameras.main.shake(100, 0.003);
+        if (!reducedMotion(this)) this.cameras.main.shake(100, 0.003);
         // Damage-feedback parity (#73): a slip under the Lord's pressure reads
         // as a hit — same thud + edge vignette the five realms use. Throttled so
         // a burst of mistyping doesn't strobe (onMiss is per-keystroke).
@@ -836,12 +846,12 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private onShutdown(): void {
+    this.chapterMenu?.destroy();
     this.run.end();
     this.typingInput.reset();
     this.clearTargetAnchors();
     this.dismissWrenDefender(0);
     this.input.keyboard?.off("keydown", this.onKeyDown, this);
-    this.input.keyboard?.off("keydown", this.returnFromCredits, this);
     this.ambientHandle?.stop();
     this.clearFacetSigil(false);
     if (this.brassSongbirdStallTimer) {
@@ -853,6 +863,13 @@ export class GreatBattleScene extends Phaser.Scene {
   // ─── Input ──────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
+    if (isPuristToggleKey(event)) {
+      event.preventDefault();
+      togglePuristMode(this, this.store);
+      return;
+    }
+    if (event.ctrlKey || event.metaKey) return;
+    if (this.chapterMenu?.handleKey(event)) return;
     // The finale's Phase-2 climax is mixed-case caseSensitive (unMAKE): the
     // browser already encodes Shift into the keystroke's case, so no spell/Shift
     // tracking is needed here. (The old bellows-hammer Shift-spell cooldown was
@@ -2112,7 +2129,7 @@ export class GreatBattleScene extends Phaser.Scene {
       enemy.target.destroy();
       enemy.target = null;
     }
-    this.cameras.main.shake(180, 0.006);
+    if (!reducedMotion(this)) this.cameras.main.shake(180, 0.006);
     playDamageThud();
     flashDamageVignette(this);
     const wake = finaleWakeForRealm(enemy.realmId);
@@ -2150,7 +2167,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.input.keyboard?.off("keydown", this.onKeyDown, this);
     this.ambientHandle?.stop();
 
-    this.cameras.main.shake(260, 0.008);
+    if (!reducedMotion(this)) this.cameras.main.shake(260, 0.008);
     const dim = this.add.graphics().setDepth(40).setAlpha(0);
     dim.fillStyle(0x05050a, 1);
     dim.fillRect(0, 0, this.scale.width, this.scale.height);
@@ -3499,7 +3516,7 @@ export class GreatBattleScene extends Phaser.Scene {
       this.playFacetImpact(facet, "landed");
       this.clearFacetSigil();
       // It lands — the realms' hit cue + a candle gutters.
-      this.cameras.main.shake(220, 0.006);
+      if (!reducedMotion(this)) this.cameras.main.shake(220, 0.006);
       playDamageThud();
       flashDamageVignette(this);
       this.narration.say("finale_facet_lands");
@@ -3782,7 +3799,7 @@ export class GreatBattleScene extends Phaser.Scene {
       this.band.setObjective("Bell's Tongue strikes; brace for the next counter.");
       this.time.delayedCall(1800, () => {
         this.playBellsTongueStrikeCue();
-        this.cameras.main.flash(300, 200, 200, 255, false);
+        if (!reducedFlashes(this)) this.cameras.main.flash(300, 200, 200, 255, false);
         this.tweens.add({
           targets: this.quietLordContainer,
           alpha: 0.5,
@@ -3834,8 +3851,8 @@ export class GreatBattleScene extends Phaser.Scene {
         // §5.5.11 — force duel: camera flash + shake on each defeat
         if (this.isForceDuel) {
           this.playForceLordCrackCue("strike");
-          this.cameras.main.flash(200, 255, 180, 100, false);
-          this.cameras.main.shake(180, 0.006);
+          if (!reducedFlashes(this)) this.cameras.main.flash(200, 255, 180, 100, false);
+          if (!reducedMotion(this)) this.cameras.main.shake(180, 0.006);
         }
 
         this.tweens.add({
@@ -3997,7 +4014,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.band.setObjective("Type light while the glass-fish opens the corridor.");
     const companion = this.showFinaleCompanionAction("glass-fish");
     // Flash the screen briefly (light corridor effect)
-    this.cameras.main.flash(400, 160, 220, 255, false);
+    if (!reducedFlashes(this)) this.cameras.main.flash(400, 160, 220, 255, false);
     this.time.delayedCall(500, () => {
       const wordPos = { x: this.scale.width * 0.64, y: 560 };
       this.playGlassFishCorridorCue();
@@ -4149,7 +4166,7 @@ export class GreatBattleScene extends Phaser.Scene {
       duration: 6000,
     });
 
-    this.cameras.main.shake(240, 0.004);
+    if (!reducedMotion(this)) this.cameras.main.shake(240, 0.004);
 
     const wordPos = this.lordDuelWordPosition(1, 2, 480);
     const defenseTarget = this.makeWhirlwindDefenseWord({
@@ -4286,7 +4303,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // §5.5.11 — force duel: Lord visually cracks open (camera shake)
     if (this.isForceDuel) {
       this.playForceLordCrackCue("open");
-      this.cameras.main.shake(300, 0.01);
+      if (!reducedMotion(this)) this.cameras.main.shake(300, 0.01);
     }
 
     // §5.5.11 — kindness duel: Lord shrinks rather than cracks
@@ -4699,7 +4716,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // A still beat on "Again" (no period) so the absence registers — then snap.
     this.time.delayedCall(800, () => {
       playPeriodSnapSting();
-      this.cameras.main.shake(120, 0.004);
+      if (!reducedMotion(this)) this.cameras.main.shake(120, 0.004);
       playBodyImpact(this, this.againText, {
         kind: "mote",
         color: 0xd4b8ff,
@@ -4733,7 +4750,7 @@ export class GreatBattleScene extends Phaser.Scene {
   private runWinFlash(): void {
     // White flash
     const whiteFlash = this.add.graphics().setDepth(50);
-    whiteFlash.fillStyle(0xffffff, 1);
+    whiteFlash.fillStyle(reducedFlashes(this) ? 0x0b0a0f : 0xffffff, 1);
     whiteFlash.fillRect(0, 0, this.scale.width, this.scale.height);
     whiteFlash.setAlpha(0);
 
@@ -4755,187 +4772,11 @@ export class GreatBattleScene extends Phaser.Scene {
               this.store.update((s) => {
                 s.realms["great-battle"] = { cleared: true, choices: {} };
               });
-              this.showCredits();
+              this.scene.start("HomecomingScene", { store: this.store });
             },
           );
         });
       },
-    });
-  }
-
-  // ─── Credits ────────────────────────────────────────────────────────────────
-
-  private showCredits(): void {
-    this.clearActiveTargets();
-
-    // Destroy all existing game objects
-    this.children.each((child) => {
-      child.destroy();
-    });
-
-    // Rebuild
-    this.cameras.main.setBackgroundColor(0x0b0a0f);
-    this.cameras.main.fadeIn(500, 11, 10, 15);
-
-    const plateW = 880;
-    const plateH = 460;
-    const plate = this.add
-      .container(this.scale.width / 2, 378)
-      .setDepth(1)
-      .setAlpha(0);
-    const bg = this.add.graphics();
-    bg.fillStyle(UI_HEX.panel, 0.72);
-    bg.fillRoundedRect(-plateW / 2, -plateH / 2, plateW, plateH, 10);
-    bg.lineStyle(3, UI_HEX.brass, 0.76);
-    bg.strokeRoundedRect(-plateW / 2, -plateH / 2, plateW, plateH, 10);
-    bg.lineStyle(1, UI_HEX.parchment, 0.18);
-    bg.strokeRoundedRect(-plateW / 2 + 12, -plateH / 2 + 12, plateW - 24, plateH - 24, 8);
-    bg.lineStyle(1, UI_HEX.brass, 0.32);
-    bg.lineBetween(-plateW / 2 + 72, -76, plateW / 2 - 72, -76);
-    plate.add(bg);
-    plate.add(cornerTicks(this, plateW, plateH, { inset: 12, size: 20, width: 3 }));
-    this.tweens.add({
-      targets: plate,
-      alpha: 1,
-      duration: 700,
-      ease: "Sine.easeOut",
-    });
-
-    const lines: Array<{
-      text: string;
-      y: number;
-      fontSize: string;
-      color: string;
-      delay: number;
-    }> = [
-      {
-        text: "The Portalwright's Almanac",
-        y: 200,
-        fontSize: "52px",
-        color: PALETTE.cream,
-        delay: 0,
-      },
-      {
-        text: "A story about words and the people who keep them.",
-        y: 280,
-        fontSize: "28px",
-        color: PALETTE.dim,
-        delay: 800,
-      },
-      {
-        text: "Co-designed by Aiden.",
-        y: 380,
-        fontSize: "34px",
-        color: "#c8a84b",
-        delay: 1600,
-      },
-      {
-        text: "Written and built by Justin.",
-        y: 430,
-        fontSize: "28px",
-        color: PALETTE.dim,
-        delay: 2400,
-      },
-    ];
-
-    for (const line of lines) {
-      const txt = this.add
-        .text(this.scale.width / 2, line.y, line.text, {
-          fontFamily: SERIF,
-          fontSize: line.fontSize,
-          color: line.color,
-          align: "center",
-        })
-        .setOrigin(0.5)
-        .setAlpha(0)
-        .setDepth(2);
-
-      this.tweens.add({
-        targets: txt,
-        alpha: 1,
-        duration: 800,
-        delay: line.delay,
-        ease: "Sine.easeOut",
-      });
-    }
-
-    // "Press any key" — shown after 3 seconds
-    const pressAny = this.add
-      .text(
-        this.scale.width / 2,
-        560,
-        "Press any key to return to the library.",
-        {
-          fontFamily: SERIF,
-          fontSize: "22px",
-          color: "#5a5248",
-          align: "center",
-        },
-      )
-      .setOrigin(0.5)
-      .setAlpha(0)
-      .setDepth(2);
-
-    this.tweens.add({
-      targets: pressAny,
-      alpha: 1,
-      duration: 800,
-      delay: 3000,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (this.run.once("credits-key")) {
-          this.input.keyboard?.once("keydown", this.returnFromCredits, this);
-        }
-      },
-    });
-  }
-
-  private returnFromCredits(): void {
-    const cx = this.scale.width / 2;
-    const cy = 560;
-    playSceneEventPulse(this, {
-      kind: "mote",
-      color: UI_HEX.brass,
-      x: cx,
-      y: cy,
-      depth: 12,
-      durationMs: 620,
-      ringWidth: 520,
-      ringHeight: 150,
-      count: 12,
-      alpha: 0.12,
-      spreadX: 220,
-      spreadY: 56,
-    });
-
-    const seal = this.add.graphics().setPosition(cx, cy).setDepth(11).setAlpha(0.7);
-    seal.lineStyle(2, UI_HEX.brass, 0.58);
-    seal.strokeEllipse(0, 0, 260, 74);
-    seal.lineStyle(1, 0x8b6ad8, 0.42);
-    seal.strokeEllipse(0, 0, 180, 48);
-    seal.fillStyle(UI_HEX.brass, 0.035);
-    seal.fillEllipse(0, 0, 260, 74);
-    this.tweens.add({
-      targets: seal,
-      alpha: 0,
-      scaleX: 1.32,
-      scaleY: 1.18,
-      duration: 540,
-      ease: "Sine.easeOut",
-      onComplete: () => seal.destroy(),
-    });
-
-    this.time.delayedCall(160, () => {
-      this.cameras.main.fadeOut(560, 11, 10, 15);
-      this.cameras.main.once(
-        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-        () => {
-          this.scene.start("PortalChamberScene", {
-            store: this.store,
-            arrival: "great-battle",
-          });
-        },
-      );
     });
   }
 

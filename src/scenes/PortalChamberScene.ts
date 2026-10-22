@@ -1,3 +1,6 @@
+import { installChapterMenu } from "../game/ui/pauseMenu";
+import { navigationAction } from "../game/ui/navigationPolicy";
+import { reducedMotion } from "../game/presentation";
 import Phaser from "phaser";
 import { resetSave } from "../game/resetSave";
 import { type AmbientHandle, playAmbientHub } from "../audio/ambient";
@@ -193,6 +196,7 @@ const DESK_LINE_IDS: Record<string, string> = {
 export class PortalChamberScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
+  private chapterMenu?: ReturnType<typeof installChapterMenu>;
   private archGraphics = new Map<string, Phaser.GameObjects.Graphics>();
   private archGlows = new Map<string, Phaser.GameObjects.Graphics>();
   private archSprites = new Map<string, Phaser.GameObjects.Sprite>();
@@ -266,6 +270,13 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.chapterMenu = installChapterMenu(this, {
+      store: this.store,
+      hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),
+      onLeave: () => this.scene.start("TitleScene"),
+      leaveLabel: "Save & return to title",
+      leaveHint: "Your journey is saved. Continue from the title to resume your latest saved place.",
+    });
     // Redirect first-time players to the opening cinematic.
     if (!this.store.get().typewriterAwakened) {
       this.scene.start("OpeningScene", { store: this.store });
@@ -312,13 +323,14 @@ export class PortalChamberScene extends Phaser.Scene {
       onCorrect: () => bobWrenSprite(this.wrenSprite),
       onMiss: () => {
         flashWrenMiss(this.wrenSprite);
-        this.cameras.main.shake(80, 0.002);
+        if (!reducedMotion(this)) this.cameras.main.shake(80, 0.002);
       },
       onClaim: () => playClaim(),
     });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.RESUME, this.resumeAfterAlmanac, this);
-    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.chapterMenu?.destroy();
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.events.off(Phaser.Scenes.Events.RESUME, this.resumeAfterAlmanac, this);
@@ -439,7 +451,7 @@ export class PortalChamberScene extends Phaser.Scene {
         let releaseAnchor = (): void => {};
         const battleTarget = new TextWordTarget({
           scene: this,
-          word: "defend hearthward",
+          word: "defend holdfast",
           x: this.scale.width / 2,
           y: PORTAL_CALL_WORD_Y,
           fontSize: 36,
@@ -1729,10 +1741,21 @@ export class PortalChamberScene extends Phaser.Scene {
   private onKeyDown(event: KeyboardEvent): void {
     // Ctrl+Shift+P: toggle purist mode from the hub too.
     if (isPuristToggleKey(event)) {
+      event.preventDefault();
       const next = togglePuristMode(this, this.store, { announce: false });
       this.showHubDifficultyNotice(next);
       return;
     }
+    if (event.ctrlKey || event.metaKey) return;
+    const activeTyping = this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0;
+    const navigation = navigationAction(event, this.activeZone === "portals" ? "hub" : "hub-zone", activeTyping);
+    if (navigation === "ignore") return;
+    if (navigation === "back") {
+      event.preventDefault();
+      if (!this.openingUtilityScene) this.enterZone("portals");
+      return;
+    }
+    if (this.chapterMenu?.handleKey(event)) return;
     if (event.key.length === 1 || event.key === " ") playClack();
     this.typingInput.handleChar(event.key);
   }

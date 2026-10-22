@@ -1,3 +1,6 @@
+import { installChapterMenu } from "../game/ui/pauseMenu";
+import { ChapterReading } from "../game/ui/chapterReading";
+import { reducedFlashes, reducedMotion } from "../game/presentation";
 import Phaser from "phaser";
 import { type AmbientHandle, playAmbientForge } from "../audio/ambient";
 import { playChime } from "../audio/chime";
@@ -178,6 +181,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private typingInput!: TypingInputController;
   private director!: WaveDirector;
   private narration!: NarrationManager;
+  private reading!: ChapterReading;
+  private chapterMenu?: ReturnType<typeof installChapterMenu>;
   private band!: ConsoleBand;
   private golems: MovingWordEnemy[] = [];
   private activeTargets: TextWordTarget[] = [];
@@ -260,6 +265,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.fightCue = null;
     this.oneShotInvoker = null;
     this.shiftHeld = false;
+    this.altHeld = false;
     this.waveActive = false;
     this.snowFoxTripNoticed = false;
     this.shrineForgivenessNoticed = false;
@@ -285,6 +291,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.chapterMenu = installChapterMenu(this, {
+      store: this.store,
+      hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),
+      onLeave: () => this.scene.start("PortalChamberScene", { store: this.store }),
+      leaveHint: "Returning to the chamber starts this realm again. Your completed journeys and collected keepsakes stay saved.",
+    });
     this.cameras.main.fadeIn(600, 26, 16, 8);
     const backdrop = this.add
       .image(0, 0, "forge-backdrop")
@@ -368,6 +380,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       framed: true,
       onSpeak: (speakerName) => this.attendSpeaker(speakerName),
     });
+    this.reading = new ChapterReading(this, () => Math.max(316, this.narration.bottom() + 40));
 
     this.typingInput = new TypingInputController(this.store);
     this.director = new WaveDirector(this.typingInput.getStats());
@@ -392,7 +405,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
           return;
         }
         flashWrenMiss(this.wrenSprite);
-        this.cameras.main.shake(80, 0.002);
+        if (!reducedMotion(this)) this.cameras.main.shake(80, 0.002);
       },
       onClaim: () => playClaim(),
     });
@@ -458,7 +471,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.input.keyboard?.on("keyup", this.onKeyUp, this);
-    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.reading.destroy();
+      this.chapterMenu?.destroy();
       this.typingInput.reset();
       this.oneShotInvoker?.destroy();
       this.oneShotInvoker = null;
@@ -513,7 +528,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
     this.setNarrator(narratorLine);
     this.band.setObjective("Type the forge memory to return to the Almanac.");
-    this.time.delayedCall(2400, () => this.deliverRevisitPassage(words));
+    this.readThen(() => this.deliverRevisitPassage(words));
   }
 
   private deliverRevisitPassage(words: string[]): void {
@@ -696,7 +711,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       ringHeight: 42,
     });
     this.showCatwalkCue(0, this.catwalkCueX(0));
-    this.time.delayedCall(1900, () => this.startCatwalkBeats(0));
+    this.readThen(() => this.startCatwalkBeats(0));
   }
 
   private startCatwalkBeats(idx: number): void {
@@ -737,7 +752,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
         });
         this.releaseCatwalkCueWordAnchor();
         this.pulseCatwalkCue(true);
-        this.time.delayedCall(1400, () => this.startCatwalkBeats(idx + 1));
+        this.clearActiveTargets();
+        this.readThen(() => this.startCatwalkBeats(idx + 1));
       },
     });
     this.attachCatwalkCueWordAnchor(idx, target);
@@ -799,7 +815,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       "Lowercase moves them. CAPITALS command them. Try both.",
       "Old Gregor",
     );
-    this.time.delayedCall(2000, () => this.gregorTutorialMove());
+    this.readThen(() => this.gregorTutorialMove());
   }
 
   private gregorTutorialMove(): void {
@@ -826,7 +842,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
       onComplete: () => {
         this.golemTurnHead(tutorialGolem);
         this.setNarrator("The golem turns its head. It heard you.");
-        this.time.delayedCall(1800, () =>
+        this.clearActiveTargets();
+        this.readThen(() =>
           this.gregorTutorialCommand(tutorialGolem),
         );
       },
@@ -856,7 +873,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
         this.setNarrator(
           "The golem snaps to attention. A command — not just a nudge.",
         );
-        this.time.delayedCall(1400, () =>
+        this.clearActiveTargets();
+        this.readThen(() =>
           this.gregorTutorialCommand(tutorialGolem),
         );
       },
@@ -883,7 +901,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
           delay: 1800,
           onComplete: () => tutorialGolem.container.destroy(),
         });
-        this.time.delayedCall(2400, () => this.startTutorialGolemFight());
+        this.clearActiveTargets();
+        this.readThen(() => this.startTutorialGolemFight());
       },
     });
     this.registerActiveTarget(target);
@@ -954,16 +973,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.setNarrator(
       "You descend to the foundry floor. The heat is immense. Iron shapes move through the dark.",
     );
-    this.time.delayedCall(460, () => this.descendWrenToFoundry(() => {
+    this.readThen(() => this.time.delayedCall(460, () => this.descendWrenToFoundry(() => {
       this.time.delayedCall(260, () => this.startWave1());
-    }));
+    })));
   }
 
   private startWave1(): void {
     this.waveActive = true;
     this.golems = [];
     playWaveSting();
-    this.cameras.main.shake(220, 0.005);
+    if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseForgeWave();
     this.narration.say("forge_wave1_intro");
     this.band.setObjective("Type each mixed-case command cleanly.");
@@ -1000,14 +1019,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
       "Runa",
     );
     this.band.setObjective("Reach Smith Forn through the moving foundry.");
-    this.time.delayedCall(2400, () => this.startWave2());
+    this.readThen(() => this.startWave2());
   }
 
   private startWave2(): void {
     this.waveActive = true;
     this.golems = [];
     playWaveSting();
-    this.cameras.main.shake(220, 0.005);
+    if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseForgeWave();
     this.narration.say("forge_wave2_intro");
     this.band.setObjective("Use Shift for CAPITAL order fragments.");
@@ -1383,7 +1402,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       "Aye. I could use steady hands.",
       "Forn",
     );
-    this.time.delayedCall(1800, () => {
+    this.readThen(() => {
       this.runPassageChain(
         [...FORN_PASSAGES],
         [
@@ -1407,7 +1426,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       "About time someone helped us.",
       "Apprentice",
     );
-    this.time.delayedCall(1800, () => {
+    this.readThen(() => {
       this.runPassageChain(
         [...CABAL_PASSAGES],
         [
@@ -1454,9 +1473,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.golems = [];
     this.waveActive = false;
     this.playCommandGolemRiseCue();
-    this.cameras.main.shake(300, 0.006);
+    if (!reducedMotion(this)) this.cameras.main.shake(300, 0.006);
     this.narration.say("forge_command_golem_rise");
-    this.time.delayedCall(2800, () => this.startBossPhase1());
+    this.readThen(() => this.startBossPhase1());
   }
 
   // Boss sprite — kept so phase 2 can flash it "commanded" (brass).
@@ -1513,7 +1532,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private startBossPhase1(): void {
     this.spawnBossVisual();
     playWaveSting();
-    this.cameras.main.shake(220, 0.005);
+    if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseForgeWave({ y: FLOOR_Y - 130, ringWidth: 980, ringHeight: 150, count: 16 });
     this.setNarrator(
       "The Command-Golem — massive, iron-crowned, its eye burning orange. Phase one begins.",
@@ -1535,14 +1554,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
         fontSize: 38,
         onComplete: () => {
           playChime();
-          this.cameras.main.shake(120, 0.003);
+          if (!reducedMotion(this)) this.cameras.main.shake(120, 0.003);
           phaseIdx++;
           this.time.delayedCall(700, nextWord);
         },
         onSpellComplete: () => {
           playChime();
-          this.cameras.main.flash(200, 200, 120, 20);
-          this.cameras.main.shake(200, 0.005);
+          if (!reducedFlashes(this)) this.cameras.main.flash(200, 200, 120, 20);
+          if (!reducedMotion(this)) this.cameras.main.shake(200, 0.005);
           phaseIdx++;
           this.time.delayedCall(700, nextWord);
         },
@@ -1580,14 +1599,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
         caseSensitive: true,
         onComplete: () => {
           playChime();
-          this.cameras.main.shake(140, 0.003);
+          if (!reducedMotion(this)) this.cameras.main.shake(140, 0.003);
           phaseIdx++;
           this.time.delayedCall(700, nextWord);
         },
         onSpellComplete: () => {
           // Camera flash — the command lands hard
-          this.cameras.main.flash(280, 220, 160, 20);
-          this.cameras.main.shake(280, 0.006);
+          if (!reducedFlashes(this)) this.cameras.main.flash(280, 220, 160, 20);
+          if (!reducedMotion(this)) this.cameras.main.shake(280, 0.006);
           playChime();
           // Golem staggers — brief displacement tween
           this.tweens.add({
@@ -1630,8 +1649,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
         burstColor: PALETTE_HEX.ember,
         onComplete: () => {
           playChime();
-          this.cameras.main.flash(300, 220, 160, 20);
-          this.cameras.main.shake(260, 0.006);
+          if (!reducedFlashes(this)) this.cameras.main.flash(300, 220, 160, 20);
+          if (!reducedMotion(this)) this.cameras.main.shake(260, 0.006);
           repeatCount++;
           if (repeatCount >= 2) {
             this.time.delayedCall(600, () => this.bossDefeated());
@@ -1686,7 +1705,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     });
 
     this.narration.say("forge_command_golem_defeated");
-    this.time.delayedCall(3200, () => this.startFork2());
+    this.readThen(() => this.startFork2());
   }
 
   // ─── Fork 2 ──────────────────────────────────────────────────────────────────
@@ -1760,13 +1779,15 @@ export class ClockworkForgeScene extends Phaser.Scene {
         // The peaceful-branch finale demands the full capitalized order.
         caseSensitive: true,
         onComplete: () => {
+          this.clearActiveTargets();
           this.setNarrator("The last golems lower their arms. The forge grows quiet.");
-          this.time.delayedCall(1800, () => this.afterFork2("peaceful", "master-key"));
+          this.readThen(() => this.afterFork2("peaceful", "master-key"));
         },
         onSpellComplete: () => {
-          this.cameras.main.flash(350, 200, 180, 40);
+          this.clearActiveTargets();
+          if (!reducedFlashes(this)) this.cameras.main.flash(350, 200, 180, 40);
           this.setNarrator("The command rings out. Every golem in the forge stills at once.");
-          this.time.delayedCall(2000, () => this.afterFork2("peaceful", "master-key"));
+          this.readThen(() => this.afterFork2("peaceful", "master-key"));
         },
       },
       { color: PALETTE_HEX.brass, sourceOffsetY: -54 },
@@ -1813,7 +1834,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.waveActive = false;
       this.golems = [];
       this.setNarrator("The last golem falls. The forge is yours.");
-      this.time.delayedCall(1600, () =>
+      this.readThen(() =>
         this.afterFork2("fought", "golem-heart"),
       );
     });
@@ -1882,7 +1903,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       );
       this.showSongbirdCompanion(1380, 470);
       this.time.delayedCall(900, () => this.dismissSongbirdCompanion(1450, 430));
-      this.time.delayedCall(2400, () => this.startTrueNamePassage());
+      this.readThen(() => this.startTrueNamePassage());
     } else {
       this.time.delayedCall(600, () => this.startTrueNamePassage());
     }
@@ -1906,7 +1927,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       "The brass bird lands on your shoulder. It trills three notes — then goes still.",
     );
     this.pulseSongbirdCompanion();
-    this.time.delayedCall(2200, () => this.startTrueNamePassage());
+    this.readThen(() => this.startTrueNamePassage());
   }
 
   private showSongbirdCompanion(startX = 1380, startY = 430): void {
@@ -1956,6 +1977,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private startTrueNamePassage(): void {
     this.clearActiveTargets();
     this.narration.say("forge_truename_intro");
+    this.readThen(() => this.deliverTrueNamePassage());
+  }
+
+  private deliverTrueNamePassage(): void {
     const sealY = this.scale.height - 318;
     const seal = stageTrueNameSeal(this, {
       color: PALETTE_HEX.ember,
@@ -2005,7 +2030,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       s.realms["clockwork-forge"] = realm;
     });
 
-    this.showAlmanacStamp(() => {
+    this.readThen(() => this.showAlmanacStamp(() => {
       playRealmReturnDeparture(this, this.wrenContainer, {
         kind: "ember",
         color: PALETTE_HEX.brass,
@@ -2022,7 +2047,11 @@ export class ClockworkForgeScene extends Phaser.Scene {
           },
         );
       });
-    });
+    }));
+  }
+
+  private readThen(next: () => void): void {
+    this.reading.show(next, () => this.narration.replay());
   }
 
   private showAlmanacStamp(onDone: () => void): void {
@@ -2125,7 +2154,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
           sourceRadius: 32,
           targetRadius: 36,
         });
-        this.cameras.main.shake(180, 0.004);
+        if (!reducedMotion(this)) this.cameras.main.shake(180, 0.004);
         playWrenHurt(this.wrenSprite, { knockX: 0 });
         playDamageThud();
         flashDamageVignette(this);
@@ -2228,7 +2257,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   /** Visual "command" effect when the player uses Shift on a golem — the camera
    *  flash and the golem flaring brass before the body falls. */
   private commandEffect(sprite: Phaser.GameObjects.Image): void {
-    this.cameras.main.flash(180, 200, 140, 20);
+    if (!reducedFlashes(this)) this.cameras.main.flash(180, 200, 140, 20);
     this.flashGolemCommanded(sprite);
   }
 
@@ -2245,7 +2274,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   /** Visual effect for full-command response. */
   private golemCommandFlash(golem: StaticGolem): void {
-    this.cameras.main.flash(200, 200, 140, 20);
+    if (!reducedFlashes(this)) this.cameras.main.flash(200, 200, 140, 20);
     this.flashGolemCommanded(golem.sprite);
     this.tweens.add({
       targets: golem.container,
@@ -2430,8 +2459,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
           });
           const line = narratorLines[step] ?? "";
           step++;
-          if (line) this.setNarrator(line);
-          this.time.delayedCall(line ? 1400 : 400, advance);
+          this.clearActiveTargets();
+          if (line) {
+            this.setNarrator(line);
+            this.readThen(advance);
+          } else {
+            this.time.delayedCall(400, advance);
+          }
         },
       };
       let target: TextWordTarget;
@@ -2978,11 +3012,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── Input ────────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
-    // Ctrl+Shift+P: toggle purist mode from inside the realm.
     if (isPuristToggleKey(event)) {
+      event.preventDefault();
       togglePuristMode(this, this.store);
       return;
     }
+    if (event.ctrlKey || event.metaKey) return;
+    if (this.chapterMenu?.handleKey(event)) return;
+    if (this.reading.handleKey(event)) return;
     if (event.key === "Shift") {
       this.shiftHeld = true;
       return;
@@ -2996,6 +3033,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
     }
     if (event.key.length === 1 || event.key === " ") {
       playClack();
+    }
+    if (event.key.length === 1) {
+      this.shiftHeld = event.shiftKey;
+      this.altHeld = event.altKey;
     }
     this.typingInput.handleChar(event.key, {
       // Shift stays free: capitalized command golems are caseSensitive, so
@@ -3318,7 +3359,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       count: 16,
       radius: 60,
     });
-    this.cameras.main.shake(160, 0.004);
+    if (!reducedMotion(this)) this.cameras.main.shake(160, 0.004);
     target.defeat();
   }
 

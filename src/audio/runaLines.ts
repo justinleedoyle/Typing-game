@@ -262,8 +262,8 @@ const HUB_LINES: readonly RunaLine[] = [
   {
     id: "hub_all_cleared",
     scene: "hub",
-    trigger: "PortalChamberScene — all 5 realms cleared, Hearthward call",
-    text: "All realms cleared. Hearthward needs you.",
+    trigger: "PortalChamberScene — all 5 realms cleared, Holdfast call",
+    text: "All realms cleared. Holdfast needs you.",
     tone: "urgent",
   },
   {
@@ -1126,8 +1126,8 @@ const FINALE_LINES: readonly RunaLine[] = [
   {
     id: "finale_phase1_arrival",
     scene: "finale",
-    trigger: "GreatBattleScene.startPhase1() — Hearthward at dusk (wired)",
-    text: "Hearthward. The last wall, and the light failing. They are coming.",
+    trigger: "GreatBattleScene.startPhase1() — Holdfast at dusk (wired)",
+    text: "Holdfast. The last wall, and the light failing. They are coming.",
     tone: "reading",
     isNew: true,
   },

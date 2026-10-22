@@ -8,13 +8,15 @@ import {
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { UI_CSS, UI_HEX } from "../game/ui/uiTheme";
 import {
-  REALM_LORE, REALM_ORDER, winterRealmSummary,
+  REALM_LORE, REALM_ORDER, realmPathSummary, winterRealmSummary,
   winterLorePageMatchesChoices, winterLorePageBody,
 } from "../game/realmLore";
 import { RELICS } from "../game/relics";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
+import { navigationAction } from "../game/ui/navigationPolicy";
+import { installPresentation } from "../game/presentation";
 import {
   addAmbientDrift,
   addContainerWake,
@@ -152,6 +154,7 @@ export class AlmanacScene extends Phaser.Scene {
   }
 
   create(): void {
+    installPresentation(this, this.store);
     this.cameras.main.fadeIn(350, 11, 10, 15);
 
     // The paused chamber remains physically behind the book. This is only a
@@ -239,6 +242,10 @@ export class AlmanacScene extends Phaser.Scene {
 
     this.renderCurrentPage();
     this.placeNavigationTargets();
+    this.add.text(this.scale.width / 2, 976,
+      "← / → or Page Up / Down: turn pages · Esc: cancel typing, then close · Typed commands also work", {
+        fontFamily: SERIF, fontSize: "22px", color: UI_CSS.cream,
+      }).setOrigin(0.5).setDepth(32);
     this.playBookEntryWake();
   }
 
@@ -349,7 +356,7 @@ export class AlmanacScene extends Phaser.Scene {
     );
 
     // Winter records all four decisions, including the earned/declined fox.
-    // Later realms retain their existing authored summaries and layout.
+    // Later chapters record both forks without inferring choices from relics.
     if (realmId === "winter-mountain") {
       const summary = winterRealmSummary(realmProgress, state.satchel);
       this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y, summary.pathHeading, {
@@ -374,34 +381,33 @@ export class AlmanacScene extends Phaser.Scene {
       }
     } else {
       // Right page: ending + satchel
-      const choices = realmProgress.choices as Record<string, string> | undefined;
-      const primaryKey = this.resolveEndingKey(realmId, choices);
-      const secondaryKey = this.resolveSecondaryEndingKey(realmId, choices);
-      const primaryText =
-        (primaryKey && lore.endings[primaryKey]) ?? "His path remains unwritten.";
-      const secondaryText =
-        secondaryKey ? (lore.endings[secondaryKey] ?? undefined) : undefined;
+      const summary = realmPathSummary(realmId, realmProgress.choices);
+      const primaryText = summary.primary;
+      const secondaryText = summary.secondary;
 
-      this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y, "His path:", {
+      this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y, "Wren's path:", {
         fontSize: "30px",
         fontStyle: "italic",
         color: PAGE_INK_DIM,
       });
-      this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 60, primaryText, {
+      const primaryBody = this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 60, primaryText, {
         fontSize: "26px",
         color: PAGE_INK,
         wordWrap: { width: PAGE_TEXT_WIDTH },
       });
 
+      let carriedY = TOP_TEXT_Y + 320;
       if (secondaryText) {
-        this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 180, secondaryText, {
+        const secondaryY = Math.max(TOP_TEXT_Y + 180, primaryBody.y + primaryBody.height + 24);
+        const secondaryBody = this.addPageText(RIGHT_PAGE_X, secondaryY, secondaryText, {
           fontSize: "26px",
           color: PAGE_INK,
           wordWrap: { width: PAGE_TEXT_WIDTH },
         });
+        carriedY = Math.max(TOP_TEXT_Y + 420, secondaryBody.y + secondaryBody.height + 30);
       }
 
-      const relicsY = secondaryText ? TOP_TEXT_Y + 420 : TOP_TEXT_Y + 320;
+      const relicsY = carriedY;
 
       const realmRelics = state.satchel
         .map((id) => RELICS[id])
@@ -411,7 +417,7 @@ export class AlmanacScene extends Phaser.Scene {
         this.addPageText(
           RIGHT_PAGE_X,
           relicsY,
-          "He carried away:",
+          "Carried away:",
           {
             fontSize: "26px",
             fontStyle: "italic",
@@ -529,64 +535,6 @@ export class AlmanacScene extends Phaser.Scene {
     );
 
     this.renderPageFooter();
-  }
-
-  /** Returns the primary (fork1) lore ending key for a realm. */
-  private resolveEndingKey(
-    realmId: string,
-    choices: Record<string, string> | undefined,
-  ): string | undefined {
-    if (!choices) return undefined;
-    switch (realmId) {
-      case "winter-mountain":
-        // fork1: "huntress" | "firefly" — both match lore keys directly
-        return choices["fork1"];
-      case "sunken-bell":
-        // fork1: "chant" | "force"; lore only has "chant" for this arm
-        return choices["fork1"] === "chant" ? "chant" : undefined;
-      case "clockwork-forge":
-        // choices.ending is e.g. "forn-peaceful" — extract the fork1 part
-        return choices["ending"]?.split("-")[0]; // "forn" | "cabal"
-      case "sky-island":
-        // fork1: "help-etta" → lore "help-etta"; "steal-flame" → lore "beacon"
-        if (choices["fork1"] === "help-etta") return "help-etta";
-        if (choices["fork1"] === "steal-flame") return "beacon";
-        return choices["fork1"];
-      case "haunted-wood":
-        // fork1: "offering" | "bone-flute" — both match lore keys directly
-        return choices["fork1"];
-      default:
-        return choices["ending"];
-    }
-  }
-
-  /** Returns the secondary (fork2) lore ending key for a realm, or undefined if none. */
-  private resolveSecondaryEndingKey(
-    realmId: string,
-    choices: Record<string, string> | undefined,
-  ): string | undefined {
-    if (!choices) return undefined;
-    switch (realmId) {
-      case "winter-mountain":
-        // fork2: "bury" | "pelt" — both match lore keys directly
-        return choices["fork2"];
-      case "sunken-bell":
-        // fork2: "free-aurland" → lore "free-king"; "claim-tongue" → lore "claim-tongue"
-        if (choices["fork2"] === "free-aurland") return "free-king";
-        return choices["fork2"]; // "claim-tongue"
-      case "clockwork-forge":
-        // choices.ending second part: "peaceful" | "fought" — both match lore keys
-        return choices["ending"]?.split("-")[1];
-      case "sky-island":
-        // fork2: "answer-kindly" | "cut-tether" — both match lore keys directly
-        return choices["fork2"];
-      case "haunted-wood":
-        // fork2: "bargain" → lore "bargain"; "force" → lore "light-grove"
-        if (choices["fork2"] === "force") return "light-grove";
-        return choices["fork2"]; // "bargain"
-      default:
-        return undefined;
-    }
   }
 
   private renderOverviewPage(): void {
@@ -1386,9 +1334,21 @@ export class AlmanacScene extends Phaser.Scene {
   }
 
   private onKeyDown(event: KeyboardEvent): void {
+    if (this.closing || event.ctrlKey || event.metaKey || event.altKey) return;
+    const typing = this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0;
+    const action = navigationAction(event, "book", typing);
+    if (action === "ignore") return;
+    if (action !== null) {
+      event.preventDefault();
+      if (action === "cancel-typing") this.typingInput.handleChar("Escape");
+      else if (action === "close") this.closeBook();
+      else if (action === "previous-page" || action === "next-page") this.turnPage(action === "previous-page" ? -1 : 1);
+      return;
+    }
     if (event.key.length === 1 || event.key === " ") {
       playClack();
     }
+    if (event.key === " " || event.key === "Backspace") event.preventDefault();
     this.typingInput.handleChar(event.key);
   }
 

@@ -15,6 +15,8 @@ import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { candleAfterHit, candleAfterCleanWave } from "../game/winterMechanics";
 import { COMPANION_IDS, selectFinalPhrase } from "../game/relicAlignment";
 import { getActiveRelicEffects } from "../game/relicEffects";
+import { shortenFinaleWords } from "../game/finaleWords";
+import { SceneRunGuard } from "../game/sceneRunGuard";
 import {
   type Facet,
   type FacetId,
@@ -487,6 +489,7 @@ interface FinalPhraseWordTrace {
 // ─── Scene ─────────────────────────────────────────────────────────────────────
 
 export class GreatBattleScene extends Phaser.Scene {
+  private readonly run = new SceneRunGuard();
   private store!: SaveStore;
   private devWaveRealmId?: string;
   private devFinalePhase?: DevFinalePhase;
@@ -572,6 +575,7 @@ export class GreatBattleScene extends Phaser.Scene {
   // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
   init(data: BattleSceneData): void {
+    this.run.begin();
     this.store = data.store;
     this.devWaveRealmId = WAVE_DEFS.some((wave) => wave.realmId === data.devWaveRealmId)
       ? data.devWaveRealmId
@@ -586,6 +590,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.waveQueue = [];
     this.currentWaveIdx = -1;
     this.candles = WAVE_CANDLES;
+    this.drawnCandles = null;
     this.wallWard = undefined;
     this.wallWardFlames = [];
     this.wrenDefender = undefined;
@@ -597,6 +602,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
     // Ally modifier state
     this.shrineTokenForgivenThisWave = false;
+    this.sabotageWrenchWaveNoticed = false;
     this.untetheredWindSlowMult = 1.0;
     this.lastMissFeedbackAt = 0;
 
@@ -784,7 +790,7 @@ export class GreatBattleScene extends Phaser.Scene {
       },
     });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
-    this.events.on(Phaser.Scenes.Events.SHUTDOWN, this.onShutdown, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.onShutdown, this);
 
     this.ambientHandle = playAmbientBattle();
 
@@ -830,10 +836,12 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private onShutdown(): void {
+    this.run.end();
     this.typingInput.reset();
     this.clearTargetAnchors();
     this.dismissWrenDefender(0);
     this.input.keyboard?.off("keydown", this.onKeyDown, this);
+    this.input.keyboard?.off("keydown", this.returnFromCredits, this);
     this.ambientHandle?.stop();
     this.clearFacetSigil(false);
     if (this.brassSongbirdStallTimer) {
@@ -849,7 +857,12 @@ export class GreatBattleScene extends Phaser.Scene {
     // browser already encodes Shift into the keystroke's case, so no spell/Shift
     // tracking is needed here. (The old bellows-hammer Shift-spell cooldown was
     // inert — no finale target consumes the spell variant — and has been removed.)
-    if (!event.key || (event.key.length !== 1 && event.key !== " ")) return;
+    if (event.key === "Backspace" || event.key === "Escape") {
+      event.preventDefault();
+      this.typingInput.handleChar(event.key);
+      return;
+    }
+    if (!event.key || event.key.length !== 1 || event.ctrlKey || event.metaKey) return;
     playClack();
     this.typingInput.handleChar(event.key);
   }
@@ -2280,7 +2293,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
     // §5.5.11 — Apprentices' Cabal (sabotage-wrench): enemy words shortened by 1 char
     if (satchel.includes("sabotage-wrench")) {
-      words = words.map((w) => (w.length > 2 ? w.slice(0, -1) : w));
+      words = shortenFinaleWords(words);
       if (!this.sabotageWrenchWaveNoticed) {
         this.sabotageWrenchWaveNoticed = true;
         this.time.delayedCall(360, () => {
@@ -4752,8 +4765,6 @@ export class GreatBattleScene extends Phaser.Scene {
 
   // ─── Credits ────────────────────────────────────────────────────────────────
 
-  private creditsKeyListenerAdded = false;
-
   private showCredits(): void {
     this.clearActiveTargets();
 
@@ -4872,9 +4883,8 @@ export class GreatBattleScene extends Phaser.Scene {
       delay: 3000,
       ease: "Sine.easeOut",
       onComplete: () => {
-        if (!this.creditsKeyListenerAdded) {
-          this.creditsKeyListenerAdded = true;
-          this.input.keyboard?.once("keydown", () => this.returnFromCredits());
+        if (this.run.once("credits-key")) {
+          this.input.keyboard?.once("keydown", this.returnFromCredits, this);
         }
       },
     });

@@ -504,6 +504,11 @@ export class TextWordTarget implements WordTarget {
     this.applyDim();
   }
 
+  /** Keep combat words readable above nearby actors. */
+  setDepth(depth: number): void {
+    this.container.setDepth(depth);
+  }
+
   /** Reposition the floating word — used to keep it pinned above a moving
    *  enemy. */
   setAnchorX(x: number): void {

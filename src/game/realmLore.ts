@@ -5,6 +5,8 @@
 // text that swaps based on the CYOA choices Aiden made. The Almanac page
 // therefore looks different on every run.
 
+import type { RealmProgress } from "./saveState";
+
 export interface RealmLore {
   title: string;
   intro: string;
@@ -18,15 +20,15 @@ export const REALM_LORE: Record<string, RealmLore> = {
       "Wren stepped through the first portal into a cold dawn. The pines were dark, the snow waist-deep, and the old one was already stirring.",
     endings: {
       huntress:
-        "At the fork he turned aside to free a huntress buried in the drifts. She spoke a few words in the wolf-tongue and the howls behind him fell quiet. She gave him her spiral horn before he climbed on.",
+        "At the fork, Wren freed Sigrid from the drifts. The huntress gave Wren her spiral horn.",
       firefly:
-        "At the fork he followed three patient fireflies up between the pines. They came to rest inside a paper lantern hidden in a hollow tree, and he carried it down the mountain with him.",
+        "Wren followed the fireflies to a lantern in a hollow tree and carried it back down.",
       bury:
-        "He buried the old wolf under a cairn of flat stones. It took a long time. The mountain was very quiet when he finished.",
+        "Wren built a cairn over the old wolf. Stone by stone, the mountain grew quiet.",
       pelt:
-        "He carried the old wolf's pelt down the mountain. It was heavy with winter. He told himself it was only weight.",
+        "Wren took the old wolf's pelt. It was heavy with winter on the way down.",
       fox:
-        "A snow-fox had been watching from the treeline since he arrived. When he finally paused and spoke to her, she followed him back through the portal without hesitation.",
+        "When Wren whispered, the snow-fox came close and followed through the portal.",
     },
   },
 
@@ -108,3 +110,88 @@ export const REALM_ORDER = [
   "sky-island",
   "haunted-wood",
 ];
+
+
+export interface WinterRealmSummary {
+  pathHeading: string;
+  carriedHeading: string;
+  /** First meeting, trail fork, wolf aftermath, then companion outcome. */
+  passages: readonly string[];
+  companion: "joined" | "declined" | "not-earned" | "unrecorded";
+  carriedIds: readonly string[];
+}
+
+/** Winter's record follows saved decisions, never whichever relic happens to
+ * be first in the satchel. Neutral wording also works for either Wren identity. */
+export function winterRealmSummary(
+  progress: RealmProgress | undefined,
+  satchel: readonly string[] = [],
+): WinterRealmSummary {
+  const choices = progress?.choices ?? {};
+  const endings = REALM_LORE["winter-mountain"].endings;
+  const fox = choices.fox === "spared"
+    ? 'Wren paused for the wounded fox and said, “I mean no harm.” She watched from the pines.'
+    : choices.fox === "ignored"
+      ? "Wren passed the wounded fox without stopping. She vanished into the trees."
+      : "The first meeting with the snow-fox is not recorded.";
+  const trail = choices.fork1 === "huntress" || choices.fork1 === "firefly"
+    ? endings[choices.fork1]
+    : "The trail fork is not recorded on this page.";
+  const aftermath = choices.fork2 === "bury" || choices.fork2 === "pelt"
+    ? endings[choices.fork2]
+    : "The old wolf's resting place is not recorded.";
+  const eligible = choices.fox === "spared" && choices.fork1 === "huntress" && choices.fork2 === "bury";
+  const completeChoices = (choices.fox === "spared" || choices.fox === "ignored") &&
+    (choices.fork1 === "huntress" || choices.fork1 === "firefly") &&
+    (choices.fork2 === "bury" || choices.fork2 === "pelt");
+  // Original saves did not record accepted/declined. A matching carried fox is
+  // evidence of acceptance only when all three canonical kindness gates hold.
+  const joined = eligible && (choices.companion === "accepted" ||
+    (choices.companion === undefined && satchel.includes("snow-fox-cub")));
+  let companion: WinterRealmSummary["companion"] = "unrecorded";
+  let farewell = "The fox's farewell is not recorded.";
+  if (joined) { companion = "joined"; farewell = endings.fox; }
+  else if (eligible && choices.companion === "declined") {
+    companion = "declined";
+    farewell = "The fox returned to the cairn. Wren let her go, and she stayed on the mountain.";
+  } else if (completeChoices && !eligible) {
+    companion = "not-earned";
+    if (choices.fox === "ignored") farewell = "No snow-fox followed Wren through the portal.";
+    else if (choices.fork1 === "firefly" && choices.fork2 === "bury") farewell = "The fox returned, searched for Sigrid, then turned back into the pines.";
+    else if (choices.fork1 === "huntress" && choices.fork2 === "pelt") farewell = "The fox saw the old wolf's pelt and stepped back into the snow.";
+    else farewell = "The fox stayed in the mountain's pines.";
+  }
+  const allowed = new Set<string>();
+  if (choices.fork1 !== "firefly") allowed.add("hunters-horn");
+  if (choices.fork1 !== "huntress") allowed.add("firefly-lantern");
+  if (choices.fork2 !== "pelt") allowed.add("cairn-token");
+  if (choices.fork2 !== "bury") allowed.add("pelt-of-the-old-one");
+  if (joined) allowed.add("snow-fox-cub");
+  return {
+    pathHeading: "Wren's path:", carriedHeading: "Carried away:",
+    passages: [fox, trail, aftermath, farewell], companion,
+    carriedIds: [...new Set(satchel.filter((id) => allowed.has(id)))],
+  };
+}
+
+/** Old saves could stamp both branches after restarting an unfinished realm.
+ * Keep those saved IDs intact, but the current chapter shows the chosen path. */
+export function winterLorePageMatchesChoices(loreId: string, choices: Readonly<Record<string, string>> = {}): boolean {
+  if (loreId === "the-wounded-foxs-name" && choices.fox === "ignored") return false;
+  if (loreId === "the-huntress-song" && choices.fork1 === "firefly") return false;
+  if (loreId === "the-firefly-trail" && choices.fork1 === "huntress") return false;
+  return true;
+}
+
+const WINTER_LORE_BODIES: Readonly<Record<string, string>> = {
+  "the-hundred-quiet-years": "Heldur thawed long enough to give a name and a fragment of the past: a hundred years at the pass, and the word Holdfast. Then the knight's voice fell quiet again. The wayshrine stayed warm a little longer than the wind would explain.",
+  "the-wounded-foxs-name": "The fox lay curled in the snow, breath shallow. When Wren said “I mean no harm” she did not run. She watched Wren from the pines for the rest of the climb. Her name, Runa later guessed, was something close to kindness in a small shape.",
+  "the-huntress-song": "Sigrid spoke a few words in the wolf-tongue as Wren freed her hands. The howls behind them fell quiet. She pressed a spiral horn into Wren's hand and gestured uphill. An old song lingered in the snow after she had gone.",
+  "the-firefly-trail": "Three fireflies hovered, patient, between the pines. They drifted up only when Wren followed, never when Wren stopped. They led the way to a hollow tree where a small paper lantern had been waiting longer than anyone living. Wren carried it down the mountain.",
+  "the-pack-leader-true-name": "The old wolf fell, and a scratched A flashed across the Almanac. When the climb was over, Wren spoke the mountain's true-name passage: the winter mountain settles. its old breath warms. the snow rests. The snow grew still.",
+};
+
+/** Other realms and unknown entries remain byte-for-byte authored as before. */
+export function winterLorePageBody(loreId: string, authoredBody: string): string {
+  return WINTER_LORE_BODIES[loreId] ?? authoredBody;
+}

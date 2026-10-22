@@ -119,7 +119,7 @@ const OPENING_LINES: readonly RunaLine[] = [
     id: "opening_beat4_type_name",
     scene: "opening",
     trigger: "OpeningScene.beat4() — first typed word: 'Wren'",
-    text: "The kingdom has gone a hundred years without a Portalwright. Tonight we find out if it has one again. Hands on the keys — and type your name.",
+    text: "The kingdom has gone a hundred years without a Portalwright. Tonight we find out if it has one again. You are Wren. Hands on the keys — type Wren.",
     tone: "intimate",
   },
   {

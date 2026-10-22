@@ -21,6 +21,14 @@ await import("./wordTarget.test.ts");
 await import("./movingWordEnemy.test.ts");
 await import("./finaleFacets.test.ts");
 await import("./saveState.test.ts");
+await import("./saveSync.test.ts");
+await import("./typingInput.test.ts");
+await import("./sceneLifecycle.test.ts");
+await import("./finaleWords.test.ts");
+await import("./chapterFlow.test.ts");
+await import("./resetSave.test.ts");
+await import("./saveChoice.test.ts");
+await import("./realmLore.test.ts");
 
 console.log("\nAll logic test suites passed.");
 // Force a clean exit: saveState.test imports the real supabase client, whose

@@ -1,3 +1,4 @@
+import { decorativeTween, reducedMotion, reducedFlashes } from "./presentation";
 import Phaser from "phaser";
 
 export type AmbientKind = "ash" | "bubble" | "ember" | "mist" | "mote" | "snow";
@@ -358,7 +359,7 @@ export function addIdleBreath(
   opts: IdleBreathOptions = {},
 ): Phaser.Tweens.Tween {
   const baseY = target.y;
-  return scene.tweens.add({
+  const tween = scene.tweens.add({
     targets: target,
     y: baseY + (opts.dy ?? -5),
     duration: opts.durationMs ?? 1800,
@@ -367,6 +368,8 @@ export function addIdleBreath(
     repeat: -1,
     ease: "Sine.easeInOut",
   });
+  decorativeTween(scene, tween);
+  return tween;
 }
 
 /** Subtle breathing motion for a full-screen painted backdrop. The target is
@@ -384,7 +387,7 @@ export function addBackdropDrift(
   const scale = opts.scale ?? 1.012;
   const extraX = (backdrop.displayWidth * (scale - 1)) / 2;
   const extraY = (backdrop.displayHeight * (scale - 1)) / 2;
-  return scene.tweens.add({
+  const tween = scene.tweens.add({
     targets: backdrop,
     x: baseX - extraX + (opts.driftX ?? -4),
     y: baseY - extraY + (opts.driftY ?? -3),
@@ -396,6 +399,8 @@ export function addBackdropDrift(
     repeat: -1,
     ease: "Sine.easeInOut",
   });
+  decorativeTween(scene, tween);
+  return tween;
 }
 
 /** Subtle additive light for painted sources such as portals, candles, aurora,
@@ -418,7 +423,7 @@ export function addLivingLight(
   g.fillEllipse(0, 0, opts.width * 1.42, opts.height * 1.36);
 
   const scale = opts.scale ?? 1.08;
-  scene.tweens.add({
+  const tween = scene.tweens.add({
     targets: g,
     alpha: alpha * 0.56,
     scaleX: scale,
@@ -429,6 +434,8 @@ export function addLivingLight(
     repeat: -1,
     ease: "Sine.easeInOut",
   });
+  decorativeTween(scene, tween);
+  if (reducedFlashes(scene)) g.setAlpha(alpha * 0.5);
   return g;
 }
 
@@ -1443,6 +1450,9 @@ export function addAmbientDrift(
   };
   const container = scene.add.container(0, 0).setDepth(opts.depth ?? -10);
   let alive = true;
+  const applyMotion = () => container.setVisible(!reducedMotion(scene));
+  applyMotion();
+  scene.events.on("chapter-presentation-changed", applyMotion);
 
   const defaultColor = colorFor(opts.kind);
   for (let i = 0; i < opts.count; i++) {
@@ -1461,6 +1471,7 @@ export function addAmbientDrift(
   const stop = (): void => {
     if (!alive) return;
     alive = false;
+    scene.events.off("chapter-presentation-changed", applyMotion);
     container.destroy();
   };
   scene.events.once(Phaser.Scenes.Events.SHUTDOWN, stop);

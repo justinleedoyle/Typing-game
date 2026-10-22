@@ -7,7 +7,10 @@ import {
 } from "../game/almanacLorePages";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { UI_CSS, UI_HEX } from "../game/ui/uiTheme";
-import { REALM_LORE, REALM_ORDER } from "../game/realmLore";
+import {
+  REALM_LORE, REALM_ORDER, winterRealmSummary,
+  winterLorePageMatchesChoices, winterLorePageBody,
+} from "../game/realmLore";
 import { RELICS } from "../game/relics";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
@@ -281,7 +284,8 @@ export class AlmanacScene extends Phaser.Scene {
     for (const realmId of this.clearedRealms) {
       stack.push({ kind: "realm", realmId });
       for (const loreId of lorePageIdsForRealm(realmId)) {
-        if (stamped.has(loreId) && ALMANAC_LORE_PAGES[loreId]) {
+        if (stamped.has(loreId) && ALMANAC_LORE_PAGES[loreId] &&
+            (realmId !== "winter-mountain" || winterLorePageMatchesChoices(loreId, this.store.get().realms[realmId]?.choices))) {
           stack.push({ kind: "lore", loreId, realmId });
         }
       }
@@ -344,61 +348,89 @@ export class AlmanacScene extends Phaser.Scene {
       },
     );
 
-    // Right page: ending + satchel
-    const choices = realmProgress.choices as Record<string, string> | undefined;
-    const primaryKey = this.resolveEndingKey(realmId, choices);
-    const secondaryKey = this.resolveSecondaryEndingKey(realmId, choices);
-    const primaryText =
-      (primaryKey && lore.endings[primaryKey]) ?? "His path remains unwritten.";
-    const secondaryText =
-      secondaryKey ? (lore.endings[secondaryKey] ?? undefined) : undefined;
+    // Winter records all four decisions, including the earned/declined fox.
+    // Later realms retain their existing authored summaries and layout.
+    if (realmId === "winter-mountain") {
+      const summary = winterRealmSummary(realmProgress, state.satchel);
+      this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y, summary.pathHeading, {
+        fontSize: "30px", fontStyle: "italic", color: PAGE_INK_DIM,
+      });
+      const bodyY = TOP_TEXT_Y + 60;
+      const body = this.addPageText(RIGHT_PAGE_X, bodyY, summary.passages.join("\n\n"), {
+        fontSize: "26px", color: PAGE_INK, wordWrap: { width: PAGE_TEXT_WIDTH },
+      });
+      const reserve = summary.carriedIds.length > 0 ? 64 + summary.carriedIds.length * 44 : 0;
+      const maxBodyHeight = PAGE_BOTTOM_Y - 76 - bodyY - reserve;
+      for (let size = 25; body.height > maxBodyHeight && size >= 22; size--) body.setFontSize(size);
+      if (summary.carriedIds.length > 0) {
+        const relicsY = bodyY + body.height + 24;
+        this.addPageText(RIGHT_PAGE_X, relicsY, summary.carriedHeading, {
+          fontSize: "26px", fontStyle: "italic", color: PAGE_INK_DIM,
+        });
+        summary.carriedIds.forEach((id, i) => {
+          const relic = RELICS[id];
+          if (relic) this.addSatchelRow(RIGHT_PAGE_X, relicsY + 40 + i * 44, id, relic.name);
+        });
+      }
+    } else {
+      // Right page: ending + satchel
+      const choices = realmProgress.choices as Record<string, string> | undefined;
+      const primaryKey = this.resolveEndingKey(realmId, choices);
+      const secondaryKey = this.resolveSecondaryEndingKey(realmId, choices);
+      const primaryText =
+        (primaryKey && lore.endings[primaryKey]) ?? "His path remains unwritten.";
+      const secondaryText =
+        secondaryKey ? (lore.endings[secondaryKey] ?? undefined) : undefined;
 
-    this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y, "His path:", {
-      fontSize: "30px",
-      fontStyle: "italic",
-      color: PAGE_INK_DIM,
-    });
-    this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 60, primaryText, {
-      fontSize: "26px",
-      color: PAGE_INK,
-      wordWrap: { width: PAGE_TEXT_WIDTH },
-    });
-
-    if (secondaryText) {
-      this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 180, secondaryText, {
+      this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y, "His path:", {
+        fontSize: "30px",
+        fontStyle: "italic",
+        color: PAGE_INK_DIM,
+      });
+      this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 60, primaryText, {
         fontSize: "26px",
         color: PAGE_INK,
         wordWrap: { width: PAGE_TEXT_WIDTH },
       });
-    }
 
-    const relicsY = secondaryText ? TOP_TEXT_Y + 420 : TOP_TEXT_Y + 320;
-
-    const realmRelics = state.satchel
-      .map((id) => RELICS[id])
-      .filter((r) => r?.realmId === realmId);
-
-    if (realmRelics.length > 0) {
-      this.addPageText(
-        RIGHT_PAGE_X,
-        relicsY,
-        "He carried away:",
-        {
+      if (secondaryText) {
+        this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 180, secondaryText, {
           fontSize: "26px",
-          fontStyle: "italic",
-          color: PAGE_INK_DIM,
-        },
-      );
-      realmRelics.forEach((r, i) => {
-        this.addSatchelRow(RIGHT_PAGE_X, relicsY + 40 + i * 44, r.id, r.name);
-      });
+          color: PAGE_INK,
+          wordWrap: { width: PAGE_TEXT_WIDTH },
+        });
+      }
+
+      const relicsY = secondaryText ? TOP_TEXT_Y + 420 : TOP_TEXT_Y + 320;
+
+      const realmRelics = state.satchel
+        .map((id) => RELICS[id])
+        .filter((r) => r?.realmId === realmId);
+
+      if (realmRelics.length > 0) {
+        this.addPageText(
+          RIGHT_PAGE_X,
+          relicsY,
+          "He carried away:",
+          {
+            fontSize: "26px",
+            fontStyle: "italic",
+            color: PAGE_INK_DIM,
+          },
+        );
+        realmRelics.forEach((r, i) => {
+          this.addSatchelRow(RIGHT_PAGE_X, relicsY + 40 + i * 44, r.id, r.name);
+        });
+      }
+
     }
 
     // Left page bottom — list any lore pages stamped for this realm. Each
     // title is rendered in italic; bodies live on their own sub-pages,
     // reachable by typing forward through the navigation.
     const stampedLoreIds = lorePageIdsForRealm(realmId).filter((id) =>
-      state.almanacLore.includes(id),
+      state.almanacLore.includes(id) &&
+      (realmId !== "winter-mountain" || winterLorePageMatchesChoices(id, realmProgress.choices)),
     );
     if (stampedLoreIds.length > 0) {
       const loreY = TOP_TEXT_Y + 380;
@@ -488,7 +520,7 @@ export class AlmanacScene extends Phaser.Scene {
     this.addPageText(
       RIGHT_PAGE_X,
       TOP_TEXT_Y + 20,
-      page.body,
+      realmId === "winter-mountain" ? winterLorePageBody(loreId, page.body) : page.body,
       {
         fontSize: "26px",
         color: PAGE_INK,
@@ -926,7 +958,7 @@ export class AlmanacScene extends Phaser.Scene {
     text: string,
     style: Phaser.Types.GameObjects.Text.TextStyle,
     opts: { centerX?: boolean } = {},
-  ): void {
+  ): Phaser.GameObjects.Text {
     const t = this.add.text(x, y, text, {
       fontFamily: SERIF,
       ...style,
@@ -936,6 +968,7 @@ export class AlmanacScene extends Phaser.Scene {
     }
     this.pageTexts.push(t);
     this.stagePageObject(t, this.nextPageWakeDelay());
+    return t;
   }
 
   private nextPageWakeDelay(): number {

@@ -28,11 +28,11 @@ import {
 import { SERIF } from "../game/palette";
 import { difficultyLabel, togglePuristMode } from "../game/purist";
 import {
-  emptySave,
   type AudioLevel,
   type Difficulty,
   type SaveStore,
 } from "../game/saveState";
+import { resetSave } from "../game/resetSave";
 import { TypingInputController } from "../game/typingInput";
 import { cornerTicks, UI_CSS, UI_HEX } from "../game/ui/uiTheme";
 import { TextWordTarget } from "../game/wordTarget";
@@ -901,7 +901,7 @@ export class SettingsScene extends Phaser.Scene {
       frame: "banner",
       onClaim: () => this.pulseResetPanel(),
       onAdvance: () => this.pulseResetPanelTyping(),
-      onComplete: () => this.performReset(),
+      onComplete: () => { void this.performReset(); },
     });
     this.attachResetTargetAnchor(confirmTarget, -160);
     this.typingInput.register(confirmTarget);
@@ -992,30 +992,29 @@ export class SettingsScene extends Phaser.Scene {
     this.stageLedgerObject(warning, 90);
   }
 
-  private performReset(): void {
-    // Replace state entirely with a fresh default save — same shape the game
-    // sees on a brand-new install. Use the SaveStore mutator so the autosave
-    // debouncer schedules a flush like any other update.
-    const fresh = emptySave();
-    this.store.update((s) => {
-      s.profileName = fresh.profileName;
-      s.typewriterAwakened = fresh.typewriterAwakened;
-      s.realms = fresh.realms;
-      s.satchel = fresh.satchel;
-      s.keyStats = fresh.keyStats;
-      s.almanacLore = fresh.almanacLore;
-      s.difficulty = fresh.difficulty;
-      s.audioLevel = fresh.audioLevel;
-    });
-    playChime();
-    // Land in the Title scene so the player sees the world re-introduce
-    // itself rather than dropping back into a now-empty Hub. TitleScene
-    // re-loads the SaveStore from the backend, which now reflects the wipe.
-    this.cameras.main.fadeOut(600, 11, 10, 15);
-    this.cameras.main.once(
-      Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-      () => this.scene.start("TitleScene"),
-    );
+  private async performReset(): Promise<void> {
+    if (this.closing) return;
+    this.closing = true;
+    this.clearMenu();
+    this.setNarrator("Saving the fresh start…");
+    resetSave(this.store);
+    try {
+      // A title reload must never race the old cloud snapshot.
+      await this.store.flush();
+      if (!this.scene.isActive()) return;
+      setAudioLevel(this.store.get().audioLevel);
+      playChime();
+      this.cameras.main.fadeOut(600, 11, 10, 15);
+      this.cameras.main.once(
+        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+        () => this.scene.start("TitleScene"),
+      );
+    } catch {
+      if (!this.scene.isActive()) return;
+      this.closing = false;
+      this.handleReset();
+      this.setNarrator("Could not finish saving the reset. Type confirm to retry, or back to continue this fresh session.");
+    }
   }
 
   private handleBack(): void {
@@ -1038,6 +1037,7 @@ export class SettingsScene extends Phaser.Scene {
   // ─── Input ──────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
+    if (this.closing) return;
     if (this.mode === "renaming") {
       this.handleRenameKey(event);
       return;

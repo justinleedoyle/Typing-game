@@ -1,7 +1,10 @@
 // Prefix-match typing input — a target is claimed only once the typed prefix
 // uniquely identifies it among all live targets.  This resolves conflicts when
 // several targets share a first letter (e.g. "the winter mountain" vs
-// "the almanac") without the player having to think about priorities.
+// "the almanac") without the player having to think about priorities. Identical
+// labels select the highest-priority target, then the earliest registered one;
+// the other target stays live and can be typed next. A complete shorter label
+// also wins over labels that extend it ("ice" before "iceberg").
 //
 // Backspace reverses one character mid-claim (the target stays claimed; only
 // the typed prefix shrinks). If you backspace past the start of the claimed
@@ -65,7 +68,8 @@ export interface WordTarget {
    */
   setCandidate?(candidate: boolean): void;
   /**
-   * Tiebreaker when two targets share a first letter. Higher wins. Default
+   * Tiebreaker when targets have identical or fully typed labels. Higher wins.
+   * Equal priorities resolve in registration order. Default
    * 0; chrome/UI targets (the almanac, settings, etc.) should sit below
    * gameplay targets (a wolf, a portal, a choice).
    */
@@ -110,7 +114,7 @@ export class TypingInputController {
   }
 
   register(target: WordTarget): void {
-    this.targets.push(target);
+    if (!this.targets.includes(target)) this.targets.push(target);
   }
 
   unregister(target: WordTarget): void {
@@ -227,7 +231,10 @@ export class TypingInputController {
         return true;
       }
       this.claimed.miss();
-      this.store?.recordKeystroke(ch, false);
+      // Practice the key the player was asked for, rather than penalizing the
+      // unrelated key they accidentally pressed. Ambiguous pre-claim misses
+      // still have no single expected key and retain their existing logging.
+      this.store?.recordKeystroke(expected?.toLowerCase() ?? ch, false);
       this.stats.record(false);
       this.onMissChar?.();
       // Difficulty: standard+ wipes the word's typed progress; purist also
@@ -264,9 +271,16 @@ export class TypingInputController {
     this.typingBuffer = newBuffer;
     this.rawTypingBuffer = newRawBuffer;
 
-    if (candidates.length === 1) {
-      // Unique match — claim it and fast-forward the cursor to buffer length.
-      const target = pickBest(candidates);
+    const fullyTyped = candidates.filter((target) =>
+      target.remaining().length === newBuffer.length,
+    );
+    const sameLabels = candidates.every((target) =>
+      matchingLabel(target) === matchingLabel(candidates[0]),
+    );
+    if (candidates.length === 1 || sameLabels || fullyTyped.length > 0) {
+      // Unique action, duplicate label, or exact shorter word: pick one live
+      // target deterministically, never leave an unfinishable full buffer.
+      const target = pickBest(fullyTyped.length > 0 ? fullyTyped : candidates);
       const claimMods: ClaimMods = {
         spell: mods?.spell === true,
         alt: mods?.alt === true,
@@ -356,6 +370,12 @@ function pickBest(candidates: WordTarget[]): WordTarget {
     const bp = best.priority ?? 0;
     return p > bp ? t : best;
   });
+}
+
+function matchingLabel(target: WordTarget): string {
+  return target.caseSensitive?.() === true && target.rawRemaining
+    ? `case:${target.rawRemaining()}`
+    : `fold:${target.remaining()}`;
 }
 
 function normalize(char: string): string | null {

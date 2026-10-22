@@ -2,6 +2,9 @@ import Phaser from "phaser";
 import { playClack } from "../audio/clack";
 import { setAudioLevel } from "../audio/context";
 import { applyDevUnlock, parseDevTarget } from "../game/devUnlock";
+import { SceneRunGuard } from "../game/sceneRunGuard";
+import { titleCheckpoint } from "../game/titleResume";
+import { saveChoiceFocus, saveJourneySummary } from "../game/saveChoice";
 import { SERIF } from "../game/palette";
 import {
   addAmbientDrift,
@@ -15,6 +18,8 @@ import {
   SaveStore,
   SyncedBackend,
   type SaveBackend,
+  type SaveConflict,
+  type SaveSource,
   type SaveState,
 } from "../game/saveState";
 import openingBackdrop from "../../art/references/opening-typewriter-study-clean.png";
@@ -34,11 +39,37 @@ export class TitleScene extends Phaser.Scene {
   private promptTween?: Phaser.Tweens.Tween;
   private store?: SaveStore;
   private storePromise?: Promise<SaveStore>;
-  private hasTyped = false;
-  private transitioning = false;
+  private backend?: SaveBackend;
+  private saveChoicePanel?: Phaser.GameObjects.Container;
+  private saveChoiceRows: Array<{ source: SaveSource; box: Phaser.GameObjects.Rectangle }> = [];
+  private saveChoiceMessage?: Phaser.GameObjects.Text;
+  private selectedSave: SaveSource | null = null;
+  private resolvingSave = false;
+  private readonly run = new SceneRunGuard();
 
   constructor() {
     super("TitleScene");
+  }
+
+  init(): void {
+    this.resetTitleRun();
+  }
+
+  private resetTitleRun(): void {
+    this.run.begin();
+    this.store = undefined;
+    this.storePromise = undefined;
+    this.backend = undefined;
+    this.saveChoicePanel = undefined;
+    this.saveChoiceRows = [];
+    this.saveChoiceMessage = undefined;
+    this.selectedSave = null;
+    this.resolvingSave = false;
+    this.promptTween = undefined;
+    this.promptPlate = undefined;
+    this.promptPlateCorners = undefined;
+    this.promptPlateW = 0;
+    this.promptPlateH = 0;
   }
 
   preload(): void {
@@ -46,6 +77,7 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.resetTitleRun();
     const { width, height } = this.scale;
 
     const backdrop = this.add
@@ -136,18 +168,31 @@ export class TitleScene extends Phaser.Scene {
     // Kick off save loading immediately so the chamber transition doesn't
     // wait on disk I/O. registry stores the backend so tests / future
     // SupabaseBackend swap can override it from outside.
-    const backend =
-      (this.registry.get("saveBackend") as SaveBackend | undefined) ??
-      new SyncedBackend();
-    this.storePromise = SaveStore.load(backend);
-    // Apply the saved audio level the moment the store resolves, so even the
-    // first title-screen clack respects "off" / "quiet".
-    void this.storePromise.then((s) => setAudioLevel(s.get().audioLevel));
+    this.loadStore();
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
-    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.run.end();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
+      this.store = undefined;
+      this.storePromise = undefined;
     });
+  }
+
+  private loadStore(): Promise<SaveStore> {
+    const backend = this.backend ??
+      (this.registry.get("saveBackend") as SaveBackend | undefined) ??
+      new SyncedBackend();
+    this.backend = backend;
+    const token = this.run.token();
+    const pending = SaveStore.load(backend);
+    this.storePromise = pending;
+    // Loading can reject without destroying the original save. beginTransition
+    // presents a retry; this separate audio listener must also handle rejection.
+    void pending.then((store) => {
+      if (this.run.isCurrent(token)) setAudioLevel(store.get().audioLevel);
+    }, () => {});
+    return pending;
   }
 
   private startTitleSourceWakes(): void {
@@ -306,8 +351,8 @@ export class TitleScene extends Phaser.Scene {
 
   private startPromptIdleTween(): void {
     if (
-      this.hasTyped ||
-      this.transitioning ||
+      this.run.has("typed") ||
+      this.run.has("transition") ||
       this.promptTween ||
       !this.prompt.scene
     ) {
@@ -341,7 +386,7 @@ export class TitleScene extends Phaser.Scene {
     item.setAlpha(0);
     item.setY(baseY + (opts.offsetY ?? 10));
     this.time.delayedCall(delayMs, () => {
-      if (opts.skipIfTyped && this.hasTyped) return;
+      if (opts.skipIfTyped && this.run.has("typed")) return;
       if (!object.scene) return;
       this.tweens.add({
         targets: item,
@@ -403,12 +448,16 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private onKeyDown(event: KeyboardEvent): void {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (this.saveChoicePanel) {
+      this.handleSaveChoiceKey(event);
+      return;
+    }
     if (event.key.length !== 1 && event.key !== "Enter" && event.key !== " ") {
       return;
     }
     playClack();
-    if (!this.hasTyped) {
-      this.hasTyped = true;
+    if (this.run.once("typed")) {
       this.promptTween?.stop();
       this.tweens.killTweensOf(this.prompt);
       this.prompt.setAlpha(1);
@@ -421,8 +470,8 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private async beginTransition(): Promise<void> {
-    if (this.transitioning) return;
-    this.transitioning = true;
+    if (!this.run.once("transition")) return;
+    const token = this.run.token();
     const dev = parseDevTarget(
       typeof location !== "undefined" ? location.search : "",
     );
@@ -437,7 +486,23 @@ export class TitleScene extends Phaser.Scene {
     if (immediateTemporaryDevJump) {
       this.store = this.createTemporaryDevStore(undefined, temporarySatchel);
     } else {
-      this.store = await this.storePromise;
+      try {
+        const loaded = await (this.storePromise ?? this.loadStore());
+        if (!this.run.isCurrent(token)) return;
+        this.store = loaded;
+      } catch {
+        if (!this.run.isCurrent(token)) return;
+        this.storePromise = undefined;
+        this.run.release("transition");
+        const conflict = this.backend?.getConflict?.();
+        if (conflict && this.backend?.resolveConflict) {
+          this.showSaveChoice(conflict);
+          return;
+        }
+        this.prompt.setText("Saved progress could not load.\nPress any key to retry.");
+        this.redrawPromptPlate();
+        return;
+      }
     }
     if (dev.unlock && this.store && !immediateTemporaryDevJump) {
       if (temporarySatchel !== undefined) {
@@ -448,10 +513,12 @@ export class TitleScene extends Phaser.Scene {
     }
     this.playTitleDepartureWake();
     this.time.delayedCall(240, () => {
+      if (!this.run.isCurrent(token)) return;
       this.cameras.main.fadeOut(640, 11, 10, 15);
       this.cameras.main.once(
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
         () => {
+          if (!this.run.isCurrent(token)) return;
           if (dev.realmSceneKey) {
             this.scene.start(dev.realmSceneKey, {
               store: this.store,
@@ -461,10 +528,125 @@ export class TitleScene extends Phaser.Scene {
             });
             return;
           }
+          const state = this.store?.get();
+          const checkpoint = state ? titleCheckpoint(state) : null;
+          if (checkpoint) {
+            this.scene.start(checkpoint.scene, { store: this.store, checkpoint });
+            return;
+          }
           this.scene.start("PortalChamberScene", { store: this.store });
         },
       );
     });
+  }
+
+  private showSaveChoice(conflict: SaveConflict, message?: string): void {
+    this.saveChoicePanel?.destroy();
+    this.selectedSave = null;
+    this.resolvingSave = false;
+    this.saveChoiceRows = [];
+    const { width, height } = this.scale;
+    const panel = this.add.container(width / 2, height / 2).setDepth(2100);
+    this.saveChoicePanel = panel;
+    const shade = this.add.rectangle(0, 0, width, height, 0x080b12, 0.92);
+    const plate = this.add.rectangle(0, 0, 1360, 690, UI_HEX.panel, 1)
+      .setStrokeStyle(2, UI_HEX.brass, 0.9);
+    const title = this.add.text(0, -286, "Which journey would you like to continue?", {
+      fontFamily: SERIF, fontSize: "40px", color: UI_CSS.parchment, align: "center",
+    }).setOrigin(0.5);
+    const explanation = this.add.text(0, -222,
+      "This device and the cloud have different progress. Both versions will be kept.", {
+        fontFamily: SERIF, fontSize: "24px", color: UI_CSS.cream, align: "center",
+      }).setOrigin(0.5);
+    panel.add([shade, plate, title, explanation]);
+    for (const [index, source] of (["local", "cloud"] as const).entries()) {
+      const x = index === 0 ? -330 : 330;
+      const state = conflict[source];
+      const box = this.add.rectangle(x, -4, 600, 328, UI_HEX.panel, 1)
+        .setStrokeStyle(2, UI_HEX.brass, 0.35)
+        .setInteractive({ useHandCursor: true });
+      box.on("pointerover", () => {
+        if (!this.resolvingSave) this.focusSaveChoice(source);
+      });
+      box.on("pointerdown", () => {
+        if (this.resolvingSave) return;
+        this.focusSaveChoice(source);
+        void this.resolveSaveChoice(source);
+      });
+      const label = this.add.text(x, -126, source === "local" ? "This device  ·  L" : "Cloud save  ·  C", {
+        fontFamily: SERIF, fontSize: "31px", color: UI_CSS.brass, align: "center",
+      }).setOrigin(0.5);
+      const summary = this.add.text(x, -38, saveJourneySummary(state), {
+        fontFamily: SERIF, fontSize: "25px", color: UI_CSS.cream, align: "center",
+        lineSpacing: 10, wordWrap: { width: 550 },
+      }).setOrigin(0.5);
+      const date = new Date(state.updatedAt).toLocaleString(undefined, {
+        dateStyle: "medium", timeStyle: "short",
+      });
+      const saved = this.add.text(x, 62, `Saved ${date}`, {
+        fontFamily: SERIF, fontSize: "21px", color: UI_CSS.cream, align: "center",
+      }).setOrigin(0.5);
+      const action = this.add.text(x, 122, source === "local" ? "Use this device's save" : "Use the cloud save", {
+        fontFamily: SERIF, fontSize: "27px", color: UI_CSS.brass, align: "center",
+      }).setOrigin(0.5);
+      panel.add([box, label, summary, saved, action]);
+      this.saveChoiceRows.push({ source, box });
+    }
+    this.saveChoiceMessage = this.add.text(0, 234,
+      message ?? "L / C or arrow keys to choose · Enter to continue\nYou can also click a save above.", {
+        fontFamily: SERIF, fontSize: "24px", color: UI_CSS.cream, align: "center",
+        lineSpacing: 8, wordWrap: { width: 1190 },
+      }).setOrigin(0.5);
+    panel.add(this.saveChoiceMessage);
+  }
+
+  private focusSaveChoice(source: SaveSource): void {
+    this.selectedSave = source;
+    for (const row of this.saveChoiceRows) {
+      row.box.setStrokeStyle(row.source === source ? 4 : 2, UI_HEX.brass,
+        row.source === source ? 1 : 0.35);
+    }
+  }
+
+  private handleSaveChoiceKey(event: KeyboardEvent): void {
+    event.preventDefault();
+    if (event.repeat || this.resolvingSave) return;
+    const source = saveChoiceFocus(event.key, this.selectedSave);
+    if (source) this.focusSaveChoice(source);
+    if (event.key === "Enter" && this.selectedSave) {
+      void this.resolveSaveChoice(this.selectedSave);
+    }
+  }
+
+  private async resolveSaveChoice(source: SaveSource): Promise<void> {
+    if (this.resolvingSave || !this.backend?.resolveConflict) return;
+    this.resolvingSave = true;
+    const token = this.run.token();
+    this.saveChoiceMessage?.setText("Keeping both versions and opening your chosen journey…");
+    try {
+      const state = await this.backend.resolveConflict(source);
+      if (!this.run.isCurrent(token)) return;
+      this.store = new SaveStore(this.backend, state);
+      this.storePromise = Promise.resolve(this.store);
+      setAudioLevel(state.audioLevel);
+      this.saveChoicePanel?.destroy();
+      this.saveChoicePanel = undefined;
+      this.saveChoiceRows = [];
+      this.saveChoiceMessage = undefined;
+      this.resolvingSave = false;
+      this.run.release("transition");
+      void this.beginTransition();
+    } catch {
+      if (!this.run.isCurrent(token)) return;
+      const refreshed = this.backend.getConflict?.();
+      if (refreshed) {
+        this.showSaveChoice(refreshed,
+          "The choice could not finish saving. Review these versions, then choose again when connected.");
+      } else {
+        this.resolvingSave = false;
+        this.saveChoiceMessage?.setText("The choice could not finish saving. Your versions are preserved.\nSelect a save to retry when connected.");
+      }
+    }
   }
 
   private createTemporaryDevStore(

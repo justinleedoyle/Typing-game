@@ -106,6 +106,10 @@ const ETTA_SPRITE_HEIGHT = 280;
 const ETTA_SPRITE_X = 520;
 const ETTA_SPRITE_Y = 760;
 const ETTA_SPRITE_DEPTH = 50;
+// Keep choice plates above Etta's painted hood and book actions above Wren's.
+const ETTA_CHOICE_WORD_LIFT = ETTA_SPRITE_HEIGHT - 120 + 84;
+const ETTA_BOOK_WORD_Y = 500;
+const SEALED_SCROLL_Y = 480;
 const ETTA_RESTING_ALPHA = 0.9;
 const LIGHTER_SPRITE_HEIGHT = 188;
 const LIGHTER_SPRITE_X = 1288;
@@ -1376,6 +1380,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private onFirstEncounterCleared(): void {
     this.setNarrator("Each lantern blooms as the spirit fades — the glow blooms wide and then rests.");
+    this.band.setObjective("Lantern-spirits cleared. Press Enter or Space to continue.");
     this.readThen(() => this.startAct2());
   }
 
@@ -1614,7 +1619,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
     this.readThen(() => {
       const cx = this.scale.width / 2;
-      const cy = 720;
+      const cy = SEALED_SCROLL_Y;
       const seal = this.drawSealedScroll(cx, cy);
       const target = this.makeWord({
         scene: this,
@@ -1641,6 +1646,7 @@ export class SkyIslandScene extends Phaser.Scene {
             onComplete: () => seal.destroy(),
           });
           this.setNarrator("The scroll holds. The seal opens of its own accord.");
+          this.band.setObjective("Scroll unsealed. Press Enter or Space to continue.");
           this.readThen(() => this.onTempleCleared());
         },
       });
@@ -1962,6 +1968,7 @@ export class SkyIslandScene extends Phaser.Scene {
         this.band.setObjective("Choose whether to help Etta with her book or keep moving.");
         const helpPos = this.skyOwnedWordPosition(this.ettaSprite, -120, ETTA_HELP_TRIGGER, {
           side: "left",
+          lift: ETTA_CHOICE_WORD_LIFT,
         });
         const helpTarget = this.makeEttaWord({
           scene: this,
@@ -1982,6 +1989,7 @@ export class SkyIslandScene extends Phaser.Scene {
         // will just fail to claim — but we also offer a "skip" word
         const skipPos = this.skyOwnedWordPosition(this.ettaSprite, -120, "keep moving", {
           side: "right",
+          lift: ETTA_CHOICE_WORD_LIFT,
         });
         const skipTarget = this.makeEttaWord({
           scene: this,
@@ -2016,7 +2024,7 @@ export class SkyIslandScene extends Phaser.Scene {
         scene: this,
         word: ETTA_CHAIN_1,
         x: bookCue.x + 110,
-        y: bookCue.y - 132,
+        y: ETTA_BOOK_WORD_Y,
         fontSize: 38,
         onComplete: () => {
           playChime();
@@ -2032,7 +2040,7 @@ export class SkyIslandScene extends Phaser.Scene {
               scene: this,
               word: ETTA_CHAIN_2,
               x: bookCue.x + 110,
-              y: bookCue.y - 132,
+              y: ETTA_BOOK_WORD_Y,
               fontSize: 38,
               onComplete: () => {
                 playChime();
@@ -2208,6 +2216,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
     const helpPos = this.skyOwnedWordPosition(this.ettaSprite, -120, "help scholar etta", {
       side: "left",
+      lift: ETTA_CHOICE_WORD_LIFT,
     });
     const helpTarget = this.makeEttaWord({
       scene: this,

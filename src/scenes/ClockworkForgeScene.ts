@@ -200,6 +200,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private chapterMenu?: ReturnType<typeof installChapterMenu>;
   private band!: ConsoleBand;
   private golems: MovingWordEnemy[] = [];
+  /** Silent subjects of the peaceful final order; never enter combat/input. */
+  private peacefulGuards: StaticGolem[] = [];
   private activeTargets: TextWordTarget[] = [];
   private bossWordAnchors: WordBodyAnchorHandle[] = [];
   private tutorialWordAnchors: WordBodyAnchorHandle[] = [];
@@ -269,6 +271,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.revisit = data.revisit === true;
     this.store = data.store;
     this.golems = [];
+    this.peacefulGuards = [];
     this.activeTargets = [];
     this.bossWordAnchors = [];
     this.tutorialWordAnchors = [];
@@ -514,6 +517,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.clearFornWordAnchors();
       this.clearForkChoiceWordAnchors();
       this.clearForgeChoiceCues(false);
+      this.clearPeacefulGuards();
       this.fornSprite?.destroy();
       this.fornSprite = undefined;
       this.gregorSprite?.destroy();
@@ -904,6 +908,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       onComplete: () => {
         this.golemTurnHead(tutorialGolem);
         this.setNarrator("The golem turns its head. It heard you.");
+        this.band.setObjective("Lowercase tested. Press Enter or Space to continue.");
         this.clearActiveTargets();
         this.readThen(() =>
           this.gregorTutorialCommand(tutorialGolem),
@@ -945,6 +950,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         this.setNarrator(
           "The golem snaps to full attention. CAPITALS command. You understand now.",
         );
+        this.band.setObjective("Command tested. Press Enter or Space to continue.");
         this.store.update((s) => {
           if (!s.satchel.includes("gregor-lore-learned")) {
             // Record lore acquisition in realm choices
@@ -971,7 +977,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private staticGolemWordPosition(golem: StaticGolem, word: string): { x: number; y: number } {
-    const side = golem.container.x < this.scale.width / 2 ? 1 : -1;
+    // The tutorial golem stands beside Wren on the catwalk. Keep its words on
+    // the outer side so neither native command crosses Wren's hood.
+    const side = golem.container.x < this.scale.width / 2 ? -1 : 1;
     const lateral = word.length > 8 ? 220 : 190;
     return {
       x: Phaser.Math.Clamp(golem.container.x + side * lateral, 330, this.scale.width - 330),
@@ -1036,9 +1044,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.setNarrator(
       "You descend to the foundry floor. The heat is immense. Iron shapes move through the dark.",
     );
-    this.readThen(() => this.time.delayedCall(460, () => this.descendWrenToFoundry(() => {
-      this.time.delayedCall(260, () => this.startWave1());
-    })));
+    this.band.setObjective("Training complete. Press Enter or Space to descend to the foundry.");
+    this.readThen(() => {
+      this.band.setObjective("Training complete. Descending to the foundry.");
+      this.time.delayedCall(460, () => this.descendWrenToFoundry(() => {
+        this.time.delayedCall(260, () => this.startWave1());
+      }));
+    });
   }
 
   private startWave1(): void {
@@ -1880,6 +1892,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.fork2Choice = this.commitFork("fork2", "peaceful") as typeof this.fork2Choice;
     if (this.fork2Choice !== "peaceful") { this.startFork2FightBranch(); return; }
     this.clearActiveTargets();
+    this.showPeacefulGuards();
     this.dismissForgeChoiceCue("fight");
     this.pulseForgeChoiceCue(this.standDownCue);
     this.setNarrator(
@@ -1967,6 +1980,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private afterFork2(choice: "peaceful" | "fought", relicId: string): void {
+    this.clearPeacefulGuards();
     this.showForgeKeepsake(relicId, this.bossContainer?.x ?? 1160);
     this.clearForgeChoiceCues();
     this.store.update((s) => {
@@ -2250,6 +2264,26 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   // ─── Golem spawning ───────────────────────────────────────────────────────────
 
+  private showPeacefulGuards(): void {
+    if (this.peacefulGuards.length > 0) return;
+    // Outer lanes leave Wren, the order cue and its single word unobscured.
+    // FLOOR_Y is a body-center lane; the painted boots share Wren's floor at
+    // FOUNDRY_GROUND_Y. Unlike a combat enemy, these guards do not advance.
+    this.peacefulGuards = [340, 1580].map(x => {
+      const container = this.add.container(x, FLOOR_Y).setDepth(37);
+      const sprite = this.drawGolemInto(container, false);
+      return { container, sprite };
+    });
+  }
+
+  private clearPeacefulGuards(): void {
+    for (const guard of this.peacefulGuards) {
+      this.tweens.killTweensOf(guard.container);
+      guard.container.destroy();
+    }
+    this.peacefulGuards = [];
+  }
+
   /** Spawn a static (non-advancing) tutorial golem. Returns the golem object. */
   private spawnStaticGolem(
     x: number,
@@ -2308,6 +2342,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
       knockbackPauseMs: 1200,
       dangerRampStart: DANGER_RAMP_START,
       anchorOffsetY: -118,
+      // Floor commands keep their authored lanes as the golems converge.
+      // Gregor's solo catwalk training target still follows its body.
+      wordAnchorX: y === FLOOR_Y ? x : undefined,
       fontSize: 34,
       // Forge-fire burst on completion — an "ember bloom" rather than brass.
       burstColor: PALETTE_HEX.ember,

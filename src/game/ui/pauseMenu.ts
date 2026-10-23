@@ -73,6 +73,10 @@ class ChapterPauseMenu extends Phaser.Scene {
     const onKey = (event: KeyboardEvent) => {
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       event.preventDefault();
+      // Resuming makes the owner active before Phaser finishes this queued
+      // event. Consume it across scenes so Escape cannot immediately re-pause
+      // (and Enter/Space cannot also advance or type in the resumed chapter).
+      event.stopPropagation();
       if (event.repeat || this.time.now - this.openedAt < 180) return;
       if (event.key === "Escape") { this.resume(); return; }
       if (this.busy) return;

@@ -3292,8 +3292,10 @@ export class GreatBattleScene extends Phaser.Scene {
     const eyeColor = forceDuel ? 0xa01010 : 0x4a1010;
     const eyeAlpha = forceDuel ? 1.0 : 0.85;
     eyes.fillStyle(eyeColor, eyeAlpha);
-    eyes.fillEllipse(-28, QUIET_LORD_EYE_Y, 20, 12);
-    eyes.fillEllipse(28, QUIET_LORD_EYE_Y, 20, 12);
+    // The painted hood sits left of the image midpoint; its trailing cloak
+    // extends to the right. Keep both eye lights inside the actual face void.
+    eyes.fillEllipse(-52, QUIET_LORD_EYE_Y, 20, 12);
+    eyes.fillEllipse(-24, QUIET_LORD_EYE_Y, 20, 12);
     lordFigure.add([lordSprite, eyes]);
 
     // §5.5.11 — ≥3 kindness relics: Lord is slightly smaller (he shrinks rather than cracks)
@@ -4029,7 +4031,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // Flash the screen briefly (light corridor effect)
     if (!reducedFlashes(this)) this.cameras.main.flash(400, 160, 220, 255, false);
     this.time.delayedCall(500, () => {
-      const wordPos = { x: this.scale.width * 0.64, y: 560 };
+      const wordPos = { x: this.scale.width * 0.64, y: 500 };
       this.playGlassFishCorridorCue();
       const bonusTarget = this.makeWindowStrikeWord({
         scene: this,

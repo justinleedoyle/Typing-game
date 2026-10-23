@@ -131,6 +131,118 @@ await suite("advancing word rendering: answers remain above world actors at cont
   }
 });
 
+await suite("advancing word lanes: Bell answers stay apart while real bodies approach and retreat", () => {
+  const source = ts.createSourceFile("movingWordEnemy.ts", readFileSync(
+    new URL("../src/game/movingWordEnemy.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true);
+  const owner = source.statements.find(ts.isClassDeclaration)!;
+  const code = ts.transpileModule(owner.getText(source).replace(/^export /, ""), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  class Target {
+    x: number; y: number;
+    constructor(readonly opts: Record<string, any>) { this.x = opts.x; this.y = opts.y; }
+    playEntryWake() {}
+    setAnchorX(x: number) { this.x = x; }
+    setAnchorY(y: number) { this.y = y; }
+    getAnchorX() { return this.x; }
+    getAnchorY() { return this.y; }
+    setDanger() {}
+  }
+  const claims: number[][] = [];
+  const Enemy = new Function("TextWordTarget", "advanceDurationMs", "dangerRamp", "splitChildPositions",
+    "attachWordBodyAnchor", "playBodyImpact", "playBodyTypePulse", "playClaimLine", "PALETTE_HEX",
+    `${code}; return MovingWordEnemy;`)(Target, advanceDurationMs, dangerRamp, splitChildPositions,
+    () => ({ destroy() {} }), () => {}, () => {},
+    (_scene: unknown, ...points: number[]) => claims.push(points), { brass: 1 });
+  for (const fixed of [false, true]) {
+    const children = [660, 780].map((restX, index) => {
+      const tweens: any[] = [];
+      const timers: Array<{ ms: number; next: () => void }> = [];
+      const body = { x: restX, y: 740, scaleX: 1, scaleY: 1, scene: true };
+      const enemy = new Enemy({
+        scene: { tweens: { add: (opts: any) => { tweens.push(opts); return { stop() {} }; }, killTweensOf() {} },
+          time: { delayedCall: (ms: number, next: () => void) => timers.push({ ms, next }) } },
+        typingInput: { register() {} }, container: body,
+        word: index ? "drift" : "ebb", restX, restY: 740, wrenX: 960,
+        advanceMs: 5000, entranceMs: 900, anchorOffsetY: -96,
+        ...(fixed ? { wordAnchorX: restX } : {}),
+        claimLineFrom: () => ({ x: 960, y: 700 }),
+      });
+      assertEqual(tweens[0].duration, 900, "stable labels do not change the child's entrance");
+      enemy.attachWord();
+      enemy.startAdvance();
+      const advance = tweens.at(-1)!;
+      assertEqual([advance.x, advance.duration], [960, 5000], "the real body still reaches Wren on its exact five-second deadline");
+      return { body, enemy, restX, advance, tweens, timers };
+    });
+    for (const progress of [0.3, 0.7, 0.95]) {
+      for (const child of children) {
+        child.body.x = child.restX + (960 - child.restX) * progress;
+        child.advance.onUpdate({ progress });
+        assertEqual(child.enemy.target.getAnchorX(), fixed ? child.restX : child.body.x,
+          "the opt-in keeps a stable lane; the default still follows its body");
+        assertEqual(child.enemy.target.getAnchorY(), 644, "the original vertical word position is preserved");
+      }
+      const separation = children[1].enemy.target.getAnchorX() - children[0].enemy.target.getAnchorX();
+      assertClose(separation, fixed ? 120 : 120 * (1 - progress), EPS,
+        "the authored sibling label spacing survives the close only when opted in");
+    }
+    for (const child of children) {
+      child.enemy.target.opts.onClaim({ spell: false, alt: false });
+      assertEqual(claims.at(-1)!.slice(2, 4), [child.enemy.target.getAnchorX(), child.body.y - 96],
+        "claim feedback points to the visible answer, not its displaced body");
+      child.enemy.knockBack(700, 2000);
+      const retreat = child.tweens.at(-1)!;
+      child.body.x = child.restX + 20;
+      retreat.onUpdate();
+      assertEqual(child.enemy.target.getAnchorX(), fixed ? child.restX : child.body.x,
+        "a contact retreat cannot drag a stable label into its sibling");
+      child.body.x = child.restX;
+      retreat.onComplete();
+      assertEqual(child.enemy.target.getAnchorX(), child.restX, "retreat completion preserves the authored answer lane");
+      assertEqual(child.timers.map((timer) => timer.ms), [2000], "the original knock-back pause remains unchanged");
+    }
+  }
+});
+
+await suite("Forge word lanes: foundry commands keep their authored slots while training still tracks", () => {
+  const source = ts.createSourceFile("ClockworkForgeScene.ts", readFileSync(
+    new URL("../src/scenes/ClockworkForgeScene.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true);
+  const declarations = source.statements.filter(ts.isVariableStatement).map(node => node.getText(source)).join("\n");
+  const owner = source.statements.find(ts.isClassDeclaration)!;
+  const method = owner.members.find(member => member.name?.getText(source) === "spawnAdvancingGolem")!;
+  const code = ts.transpileModule(`${declarations}\nclass Forge {
+    static slots = FLOOR_SLOTS; static baseDeadline = GOLEM_ADVANCE_MS; static tutorialY = TUTORIAL_GOLEM_Y;
+    ${method.getText(source)}
+  }`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  const configs: Array<Record<string, any>> = [];
+  class Enemy { constructor(readonly config: Record<string, any>) { configs.push(config); } }
+  const Forge = new Function("MovingWordEnemy", "addContainerWake", "PALETTE_HEX", `${code}; return Forge;`)(
+    Enemy, () => {}, { ember: 1 });
+  const forge = new Forge();
+  Object.assign(forge, {
+    scale: { width: 1920 }, wrenContainer: { x: 960, y: 866 }, combat: { advanceMult: 1.1 },
+    typingInput: {}, drawGolemInto: () => ({}),
+    add: { container: (x: number, y: number) => ({ x, y, setAlpha() { return this; } }) },
+  });
+  for (const multiplier of [1, 0.85, 0.75]) for (const slot of Forge.slots) {
+    const advanceMs = Forge.baseDeadline * multiplier;
+    forge.spawnAdvancingGolem(slot.x, slot.y, "quenCH", advanceMs, true);
+    const config = configs.at(-1)!;
+    assertEqual(config.wordAnchorX, slot.x, "each authored floor slot becomes a distinct readable answer lane");
+    assertEqual([config.restX, config.restY, config.container.x, config.advanceMs, config.advanceMult],
+      [slot.x, slot.y, slot.x < 960 ? -120 : 2040, advanceMs, 1.1],
+      "first/second/final guard waves keep their body, entrance side and deadline multiplier");
+    assertEqual([config.word, config.caseSensitive, config.anchorOffsetY], ["quenCH", true, -118],
+      "exact mixed-case typing and the vertical answer anchor remain unchanged");
+  }
+  forge.spawnAdvancingGolem(1060, Forge.tutorialY, "walk", Forge.baseDeadline * 1.4, false);
+  const tutorial = configs.at(-1)!;
+  assertEqual(tutorial.wordAnchorX, undefined, "the separate solo catwalk lesson keeps its body-following word");
+  assertEqual([tutorial.word, tutorial.caseSensitive, tutorial.advanceMs], ["walk", false, 21000],
+    "training keeps its answer, case rule and full deadline");
+});
+
 function renderMethod(path: string, name: string, globals: Record<string, unknown>) {
   const source = ts.createSourceFile(path, readFileSync(new URL(path, import.meta.url), "utf8"), ts.ScriptTarget.Latest, true);
   const owner = source.statements.find(ts.isClassDeclaration)!;

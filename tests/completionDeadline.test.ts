@@ -324,7 +324,7 @@ await suite("Sky expiry: actual last scroll misses hand fresh input to the libra
   });
   const Sky = methods("../src/scenes/SkyIslandScene.ts", [
     "onPhraseResolved", "onTempleCleared", "startFork1",
-  ], { playWrenHurt() {}, reducedMotion: () => true,
+  ], { playWrenHurt() {}, reducedMotion: () => true, ETTA_CHOICE_WORD_LIFT: 244,
     TEMPLE_PHRASE_CONFIGS: Array.from({ length: 5 }, () => ({})) });
   const input = new TypingInputController();
   const callbacks: Array<() => void> = [];

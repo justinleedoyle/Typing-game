@@ -13,7 +13,7 @@ function constants(file: ts.SourceFile, names: readonly string[]): string {
 }
 const winterSource = source("../src/scenes/WinterMountainScene.ts");
 const winterClass = winterSource.statements.find(ts.isClassDeclaration)!;
-const winterMethods = ["spawnBoss", "drawBossInto", "makeWolfSnowFooting"].map(name =>
+const winterMethods = ["spawnBoss", "drawBossInto", "makeWolfSnowFooting", "quietLordIntrusionAnchor"].map(name =>
   winterClass.members.find(member => member.name?.getText(winterSource) === name)!.getText(winterSource));
 const wolfSource = source("../src/game/wolf.ts");
 const wolfFunction = wolfSource.statements.find(statement => ts.isFunctionDeclaration(statement) &&
@@ -25,16 +25,17 @@ const wolfCode = ts.transpileModule(`${constants(wolfSource, ["PACK_DISPLAY_HEIG
 const makeWolfSprite = new Function("applySceneActorLighting", `${wolfCode}; return makeWolfSprite;`)(() => {});
 const winterCode = ts.transpileModule(`${constants(winterSource, [
   "BOSS_PHRASE", "BOSS_ADVANCE_MS", "BOSS_SPAWN_X", "BOSS_SPAWN_Y",
-  "WOLF_KNOCKBACK_PAUSE_MS", "DANGER_RAMP_START",
+  "WOLF_KNOCKBACK_PAUSE_MS", "DANGER_RAMP_START", "SPAWN_SLOTS",
 ])}
-  class Winter { ${winterMethods.join("\n")} }`, {
+  class Winter { static spawnSlots = SPAWN_SLOTS; ${winterMethods.join("\n")} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;
 class Enemy {
   constructor(readonly config: Record<string, any>) {}
 }
-const Winter = new Function("MovingWordEnemy", "makeWolfSprite", "addLocalGroundShadow", "addContainerWake", "PALETTE_HEX",
-  `${winterCode}; return Winter;`)(Enemy, makeWolfSprite, () => ({}), () => {}, { frost: 0xabcdef });
+const Winter = new Function("MovingWordEnemy", "makeWolfSprite", "addLocalGroundShadow", "addContainerWake", "PALETTE_HEX", "Phaser",
+  `${winterCode}; return Winter;`)(Enemy, makeWolfSprite, () => ({}), () => {}, { frost: 0xabcdef },
+    { Math: { Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)) } });
 
 class MarkGraphics {
   ellipses = 0;
@@ -103,5 +104,29 @@ await suite("Winter wolf contact: broken snow grains replace the hard floating s
       "separate short strokes stay at the paw line rather than forming a raised shelf");
     assert(marks.grains.every(([, y, radius]) => Math.abs(y) <= 3 && radius <= 1.8),
       "snow grains remain small and close to the same foot line");
+  }
+});
+
+await suite("Winter intrusion: the transient scar clears narration, wolves and live ward words", () => {
+  const winter = new Winter();
+  const slots = Winter.spawnSlots as Array<{ x: number; y: number }>;
+  const scarHalfHeight = (32 + 58) / 2; // actual shared intrusion defaults
+  const earliestWardTop = Math.min(...slots.map((slot) => slot.y - 232 - 24));
+  for (const captionBottom of [200, 275, 320]) {
+    Object.assign(winter, {
+      scale: { width: 1920, height: 1080 },
+      narration: { bottom: () => captionBottom },
+      wolves: slots.map((slot, index) => ({
+        container: { ...slot, scene: true },
+        isDefeated: () => false, advanceProgress: () => index / slots.length,
+      })),
+    });
+    const anchor = winter.quietLordIntrusionAnchor();
+    assertEqual(anchor.x, slots.at(-1)!.x, "the most advanced live threat still owns the horizontal cue");
+    assert(anchor.y - scarHalfHeight >= captionBottom + 24, "the entire scar leaves a readable gap below the held wave caption");
+    assert(anchor.y + scarHalfHeight + 40 < earliestWardTop, "the scar cannot cross the earliest authored wolf label or its head");
+    winter.wolves = [];
+    const fallback = winter.quietLordIntrusionAnchor();
+    assertEqual(fallback, { x: 960, y: anchor.y }, "without a live threat the same clear lane remains centered");
   }
 });

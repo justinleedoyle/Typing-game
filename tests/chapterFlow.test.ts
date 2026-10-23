@@ -230,7 +230,7 @@ const woodMethods = ["startFork1Offering", "runPassageChain", "ownerPassageWordP
 const woodCode = ts.transpileModule(`class Harness { ${woodMethods.join("\n")} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;
-const OfferingLayout = new Function(`${woodCode}; return Harness;`)();
+const OfferingLayout = new Function("WOOD_BRANCH_WORD_Y", `${woodCode}; return Harness;`)(500);
 const offeringScene = new OfferingLayout();
 let offeringWord: { word: string; x: number; y: number } | null = null;
 Object.assign(offeringScene, {

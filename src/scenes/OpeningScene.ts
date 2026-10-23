@@ -36,7 +36,7 @@ interface OpeningSceneData {
   store: SaveStore;
 }
 
-const IDENTITY_CHOICE_TARGET = { x: 790, y: 650 };
+const IDENTITY_CHOICE_TARGET = { x: 980, y: 650 };
 const IDENTITY_CARD_W = 230;
 const IDENTITY_CARD_H = 124;
 const IDENTITY_CARD_OFFSET_X = 150;

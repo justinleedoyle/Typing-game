@@ -3936,6 +3936,9 @@ export class SunkenBellScene extends Phaser.Scene {
       knockbackPauseMs: GHOST_KNOCKBACK_PAUSE_MS,
       dangerRampStart: DANGER_RAMP_START,
       anchorOffsetY: -96,
+      // Choir bodies can crowd Wren, but their answers keep their distinct
+      // approach lanes. The existing tether follows each moving ghost.
+      wordAnchorX: restX,
       idleBobDy: 8,
       idleBobMs: 1100,
       defeatRiseY: -50,

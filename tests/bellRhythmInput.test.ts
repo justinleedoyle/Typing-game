@@ -175,6 +175,40 @@ await suite("Bell split staging: children born near Wren keep visible lanes and 
   }
 });
 
+await suite("Bell choir labels: ordinary and split ghosts opt into their existing readable rest lanes", () => {
+  const names = ["spawnGhost", "spawnSplitGhost"];
+  const code = ts.transpileModule(`class Harness { ${names.map((name) =>
+    owner.members.find((member) => member.name?.getText(source) === name)!.getText(source)).join("\n")} }`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const configs: Array<Record<string, any>> = [];
+  class Enemy { constructor(readonly config: Record<string, any>) { configs.push(config); } }
+  const Spawn = new Function("MovingWordEnemy", "addContainerWake", "GHOST_KNOCKBACK_PAUSE_MS",
+    "DANGER_RAMP_START", "BELL_BURST_COLOR", `${code}; return Harness;`)(Enemy, () => {}, 2000, 0.4, 1);
+  const bell = new Spawn();
+  Object.assign(bell, {
+    ghosts: [], activeTargets: [], wrenContainer: { x: 960 }, combat: { advanceMult: 1 },
+    typingInput: {}, drawGhostInto() {},
+    add: { container: (x: number, y: number) => ({ x, y, setAlpha() { return this; } }) },
+  });
+  for (const [index, restX] of [240, 1680, 480, 1440, 720].entries()) {
+    bell.spawnGhost(-100, restX, 700 + index * 10, "sorrow", index * 350, 13000, index === 4);
+    const config = configs.at(-1)!;
+    assertEqual(config.wordAnchorX, restX, "the Bell alone pins each answer to its existing horizontal approach lane");
+    assertEqual([config.restX, config.advanceMs, config.entranceDelayMs, config.word],
+      [restX, 13000, index * 350, "sorrow"], "the ordinary body, deadline, stagger and answer are unchanged");
+  }
+  for (const parentX of [720, 900, 959.9]) {
+    for (const [word, dx] of [["ebb", -60], ["drift", 60]] as const) {
+      bell.spawnSplitGhost({ word, restX: parentX + dx, restY: 740 }, parentX);
+    }
+    const children = configs.slice(-2);
+    assertEqual(children.map((child) => child.wordAnchorX), [660, 780], "near-Wren splits retain two separate visible answer lanes");
+    assertEqual(children.map((child) => [child.word, child.restX, child.restY, child.advanceMs]),
+      [["ebb", 660, 740, 5000], ["drift", 780, 740, 5000]], "the authored split bodies and five-second deadlines are unchanged");
+  }
+});
+
 await suite("Bell Warden layout: compound rows keep spacing when their boss is near the right edge", () => {
   const method = owner.members.find((member) => member.name?.getText(source) === "wardenWordPosition")!;
   const code = ts.transpileModule(`class Harness { ${method.getText(source)} }`, {

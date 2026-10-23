@@ -191,7 +191,7 @@ const WAVES: readonly WaveConfig[] = [
     wolfCount: 1,
     advanceMs: 16_000,
     intro:
-      "one wolf, alone in the trees. type its name to drive it back. hold Shift on the first letter for a thunderclap.",
+      "one wolf, alone in the trees. type its name to drive it back. when thunder is ready, hold Shift on the first letter for a thunderclap.",
   },
   {
     wolfCount: 2,
@@ -892,7 +892,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private startAct1(): void {
     this.checkpoint("arrival");
-    this.band.setObjective("Act I · The pass. Type the visible word; Backspace corrects, Esc cancels a word, then pauses.");
+    this.band.setObjective("Act I · The pass. Read the arrival, then press Enter or Space to continue.");
     this.narration.say("winter_intro_arrival");
     playPortalArrivalWake(this, this.wrenContainer, {
       kind: "snow",
@@ -923,7 +923,7 @@ export class WinterMountainScene extends Phaser.Scene {
       "A low branch catches the light. Duck under it.",
     ];
     if (idx === 0) {
-      this.band.setObjective("Type each trail word to move through the pass.");
+      this.band.setObjective("Type each trail word. Backspace corrects; Esc cancels a word, then pauses.");
     }
     this.showRiverCue(beat);
     this.setNarrator(narrations[idx]);
@@ -1705,10 +1705,13 @@ export class WinterMountainScene extends Phaser.Scene {
       }
     }
 
-    if (!threat) return { x: this.scale.width / 2, y: 340 };
+    // The ink scar may track a threat horizontally, but its sentence belongs
+    // in the empty lane below narration, clear of wolf heads and live words.
     return {
-      x: Phaser.Math.Clamp(threat.container.x, 260, this.scale.width - 260),
-      y: Phaser.Math.Clamp(threat.container.y - 150, 280, this.scale.height - 360),
+      x: threat
+        ? Phaser.Math.Clamp(threat.container.x, 260, this.scale.width - 260)
+        : this.scale.width / 2,
+      y: Math.max(340, this.narration.bottom() + 90),
     };
   }
 

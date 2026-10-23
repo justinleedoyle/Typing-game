@@ -161,7 +161,7 @@ const OPENING_LINES: readonly RunaLine[] = [
     id: "opening_beat10_bridge_to_hub",
     scene: "opening",
     trigger: "OpeningScene.beat10() — fade to Portal Chamber",
-    text: "Runa gathers her maps and rises, and beckons you after her — down the long hall, to the Portal Chamber. The Almanac knows the way back.",
+    text: "Runa gathers her maps and beckons you after her — down the long hall, to the Portal Chamber. The Almanac knows the way back.",
     tone: "reading",
   },
 ];

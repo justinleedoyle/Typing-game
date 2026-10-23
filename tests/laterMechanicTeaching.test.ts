@@ -422,6 +422,7 @@ await suite("Later realm passages: the task follows each phrase and held respons
   for (const source of [forge, sky, wood]) {
     const Scene = actualMethod(source, "runPassageChain", {
       playWrenAction: noop, playWrenFocus: noop, playChime: noop,
+      WOOD_BRANCH_WORD_Y: 500,
       playBodyImpact: noop, playActorAttention: noop, PALETTE_HEX: { ember: 0, brass: 0, moss: 0 },
     });
     const s = new Scene();
@@ -477,7 +478,7 @@ await suite("Forge rewards: the collected keepsake is readable before the next c
       band: { setObjective: (text: string) => { objective = text; } },
       setNarrator: (text: string) => { caption = text; },
       readThen: (fn: () => void) => { next = fn; },
-      hideFornSprite() {}, hideApprenticeSprite() {}, dismissForgeChoiceCue() {}, clearForgeChoiceCues() {}, showForgeKeepsake() {},
+      hideFornSprite() {}, hideApprenticeSprite() {}, dismissForgeChoiceCue() {}, clearForgeChoiceCues() {}, clearPeacefulGuards() {}, showForgeKeepsake() {},
       [followup]: () => { challenges += 1; },
     });
     s[method](choice, item);

@@ -107,6 +107,7 @@ const WOOD_NORTH_GHOST_REST_Y = 340;
 const WOOD_SOUTH_GHOST_REST_Y = 792;
 const WOOD_SIDE_GHOST_REST_Y = 704;
 const WOOD_SIDE_GHOST_STEP_Y = 46;
+const WOOD_BRANCH_WORD_Y = 500;
 const GHOST_KNOCKBACK_PAUSE_MS = 1800;
 const WARD_INPUT_HINT = "At · use the approach mark: above . / below ! / left , / right ?; type the other letters.";
 
@@ -1350,6 +1351,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   // the player sees south, completing the punctuation set.
   private startCrossroads2(): void {
     this.narration.say("wood_crossroads2_intro");
+    this.band.setObjective("First crossroads cleared. Press Enter or Space to meet the next spirits.");
     this.readThen(() => this.beginCrossroads2());
   }
 
@@ -1399,6 +1401,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   // a row without panicking.
   private startCrossroads3(): void {
     this.setNarrator("Older things stir. They come in pairs now.");
+    this.band.setObjective("Second crossroads cleared. Press Enter or Space to meet the paired spirits.");
     this.readThen(() => this.beginCrossroads3());
   }
 
@@ -1732,12 +1735,13 @@ export class HauntedWoodScene extends Phaser.Scene {
       ? "You bring fire to my grove. Then face what it wakes."
       : "Then prove it.", "Ghost-King");
     this.playGhostKingStagePulse();
-    this.band.setObjective(WARD_INPUT_HINT);
+    this.band.setObjective("Read the Ghost-King's challenge. Press Enter or Space to face the spirits.");
     this.ghosts = [];
     this.readThen(() => this.time.delayedCall(800, () => this.spawnBossWaveA()));
   }
 
   private spawnBossWaveA(): void {
+    this.band.setObjective(WARD_INPUT_HINT);
     playWaveSting();
     if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseWoodWave({ y: 650, ringWidth: 900, ringHeight: 210, count: 14 });
@@ -1751,6 +1755,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private onBossWaveACleared(): void {
     this.setNarrator("The first wave fades. More rise.");
+    this.band.setObjective("First warding wave cleared. Press Enter or Space for the next wave.");
     this.attendGhostKing();
     this.readThen(() => this.time.delayedCall(1200, () => this.spawnBossWaveB()));
   }
@@ -1769,7 +1774,8 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private onBossWaveBCleared(): void {
-    this.setNarrator("The hall goes still. The Ghost-King rises fully.");
+    this.setNarrator("The clearing goes still. The Ghost-King rises fully.");
+    this.band.setObjective("Warding waves cleared. Press Enter or Space for the Ghost-King's final words.");
     this.attendGhostKing();
     this.readThen(() => this.startBossCapstone());
   }
@@ -1782,7 +1788,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   // first time. Per §5.5.8 this is the boss's phase 2.
 
   private startBossCapstone(): void {
-    this.band.setObjective("Type every punctuation mark in his final words.");
+    this.band.setObjective("Read the final warning. Press Enter or Space to begin his words.");
     this.playGhostKingStagePulse(true);
     const dimOverlay = this.add.graphics().setDepth(40).fillStyle(0x000000, 0.4);
     dimOverlay.fillRect(0, 0, this.scale.width, this.scale.height);
@@ -2456,7 +2462,9 @@ export class HauntedWoodScene extends Phaser.Scene {
         scene: this,
         word: step.word,
         x: ownerWordPos?.x ?? this.scale.width / 2,
-        y: ownerWordPos?.y ?? this.scale.height - 340,
+        // Ground props sit beside Wren; their inward-facing words need their
+        // own lane above the hood, while higher king-owned words stay put.
+        y: Math.min(ownerWordPos?.y ?? this.scale.height - 340, WOOD_BRANCH_WORD_Y),
         fontSize: 36,
         onClaim: () => playWrenFocus(this.wrenSprite),
         onComplete: () => {

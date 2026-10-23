@@ -53,6 +53,9 @@ await suite("Wood live wards: held story yields the top lane before every ghost 
       setNarrator: (line: string) => { caption = line; },
       band: { setObjective: (line: string) => { objective = line; } },
       readThen: (next: () => void) => gates.push(next), announceCombatLoadout: (next: () => void) => next(),
+      // Practice behavior is covered with the real controller in guidedPractice;
+      // this suite checks the unchanged combat handoff after that boundary.
+      startWardPractice() { this.announceCombatLoadout(() => this.beginCrossroads1()); },
       pulseWoodWave() {}, playGhostKingStagePulse() {}, attendGhostKing() {},
       beginCombatWave: () => { waveProcs += 1; },
       time: { delayedCall: (ms: number, next: () => void) => timers.push({ ms, next }) },

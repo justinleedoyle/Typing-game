@@ -9,6 +9,7 @@
 import { assert, assertClose, assertEqual, suite } from "./_assert";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { applySceneActorLighting } from "../src/game/actorLighting";
 
 import {
   advanceDurationMs,
@@ -260,7 +261,12 @@ await suite("Forge boss grounding: the scaled Command-Golem keeps its boots abov
   const code = ts.transpileModule(`${declarations}\nclass Forge { ${methods} }`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  const Forge = new Function("addLocalGroundShadow", `${code}; return { Forge, FOUNDRY_GROUND_Y };`)(() => ({}));
+  const contactShadows: Array<{ y: number }> = [];
+  const Forge = new Function("addLocalGroundShadow", "applySceneActorLighting",
+    `${code}; return { Forge, FOUNDRY_GROUND_Y };`)(
+    (_scene: unknown, _width: number, _height: number, opts: { y: number }) => {
+      contactShadows.push(opts); return {};
+    }, applySceneActorLighting);
   const s = new Forge.Forge();
   const body = { x: 0, y: 0, scaleX: 1, scaleY: 1, alpha: 1,
     setScale(scale: number) { this.scaleX = this.scaleY = scale; },
@@ -282,7 +288,11 @@ await suite("Forge boss grounding: the scaled Command-Golem keeps its boots abov
   s.spawnBossVisual();
   const bootsY = body.y + (sprite.y + sprite.height * sprite.scaleY / 2) * body.scaleY;
   assertEqual(bootsY, Forge.FOUNDRY_GROUND_Y, "scaled center-origin boss lands on the same boot line as regular golems");
-  assertEqual(body.scaleY, 1.8, "boss keeps its authored visual size");
+  const shadowY = body.y + contactShadows[0]!.y * body.scaleY;
+  assert(shadowY >= bootsY && shadowY - bootsY < 8,
+    "the scaled contact shadow stays below its boots rather than across its lower body");
+  assert(sprite.height * sprite.scaleY * body.scaleY > 330,
+    "the massive Command-Golem visibly towers over 240px Wren");
   assertEqual(body.x, 1160, "boss keeps its authored horizontal stage slot");
   assertEqual(restingCenter, body.y, "idle motion starts from the corrected center");
   assertEqual(entrance!.duration, 900, "entrance timing is unchanged");

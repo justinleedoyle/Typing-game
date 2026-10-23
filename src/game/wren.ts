@@ -3,6 +3,7 @@ import wrenFront from "../../art/wren/wren-front.png";
 import wrenWalk from "../../art/wren/wren-walk-right.png";
 import wrenCast from "../../art/wren/wren-cast.png";
 import wrenHurt from "../../art/wren/wren-hurt.png";
+import { applySceneActorLighting, restoreSceneActorLighting } from "./actorLighting";
 
 export type WrenPose = "front" | "walk" | "cast" | "hurt";
 
@@ -48,7 +49,7 @@ function beginReaction(img: Phaser.GameObjects.Image): () => boolean {
     if (hurtTimer) {
       hurtTimer.remove();
       img.setData(HURT_TIMER_KEY, undefined);
-      img.clearTint();
+      restoreSceneActorLighting(img);
     }
     img.setTexture(resting.key);
     img.x = resting.x;
@@ -78,6 +79,7 @@ export function makeWrenSprite(
 ): Phaser.GameObjects.Image {
   const img = scene.add.image(0, 0, TEXTURE[pose]).setOrigin(0.5, 1);
   img.setScale(WREN_DISPLAY_HEIGHT / img.height);
+  applySceneActorLighting(scene, img);
   return img;
 }
 
@@ -231,5 +233,5 @@ export function playWrenHurt(
  */
 export function flashWrenMiss(img: Phaser.GameObjects.Image): void {
   img.setTintFill(0x8a3a2a);
-  img.scene.time.delayedCall(80, () => img.clearTint());
+  img.scene.time.delayedCall(80, () => restoreSceneActorLighting(img));
 }

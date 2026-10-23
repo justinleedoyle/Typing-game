@@ -2,6 +2,7 @@ import { installChapterMenu } from "../game/ui/pauseMenu";
 import { navigationAction } from "../game/ui/navigationPolicy";
 import { reducedMotion } from "../game/presentation";
 import Phaser from "phaser";
+import { applySceneActorLighting } from "../game/actorLighting";
 import { resetSave } from "../game/resetSave";
 import { type AmbientHandle, playAmbientHub } from "../audio/ambient";
 import { playChime } from "../audio/chime";
@@ -2900,6 +2901,7 @@ export class PortalChamberScene extends Phaser.Scene {
       .setOrigin(0.5, 1);
     this.runaSprite = img;
     img.setScale(360 / img.height);
+    applySceneActorLighting(this, img);
     addIdleBreath(this, img, { dy: -4, durationMs: 2200, delayMs: 300 });
     addContainerWake(this, img, {
       kind: "mote",

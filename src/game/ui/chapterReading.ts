@@ -10,26 +10,39 @@ export class ChapterReading {
   private next: (() => void) | null = null;
   private replay: (() => void) | null = null;
   private readonly hint: Phaser.GameObjects.Text;
+  private readonly replayHint: Phaser.GameObjects.Text;
   private readonly plate: Phaser.GameObjects.Graphics;
   private openedAt = 0;
 
   constructor(private readonly scene: Phaser.Scene, private readonly position: number | (() => number)) {
     this.plate = scene.add.graphics().setDepth(1900).setVisible(false);
     this.hint = scene.add.text(scene.scale.width / 2, typeof position === "number" ? position : position(),
-      "Enter / Space: continue  ·  R: read again  ·  Esc: pause", {
+      "Enter / Space · Continue", {
         fontFamily: SERIF, fontSize: "22px", color: UI_CSS.cream,
-        align: "center", padding: { x: 18, y: 10 },
+        align: "center", padding: { x: 14, y: 8 },
       }).setOrigin(0.5).setDepth(1901).setVisible(false);
+    this.replayHint = scene.add.text(scene.scale.width / 2,
+      typeof position === "number" ? position : position(), "", {
+        fontFamily: SERIF, fontSize: "17px", color: "#c8b88f",
+        stroke: "#0b0a0f", strokeThickness: 3,
+      }).setOrigin(0, 0.5).setDepth(1901).setVisible(false);
     scene.events.on(PRESENTATION_CHANGED, this.redraw, this);
   }
 
   private redraw(): void {
-    this.hint.setY(typeof this.position === "number" ? this.position : this.position());
-    this.hint.setFontSize(chapterPreferences(this.scene)?.textScale === "large" ? 28 : 22);
-    this.plate.clear().fillStyle(UI_HEX.panel, 0.96);
+    const y = typeof this.position === "number" ? this.position : this.position();
+    const large = chapterPreferences(this.scene)?.textScale === "large";
+    this.hint.setY(y).setFontSize(large ? 28 : 22);
+    this.replayHint.setY(y).setFontSize(large ? 22 : 17);
+    const gap = this.replay ? 18 : 0;
+    const secondaryW = this.replay ? this.replayHint.width : 0;
+    const left = (this.scene.scale.width - this.hint.width - gap - secondaryW) / 2;
+    this.hint.setX(left + this.hint.width / 2);
+    this.replayHint.setX(left + this.hint.width + gap);
+    this.plate.clear().fillStyle(UI_HEX.panel, 0.84);
     this.plate.fillRoundedRect(this.hint.x - this.hint.width / 2,
       this.hint.y - this.hint.height / 2, this.hint.width, this.hint.height, 7);
-    this.plate.lineStyle(1, UI_HEX.brass, 0.6);
+    this.plate.lineStyle(1, UI_HEX.brass, 0.4);
     this.plate.strokeRoundedRect(this.hint.x - this.hint.width / 2,
       this.hint.y - this.hint.height / 2, this.hint.width, this.hint.height, 7);
   }
@@ -38,9 +51,7 @@ export class ChapterReading {
     this.next = next;
     this.replay = replay;
     this.openedAt = this.scene.time.now;
-    this.hint.setText(replay
-      ? "Enter / Space: continue  ·  R: read again  ·  Esc: pause"
-      : "Enter / Space: continue  ·  Esc: pause");
+    this.replayHint.setText(replay ? "R · Read again" : "").setVisible(replay !== null);
     this.hint.setVisible(true);
     this.redraw();
     this.plate.setVisible(true);
@@ -66,6 +77,7 @@ export class ChapterReading {
     this.next = null;
     this.replay = null;
     this.hint.setVisible(false);
+    this.replayHint.setVisible(false);
     this.plate.setVisible(false);
   }
 
@@ -73,6 +85,7 @@ export class ChapterReading {
     this.scene.events.off(PRESENTATION_CHANGED, this.redraw, this);
     this.clear();
     this.hint.destroy();
+    this.replayHint.destroy();
     this.plate.destroy();
   }
 }

@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { applySceneActorLighting } from "../game/actorLighting";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
@@ -1069,6 +1070,7 @@ export class OpeningScene extends Phaser.Scene {
       .setOrigin(0.5, 1);
     // 420px tall — matches painted desk + chair proportions in this study.
     img.setScale(420 / img.height);
+    applySceneActorLighting(this, img);
     actor.add(img);
     this.tweens.add({
       targets: actor,
@@ -1124,7 +1126,7 @@ export class OpeningScene extends Phaser.Scene {
     // Tint multipliers soften the bright nightgown+pale skin against the
     // dim study palette. Saga gets a warm cream cast (sits in lamplight);
     // Magnus gets a cool blue-gray (reads as older + a beat more distant).
-    img.setTint(isBoy ? 0xbfb0a0 : 0xc2c9d0);
+    applySceneActorLighting(this, img);
     actor.add(img);
 
     if (isBoy) {

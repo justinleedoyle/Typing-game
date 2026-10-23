@@ -1,7 +1,9 @@
 import { installChapterMenu } from "../game/ui/pauseMenu";
-import { reducedFlashes, reducedMotion } from "../game/presentation";
+import { decorativeTween, reducedFlashes, reducedMotion } from "../game/presentation";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import Phaser from "phaser";
+import { applySceneActorLighting } from "../game/actorLighting";
+import { addSoftLocalLight } from "../game/livingScene";
 import { type AmbientHandle, playAmbientBattle } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
@@ -222,7 +224,7 @@ const WAVE_DEFS: WaveDef[] = [
   {
     realmId: "winter-mountain",
     bank: WINTER_WORD_BANK,
-    baseY: 602,
+    baseY: 710,
     companionId: "snow-fox-cub",
     companionLine: "The fox darts through the shadows. They scatter.",
     label: "shadow-wolves",
@@ -238,7 +240,7 @@ const WAVE_DEFS: WaveDef[] = [
   {
     realmId: "clockwork-forge",
     bank: FORGE_WORD_BANK,
-    baseY: 540,
+    baseY: 710,
     companionId: "brass-songbird",
     companionLine: "The songbird sings one note. The golems fall still.",
     label: "rogue-golems",
@@ -2316,8 +2318,10 @@ export class GreatBattleScene extends Phaser.Scene {
 
     // §5.5.11 — Apprentices' Cabal (sabotage-wrench): enemy words shortened by 1 char
     if (satchel.includes("sabotage-wrench")) {
-      words = shortenFinaleWords(words);
-      if (!this.sabotageWrenchWaveNoticed) {
+      const shortened = shortenFinaleWords(words, waveDef.realmId);
+      const changed = shortened.some((word, index) => word !== words[index]);
+      words = shortened;
+      if (changed && !this.sabotageWrenchWaveNoticed) {
         this.sabotageWrenchWaveNoticed = true;
         this.time.delayedCall(360, () => {
           if (this.runOver) return;
@@ -2355,9 +2359,9 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private waveSpawnXs(waveDef: WaveDef): number[] {
-    if (waveDef.realmId === "winter-mountain") {
-      // Wolves are broad enough that the default center lane covers Wren.
-      // Keep the three-target wave, but make the pack pour around the ward.
+    if (waveDef.realmId === "winter-mountain" || waveDef.realmId === "clockwork-forge") {
+      // Grounded wolves and golems are broad enough that a center lane covers
+      // Wren. Keep three targets and let the bodies approach around the ward.
       return [0.22, 0.64, 0.84].map((ratio) => this.scale.width * ratio);
     }
 
@@ -2516,7 +2520,7 @@ export class GreatBattleScene extends Phaser.Scene {
         this.beginEnemyThreat(enemy, waveDef);
       },
     });
-    this.tweens.add({
+    decorativeTween(this, this.tweens.add({
       targets: enemy.body,
       scaleX: { from: 0.98, to: 1.03 },
       scaleY: { from: 1, to: 0.97 },
@@ -2525,7 +2529,7 @@ export class GreatBattleScene extends Phaser.Scene {
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
-    });
+    }));
   }
 
   private beginEnemyThreat(enemy: Enemy, waveDef: WaveDef): void {
@@ -2639,7 +2643,7 @@ export class GreatBattleScene extends Phaser.Scene {
     const homeY = body.y;
 
     if (enemy.realmId === "winter-mountain") {
-      this.tweens.add({
+      decorativeTween(this, this.tweens.add({
         targets: body,
         x: homeX + dir * 10,
         y: homeY - 4,
@@ -2648,12 +2652,12 @@ export class GreatBattleScene extends Phaser.Scene {
         yoyo: true,
         repeat: -1,
         ease: "Sine.easeInOut",
-      });
+      }));
       return;
     }
 
     if (enemy.realmId === "clockwork-forge") {
-      this.tweens.add({
+      decorativeTween(this, this.tweens.add({
         targets: body,
         x: homeX + dir * 5,
         y: homeY - 2,
@@ -2662,7 +2666,7 @@ export class GreatBattleScene extends Phaser.Scene {
         yoyo: true,
         repeat: -1,
         ease: "Sine.easeInOut",
-      });
+      }));
       return;
     }
 
@@ -2679,7 +2683,7 @@ export class GreatBattleScene extends Phaser.Scene {
           ? -10
           : -8;
 
-    this.tweens.add({
+    decorativeTween(this, this.tweens.add({
       targets: body,
       x: homeX + dir * (enemy.realmId === "sky-island" ? 9 : 6),
       y: homeY + lift,
@@ -2688,7 +2692,7 @@ export class GreatBattleScene extends Phaser.Scene {
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
-    });
+    }));
   }
 
   private stopFinaleEnemyMotion(enemy: Enemy): void {
@@ -2712,14 +2716,9 @@ export class GreatBattleScene extends Phaser.Scene {
     }));
 
     if (spec.glowColor) {
-      const glow = this.add.graphics();
-      glow.fillStyle(spec.glowColor, spec.glowAlpha ?? 0.14);
-      glow.fillEllipse(
-        0,
-        spec.glowY ?? 0,
-        spec.glowWidth ?? 92,
-        spec.glowHeight ?? 92,
-      );
+      const glow = addSoftLocalLight(this, spec.glowWidth ?? 92,
+        spec.glowHeight ?? 92, spec.glowColor, spec.glowAlpha ?? 0.14);
+      glow.y = spec.glowY ?? 0;
       body.add(glow);
     }
 
@@ -2728,6 +2727,9 @@ export class GreatBattleScene extends Phaser.Scene {
     const sprite = this.add.image(0, spec.spriteY, spec.textureKey);
     sprite.setScale(spec.height / sprite.height);
     if (spec.tint) sprite.setTint(spec.tint);
+    if (realmId === "clockwork-forge" || realmId === "winter-mountain") {
+      applySceneActorLighting(this, sprite);
+    }
     if (spec.alpha !== undefined) sprite.setAlpha(spec.alpha);
     if (this.shouldFlipFinaleEnemySprite(realmId, spec, x)) sprite.setFlipX(true);
     body.add(sprite);
@@ -2794,8 +2796,6 @@ export class GreatBattleScene extends Phaser.Scene {
     }
 
     if (realmId === "clockwork-forge") {
-      footing.fillStyle(0x1d100c, 0.24);
-      footing.fillEllipse(0, 62, 194, 32);
       footing.lineStyle(3, PALETTE_HEX.ember, 0.16);
       footing.lineBetween(-76, 52, -36, 59);
       footing.lineBetween(-28, 61, 20, 54);

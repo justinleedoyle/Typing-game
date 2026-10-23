@@ -5,6 +5,7 @@ import { NarrationManager } from "../game/narrationManager";
 import { ChapterReading } from "../game/ui/chapterReading";
 import { installChapterMenu } from "../game/ui/pauseMenu";
 import { addIdleBreath, addLocalGroundShadow } from "../game/livingScene";
+import { applySceneActorLighting } from "../game/actorLighting";
 import { reducedMotion } from "../game/presentation";
 import { makeWrenSprite, preloadWren } from "../game/wren";
 import { SERIF } from "../game/palette";
@@ -13,6 +14,8 @@ import study from "../../art/references/opening-typewriter-study-clean.png";
 import runa from "../../art/runa/runa-front.png";
 import saga from "../../art/sibling/sibling-front.png";
 import magnus from "../../art/sibling/magnus-front.png";
+import sagaEmbrace from "../../art/sibling/saga-wren-embrace.png";
+import magnusEmbrace from "../../art/sibling/magnus-wren-embrace.png";
 
 /** A quiet return to the opening's people before the credits. No new choice,
  * reward, or automatic caption deadline is introduced after victory. */
@@ -22,14 +25,25 @@ export class HomecomingScene extends Phaser.Scene {
   private narration!: NarrationManager;
   private menu?: ReturnType<typeof installChapterMenu>;
   private leaving = false;
+  private wrenActor: Phaser.GameObjects.Container | null = null;
+  private siblingActor: Phaser.GameObjects.Container | null = null;
+  private reunionActor: Phaser.GameObjects.Container | null = null;
 
   constructor() { super("HomecomingScene"); }
-  init(data: { store: SaveStore }): void { this.store = data.store; this.leaving = false; }
+  init(data: { store: SaveStore }): void {
+    this.store = data.store;
+    this.leaving = false;
+    this.wrenActor = null;
+    this.siblingActor = null;
+    this.reunionActor = null;
+  }
   preload(): void {
     this.load.image("homecoming-study", study);
     this.load.image("homecoming-runa", runa);
     this.load.image("homecoming-saga", saga);
     this.load.image("homecoming-magnus", magnus);
+    this.load.image("homecoming-saga-embrace", sagaEmbrace);
+    this.load.image("homecoming-magnus-embrace", magnusEmbrace);
     preloadWren(this);
   }
   create(): void {
@@ -48,21 +62,29 @@ export class HomecomingScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(10);
     this.actor("homecoming-runa", 425, 950, 365);
     const wren = this.add.container(1000, 950).setDepth(2);
+    this.wrenActor = wren;
     wren.add(addLocalGroundShadow(this, 150, 24, { alpha: .3, y: 6 }));
     const sprite = makeWrenSprite(this);
     sprite.setScale(320 / sprite.height);
     wren.add(sprite);
     addIdleBreath(this, wren, { dy: -2, durationMs: 2600 });
     const gender = this.store.get().wrenGender;
-    if (gender) this.actor(gender === "boy" ? "homecoming-saga" : "homecoming-magnus", 1430, 950, gender === "boy" ? 270 : 350);
+    if (gender) this.siblingActor = this.actor(gender === "boy" ? "homecoming-saga" : "homecoming-magnus", 1430, 950, gender === "boy" ? 270 : 350);
     this.narration = new NarrationManager(this, { store: this.store, framed: true, y: 260, depth: 20 });
     this.reading = new ChapterReading(this, 1005);
     const lines = homecomingLines(gender);
     const show = (index: number): void => {
       if (index === lines.length) { title.setText("The Portalwright's Almanac"); this.showCredits(); return; }
       const line = lines[index];
-      this.narration.sayRaw(line.text, { speakerName: line.speaker });
-      this.reading.show(() => show(index + 1), () => this.narration.replay());
+      const present = (): void => {
+        if (this.leaving) return;
+        this.narration.sayRaw(line.text, { speakerName: line.speaker });
+        this.reading.show(() => show(index + 1), () => this.narration.replay());
+      };
+      if (index === 1 && gender) {
+        this.narration.clear();
+        this.showSiblingEmbrace(present);
+      } else present();
     };
     show(0);
     const onKey = (event: KeyboardEvent): void => {
@@ -78,13 +100,48 @@ export class HomecomingScene extends Phaser.Scene {
     });
     this.cameras.main.fadeIn(reducedMotion(this) ? 0 : 700, 11, 10, 15);
   }
-  private actor(texture: string, x: number, y: number, height: number): void {
+  private actor(texture: string, x: number, y: number, height: number): Phaser.GameObjects.Container {
     const actor = this.add.container(x, y).setDepth(1);
     actor.add(addLocalGroundShadow(this, 180, 26, { y: 7, alpha: .3 }));
     const image = this.add.image(0, 0, texture).setOrigin(.5, 1);
     image.setScale(height / image.height);
+    applySceneActorLighting(this, image);
     actor.add(image);
     addIdleBreath(this, actor, { dy: -2, durationMs: 2400 });
+    return actor;
+  }
+  private showSiblingEmbrace(onReady: () => void): void {
+    const gender = this.store.get().wrenGender;
+    if (!gender || !this.wrenActor?.scene || !this.siblingActor?.scene || this.reunionActor?.scene) {
+      onReady();
+      return;
+    }
+    const pair = this.add.container(1210, 950).setDepth(2).setVisible(false);
+    pair.add(addLocalGroundShadow(this, 235, 26, { y: 7, alpha: 0.3 }));
+    const image = this.add.image(0, 0,
+      gender === "boy" ? "homecoming-saga-embrace" : "homecoming-magnus-embrace").setOrigin(0.5, 1);
+    image.setScale((gender === "boy" ? 340 : 365) / image.height);
+    applySceneActorLighting(this, image);
+    pair.add(image);
+    this.reunionActor = pair;
+    const wren = this.wrenActor;
+    const sibling = this.siblingActor;
+    this.tweens.killTweensOf(wren);
+    this.tweens.killTweensOf(sibling);
+    const settle = (): void => {
+      if (this.leaving || !pair.scene) return;
+      wren.setVisible(false);
+      sibling.setVisible(false);
+      pair.setVisible(true);
+      addIdleBreath(this, pair, { dy: -2, durationMs: 2700 });
+      onReady();
+    };
+    if (reducedMotion(this)) {
+      settle();
+      return;
+    }
+    this.tweens.add({ targets: wren, x: 1165, duration: 420, ease: "Sine.easeInOut" });
+    this.tweens.add({ targets: sibling, x: 1255, duration: 420, ease: "Sine.easeInOut", onComplete: settle });
   }
   private showCredits(): void {
     this.narration.clear();

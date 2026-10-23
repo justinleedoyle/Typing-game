@@ -48,14 +48,23 @@ const finale = sceneSource("GreatBattleScene");
 const winter = sceneSource("WinterMountainScene");
 
 await suite("Wood force choice: the fire remains visible through the held response and king's challenge", () => {
+  const firePng = readFileSync(new URL("../art/effects/grove-fire.png", import.meta.url));
+  const [fireWidth, fireHeight] = [firePng.readUInt32BE(16), firePng.readUInt32BE(20)];
+  const RestingPosition = actualMethod(wood, "spawnPositionFor", {
+    WOOD_SIDE_GHOST_REST_Y: 704, WOOD_SIDE_GHOST_STEP_Y: 46,
+  });
+  const positions = new RestingPosition();
+  positions.scale = { width: 1920, height: 1080 };
+  const westRest = positions.spawnPositionFor("west", 0);
   for (const reduced of [false, true]) {
-    const lights: unknown[] = [];
-    const wakes: unknown[] = [];
+    const lights: Array<{ x: number; y: number }> = [];
+    const wakes: Array<{ body: unknown; depth: number }> = [];
     const events: string[] = [];
     const Entry = actualMethod(wood, "startFork2Force");
     const Ignite = actualMethod(wood, "igniteGroveLightCue", {
-      addLivingLight: (_scene: unknown, opts: unknown) => { lights.push(opts); return warmth; },
-      addContainerWake: (_scene: unknown, body: unknown) => wakes.push(body),
+      addLivingLight: (_scene: unknown, opts: typeof lights[number]) => { lights.push(opts); return warmth; },
+      addContainerWake: (_scene: unknown, body: unknown, opts: { depth: number }) => wakes.push({ body, depth: opts.depth }),
+      addLocalGroundShadow: () => ({ shadow: true }),
       reducedMotion: () => reduced,
       Phaser: { GameObjects: { Events: { DESTROY: "destroy" } } },
     });
@@ -64,23 +73,34 @@ await suite("Wood force choice: the fire remains visible through the held respon
     let destroyCue: (() => void) | undefined;
     let ignited = false;
     let drawn = 0;
+    let oldGeometryRemoved = 0;
+    let paintedFire = 0;
     let boss = 0;
     const warmth = { scene: true, destroy() { events.push("release-warmth"); } };
     const cue = {
-      scene: true, x: 1210, y: 770, alpha: 0,
+      scene: true, x: 1210, y: 770, alpha: 0, depth: 42,
       getData: () => ignited, setData(_key: string, value: boolean) { ignited = value; },
       setAlpha(value: number) { this.alpha = value; return this; }, setScale() { return this; },
+      setDepth(value: number) { this.depth = value; return this; },
+      removeAll(destroy: boolean) { assert(destroy, "unlit schematic is removed instead of layered over the painted fire"); oldGeometryRemoved += 1; },
       add() { drawn += 1; }, once(_event: string, callback: () => void) { destroyCue = callback; },
     };
     const state = { satchel: [] as string[] };
     Object.assign(s, {
       groveLightCue: cue,
+      scale: { width: 1920, height: 1080 },
       commitFork: (_fork: string, choice: string) => choice,
       store: { update: (edit: (value: typeof state) => void) => edit(state) },
       attendGhostKing() {},
       igniteGroveLightCue: Ignite.prototype.igniteGroveLightCue,
       tweens: { killTweensOf() {} },
-      add: { graphics: () => ({ fillStyle() {}, fillTriangle() {}, fillEllipse() {} }) },
+      add: { image: (x: number, y: number, texture: string) => {
+        paintedFire += 1;
+        assertEqual([x, y, texture], [0, 4, "wood-grove-fire"], "painted fire uses the existing grounded cue owner");
+        return { height: fireHeight, setOrigin(x: number, y: number) {
+          assertEqual([x, y], [0.5, 1], "coal bed stays anchored at its feet"); return this;
+        }, setScale(scale: number) { assertEqual(scale * this.height, 196, "fire remains smaller than Wren"); return this; } };
+      } },
       setNarrator() { assert(ignited && cue.alpha === 1, "visible fire is staged before the held flare caption"); },
       band: { setObjective() {} },
       readThen(callback: () => void) { next = callback; },
@@ -90,9 +110,17 @@ await suite("Wood force choice: the fire remains visible through the held respon
     assertEqual(state.satchel, ["ash-vial"], "the existing force reward and timing are unchanged");
     assertEqual(boss, 0, "the readable consequence remains held before combat");
     s.igniteGroveLightCue();
-    assertEqual(drawn, 1, "a restarted committed choice cannot duplicate the flame");
+    assertEqual(drawn, 2, "one painted fire and its contact shadow replace the schematic once");
+    assertEqual([oldGeometryRemoved, paintedFire], [1, 1], "a restarted committed choice cannot duplicate or erase the flame");
     assertEqual(lights.length, 1, "one sustained warm light replaces the missing consequence");
+    assertEqual([lights[0]!.x, lights[0]!.y], [cue.x, cue.y - 64], "the warm light follows the relocated fire");
+    const halfWidth = 196 * fireWidth / fireHeight / 2;
+    assert(cue.x - halfWidth >= 0 && cue.x + halfWidth < westRest.restX - 100,
+      "the complete painted fire fits left of the first actual west spirit with room for its label");
+    assertEqual(cue.y, 770, "relocating the fire preserves its existing floor");
+    assert(cue.depth < 0, "the fire draws behind default-depth spirit bodies");
     assertEqual(wakes.length, reduced ? 0 : 1, "reduced motion keeps the visible flame without drifting embers");
+    assert(wakes.every(wake => wake.depth < 0), "fire embers also stay behind the spirits");
     next!();
     assertEqual(boss, 1, "the original Continue still enters the boss once");
     destroyCue!();
@@ -449,7 +477,7 @@ await suite("Forge rewards: the collected keepsake is readable before the next c
       band: { setObjective: (text: string) => { objective = text; } },
       setNarrator: (text: string) => { caption = text; },
       readThen: (fn: () => void) => { next = fn; },
-      hideFornSprite() {}, hideApprenticeSprite() {}, dismissForgeChoiceCue() {}, clearForgeChoiceCues() {},
+      hideFornSprite() {}, hideApprenticeSprite() {}, dismissForgeChoiceCue() {}, clearForgeChoiceCues() {}, showForgeKeepsake() {},
       [followup]: () => { challenges += 1; },
     });
     s[method](choice, item);
@@ -714,6 +742,7 @@ await suite("Mechanic teaching: Wood and Sky explain hidden marks before timed e
   let continueWood: (() => void) | undefined;
   let finishLoadout: (() => void) | undefined;
   let ghosts = 0;
+  let practices = 0;
   let lesson = "";
   Object.assign(w, {
     narration: { say: (id: string) => { lesson = getRunaLine(id)!.text; } },
@@ -721,15 +750,16 @@ await suite("Mechanic teaching: Wood and Sky explain hidden marks before timed e
     readThen: (next: () => void) => { continueWood = next; },
     announceCombatLoadout: (next: () => void) => { finishLoadout = next; },
     beginCrossroads1: () => { ghosts += 1; },
+    startWardPractice: () => { practices += 1; },
   });
   w.startCrossroads1();
   assert(lesson.includes("·") && lesson.includes("punctuation"), "the first lesson identifies what the displayed dot hides");
   assertEqual(ghosts, 0, "ghost deadlines cannot begin while the ward lesson is being read");
   assert(!finishLoadout, "a relic notice cannot overwrite the lesson before Continue");
   continueWood!();
-  assertEqual(ghosts, 0, "existing relic announcement still precedes the encounter");
-  finishLoadout!();
-  assertEqual(ghosts, 1, "Continue and the announcement lead to the unchanged encounter once");
+  assertEqual(practices, 1, "Continue enters the safe four-direction rehearsal");
+  assertEqual(ghosts, 0, "combined threats cannot start before the four guided examples");
+  assert(!finishLoadout, "the existing relic announcement waits until rehearsal is complete");
 
   const Sky = actualMethod(sky, "startAct2");
   const s = new Sky();

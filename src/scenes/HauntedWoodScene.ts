@@ -82,6 +82,7 @@ import ghostKingSprite from "../../art/wood/ghost-king.png";
 import runaPortrait from "../../art/runa/runa-front.png";
 import wispCatSprite from "../../art/companions/wisp-cat.png";
 import snowFoxSprite from "../../art/companions/snow-fox.png";
+import groveFireSprite from "../../art/effects/grove-fire.png";
 
 interface HauntedWoodSceneData {
   store: SaveStore;
@@ -187,6 +188,10 @@ export class HauntedWoodScene extends Phaser.Scene {
   private oneShotInvoker: OneShotInvoker<MovingWordEnemy> | null = null;
 
   private mistTimer: Phaser.Time.TimerEvent | null = null;
+  private wardPracticeActive = false;
+  private wardPracticeBody: Phaser.GameObjects.Container | null = null;
+  private wardPracticeTarget: TextWordTarget | null = null;
+  private wardPracticeGeneration = 0;
   private shrineFigure: Phaser.GameObjects.Container | null = null;
   private offeringCue: Phaser.GameObjects.Container | null = null;
   private boneFluteCue: Phaser.GameObjects.Container | null = null;
@@ -227,6 +232,10 @@ export class HauntedWoodScene extends Phaser.Scene {
     const companion = resolveCompanionDecision("haunted-wood", this.store.get().realms["haunted-wood"], this.store.get().satchel);
     this.companionChoice = companion === "accepted" ? "call" : companion === "declined" ? "leave" : null;
     this.mistTimer = null;
+    this.wardPracticeActive = false;
+    this.wardPracticeBody = null;
+    this.wardPracticeTarget = null;
+    this.wardPracticeGeneration += 1;
     this.shrineFigure = null;
     this.offeringCue = null;
     this.boneFluteCue = null;
@@ -256,6 +265,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.load.image("ghost-king", ghostKingSprite);
     this.load.image("wood-companion-wisp-cat", wispCatSprite);
     this.load.image("wood-companion-snow-fox", snowFoxSprite);
+    this.load.image("wood-grove-fire", groveFireSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
@@ -400,6 +410,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.typingInput.setKeystrokeHooks({
       onCorrect: () => bobWrenSprite(this.wrenSprite),
       onMiss: () => {
+        if (this.wardPracticeActive) return;
         // forgive-wave-miss (Shrine-Token): spare the first miss of a wave its
         // flinch. Dormant on a forward run (Shrine-Token is earned here, at the
         // end), wired for consistency + revisit-combat forward-compat.
@@ -445,7 +456,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       getThreats: () => this.liveGhostThreats(),
       applyEffect: (effect, targets) => this.applyOneShot(effect, targets),
       isActive: () =>
-        this.ghosts.length > 0 && this.ghosts.some((g) => !g.isDefeated()),
+        !this.wardPracticeActive && this.ghosts.length > 0 && this.ghosts.some((g) => !g.isDefeated()),
       announce: (text) => this.band.showNotice(text, { label: "one-shot" }),
       slots: band.oneShotSlots,
       compact: true,
@@ -453,6 +464,8 @@ export class HauntedWoodScene extends Phaser.Scene {
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.wardPracticeActive = false;
+      this.clearWardPracticeVisual();
       this.reading.destroy();
       this.chapterMenu?.destroy();
       this.typingInput.reset();
@@ -1221,14 +1234,96 @@ export class HauntedWoodScene extends Phaser.Scene {
   // Encounter 1: 3 ghosts — west, east, north. Introduces 3 of 4 directions
   // gently so the player can learn each punctuation glyph in turn.
   private startCrossroads1(): void {
+    this.wardPracticeActive = true;
+    if (this.mistTimer) this.mistTimer.paused = true;
     this.narration.say("wood_crossroads1_intro");
     this.band.setObjective(WARD_INPUT_HINT);
     // Tier 4 — announce the relic loadout once before the realm's first combat,
     // then begin. Empty loadout (incl. revisits) passes straight through.
-    this.readThen(() => this.announceCombatLoadout(() => this.beginCrossroads1()));
+    this.readThen(() => this.startWardPractice());
+  }
+
+  /** Four waiting spirits rehearse the compass, one mark at a time. They use
+   * the real body/word rendering and controller, without an enemy deadline. */
+  private startWardPractice(index = 0): void {
+    const directions: readonly WoodDirection[] = ["north", "south", "west", "east"];
+    const direction = directions[index];
+    if (!direction) { this.finishWardPractice(); return; }
+    this.clearWardPracticeVisual();
+    this.clearActiveTargets();
+    this.ghosts = [];
+    this.wardPracticeActive = true;
+    if (this.mistTimer) this.mistTimer.paused = true;
+    this.ensureCompassDrawn();
+    const teaching = {
+      north: { side: "above", name: "period", mark: ".", compass: 0 },
+      south: { side: "below", name: "exclamation mark", mark: "!", compass: 1 },
+      west: { side: "the left", name: "comma", mark: ",", compass: 3 },
+      east: { side: "the right", name: "question mark", mark: "?", compass: 2 },
+    }[direction];
+    this.compassGlyphs.forEach((glyph, i) => glyph.setAlpha(i === teaching.compass ? 1 : 0.4));
+    const word = woodWardWord("howl", direction);
+    const article = teaching.name === "exclamation mark" ? "an" : "a";
+    this.setNarrator(`A spirit comes from ${teaching.side}. Put ${article} ${teaching.name} (${teaching.mark}) in its hidden dot: ${word}. This spirit will wait.`);
+    this.band.setObjective(`Practice ${index + 1}/4: type ${word}. No deadline; a wrong key simply waits.`);
+    const position = this.spawnPositionFor(direction, 0);
+    const body = this.add.container(position.startX, position.startY).setAlpha(0.6);
+    this.drawGhostInto(body, true);
+    this.wardPracticeBody = body;
+    const generation = this.wardPracticeGeneration;
+    this.tweens.add({
+      targets: body, x: position.restX, y: position.restY,
+      duration: reducedMotion(this) ? 0 : 900, ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!this.wardPracticeActive || this.wardPracticeGeneration !== generation || this.wardPracticeBody !== body) return;
+        const target = this.makeWord({
+          scene: this, word, x: position.restX,
+          y: Math.max(this.narration.bottom() + 48, position.restY - 92),
+          fontSize: 38, maskMarks: true,
+          onComplete: () => {
+            if (!this.wardPracticeActive || this.wardPracticeTarget !== target) return;
+            this.clearWardPracticeVisual();
+            playChime();
+            this.setNarrator(`The ${teaching.name} wards the spirit from ${teaching.side}. It fades back into the trees.`);
+            this.band.setObjective(index === directions.length - 1
+              ? "All four marks practiced. Press Enter or Space to meet the crossroads spirits."
+              : "Mark practiced. Press Enter or Space for the next direction.");
+            this.readThen(() => index === directions.length - 1
+              ? this.finishWardPractice() : this.startWardPractice(index + 1));
+          },
+        });
+        this.wardPracticeTarget = target;
+        this.registerActiveTarget(target);
+      },
+    });
+  }
+
+  private clearWardPracticeVisual(): void {
+    this.wardPracticeGeneration += 1;
+    if (this.wardPracticeTarget) {
+      const target = this.wardPracticeTarget;
+      this.typingInput.unregister(target);
+      target.destroy();
+      this.activeTargets = this.activeTargets.filter((value) => value !== target);
+      this.wardPracticeTarget = null;
+    }
+    if (this.wardPracticeBody?.scene) {
+      this.tweens.killTweensOf(this.wardPracticeBody);
+      this.wardPracticeBody.destroy();
+    }
+    this.wardPracticeBody = null;
+  }
+
+  private finishWardPractice(): void {
+    this.clearWardPracticeVisual();
+    this.wardPracticeActive = false;
+    this.compassGlyphs.forEach((glyph) => glyph.setAlpha(0.5));
+    this.announceCombatLoadout(() => this.beginCrossroads1());
   }
 
   private beginCrossroads1(): void {
+    this.wardPracticeActive = false;
+    if (this.mistTimer) this.mistTimer.paused = false;
     playWaveSting();
     if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseWoodWave();
@@ -2259,6 +2354,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Mist roll mechanic ───────────────────────────────────────────────────
 
   private triggerMistRoll(): void {
+    if (this.wardPracticeActive) return;
     // Tier 4 — mist-clear (Wind-Phrase): the mist still rolls (ambiance) but
     // never blinds. warm-light (Firefly / Beacon / Pelt): the blind is shorter,
     // capped. Both bounded so the realm's signature mist still reads as a hazard.
@@ -2419,6 +2515,11 @@ export class HauntedWoodScene extends Phaser.Scene {
     if (event.ctrlKey || event.metaKey) return;
     if (this.chapterMenu?.handleKey(event)) return;
     if (this.reading.handleKey(event)) return;
+    if (this.wardPracticeActive && event.key.length === 1 &&
+      event.key.toLowerCase() !== this.wardPracticeTarget?.remaining()[0]) {
+      this.band.setObjective("Practice: use the shown direction's mark at the dot. The spirit will wait.");
+      return;
+    }
     if (event.key.length === 1 || event.key === " ") {
       playClack();
     }
@@ -2865,18 +2966,18 @@ export class HauntedWoodScene extends Phaser.Scene {
     if (cue.getData("grove-ignited")) return;
     cue.setData("grove-ignited", true);
     this.tweens.killTweensOf(cue);
-    cue.setAlpha(1).setScale(1);
+    // Keep the consequence on the far-left foreground, outside the spirits'
+    // resting lanes. Their containers use depth0, so the fire stays behind
+    // them while its words and the king remain fully visible.
+    cue.x = this.scale.width * 0.06;
+    cue.setDepth(-0.5).setAlpha(1).setScale(1);
 
-    const fire = this.add.graphics();
-    fire.fillStyle(0xc45125, 0.8);
-    fire.fillTriangle(-48, -48, -25, -152, 10, -46);
-    fire.fillTriangle(-12, -46, 8, -186, 45, -48);
-    fire.fillTriangle(24, -48, 53, -142, 68, -44);
-    fire.fillStyle(0xf4b95f, 0.92);
-    fire.fillTriangle(-23, -46, -13, -120, 13, -46);
-    fire.fillTriangle(7, -45, 16, -142, 36, -45);
-    fire.fillStyle(0xffe5a1, 0.84);
-    fire.fillEllipse(12, -58, 22, 36);
+    // The lit choice becomes a small painted fire planted on the grove floor;
+    // remove the unlit schematic without changing its gameplay/cleanup owner.
+    cue.removeAll(true);
+    cue.add(addLocalGroundShadow(this, 174, 22, { y: 4, alpha: 0.28 }));
+    const fire = this.add.image(0, 4, "wood-grove-fire").setOrigin(0.5, 1);
+    fire.setScale(196 / fire.height);
     cue.add(fire);
 
     const warmth = addLivingLight(this, {
@@ -2891,7 +2992,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       addContainerWake(this, cue, {
         kind: "ember", color: 0xf2a04b, intervalMs: 230,
         offsetY: -108, spreadX: 42, spreadY: 24,
-        alpha: 0.32, size: 3.5, depth: 41, driftY: -70,
+        alpha: 0.32, size: 3.5, depth: -0.5, driftY: -70,
         durationMs: 1100,
       });
     }

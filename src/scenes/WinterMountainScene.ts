@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { restoreSceneActorLighting } from "../game/actorLighting";
 import { type AmbientHandle, playAmbientWinter } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
@@ -42,6 +43,7 @@ import {
   fadeOutStagedSprite,
   addIdleBreath,
   addLocalGroundShadow,
+  addSoftLocalLight,
   addLivingLight,
   playBodyContactCue,
   playBodyImpact,
@@ -1381,7 +1383,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.band.setObjective("Act I · The wayshrine wakes; keep Wren's candles lit.");
     if (this.heldurSprite) {
       this.heldurSprite.setTintFill(0xffd277);
-      this.time.delayedCall(180, () => this.heldurSprite?.clearTint());
+      this.time.delayedCall(180, () => { if (this.heldurSprite) restoreSceneActorLighting(this.heldurSprite); });
     }
     this.readThen(() => this.onHeldurSpoken());
   }
@@ -2093,7 +2095,7 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private spawnBoss(delayMs: number = 600): void {
-    const startX = -200;
+    const startX = this.scale.width + 200;
     const container = this.add.container(startX, BOSS_SPAWN_Y).setDepth(2);
     this.bossBodySprite = this.drawBossInto(container);
     addContainerWake(this, container, {
@@ -2181,7 +2183,7 @@ export class WinterMountainScene extends Phaser.Scene {
       this.narration.say("winter_boss_rise");
       if (this.bossBodySprite) {
         this.bossBodySprite.setTintFill(0xffd277);
-        this.time.delayedCall(140, () => this.bossBodySprite?.clearTint());
+        this.time.delayedCall(140, () => { if (this.bossBodySprite) restoreSceneActorLighting(this.bossBodySprite); });
       }
       this.band.setObjective("Type the Old One, STIRRING. Match capitals and punctuation; Shift is free required typing here.");
       playBodyImpact(this, boss.container, {
@@ -3685,36 +3687,32 @@ export class WinterMountainScene extends Phaser.Scene {
   private drawBossInto(c: Phaser.GameObjects.Container): Phaser.GameObjects.Image {
     c.add(addLocalGroundShadow(this, 286, 46, { y: 14, alpha: 0.5 }));
     c.add(this.makeWolfFrostRim(true));
-    const sprite = makeWolfSprite(this, true, false);
+    const sprite = makeWolfSprite(this, true, true);
     c.add(sprite);
     c.add(this.makeWolfSnowFooting(true));
     return sprite;
   }
 
   private makeWolfFrostRim(isBoss: boolean): Phaser.GameObjects.Graphics {
-    const g = this.add.graphics();
     const width = isBoss ? 410 : 330;
     const height = isBoss ? 170 : 128;
     const y = isBoss ? -150 : -112;
-    g.fillStyle(0xb7dcff, isBoss ? 0.13 : 0.11);
-    g.fillEllipse(0, y, width, height);
-    g.lineStyle(isBoss ? 3 : 2, 0xd8ecff, isBoss ? 0.26 : 0.22);
-    g.strokeEllipse(0, y, width * 0.92, height * 0.86);
-    g.lineStyle(1, 0xffffff, isBoss ? 0.18 : 0.14);
-    g.strokeEllipse(0, y - 4, width * 0.72, height * 0.58);
-    return g;
+    return addSoftLocalLight(this, width, height, 0xb7dcff, isBoss ? 0.2 : 0.16).setY(y);
   }
 
   private makeWolfSnowFooting(isBoss: boolean): Phaser.GameObjects.Graphics {
     const g = this.add.graphics();
     const width = isBoss ? 330 : 260;
-    g.fillStyle(0xdceaf8, isBoss ? 0.24 : 0.2);
-    g.fillEllipse(0, 18, width, isBoss ? 28 : 22);
-    g.fillStyle(0x8fb5d0, isBoss ? 0.18 : 0.14);
-    g.fillEllipse(-28, 24, width * 0.78, isBoss ? 19 : 15);
-    g.lineStyle(2, 0xffffff, isBoss ? 0.2 : 0.16);
-    g.lineBetween(-width * 0.34, 12, width * 0.1, 8);
-    g.lineBetween(-width * 0.05, 16, width * 0.36, 11);
+    // Broken grains sit at the paws; a continuous pale oval reads as a second
+    // platform floating above the painted trail. The soft shadow owns contact.
+    g.lineStyle(1.5, 0xdceaf8, isBoss ? 0.2 : 0.16);
+    for (const [x, y, length] of [[-0.31, -2, 12], [-0.08, 2, 9], [0.18, -1, 13], [0.33, 3, 8]]) {
+      g.lineBetween(width * x, y, width * x + length, y - 1);
+    }
+    g.fillStyle(0xdceaf8, isBoss ? 0.22 : 0.18);
+    for (const [x, y, radius] of [[-0.25, 1, 1.8], [-0.02, -3, 1.4], [0.25, 3, 1.6]]) {
+      g.fillCircle(width * x, y, radius);
+    }
     return g;
   }
 }

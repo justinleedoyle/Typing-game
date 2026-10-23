@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { assert, assertEqual, suite } from "./_assert";
+import * as actorLighting from "../src/game/actorLighting";
 
 // Run the complete, actual helper module. Only image imports and Phaser's
 // display/tween surfaces are inert; reaction and restoration code is unchanged.
@@ -16,7 +17,8 @@ interface WrenHelpers {
   playWrenHurt(image: Image, options: { onComplete: () => void }): void;
 }
 const exports = {} as WrenHelpers;
-new Function("exports", "require", code)(exports, () => ({ default: "inert-image-asset" }));
+new Function("exports", "require", code)(exports, (name: string) =>
+  name.endsWith("actorLighting") ? actorLighting : { default: "inert-image-asset" });
 
 interface Tween { targets: Image; onComplete?: () => void }
 interface Timer { removed: boolean; callback: () => void; remove(): void }
@@ -54,6 +56,7 @@ class Image {
   scaleX = -2.4;
   scaleY = 2.4;
   tinted = false;
+  cornerLight: number[] = [];
   data = new Map<string, unknown>();
   constructor(readonly scene: { tweens: unknown; time: unknown }) {}
   setTexture(key: string) { this.texture.key = key; this.height = key === "wren-front" ? 100 : 150; return this; }
@@ -61,8 +64,21 @@ class Image {
   getData(key: string) { return this.data.get(key); }
   setData(key: string, value: unknown) { this.data.set(key, value); return this; }
   setTintFill() { this.tinted = true; return this; }
+  setTint(...light: number[]) { this.cornerLight = light; this.tinted = false; return this; }
   clearTint() { this.tinted = false; return this; }
 }
+
+await suite("Wren reactions: damage restores painted scene light after its feedback", () => {
+  const { image, timers } = fixture();
+  actorLighting.applySceneActorLighting({ sys: { settings: { key: "ClockworkForgeScene" } } } as never, image);
+  const expected = [...image.cornerLight];
+  assert(expected.length === 4, "world figures carry corner light from the scene");
+  exports.playWrenHurt(image, { onComplete() {} });
+  image.cornerLight = [];
+  timers.at(-1)!.callback();
+  assertEqual(image.cornerLight, expected, "hurt completion cannot leave an unlit white cutout");
+  assert(!image.tinted, "the damage fill itself is cleared");
+});
 const resting = (image: Image) => ({ key: image.texture.key, x: image.x, y: image.y,
   scaleX: image.scaleX, scaleY: image.scaleY });
 

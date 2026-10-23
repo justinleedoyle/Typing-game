@@ -3,6 +3,7 @@ import { rememberRealmFork, resolveRealmFork, resolveCompanionDecision, remember
 import { ChapterReading } from "../game/ui/chapterReading";
 import { reducedFlashes, reducedMotion } from "../game/presentation";
 import Phaser from "phaser";
+import { applySceneActorLighting } from "../game/actorLighting";
 import { type AmbientHandle, playAmbientBell } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
@@ -186,6 +187,9 @@ export class SunkenBellScene extends Phaser.Scene {
   //    the beat) for the Warden's Phase 2.
   private beatPhase: "on" | "off" | "free" = "free";
   private beatLocked = false;
+  private rhythmPracticeActive = false;
+  private rhythmPracticeTarget: TextWordTarget | null = null;
+  private rhythmPracticeCoach: Phaser.GameObjects.Text | null = null;
   private rhythmLabel!: Phaser.GameObjects.Text;
 
   // "Air" stake — staying in rhythm lets Wren breathe; off-beat / de-sync
@@ -245,6 +249,9 @@ export class SunkenBellScene extends Phaser.Scene {
     this.revisitMemoryWordAnchor = null;
     this.beatPhase = "free";
     this.beatLocked = false;
+    this.rhythmPracticeActive = false;
+    this.rhythmPracticeTarget = null;
+    this.rhythmPracticeCoach = null;
     this.breath.reset();
     this.breathActive = false;
     this.snowFoxTripNoticed = false;
@@ -409,8 +416,12 @@ export class SunkenBellScene extends Phaser.Scene {
     // Bell is "quiet listening" — softer per-keystroke feedback than the
     // Winter Mountain default. 120ms / 0.002 shake instead of 80ms / 0.002.
     this.typingInput.setKeystrokeHooks({
-      onCorrect: () => bobWrenSprite(this.wrenSprite),
+      onCorrect: () => {
+        bobWrenSprite(this.wrenSprite);
+        if (this.rhythmPracticeActive) this.rhythmPracticeCoach?.setText("Good. Finish the remaining letters freely.");
+      },
       onMiss: () => {
+        if (this.rhythmPracticeActive) return;
         flashWrenMiss(this.wrenSprite);
         if (!reducedMotion(this)) this.cameras.main.shake(120, 0.002);
       },
@@ -477,6 +488,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.clearRhythmPractice();
       this.reading.destroy();
       this.chapterMenu?.destroy();
       this.typingInput.reset();
@@ -745,7 +757,7 @@ export class SunkenBellScene extends Phaser.Scene {
     // so the dim never disappears (it stays a real read-ahead hazard).
     this.tweens.killTweensOf(this.echoDim);
     this.echoDim.setAlpha(0);
-    if (!reducedFlashes(this)) {
+    if (!this.rhythmPracticeActive && !reducedFlashes(this)) {
       this.echoDim.setAlpha(1);
       this.tweens.add({
         targets: this.echoDim,
@@ -1132,6 +1144,14 @@ export class SunkenBellScene extends Phaser.Scene {
 
     playClack();
 
+    // This one-target rehearsal has no accuracy/Heart cost. Correct keys still
+    // pass through the real rhythm gate and controller; a slip simply waits.
+    if (this.rhythmPracticeActive &&
+      key.toLowerCase() !== this.rhythmPracticeTarget?.remaining()[0]) {
+      this.rhythmPracticeCoach?.setText("Try the next shown letter. There is no hurry.");
+      return;
+    }
+
     // Exploration, door choices and post-boss passages use ordinary typing.
     // Only the explicitly taught choir/Warden encounters demand rhythm starts.
     if (this.beatPhase === "free") {
@@ -1160,6 +1180,10 @@ export class SunkenBellScene extends Phaser.Scene {
 
     // reject-newclaim (off-beat new claim) or desync (off-beat metered
     // boundary). Both teach timing; de-sync also wipes the metered word.
+    if (this.rhythmPracticeActive) {
+      this.rhythmPracticeCoach?.setText("Wait for the blue ring, then start with t.");
+      return;
+    }
     this.registerStumble(decision === "desync");
   }
 
@@ -1709,14 +1733,65 @@ export class SunkenBellScene extends Phaser.Scene {
       }
     });
     this.narration.say("sunken_olin_teach_activate");
-    this.setStoryObjective("Read the rhythm lesson, then continue to meet the tide-ghosts.");
-    this.readThen(() => {
-      this.beatPhase = "on";
-      this.rhythmLabel.setAlpha(0.9);
-      this.beatClock.setTempo(2000);
-      this.beatClock.start();
-      this.time.delayedCall(2000, () => this.startFirstGhostEncounter());
+    this.setStoryObjective("Read the rhythm lesson, then try one word safely with Olin.");
+    this.readThen(() => this.startRhythmPractice());
+  }
+
+  /** One real first-letter rhythm gate, with no advancing foe or air stake. */
+  private startRhythmPractice(): void {
+    this.clearRhythmPractice();
+    this.clearActiveTargets();
+    this.rhythmPracticeActive = true;
+    this.beatPhase = "on";
+    this.beatLocked = false;
+    this.setBreathActive(false);
+    this.setNarrator("Try tide with me. Begin its t when the blue ring opens; finish i d e at your own pace.", "Old Olin");
+    this.band.setObjective("Practice: first letter on blue, then finish freely. No air or Heart is lost.");
+    const position = this.olinPassageWordPosition();
+    this.rhythmPracticeCoach = this.add.text(position.x, position.y + 66,
+      "Blue ring → start t; then finish i d e freely.", {
+        fontFamily: SERIF, fontSize: "23px", color: PALETTE.frost,
+        align: "center", wordWrap: { width: 560 }, stroke: "#0b0a0f", strokeThickness: 4,
+      }).setOrigin(0.5).setDepth(71);
+    const target = this.makeOlinWord({
+      scene: this, word: "tide", x: position.x, y: position.y, fontSize: 48,
+      onComplete: () => {
+        if (!this.rhythmPracticeActive || this.rhythmPracticeTarget !== target) return;
+        this.clearRhythmPractice();
+        this.clearActiveTargets();
+        this.beatClock.stop();
+        this.setStoryObjective("Practice complete. Press Enter or Space to meet the tide-ghosts.");
+        this.setNarrator("There. Your first letter followed the toll, and the rest found its own way. Now listen for it among the ghosts.", "Old Olin");
+        this.readThen(() => this.beginRhythmEncounters());
+      },
     });
+    this.rhythmPracticeTarget = target;
+    this.registerActiveTarget(target);
+    this.rhythmLabel.setAlpha(0.9);
+    this.beatClock.setTempo(2000);
+    this.beatClock.start();
+  }
+
+  private clearRhythmPractice(): void {
+    this.rhythmPracticeActive = false;
+    this.rhythmPracticeCoach?.destroy();
+    this.rhythmPracticeCoach = null;
+    if (this.rhythmPracticeTarget) {
+      const target = this.rhythmPracticeTarget;
+      this.typingInput.unregister(target);
+      target.destroy();
+      this.activeTargets = this.activeTargets.filter((value) => value !== target);
+    }
+    this.rhythmPracticeTarget = null;
+  }
+
+  /** Original combat clock and encounter delay begin only after rehearsal. */
+  private beginRhythmEncounters(): void {
+    this.beatPhase = "on";
+    this.rhythmLabel.setAlpha(0.9);
+    this.beatClock.setTempo(2000);
+    this.beatClock.start();
+    this.time.delayedCall(2000, () => this.startFirstGhostEncounter());
   }
 
   // ─── Act 1: First ghost encounter ────────────────────────────────────────
@@ -2142,14 +2217,10 @@ export class SunkenBellScene extends Phaser.Scene {
     let step = 0;
     const advance = (): void => {
       if (step >= forcePhrases.length) {
-        // The last breaking word has released its anchor. Remove the closed
-        // doorway before holding the completed, open-door acknowledgment.
-        const door = this.doorForceCue;
-        this.doorForceCue = null;
-        if (door?.scene) {
-          this.tweens.killTweensOf(door);
-          door.destroy();
-        }
+        // The matched final character already began the opening during the
+        // word's 320ms exit. Settle it before the held acknowledgment, retaining
+        // the open masonry until the existing Continue/corridor cleanup.
+        this.openForceDoorCue(true);
         this.setNarrator("The doors burst wide. Their lock-bar rests in your hands.");
         this.setStoryObjective("Lock-Bar is yours. Continue through the open doors.");
         this.readThen(() => this.startAct3Corridor());
@@ -2166,6 +2237,9 @@ export class SunkenBellScene extends Phaser.Scene {
         x: pos.x,
         y: pos.y,
         fontSize: 40,
+        onAdvance: (cursor, length) => {
+          if (step === forcePhrases.length - 1 && cursor === length) this.openForceDoorCue();
+        },
         onComplete: () => {
           step += 1;
           this.clearActiveTargets();
@@ -2196,6 +2270,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.drawWardenStageBase();
     const sprite = this.add.image(WARDEN_X, WARDEN_Y, "bell-warden").setDepth(8);
     sprite.setScale(WARDEN_SPRITE_HEIGHT / sprite.height);
+    applySceneActorLighting(this, sprite);
     addIdleBreath(this, sprite, { dy: -3, durationMs: 2800 });
     return sprite;
   }
@@ -3523,8 +3598,10 @@ export class SunkenBellScene extends Phaser.Scene {
     return c;
   }
 
-  private drawCathedralDoor(mode: "chant" | "force"): Phaser.GameObjects.Graphics {
-    const g = this.add.graphics();
+  private drawCathedralDoor(mode: "chant" | "force"): Phaser.GameObjects.Container {
+    const door = this.add.container(0, 0).setName("cathedral-door");
+    let g = this.add.graphics();
+    door.add(g);
     const polygon = (points: number[][], color: number, alpha = 1): void => {
       g.fillStyle(color, alpha);
       g.fillPoints(points.map(([x, y]) => ({ x, y })), true);
@@ -3560,21 +3637,28 @@ export class SunkenBellScene extends Phaser.Scene {
       g.lineBetween(38, y + 1, 47, y - 1);
     }
 
-    g.fillStyle(0x5d6047, 0.96);
-    g.fillPoints(arch(35, -62, -92, -1), true);
-    polygon([[0, -92], [20, -86], [35, -64], [35, -1], [0, -1]], 0x364c45);
-    g.lineStyle(1, 0x9d9564, 0.62);
-    for (const x of [-27, -18, 18, 27]) {
-      g.lineBetween(x, Math.abs(x) > 20 ? -76 : -85, x, -5);
-    }
-    g.lineStyle(2, 0x182f32, 0.9);
-    g.lineBetween(0, -90, 0, 1);
-    g.lineStyle(1, 0xb2a66e, 0.7);
-    g.lineBetween(-33, -57, -3, -57);
-    g.lineBetween(3, -57, 33, -57);
-    g.lineBetween(-33, -12, -3, -12);
-    g.lineBetween(3, -12, 33, -12);
+    // Keep the accepted bronze/masonry drawing, but give each leaf its own
+    // hinge so the completed force action can open the actual doorway.
     for (const side of [-1, 1]) {
+      const hinge = side * 35;
+      const leaf = this.add.container(hinge, 0).setName(side < 0 ? "door-left" : "door-right");
+      g = this.add.graphics().setX(-hinge);
+      leaf.add(g);
+      door.add(leaf);
+      g.fillStyle(side < 0 ? 0x5d6047 : 0x364c45, 0.96);
+      const outline = arch(35, -62, -92, -1);
+      g.fillPoints((side < 0 ? outline.slice(0, 7) : outline.slice(6)).concat([{ x: 0, y: -1 }]), true);
+      g.lineStyle(1, 0x9d9564, 0.62);
+      for (const x of [side * 18, side * 27]) {
+        g.lineBetween(x, Math.abs(x) > 20 ? -76 : -85, x, -5);
+      }
+      g.lineStyle(1, 0x182f32, 0.9);
+      g.lineBetween(0, -90, 0, 1);
+      g.lineStyle(1, 0xb2a66e, 0.7);
+      const left = side < 0 ? -33 : 3;
+      const right = side < 0 ? -3 : 33;
+      g.lineBetween(left, -57, right, -57);
+      g.lineBetween(left, -12, right, -12);
       g.fillStyle(0x827848, 1);
       g.fillEllipse(side * 8, -35, 8, 15);
       g.lineStyle(1.5, 0xb2a16a, 0.9);
@@ -3585,6 +3669,8 @@ export class SunkenBellScene extends Phaser.Scene {
       }
     }
 
+    g = this.add.graphics().setName(mode === "force" ? "door-crossbar" : "door-decoration");
+    door.add(g);
     if (mode === "chant") {
       // The quiet route carries three carved, softly lit chant marks.
       for (const [x, y] of [[-21, -73], [0, -80], [21, -73]]) {
@@ -3614,10 +3700,38 @@ export class SunkenBellScene extends Phaser.Scene {
         g.fillCircle(x, -36, 2);
       }
     }
+    // The sill belongs to the masonry, so the released crossbar cannot carry
+    // it away when the leaves swing open.
+    g = this.add.graphics();
+    door.add(g);
     polygon([[-50, 3], [43, 3], [51, 9], [-49, 9]], 0x4b625b);
     g.lineStyle(1, 0xa5b6a0, 0.44);
     g.lineBetween(-43, 4, 37, 4);
-    return g;
+    return door;
+  }
+
+  private openForceDoorCue(immediate = false): void {
+    const cue = this.doorForceCue;
+    if (!cue?.scene) return;
+    const assembly = cue.getByName("cathedral-door") as Phaser.GameObjects.Container | null;
+    const left = assembly?.getByName("door-left") as Phaser.GameObjects.Container | null;
+    const right = assembly?.getByName("door-right") as Phaser.GameObjects.Container | null;
+    const bar = assembly?.getByName("door-crossbar") as Phaser.GameObjects.Graphics | null;
+    if (!left || !right || !bar) return;
+    if (cue.getData("door-open") && !immediate) return;
+    cue.setData("door-open", true);
+    this.tweens.killTweensOf(cue);
+    if (immediate || reducedMotion(this)) {
+      this.tweens.killTweensOf([left, right, bar]);
+      left.setScale(0.12, 1);
+      right.setScale(0.12, 1);
+      bar.setVisible(false);
+      return;
+    }
+    // This finishes inside TextWordTarget's existing 320ms completion exit;
+    // no target, reward, reading deadline or extra Continue is introduced.
+    this.tweens.add({ targets: [left, right], scaleX: 0.12, duration: 280, ease: "Cubic.easeOut" });
+    this.tweens.add({ targets: bar, y: 24, rotation: 0.22, alpha: 0, duration: 250, ease: "Cubic.easeIn" });
   }
 
   private showFateCues(): void {
@@ -3749,6 +3863,8 @@ export class SunkenBellScene extends Phaser.Scene {
     ]) {
       if (!cue?.scene) continue;
       this.tweens.killTweensOf(cue);
+      const doorway = cue.getByName("cathedral-door") as Phaser.GameObjects.Container | null;
+      if (doorway) this.tweens.killTweensOf(doorway.list);
       cue.destroy();
     }
     this.doorChantCue = null;

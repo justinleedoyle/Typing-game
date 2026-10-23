@@ -1,7 +1,7 @@
 import { installChapterMenu } from "../game/ui/pauseMenu";
 import { rememberRealmFork, resolveRealmFork, resolveCompanionDecision, rememberCompanionDecision, type RealmFork } from "../game/realmChoices";
 import { ChapterReading } from "../game/ui/chapterReading";
-import { reducedFlashes, reducedMotion } from "../game/presentation";
+import { decorativeTween, reducedFlashes, reducedMotion } from "../game/presentation";
 import Phaser from "phaser";
 import { type AmbientHandle, playAmbientForge } from "../audio/ambient";
 import { playChime } from "../audio/chime";
@@ -83,7 +83,8 @@ import {
 } from "../game/wren";
 import { showAlmanacStampCard } from "../game/ui/almanacStamp";
 import { ConsoleBand } from "../game/ui/consoleBand";
-import { preloadSatchelIcons } from "../game/ui/satchelIcons";
+import { preloadSatchelIcons, satchelIconFor } from "../game/ui/satchelIcons";
+import { applySceneActorLighting, restoreSceneActorLighting } from "../game/actorLighting";
 import forgeBackdrop from "../../art/references/clockwork-forge-clean.png";
 import forgeGolemSprite from "../../art/forge/golem.png";
 import forgeCommandGolemSprite from "../../art/forge/command-golem.png";
@@ -130,10 +131,10 @@ const GOLEM_ADVANCE_MS = 15000;
 // procedural body height, but the living-scene pass needs the painted automaton
 // to carry more of the threat against the foundry floor. The boss is drawn
 // inside a ×1.8 container, so its on-screen height is
-// COMMAND_GOLEM_SPRITE_HEIGHT × 1.8. Tune on live.
+// COMMAND_GOLEM_SPRITE_HEIGHT × COMMAND_GOLEM_SCALE. Tune on live.
 const GOLEM_SPRITE_HEIGHT = 172;
 const COMMAND_GOLEM_SPRITE_HEIGHT = 150;
-const COMMAND_GOLEM_SCALE = 1.8;
+const COMMAND_GOLEM_SCALE = 2.4;
 // FLOOR_Y is the centered golems' body lane. Feet-origin actors need the
 // painted boot line, half a regular golem below that center.
 const FOUNDRY_GROUND_Y = FLOOR_Y + GOLEM_SPRITE_HEIGHT / 2;
@@ -221,6 +222,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private gregorSprite?: Phaser.GameObjects.Image;
   /** The apprentices' speaker stays beside their valve during the first fork. */
   private apprenticeSprite?: Phaser.GameObjects.Image;
+  private keepsakeSprite?: Phaser.GameObjects.Image;
 
   private shiftHeld = false;
   private altHeld = false;
@@ -283,6 +285,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.fightCue = null;
     this.gregorSprite = undefined;
     this.apprenticeSprite = undefined;
+    this.keepsakeSprite = undefined;
     this.oneShotInvoker = null;
     this.shiftHeld = false;
     this.altHeld = false;
@@ -309,6 +312,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.load.image("forge-companion-snow-fox", snowFoxSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
+    preloadSatchelIcons(this, ["bellows-hammer", "sabotage-wrench", "master-key", "golem-heart"]);
     preloadWren(this);
   }
 
@@ -516,6 +520,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.gregorSprite = undefined;
       this.apprenticeSprite?.destroy();
       this.apprenticeSprite = undefined;
+      this.keepsakeSprite?.destroy();
+      this.keepsakeSprite = undefined;
     });
 
     this.ambientHandle = playAmbientForge();
@@ -1465,11 +1471,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const helpForn = this.makeFornWord({
       scene: this,
       word: "help smith forn",
-      ...this.forgeChoiceWordPosition(this.fornSprite, -128, "help smith forn", {
-        side: "right",
-        long: true,
-        lift: 92,
-      }),
+      ...this.forgeForkWordPosition("forn"),
       fontSize: 32,
       frame: "banner",
       onComplete: () => this.startFornBranch(),
@@ -1479,10 +1481,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       {
         scene: this,
         word: "join the apprentices",
-        ...this.forgeChoiceWordPosition(this.apprenticeCue, -68, "join the apprentices", {
-          side: "left",
-          long: true,
-        }),
+        ...this.forgeForkWordPosition("apprentices"),
         fontSize: 32,
         frame: "banner",
         onComplete: () => this.startCabalBranch(),
@@ -1498,6 +1497,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.clearActiveTargets();
     this.dismissForgeChoiceCue("apprentice");
     this.hideApprenticeSprite();
+    this.approachForgeWork(665);
     this.band.setObjective("Forn accepts your help. Press Enter or Space to begin the repair.");
     this.setNarrator(
       "Aye. I could use steady hands.",
@@ -1524,6 +1524,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.clearActiveTargets();
     this.hideFornSprite();
     this.showApprenticeSprite();
+    this.approachForgeWork(1100);
     this.pulseForgeChoiceCue(this.apprenticeCue);
     this.band.setObjective("The apprentices accept your help. Press Enter or Space to begin.");
     this.setNarrator(
@@ -1546,6 +1547,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private afterFork1(choice: "forn" | "cabal", relicId: string): void {
+    this.showForgeKeepsake(relicId, choice === "forn" ? 475 : 1450);
     // The fork is resolved — the realm moves on to the boss; Forn leaves.
     this.hideFornSprite();
     this.hideApprenticeSprite();
@@ -1578,9 +1580,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── ACT 3 — The Command-Golem ────────────────────────────────────────────────
 
   private startAct3(): void {
+    this.keepsakeSprite?.destroy();
+    this.keepsakeSprite = undefined;
     this.clearActiveTargets();
     this.golems = [];
     this.waveActive = false;
+    this.approachForgeWork(this.scale.width / 2 - 100);
     this.playCommandGolemRiseCue();
     if (!reducedMotion(this)) this.cameras.main.shake(300, 0.006);
     this.narration.say("forge_command_golem_rise");
@@ -1962,6 +1967,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private afterFork2(choice: "peaceful" | "fought", relicId: string): void {
+    this.showForgeKeepsake(relicId, this.bossContainer?.x ?? 1160);
     this.clearForgeChoiceCues();
     this.store.update((s) => {
       const realm = s.realms["clockwork-forge"] ?? {
@@ -1984,6 +1990,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── Brass Songbird companion gate ────────────────────────────────────────────
 
   private startCompanionGate(): void {
+    this.keepsakeSprite?.destroy();
+    this.keepsakeSprite = undefined;
     this.clearActiveTargets();
     if (resolveCompanionDecision("clockwork-forge", this.store.get().realms["clockwork-forge"], this.store.get().satchel)) {
       this.startTrueNamePassage(); return;
@@ -2247,7 +2255,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     x: number,
     y: number,
     _isBoss: boolean,
-    groundY = 16,
+    groundY = GOLEM_SPRITE_HEIGHT / 2 + 4,
   ): StaticGolem {
     const container = this.add.container(x, y);
     const sprite = this.drawGolemInto(container, false, groundY);
@@ -2265,7 +2273,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     word: string,
     advanceMs: number,
     isCapitalized: boolean,
-    groundY = 16,
+    groundY = GOLEM_SPRITE_HEIGHT / 2 + 4,
   ): MovingWordEnemy {
     const startX = x < this.scale.width / 2 ? -120 : this.scale.width + 120;
     const container = this.add.container(startX, y);
@@ -2429,7 +2437,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     persist = false,
   ): void {
     sprite.setTint(PALETTE_HEX.brass);
-    if (!persist) this.time.delayedCall(220, () => sprite.clearTint());
+    if (!persist) this.time.delayedCall(220, () => restoreSceneActorLighting(sprite));
   }
 
   /** Visual "command" effect when the player uses Shift on a golem — the camera
@@ -2518,9 +2526,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
     const lateral = long ? 220 : 180;
     const xInset = long ? 420 : 300;
+    const actorClearanceY = owner === "forn"
+      ? Math.min(this.wrenContainer.y - 300, body.y - FORN_SPRITE_HEIGHT - 64)
+      : this.wrenContainer.y - 300;
     return {
       x: Phaser.Math.Clamp(body.x + side * lateral, xInset, width - xInset),
-      y: Phaser.Math.Clamp(body.y + sourceOffsetY - lift, 280, height - 430),
+      y: Math.min(actorClearanceY,
+        Phaser.Math.Clamp(body.y + sourceOffsetY - lift, 280, height - 430)),
     };
   }
 
@@ -2545,6 +2557,44 @@ export class ClockworkForgeScene extends Phaser.Scene {
       x: Phaser.Math.Clamp(body.x + side * lateral, xInset, width - xInset),
       y: Phaser.Math.Clamp(body.y + sourceOffsetY - lift, 280, height - 430),
     };
+  }
+
+  /** Each choice sits above its speaker, clear of all three silhouettes. */
+  private forgeForkWordPosition(owner: "forn" | "apprentices"): { x: number; y: number } {
+    return {
+      x: this.scale.width * (owner === "forn" ? 0.26 : 0.74),
+      y: Math.min(440, this.scale.height - 620),
+    };
+  }
+
+  private approachForgeWork(x: number): void {
+    const actor = this.wrenContainer;
+    if (!actor?.scene) return;
+    this.tweens.killTweensOf(actor);
+    if (reducedMotion(this)) { actor.x = x; return; }
+    setWrenPose(this.wrenSprite, "walk", x < actor.x);
+    this.tweens.add({
+      targets: actor, x, duration: 520, ease: "Sine.easeInOut",
+      onComplete: () => { if (this.wrenSprite?.scene) setWrenPose(this.wrenSprite, "front"); },
+    });
+  }
+
+  /** The same painted keepsake moves from its maker into Wren's hands. This
+   * flourish never gates Continue or owns reward/save progression. */
+  private showForgeKeepsake(id: string, fromX: number): void {
+    const icon = satchelIconFor(id);
+    if (!icon || !this.textures.exists(icon.key)) return;
+    this.keepsakeSprite?.destroy();
+    const end = { x: this.wrenContainer.x + 38, y: this.wrenContainer.y - 118 };
+    const item = this.add.image(reducedMotion(this) ? end.x : fromX,
+      reducedMotion(this) ? end.y : FOUNDRY_GROUND_Y - 190, icon.key).setDepth(61);
+    item.setScale(66 / Math.max(item.width, item.height));
+    this.keepsakeSprite = item;
+    applySceneActorLighting(this, item);
+    this.tweens.add({
+      targets: item, ...end, duration: reducedMotion(this) ? 0 : 650,
+      ease: "Sine.easeInOut",
+    });
   }
 
   private runPassageChain(
@@ -4052,14 +4102,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private idleBob(c: Phaser.GameObjects.Container): void {
-    this.tweens.add({
+    decorativeTween(this, this.tweens.add({
       targets: c,
       y: { from: c.y, to: c.y - 5 },
       duration: 1100,
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
-    });
+    }));
   }
 
   // ─── Drawing ──────────────────────────────────────────────────────────────────
@@ -4224,43 +4274,45 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private drawGolemInto(
     c: Phaser.GameObjects.Container,
     _isBoss: boolean,
-    groundY = 16,
+    groundY = GOLEM_SPRITE_HEIGHT / 2 + 4,
   ): Phaser.GameObjects.Image {
     c.add(addLocalGroundShadow(this, 190, 34, { y: groundY, alpha: 0.46 }));
     c.add(this.makeGolemFoundryBase(false, groundY + 2));
     const sprite = this.add.image(0, 0, "forge-golem");
     sprite.setScale(GOLEM_SPRITE_HEIGHT / sprite.height);
+    applySceneActorLighting(this, sprite);
     c.add(sprite);
     return sprite;
   }
 
   /** Add the painted Command-Golem boss sprite (scaled to the procedural boss
-   *  height; the ×1.8 container scales it up on screen). Returns it so phase 2
+   *  height; the container scales it up on screen). Returns it so phase 2
    *  can flash it "commanded". */
   private drawCommandGolemInto(
     c: Phaser.GameObjects.Container,
     _isBoss: boolean,
   ): Phaser.GameObjects.Image {
-    c.add(addLocalGroundShadow(this, 164, 30, { y: 12, alpha: 0.46 }));
+    c.add(addLocalGroundShadow(this, 164, 30, { y: COMMAND_GOLEM_SPRITE_HEIGHT / 2 + 2, alpha: 0.46 }));
     c.add(this.makeGolemFoundryBase(true));
     const sprite = this.add.image(0, 0, "forge-command-golem");
     sprite.setScale(COMMAND_GOLEM_SPRITE_HEIGHT / sprite.height);
+    applySceneActorLighting(this, sprite);
     c.add(sprite);
     return sprite;
   }
 
   private makeGolemFoundryBase(
     isBoss: boolean,
-    emberY = isBoss ? 16 : 18,
+    emberY = (isBoss ? COMMAND_GOLEM_SPRITE_HEIGHT : GOLEM_SPRITE_HEIGHT) / 2 + 2,
   ): Phaser.GameObjects.Graphics {
-    const g = this.add.graphics();
     const width = isBoss ? 190 : 174;
-    g.fillStyle(0x090604, 0.22);
-    g.fillEllipse(0, emberY, width, isBoss ? 42 : 36);
-    g.fillStyle(PALETTE_HEX.ember, isBoss ? 0.16 : 0.14);
-    g.fillEllipse(0, emberY - 4, width * 0.72, isBoss ? 32 : 28);
-    g.lineStyle(2, PALETTE_HEX.brass, isBoss ? 0.28 : 0.22);
-    g.strokeEllipse(0, emberY - 3, width * 0.86, isBoss ? 36 : 31);
+    const g = addLocalGroundShadow(this, width, isBoss ? 42 : 36,
+      { y: emberY, color: 0x090604, alpha: 0.22 });
+    g.fillStyle(PALETTE_HEX.ember, isBoss ? 0.12 : 0.1);
+    g.fillEllipse(-width * 0.2, emberY - 4, width * 0.27, 9);
+    g.fillEllipse(width * 0.21, emberY - 1, width * 0.24, 7);
+    // Floor heat is a scattered reflection; an outlined oval reads as a disc
+    // floating underneath the heavy automaton.
     g.lineStyle(2, PALETTE_HEX.ember, isBoss ? 0.28 : 0.24);
     g.lineBetween(-width * 0.34, emberY - 8, -width * 0.12, emberY - 14);
     g.lineBetween(width * 0.06, emberY - 13, width * 0.32, emberY - 7);

@@ -42,12 +42,17 @@ class ReadingDisplay {
   visible = false;
   destroyed = false;
   text = "";
-  setText(text: string) { this.text = text; return this; }
+  fontSize = 22;
+  padX = 0;
+  padY = 0;
+  measure() { this.width = this.text.length * this.fontSize * 0.52 + this.padX * 2; this.height = this.fontSize * 1.2 + this.padY * 2; }
+  setText(text: string) { this.text = text; this.measure(); return this; }
   setDepth() { return this; }
   setOrigin() { return this; }
   setVisible(visible: boolean) { this.visible = visible; return this; }
   setY(y: number) { this.y = y; return this; }
-  setFontSize() { return this; }
+  setX(x: number) { this.x = x; return this; }
+  setFontSize(size: number) { this.fontSize = size; this.measure(); return this; }
   clear() { return this; }
   fillStyle() { return this; }
   fillRoundedRect() { return this; }
@@ -59,12 +64,23 @@ const displays: ReadingDisplay[] = [];
 const display = () => { const value = new ReadingDisplay(); displays.push(value); return value; };
 let listeners = 0;
 const clock = { now: 0 };
+let readingTextScale: "standard" | "large" = "standard";
+let presentationRedraw: (() => void) | null = null;
 const readingScene = {
   time: clock,
   scale: { width: 1920 },
-  add: { graphics: display, text: display },
-  data: { get: () => undefined },
-  events: { on: () => { listeners += 1; }, off: () => { listeners -= 1; } },
+  add: { graphics: display, text: (x: number, y: number, text: string,
+    style: { fontSize: string; padding?: { x: number; y: number } }) => {
+    const value = display(); value.x = x; value.y = y;
+    value.padX = style.padding?.x ?? 0; value.padY = style.padding?.y ?? 0;
+    return value.setFontSize(Number.parseInt(style.fontSize)).setText(text);
+  } },
+  data: { get: () => ({ get: () => ({ textScale: readingTextScale }) }) },
+  events: {
+    on: (_event: string, callback: () => void, context: unknown) => {
+      listeners += 1; presentationRedraw = () => callback.call(context);
+    }, off: () => { listeners -= 1; },
+  },
 } as unknown as Phaser.Scene;
 const gate = new ChapterReading(readingScene, 316);
 let continued = 0;
@@ -76,6 +92,21 @@ gate.show(() => {
   continued += 1;
   gate.show(() => { continued += 1; }, () => { replayed += 1; });
 }, () => { replayed += 1; });
+const primaryHint = displays.find((value) => value.text === "Enter / Space · Continue")!;
+const replayHint = displays.find((value) => value.text === "R · Read again")!;
+assert.equal(primaryHint.y, 316, "the compact prompt retains its established reading lane");
+assert.equal(replayHint.y, 316, "replay remains on the same deliberate reading baseline");
+assert(primaryHint.fontSize > replayHint.fontSize && replayHint.fontSize >= 17,
+  "Continue leads while the secondary control remains readable");
+assert(!displays.some((value) => value.text.includes("Esc")), "the central hint does not duplicate persistent pause chrome");
+readingTextScale = "large";
+(presentationRedraw as (() => void) | null)?.();
+assert.equal(primaryHint.fontSize, 28);
+assert.equal(replayHint.fontSize, 22, "large text enlarges the replay control too");
+assert.equal(primaryHint.y, 316);
+assert.equal(replayHint.y, 316);
+assert(primaryHint.x - primaryHint.width / 2 >= 0 && replayHint.x + replayHint.width < 1920,
+  "both large-text controls remain inside the scene");
 assert.equal(key("Enter"), true);
 assert.equal(continued, 0, "the key completing the previous typed beat cannot also skip its response");
 clock.now = 200;
@@ -95,6 +126,8 @@ assert.equal(continued, 2, "a fresh Space press continues the next paragraph");
 assert.equal(key("x"), false, "the final continuation releases ordinary gameplay input");
 gate.show(() => { continued += 1; }, null);
 assert(!displays.at(-1)!.text.includes("read again"), "credits without replay do not advertise a dead control");
+assert(!replayHint.visible && replayHint.text === "", "no-replay gates have no empty secondary furniture");
+assert.equal(primaryHint.x, 960, "a lone Continue prompt remains centered");
 clock.now = 800;
 assert.equal(key("R"), true);
 assert.equal(continued, 2, "replay never becomes an accidental credit exit");

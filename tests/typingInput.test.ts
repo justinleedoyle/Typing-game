@@ -143,3 +143,49 @@ await suite("typing input: same target registration and reset do not create stal
   type(input, "snow");
   assertEqual(target.completions, 1, "new run can reuse the target");
 });
+
+await suite("typing input: an encounter ending inside miss callbacks leaves no stale claim", () => {
+  for (const difficulty of ["forgiving", "standard", "purist"] as const) {
+    for (const endFrom of ["target", "hook"] as const) {
+      const { store, keys } = recordingStore(difficulty);
+      const input = new TypingInputController(store);
+      const target = new Target("unMAKE", 0, true);
+      input.register(target);
+      type(input, "u");
+      if (endFrom === "target") target.miss = () => input.unregister(target);
+      else input.setKeystrokeHooks({ onMiss: () => input.reset() });
+      assert(input.handleChar("x"), `${difficulty}: ending miss is consumed`);
+      assert(!input.hasClaim(), `${difficulty}: ended encounter stays unclaimed`);
+      assertEqual(target.releases, 1, "ending releases the old target exactly once");
+      assertEqual(keys.at(-1), { key: "n", hit: false }, "miss still records the requested key");
+    }
+  }
+});
+
+await suite("typing input: callbacks that acquire a replacement preserve its typed progress", () => {
+  for (const difficulty of ["forgiving", "standard", "purist"] as const) {
+    for (const replaceFrom of ["target-miss", "miss-hook", "correct-hook"] as const) {
+      const { store } = recordingStore(difficulty);
+      const input = new TypingInputController(store);
+      const old = new Target("ab");
+      const replacement = new Target("xy");
+      input.register(old);
+      type(input, "a");
+      const replace = (): void => {
+        input.setKeystrokeHooks({});
+        input.unregister(old);
+        input.register(replacement);
+        input.handleChar("x");
+      };
+      if (replaceFrom === "target-miss") old.miss = replace;
+      else if (replaceFrom === "miss-hook") input.setKeystrokeHooks({ onMiss: replace });
+      else input.setKeystrokeHooks({ onCorrect: replace });
+      assert(input.handleChar(replaceFrom === "correct-hook" ? "b" : "z"), "trigger consumed");
+      assert(input.hasClaim(), `${difficulty}: callback's replacement remains claimed`);
+      assertEqual(replacement.cursor, 1, "old input does not rewind the replacement");
+      assertEqual(old.completions, 0, "invalidated claim has no delayed completion");
+      type(input, "y");
+      assertEqual(replacement.completions, 1, "replacement completes normally");
+    }
+  }
+});

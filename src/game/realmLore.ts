@@ -35,7 +35,7 @@ export const REALM_LORE: Record<string, RealmLore> = {
   "sunken-bell": {
     title: "The Sunken Bell",
     intro:
-      "The second portal opened underwater — or nearly so. The kingdom of Tide-Glass sat on the seafloor, its glass spires green with old light, and its bell had not rung in a hundred years.",
+      "The second portal opened underwater — or nearly so. The kingdom of Tide-Glass sat on the seafloor, its glass spires green with old light, and its bell had kept the same drowned rhythm for a hundred years.",
     endings: {
       chant:
         "Wren opened the cathedral doors slowly, on the bell's rhythm. The doors parted with grace, and Wren carried the Quiet Chant onward.",
@@ -214,7 +214,7 @@ export function winterRealmSummary(
   } else if (completeChoices && !eligible) {
     companion = "not-earned";
     if (choices.fox === "ignored") farewell = "No snow-fox followed Wren through the portal.";
-    else if (choices.fork1 === "firefly" && choices.fork2 === "bury") farewell = "The fox returned, searched for Sigrid, then turned back into the pines.";
+    else if (choices.fork1 === "firefly" && choices.fork2 === "bury") farewell = "The fox returned and looked past Wren, searching. After a long moment, she turned back into the pines.";
     else if (choices.fork1 === "huntress" && choices.fork2 === "pelt") farewell = "The fox saw the old wolf's pelt and stepped back into the snow.";
     else farewell = "The fox stayed in the mountain's pines.";
   }
@@ -242,7 +242,7 @@ export function winterLorePageMatchesChoices(loreId: string, choices: Readonly<R
 
 const WINTER_LORE_BODIES: Readonly<Record<string, string>> = {
   "the-hundred-quiet-years": "Heldur thawed long enough to give a name and a fragment of the past: a hundred years at the pass, and the word Holdfast. Then the knight's voice fell quiet again. The wayshrine stayed warm a little longer than the wind would explain.",
-  "the-wounded-foxs-name": "The fox lay curled in the snow, breath shallow. When Wren said “I mean no harm” she did not run. She watched Wren from the pines for the rest of the climb. Her name, Runa later guessed, was something close to kindness in a small shape.",
+  "the-wounded-foxs-name": "The fox sat in the snow, hurt and breathing shallowly. When Wren said “I mean no harm” she did not run. She watched Wren from the pines for the rest of the climb. Her name, Runa later guessed, was something close to kindness in a small shape.",
   "the-huntress-song": "Sigrid spoke a few words in the wolf-tongue as Wren freed her hands. The howls behind them fell quiet. She pressed a spiral horn into Wren's hand and gestured uphill. An old song lingered in the snow after she had gone.",
   "the-firefly-trail": "Three fireflies hovered, patient, between the pines. They drifted up only when Wren followed, never when Wren stopped. They led the way to a hollow tree where a small paper lantern had been waiting longer than anyone living. Wren carried it down the mountain.",
   "the-pack-leader-true-name": "The old wolf fell, and a scratched A flashed across the Almanac. When the climb was over, Wren spoke the mountain's true-name passage: the winter mountain settles. its old breath warms. the snow rests. The snow grew still.",

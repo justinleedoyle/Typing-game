@@ -22,6 +22,44 @@ const SOURCE: Record<string, string> = {
   "wren-hurt": wrenHurt,
 };
 const HURT_TIMER_KEY = "wrenHurtTimer";
+const pendingReactions = new WeakMap<Phaser.GameObjects.Image, () => boolean>();
+
+/** Keystrokes can interrupt a flourish before its tween completes. Restore its
+ * resting pose first so the next reaction cannot inherit a raised walk frame. */
+function finishPendingReaction(img: Phaser.GameObjects.Image): void {
+  const restore = pendingReactions.get(img);
+  if (!restore) return;
+  img.scene?.tweens.killTweensOf(img);
+  restore();
+}
+
+function beginReaction(img: Phaser.GameObjects.Image): () => boolean {
+  finishPendingReaction(img);
+  img.scene.tweens.killTweensOf(img);
+  const resting = {
+    key: img.texture.key, x: img.x, y: img.y,
+    scaleX: img.scaleX, scaleY: img.scaleY,
+  };
+  const restore = (): boolean => {
+    if (pendingReactions.get(img) !== restore) return false;
+    pendingReactions.delete(img);
+    if (!img.scene) return false;
+    const hurtTimer = img.getData(HURT_TIMER_KEY) as Phaser.Time.TimerEvent | undefined;
+    if (hurtTimer) {
+      hurtTimer.remove();
+      img.setData(HURT_TIMER_KEY, undefined);
+      img.clearTint();
+    }
+    img.setTexture(resting.key);
+    img.x = resting.x;
+    img.y = resting.y;
+    img.scaleX = resting.scaleX;
+    img.scaleY = resting.scaleY;
+    return true;
+  };
+  pendingReactions.set(img, restore);
+  return restore;
+}
 
 /** Loads every Wren pose texture. Call from a scene's preload(). */
 export function preloadWren(scene: Phaser.Scene): void {
@@ -52,6 +90,11 @@ export function setWrenPose(
   pose: WrenPose,
   faceLeft = false,
 ): void {
+  finishPendingReaction(img);
+  applyWrenPose(img, pose, faceLeft);
+}
+
+function applyWrenPose(img: Phaser.GameObjects.Image, pose: WrenPose, faceLeft: boolean): void {
   img.setTexture(TEXTURE[pose]);
   const scale = WREN_DISPLAY_HEIGHT / img.height;
   img.setScale(scale);
@@ -69,21 +112,16 @@ export function setWrenPose(
  * through the bob.
  */
 export function bobWrenSprite(img: Phaser.GameObjects.Image): void {
-  const baseScale = WREN_DISPLAY_HEIGHT / img.height;
-  const facingLeft = img.scaleX < 0;
-  const baseScaleX = facingLeft ? -baseScale : baseScale;
-  img.scene.tweens.killTweensOf(img);
+  if (img.getData(HURT_TIMER_KEY)) return;
+  const restore = beginReaction(img);
   img.scene.tweens.add({
     targets: img,
-    scaleY: baseScale * 0.95,
-    scaleX: baseScaleX * 1.02,
+    scaleY: img.scaleY * 0.95,
+    scaleX: img.scaleX * 1.02,
     duration: 60,
     yoyo: true,
     ease: "Sine.out",
-    onComplete: () => {
-      img.scaleY = baseScale;
-      img.scaleX = baseScaleX;
-    },
+    onComplete: restore,
   });
 }
 
@@ -96,26 +134,19 @@ export function playWrenAction(
   img: Phaser.GameObjects.Image,
   opts: { faceLeft?: boolean; durationMs?: number } = {},
 ): void {
-  const originalKey = img.texture.key;
+  if (img.getData(HURT_TIMER_KEY)) return;
+  const restore = beginReaction(img);
   const originalScaleX = img.scaleX;
-  const originalScaleY = img.scaleY;
   const originalY = img.y;
   const scene = img.scene;
-  scene.tweens.killTweensOf(img);
-  setWrenPose(img, "cast", opts.faceLeft ?? originalScaleX < 0);
+  applyWrenPose(img, "cast", opts.faceLeft ?? originalScaleX < 0);
   scene.tweens.add({
     targets: img,
     y: originalY - 8,
     duration: opts.durationMs ?? 180,
     yoyo: true,
     ease: "Sine.easeOut",
-    onComplete: () => {
-      if (!img.scene) return;
-      img.setTexture(originalKey);
-      img.scaleX = originalScaleX;
-      img.scaleY = originalScaleY;
-      img.y = originalY;
-    },
+    onComplete: restore,
   });
 }
 
@@ -126,15 +157,13 @@ export function playWrenFocus(
   opts: { faceLeft?: boolean; durationMs?: number } = {},
 ): void {
   if (img.getData(HURT_TIMER_KEY)) return;
-  const originalKey = img.texture.key;
+  const restore = beginReaction(img);
   const originalScaleX = img.scaleX;
-  const originalScaleY = img.scaleY;
   const originalX = img.x;
   const originalY = img.y;
   const scene = img.scene;
-  scene.tweens.killTweensOf(img);
   const faceLeft = opts.faceLeft ?? originalScaleX < 0;
-  setWrenPose(img, "walk", faceLeft);
+  applyWrenPose(img, "walk", faceLeft);
   scene.tweens.add({
     targets: img,
     x: originalX + (faceLeft ? -5 : 5),
@@ -142,14 +171,7 @@ export function playWrenFocus(
     duration: opts.durationMs ?? 120,
     yoyo: true,
     ease: "Sine.easeOut",
-    onComplete: () => {
-      if (!img.scene) return;
-      img.setTexture(originalKey);
-      img.scaleX = originalScaleX;
-      img.scaleY = originalScaleY;
-      img.x = originalX;
-      img.y = originalY;
-    },
+    onComplete: restore,
   });
 }
 
@@ -177,20 +199,13 @@ export function playWrenHurt(
   const scene = img.scene;
   if (!scene) return;
 
-  const priorTimer = img.getData(HURT_TIMER_KEY) as
-    | Phaser.Time.TimerEvent
-    | undefined;
-  priorTimer?.remove();
-
-  const originalKey = img.texture.key;
+  const restore = beginReaction(img);
   const originalScaleX = img.scaleX;
-  const originalScaleY = img.scaleY;
   const originalX = img.x;
   const originalY = img.y;
   const facingLeft = opts.faceLeft ?? originalScaleX < 0;
 
-  scene.tweens.killTweensOf(img);
-  setWrenPose(img, "hurt", facingLeft);
+  applyWrenPose(img, "hurt", facingLeft);
   img.setTintFill(0x8a3a2a);
 
   scene.tweens.add({
@@ -203,15 +218,7 @@ export function playWrenHurt(
   });
 
   const timer = scene.time.delayedCall(opts.durationMs ?? 420, () => {
-    if (!img.scene) return;
-    img.clearTint();
-    img.setTexture(originalKey);
-    img.scaleX = originalScaleX;
-    img.scaleY = originalScaleY;
-    img.x = originalX;
-    img.y = originalY;
-    img.setData(HURT_TIMER_KEY, undefined);
-    opts.onComplete?.();
+    if (restore()) opts.onComplete?.();
   });
   img.setData(HURT_TIMER_KEY, timer);
 }

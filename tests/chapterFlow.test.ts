@@ -1,4 +1,6 @@
 import { strict as assert } from "node:assert";
+import { readFileSync } from "node:fs";
+import ts from "typescript";
 import type Phaser from "phaser";
 import { checkpointIndex, committedWinterChoices, openingStep, readingAction, winterStep } from "../src/game/chapterFlow";
 import { ChapterReading } from "../src/game/ui/chapterReading";
@@ -102,3 +104,66 @@ gate.destroy();
 assert.equal(listeners, 0, "shutdown removes the presentation listener");
 assert(displays.every((value) => value.destroyed && !value.visible), "shutdown removes the reading UI");
 console.log("chapterFlow: actual reading gate protects deliberate progression and replay");
+
+// Run the actual layout method against the photographed cairn/actor geometry.
+// The renderer is unnecessary for this label-placement regression.
+const winterPath = new URL("../src/scenes/WinterMountainScene.ts", import.meta.url);
+const winterSource = ts.createSourceFile(winterPath.pathname, readFileSync(winterPath, "utf8"),
+  ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+const winterClass = winterSource.statements.find(ts.isClassDeclaration)!;
+const passageMethod = winterClass.members.find((member) => member.name?.getText(winterSource) === "winterPassageWordPosition")!;
+const passageCode = ts.transpileModule(`class Harness { ${passageMethod.getText(winterSource)} }`, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const PassageLayout = new Function("Phaser", `${passageCode}; return Harness;`)({
+  Math: { Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(value, max)) },
+});
+const cairn = { scene: true, x: 650, y: 792 };
+const winter = new PassageLayout();
+Object.assign(winter, { scale: { width: 1920, height: 1080 }, cairnCue: cairn });
+for (const word of ["carry the stones", "let him rest here"]) {
+  const position = winter.winterPassageWordPosition(cairn, -42, word);
+  const generousHalfWidth = word.length * 18 / 2;
+  assert(position.x + generousHalfWidth < 880, "the cairn passage stays clear of centered Wren's hood and body");
+  assert(position.x - generousHalfWidth > 180, "the full cairn passage remains on screen");
+  assert(position.y >= 280 && position.y <= 670, "passage remains in the existing reading lane");
+}
+const lantern = { scene: true, x: 1330, y: 790 };
+assert.deepEqual(winter.winterPassageWordPosition(lantern, -34, "take the lantern"),
+  { x: 1150, y: 654 }, "the firefly/lantern passage keeps its existing placement");
+console.log("chapterFlow: actual cairn passage layout stays clear of Wren");
+
+// Run the offering entry and passage chain, rather than duplicating its chosen
+// side in the test. Removing that choice recreates the photographed hood overlap.
+const woodPath = new URL("../src/scenes/HauntedWoodScene.ts", import.meta.url);
+const woodSource = ts.createSourceFile(woodPath.pathname, readFileSync(woodPath, "utf8"),
+  ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+const woodClass = woodSource.statements.find(ts.isClassDeclaration)!;
+const woodMethods = ["startFork1Offering", "runPassageChain", "ownerPassageWordPosition"].map((name) =>
+  woodClass.members.find((member) => member.name?.getText(woodSource) === name)!.getText(woodSource));
+const woodCode = ts.transpileModule(`class Harness { ${woodMethods.join("\n")} }`, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const OfferingLayout = new Function(`${woodCode}; return Harness;`)();
+const offeringScene = new OfferingLayout();
+let offeringWord: { word: string; x: number; y: number } | null = null;
+Object.assign(offeringScene, {
+  scale: { width: 1920, height: 1080 },
+  offeringCue: { scene: true, x: 690, y: 792 },
+  commitFork: (_fork: string, requested: string) => requested,
+  fadeOutForkCue: () => {},
+  setNarrator: () => {},
+  band: { setObjective: () => {} },
+  readThen: (next: () => void) => next(),
+  makeWoodForkWord: (_body: unknown, opts: { word: string; x: number; y: number }) => { offeringWord = opts; return opts; },
+  registerActiveTarget: () => {},
+});
+offeringScene.startFork1Offering();
+assert(offeringWord, "the actual offering entry creates its remembrance target");
+const offeringTarget = offeringWord as { word: string; x: number; y: number };
+assert(offeringTarget.x + offeringTarget.word.length * 18 / 2 < 880,
+  "the whole remembrance phrase stays clear of centered Wren's hood");
+assert(offeringTarget.x - offeringTarget.word.length * 18 / 2 > 180,
+  "the phrase stays fully within the existing scene");
+assert(offeringTarget.y >= 330 && offeringTarget.y <= 720, "the phrase retains the established reading lane");
+console.log("chapterFlow: actual offering entry keeps its remembrance phrase clear of Wren");

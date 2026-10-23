@@ -1316,17 +1316,19 @@ export class AlmanacScene extends Phaser.Scene {
     this.closing = true;
     playChime();
     this.clearNavigationTargets();
+    if (this.overlay) {
+      // The chamber already exists beneath this book. Return control now so
+      // the next typed command cannot disappear into a closing-animation gap.
+      this.scene.stop();
+      this.scene.resume("PortalChamberScene");
+      return;
+    }
     this.playBookCloseWake();
     this.time.delayedCall(220, () => {
       this.cameras.main.fadeOut(430, 11, 10, 15);
       this.cameras.main.once(
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
         () => {
-          if (this.overlay) {
-            this.scene.stop();
-            this.scene.resume("PortalChamberScene");
-            return;
-          }
           this.scene.start("PortalChamberScene", { store: this.store });
         },
       );
@@ -1340,6 +1342,9 @@ export class AlmanacScene extends Phaser.Scene {
     if (action === "ignore") return;
     if (action !== null) {
       event.preventDefault();
+      // Phaser broadcasts keyboard events across scenes. The Esc that closes
+      // this overlay must not also send the newly resumed chamber back/pause.
+      event.stopPropagation();
       if (action === "cancel-typing") this.typingInput.handleChar("Escape");
       else if (action === "close") this.closeBook();
       else if (action === "previous-page" || action === "next-page") this.turnPage(action === "previous-page" ? -1 : 1);

@@ -150,7 +150,7 @@ export class TitleScene extends Phaser.Scene {
       .text(TITLE_PROMPT.x, TITLE_PROMPT.y, "press any key", {
         fontFamily: SERIF,
         fontSize: "22px",
-        color: UI_CSS.inkSoft,
+        color: UI_CSS.ink,
         fontStyle: "italic",
       })
       .setOrigin(0.5)
@@ -360,7 +360,7 @@ export class TitleScene extends Phaser.Scene {
     }
     this.promptTween = this.tweens.add({
       targets: this.prompt,
-      alpha: { from: 1, to: 0.35 },
+      alpha: { from: 1, to: 0.78 },
       duration: 1400,
       yoyo: true,
       repeat: -1,

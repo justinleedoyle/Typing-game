@@ -25,6 +25,7 @@ const DEFAULT_SPEAKER_NAME = "Runa";
 const SPEAKER_TAB_MIN_W = 86;
 const SPEAKER_TAB_PAD_X = 30;
 const SPEAKER_TAB_SIDE_PAD = 56;
+const SPEAKER_TAB_BODY_GAP = 6;
 
 interface NarrationConfig {
   /** Chapter accessibility preferences, opt in for finished chapters. */
@@ -73,6 +74,7 @@ export class NarrationManager {
   private currentSpeaker: string | null = null;
   private readonly store?: SaveStore;
   private readonly preferredY: number;
+  private readonly maxSpeakerTabWidth: number;
   private readonly onSpeak?: (speakerName: string | null, text: string) => void;
 
   constructor(
@@ -88,6 +90,10 @@ export class NarrationManager {
     const cx = scene.scale.width / 2;
     const cy = config.y ?? DEFAULT_Y;
     this.preferredY = cy;
+    this.maxSpeakerTabWidth = Math.max(SPEAKER_TAB_MIN_W, Math.min(
+      config.wordWrapWidth ?? FRAMED_WORD_WRAP,
+      scene.scale.width - 96,
+    ));
 
     if (this.framed) {
       // Card: dark ink text on a parchment plate, sized to each line in sayRaw.
@@ -182,7 +188,7 @@ export class NarrationManager {
       const tabW = Math.max(SPEAKER_TAB_MIN_W, this.speakerText.width + SPEAKER_TAB_PAD_X);
       const tabH = Math.max(28, this.speakerText.height + 10);
       const tabX = -w / 2 + 28;
-      const tabY = -h / 2 - tabH / 2 + 5;
+      const tabY = -h / 2 + CARD_PAD_Y - SPEAKER_TAB_BODY_GAP - tabH;
       this.speakerBg.clear();
       this.speakerBg.fillStyle(UI_HEX.frame, 0.98);
       this.speakerBg.fillRoundedRect(tabX, tabY, tabW, tabH, 6);
@@ -202,18 +208,28 @@ export class NarrationManager {
     }
     const label = this.formatSpeakerName(name);
     this.speakerText
-      .setFontSize(label.includes("\n") ? 14 : 17)
+      .setFontSize(17)
       .setText(label)
       .setVisible(true);
+    // Measure one readable line rather than inserting a name break into a
+    // short ribbon. Bound exceptional labels to the caption's normal width.
+    const maxTextWidth = this.maxSpeakerTabWidth - SPEAKER_TAB_PAD_X;
+    if (this.speakerText.width > maxTextWidth) {
+      let lo = 0;
+      let hi = label.length;
+      while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2);
+        this.speakerText.setText(`${label.slice(0, mid).trimEnd()}…`);
+        if (this.speakerText.width <= maxTextWidth) lo = mid;
+        else hi = mid - 1;
+      }
+      this.speakerText.setText(`${label.slice(0, lo).trimEnd()}…`);
+    }
     this.speakerBg.setVisible(true);
   }
 
   private formatSpeakerName(name: string): string {
-    if (name.length <= 12) return name;
-    if (name.includes("-")) return name.replace("-", "-\n");
-    const words = name.split(/\s+/);
-    if (words.length > 1) return `${words[0]}\n${words.slice(1).join(" ")}`;
-    return name;
+    return name.replace(/\s+/g, " ").trim();
   }
 
   /** Render a canonical Runa line by ID. Falls back to sayRaw() if the ID is

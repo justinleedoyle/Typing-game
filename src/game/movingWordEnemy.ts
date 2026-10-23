@@ -237,6 +237,8 @@ export class MovingWordEnemy {
     config.scene.tweens.add({
       targets: config.container,
       x: config.restX,
+      // North/south arrivals must land before their live distance is measured.
+      y: config.restY,
       alpha: this.restAlpha,
       duration: this.entranceMs,
       delay: this.entranceDelayMs,
@@ -433,6 +435,9 @@ export class MovingWordEnemy {
       word: this.cfg.word,
       x: this.cfg.container.x,
       y: this.cfg.restY + this.anchorOffsetY,
+      // The body advances through Wren's silhouette. Keep its answer above
+      // world actors/tethers, while the console and pause UI retain their layers.
+      depth: 70,
       fontSize: this.cfg.fontSize ?? 32,
       burstColor: this.cfg.burstColor ?? PALETTE_HEX.brass,
       caseSensitive: this.cfg.caseSensitive,
@@ -727,6 +732,10 @@ export class MovingWordEnemy {
   }
 
   private reachWren(): void {
+    // A fully typed word is already safe while its exit animation finishes.
+    // Its completion callback will defeat this body; contact during that
+    // short animation must not charge a hit or replace its completed target.
+    if (this.wordTarget?.isComplete()) return;
     // The hit feel runs FIRST — it may end the wave (a Winter candle loss tears
     // every enemy down via dismiss()). If it did, stop here: the scene owns
     // teardown and there's nothing to knock back. Otherwise drop the timed-out

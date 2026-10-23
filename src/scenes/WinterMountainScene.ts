@@ -1328,7 +1328,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private startHeldur(): void {
     this.checkpoint("heldur", { index: 0, intro: true });
     this.narration.say("winter_wayshrine_intro");
-    this.band.setObjective("Ask Heldur the words that wake the wayshrine.");
+    this.band.setObjective("Ask the frozen knight the words that wake the wayshrine.");
     this.fadeInHeldur();
     this.readThen(() => this.runHeldurExchange(0));
   }
@@ -2507,8 +2507,8 @@ export class WinterMountainScene extends Phaser.Scene {
       this.runPassageChain(
         FIREFLY_PASSAGES,
         [
-          "The lights bob between the pines, patient, waiting for you.",
-          "They settle inside a paper lantern hidden in a hollow tree.",
+          "The lights lead you to a hollow tree. A paper lantern waits inside; the fireflies settle behind its thin walls.",
+          "You lift the lantern from the hollow. Its three lights glow steadily in your hands.",
         ],
         () => {
           this.dismissFireflyCue();
@@ -2825,6 +2825,12 @@ export class WinterMountainScene extends Phaser.Scene {
     this.clearActiveTargets();
     this.checkpoint(choice, this.savedStageData(choice));
     const bury = choice === "bury";
+    const unusedCue = bury ? this.peltCue : this.cairnCue;
+    if (unusedCue?.scene) {
+      this.tweens.killTweensOf(unusedCue);
+      unusedCue.destroy();
+    }
+    if (bury) this.peltCue = null; else this.cairnCue = null;
     if (bury) this.showCairnCue(); else this.showPeltCue();
     this.band.setObjective(bury ? "Type the cairn passage to lay the Pack-Leader down." : "Type the pelt passage to carry the winter home.");
     this.runPassageChain(bury ? BURY_PASSAGES : PELT_PASSAGES, bury ? [
@@ -2841,20 +2847,45 @@ export class WinterMountainScene extends Phaser.Scene {
     if (this.cairnCue?.scene) return this.cairnCue;
 
     const c = this.add.container(650, 812).setDepth(43).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 150, 18, { y: 18, alpha: 0.18 }));
+    c.add(addLocalGroundShadow(this, 184, 24, { y: 20, alpha: 0.3 }));
     const g = this.add.graphics();
+    g.fillStyle(0xa9b9c8, 0.15);
+    g.fillEllipse(0, 18, 178, 23);
+    g.fillStyle(0x172330, 0.4);
+    g.fillEllipse(0, 17, 146, 12);
     const stones = [
-      { x: -48, y: 0, w: 66, h: 24, color: 0x6d7580 },
-      { x: 18, y: 2, w: 70, h: 26, color: 0x59636f },
-      { x: -14, y: -24, w: 62, h: 24, color: 0x747d88 },
-      { x: 34, y: -42, w: 46, h: 20, color: 0x626b76 },
-      { x: -26, y: -55, w: 42, h: 18, color: 0x818992 },
+      { x: -40, y: 3, w: 86, h: 34, color: 0x596573, lean: 0.08 },
+      { x: 35, y: 3, w: 86, h: 38, color: 0x657180, lean: -0.12 },
+      { x: -6, y: -26, w: 112, h: 40, color: 0x707d8b, lean: 0.04 },
+      { x: -12, y: -58, w: 80, h: 38, color: 0x7b8794, lean: -0.09 },
+      { x: -5, y: -85, w: 50, h: 28, color: 0x87929c, lean: 0.11 },
     ];
     for (const stone of stones) {
-      g.fillStyle(stone.color, 0.9);
-      g.fillEllipse(stone.x, stone.y, stone.w, stone.h);
-      g.lineStyle(2, PALETTE_HEX.frost, 0.18);
-      g.strokeEllipse(stone.x, stone.y, stone.w * 0.88, stone.h * 0.72);
+      const point = (x: number, y: number) => new Phaser.Geom.Point(
+        stone.x + (x + stone.lean * y) * stone.w, stone.y + y * stone.h,
+      );
+      const contour = [point(-0.49, 0.22), point(-0.53, -0.08), point(-0.32, -0.42),
+        point(0.1, -0.5), point(0.43, -0.26), point(0.52, 0.09),
+        point(0.32, 0.42), point(-0.2, 0.48)];
+      g.fillStyle(stone.color, 1);
+      g.fillPoints(contour, true);
+      g.lineStyle(1.5, 0x283746, 0.85);
+      g.strokePoints(contour, true);
+      // A shaded lower face gives each stone thickness where the next rests.
+      g.fillStyle(0x2c3b4c, 0.42);
+      g.fillPoints([point(-0.49, 0.22), point(-0.06, 0.1), point(0.43, -0.26),
+        point(0.52, 0.09), point(0.32, 0.42), point(-0.2, 0.48)], true);
+      g.fillStyle(0xa7b4c1, 0.3);
+      g.fillPoints([point(-0.53, -0.08), point(-0.32, -0.42), point(0.1, -0.5),
+        point(0.43, -0.26), point(-0.08, -0.16)], true);
+      // Broken snow edges, rather than a full ellipse, follow the upper facet.
+      g.fillStyle(0xd9e2e8, 0.73);
+      g.fillPoints([point(-0.38, -0.3), point(-0.28, -0.43), point(0.09, -0.5),
+        point(0.34, -0.33), point(0.19, -0.3), point(0.07, -0.37),
+        point(-0.15, -0.29), point(-0.25, -0.33)], true);
+      g.lineStyle(1, 0x344455, 0.6);
+      g.lineBetween(stone.x - stone.w * 0.18, stone.y - stone.h * 0.08,
+        stone.x + stone.w * 0.08, stone.y + stone.h * 0.16);
     }
     c.add(g);
     this.tweens.add({
@@ -3179,7 +3210,8 @@ export class WinterMountainScene extends Phaser.Scene {
 
     const long = opts.long ?? word.length > 16;
     const side =
-      opts.side === "left" ? -1 : opts.side === "right" ? 1 : body.x < width / 2 ? 1 : -1;
+      opts.side === "left" ? -1 : opts.side === "right" ? 1
+        : body === this.cairnCue ? -1 : body.x < width / 2 ? 1 : -1;
     const lateral = long ? 220 : 180;
     const xInset = long ? 420 : 300;
     const lift = long ? 116 : 102;

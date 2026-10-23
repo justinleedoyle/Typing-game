@@ -200,6 +200,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private archGraphics = new Map<string, Phaser.GameObjects.Graphics>();
   private archGlows = new Map<string, Phaser.GameObjects.Graphics>();
   private archSprites = new Map<string, Phaser.GameObjects.Sprite>();
+  private portalInstructionObjects: Array<Phaser.GameObjects.Graphics | Phaser.GameObjects.Text> = [];
   private narration!: NarrationManager;
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
@@ -222,6 +223,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private hubArrival: HubArrivalSource | null = null;
   private activeZone: Zone = "portals";
   private openingUtilityScene = false;
+  private almanacOverlayOpen = false;
   private enteringGreatBattle = false;
   private restartingNewGame = false;
 
@@ -235,6 +237,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.archGraphics = new Map();
     this.archGlows = new Map();
     this.archSprites = new Map();
+    this.portalInstructionObjects = [];
     this.zoneTargets = [];
     this.portalWordAnchors = [];
     this.stationWordAnchorReleases = [];
@@ -251,6 +254,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.showPortalRevisits = false;
     this.activeZone = "portals";
     this.openingUtilityScene = false;
+    this.almanacOverlayOpen = false;
     this.enteringGreatBattle = false;
     this.restartingNewGame = false;
   }
@@ -363,6 +367,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private enterZone(zone: Zone, animate = true): void {
     this.activeZone = zone;
     this.clearZoneTargets();
+    for (const object of this.portalInstructionObjects) object.setVisible(zone === "portals");
     if (zone === "shelf") this.drawDisplayShelf();
     else this.clearShelfDisplay();
     this.walkWrenTo(ZONE_X[zone], animate);
@@ -374,6 +379,9 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private clearZoneTargets(): void {
+    // A zone replacement also ends any ambiguous prefix. Unregistering every
+    // old target alone leaves that buffer invisible against the new targets.
+    this.typingInput.handleChar("Escape");
     for (const anchor of this.portalWordAnchors) {
       anchor.destroy();
     }
@@ -1722,13 +1730,17 @@ export class PortalChamberScene extends Phaser.Scene {
       // the chamber rendered beneath it and give the overlay exclusive typing.
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
+      this.almanacOverlayOpen = true;
       this.scene.launch("AlmanacScene", { store: this.store, overlay: true });
       this.scene.pause();
     });
   }
 
   private resumeAfterAlmanac(): void {
-    if (!this.openingUtilityScene) return;
+    // Blur/pause may resume the chamber during the book's short opening beat.
+    // Only an overlay that actually launched owns this return transition.
+    if (!this.almanacOverlayOpen) return;
+    this.almanacOverlayOpen = false;
     this.openingUtilityScene = false;
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     // Rebuild the desk targets after the completed `almanac` word is gone, but
@@ -2057,7 +2069,7 @@ export class PortalChamberScene extends Phaser.Scene {
     // Keep the instruction above the painted arch and clear of Runa on the floor.
     const y = arch.baseY - arch.height - (subtitle ? 43 : 34);
     const isLocked = tone === "locked";
-    const alpha = isLocked ? 0.24 : tone === "next" ? 0.42 : 0.34;
+    const alpha = isLocked ? 0.24 : tone === "next" ? 0.78 : 0.34;
     const textColor = isLocked
       ? "#4a4352"
       : tone === "next"
@@ -2070,7 +2082,7 @@ export class PortalChamberScene extends Phaser.Scene {
     g.lineStyle(1, isLocked ? 0x4a4352 : UI_HEX.brass, alpha + 0.2);
     g.strokeRoundedRect(arch.x - width / 2, y - height / 2, width, height, 8);
 
-    this.add
+    const titleText = this.add
       .text(arch.x, y - (subtitle ? 9 : 1), title, {
         fontFamily: SERIF,
         fontSize: isLocked ? "17px" : "16px",
@@ -2079,16 +2091,18 @@ export class PortalChamberScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(0);
+    if (tone === "next") this.portalInstructionObjects.push(g, titleText);
 
     if (!subtitle) return;
-    this.add
+    const subtitleText = this.add
       .text(arch.x, y + 13, subtitle, {
         fontFamily: SERIF,
         fontSize: "14px",
-        color: "#4a4352",
+        color: tone === "next" ? PALETTE.cream : "#4a4352",
       })
       .setOrigin(0.5)
       .setDepth(0);
+    if (tone === "next") this.portalInstructionObjects.push(subtitleText);
   }
 
   private flashPortalForScene(sceneKey: string): void {

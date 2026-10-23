@@ -137,6 +137,12 @@ export class TypingInputController {
     return this.claimed !== null;
   }
 
+  /** A word has started once its first prefix character is accepted, even
+   *  while several matching targets are still being disambiguated. */
+  hasPendingInput(): boolean {
+    return this.claimed !== null || this.typingBuffer.length > 0;
+  }
+
   /** Next expected (lowercase) char of the claimed word, or null when nothing
    *  is claimed. Rhythm scenes peek this to decide whether the next keystroke
    *  crosses a beat boundary that must land in the window. */
@@ -209,39 +215,44 @@ export class TypingInputController {
 
     // ── Mid-claim: validate against the claimed target ───────────────────────
     if (this.claimed) {
+      const target = this.claimed;
       // Case-sensitive targets compare the RAW keystroke against the raw
       // expected char (preserves case). Non-case-sensitive targets compare
       // the lowercased forms (existing behavior; default for all targets
       // that don't opt in).
       const isCaseSensitive =
-        this.claimed.caseSensitive?.() === true && !!this.claimed.rawRemaining;
+        target.caseSensitive?.() === true && !!target.rawRemaining;
       const expected = isCaseSensitive
-        ? this.claimed.rawRemaining!()[0]
-        : this.claimed.remaining()[0];
+        ? target.rawRemaining!()[0]
+        : target.remaining()[0];
       const inputChar = isCaseSensitive ? char : ch;
 
       if (inputChar === expected) {
-        this.claimed.advance();
+        target.advance();
         this.store?.recordKeystroke(ch, true);
         this.stats.record(true);
         this.onCorrectChar?.();
-        if (this.claimed.isComplete()) {
+        if (this.claimed === target && target.isComplete()) {
           this.completeClaimed();
         }
         return true;
       }
-      this.claimed.miss();
+      target.miss();
       // Practice the key the player was asked for, rather than penalizing the
       // unrelated key they accidentally pressed. Ambiguous pre-claim misses
       // still have no single expected key and retain their existing logging.
       this.store?.recordKeystroke(expected?.toLowerCase() ?? ch, false);
       this.stats.record(false);
       this.onMissChar?.();
+      // A miss can end the encounter synchronously (the finale's last candle),
+      // or a feedback hook can replace its targets. Never reset or release a
+      // different claim after those callbacks have handed input to a new beat.
+      if (this.claimed !== target) return true;
       // Difficulty: standard+ wipes the word's typed progress; purist also
       // drops the claim, so the enemy keeps coming and you must re-acquire it.
       if (this.store && missResetsProgress(this.store)) {
-        this.claimed.resetCursor?.();
-        if (missReleasesClaim(this.store)) {
+        target.resetCursor?.();
+        if (this.claimed === target && missReleasesClaim(this.store)) {
           this.releaseClaim();
           this.typingBuffer = "";
           this.rawTypingBuffer = "";

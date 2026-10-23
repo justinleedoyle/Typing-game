@@ -38,6 +38,7 @@ await suite("Winter Almanac: all fork and companion combinations tell the played
           assert(!summary.carriedIds.includes("quiet-chant"), "another realm's keepsakes excluded");
           const prose = [summary.pathHeading, summary.carriedHeading, ...summary.passages].join(" ");
           assert(!/\b(he|him|his)\b/i.test(prose), "Wren's record works for girl, boy and unspecified identity");
+          if (fork1 === "firefly") assert(!prose.includes("Sigrid"), "the firefly route never learns the huntress's name or the fox's reason for searching");
           assertEqual(JSON.stringify(progress), before, "reader does not rewrite saved decisions");
         }
       }
@@ -48,7 +49,8 @@ await suite("Winter Almanac: all fork and companion combinations tell the played
 await suite("Winter Almanac: near misses and declining the fox have distinct truthful farewells", () => {
   const summary = (fox: string, fork1: string, fork2: string, companion?: string) => winterRealmSummary({ cleared: true, choices: { fox, fork1, fork2, ...(companion ? { companion } : {}) } });
   assert(summary("ignored", "huntress", "bury").passages[3].includes("No snow-fox followed"), "missing first kindness acknowledged");
-  assert(summary("spared", "firefly", "bury").passages[3].includes("searched for Sigrid"), "missing huntress acknowledged");
+  const searching = summary("spared", "firefly", "bury").passages[3];
+  assert(searching.includes("looked past Wren") && searching.includes("back into the pines"), "the unexplained search records only what Wren witnessed");
   assert(summary("spared", "huntress", "pelt").passages[3].includes("saw the old wolf's pelt"), "pelt near miss acknowledged");
   const declined = summary("spared", "huntress", "bury", "declined");
   assert(declined.passages[3].includes("Wren let her go"), "earned offer can be declined");
@@ -149,6 +151,24 @@ await suite("Story copy: one living Holdfast and identity-neutral Wren records",
   assert(etta.includes("royal library still kept its lamps lit"), "Etta's record preserves the active library hub");
   assert(!etta.includes("library had burned") && !etta.includes("measurements"), "abandoned library/chart backstory is removed");
   assert(!ALMANAC_LORE_PAGES["the-hundred-quiet-years"]!.body.includes("seven realms"), "authored lore no longer contradicts the five-realm world");
+  assert(REALM_LORE["sunken-bell"]!.intro.includes("same drowned rhythm"), "Bell history agrees with the century-long choir and final silence");
+  assert(!REALM_LORE["sunken-bell"]!.intro.includes("had not rung"), "Bell does not claim both a century of silence and a first silence at defeat");
+  const crossroads = ALMANAC_LORE_PAGES["the-crossroads-ghost"]!.body;
+  assert(crossroads.includes("don't know my name") && crossroads.includes("i'll find it") && crossroads.includes("shrine"), "crossroads journal records the actual lost-name promise");
+  assert(!crossroads.includes("which way I came") && !crossroads.includes("fifth way"), "journal does not invent a different meeting and departure");
+  const code = ALMANAC_LORE_PAGES["golem-keepers-code"]!.body;
+  assert(code.includes("typed turn") && code.includes("Shift through TURN"), "Gregor's record uses the actual paired tutorial targets");
+  const gates = ALMANAC_LORE_PAGES["the-five-temple-riddles"]!;
+  assert(gates.title.includes("Gates") && gates.body.includes("third gate") && gates.body.includes("sealed scroll"), "Sky records its actual middle precision gate");
+  assert(!gates.body.includes("without a stumble"), "moving gates are not falsely recorded as five no-miss tests");
+  const lighter = ALMANAC_LORE_PAGES["the-lantern-lighters-vigil"]!.body;
+  assert(lighter.includes("i came to help."), "Lantern-Lighter memory records Wren's actual typed reply");
+  assert(lighter.includes("long questions") && lighter.includes("light toward the tower path"), "Lantern-Lighter memory preserves the warning and light handoff");
+  assert(!lighter.includes("let Wren help with the row") && !lighter.includes("corrected Wren"), "memory does not claim an unplayed counting task or invented mistakes");
+  const riddles = ALMANAC_LORE_PAGES["the-scholar-spirits-riddles"]!.body;
+  assert(riddles.indexOf("second answer") < riddles.indexOf("Agai") && riddles.indexOf("Agai") < riddles.indexOf("third answer"), "the scratched fragment appears between the second and third answers");
+  const wards = ALMANAC_LORE_PAGES["punctuation-warding"]!.body;
+  assert(wards.includes("A dot hid the ward") && !wards.includes("Inga"), "the early ward record preserves both the actual masking rule and the still-unknown ghost name");
   for (const realm of Object.values(REALM_LORE)) for (const text of Object.values(realm.endings)) {
     assert(!/\b(he|him|his|himself)\b/i.test(text), "all branch and companion summary copy works for either Wren identity");
   }

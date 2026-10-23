@@ -2114,6 +2114,12 @@ export class GreatBattleScene extends Phaser.Scene {
    *  kill), and the realms' hit cue (shake + thud + edge vignette) fires. */
   private breachEnemy(enemy: Enemy): void {
     if (enemy.defeated || this.runOver) return;
+    // Typing the last character wins the deadline; its 320ms word fade does
+    // not leave a defeated enemy able to snuff a candle at the wall.
+    if (enemy.target?.isComplete()) {
+      this.defeatEnemy(enemy);
+      return;
+    }
     enemy.defeated = true;
     enemy.advanceTween?.stop();
     enemy.advanceTween = null;
@@ -3407,7 +3413,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
     let descLine: string;
     if (clearedCount >= 5) {
-      descLine = "He is smaller than the stories said. The allies you gathered flicker at his edges.";
+      descLine = "He is smaller than the stories said. The realms you carried home flicker at his edges.";
     } else if (clearedCount >= 3) {
       descLine = "He is vast but unsteady. Each realm you visited is a crack in his silence.";
     } else {
@@ -3837,7 +3843,7 @@ export class GreatBattleScene extends Phaser.Scene {
       return;
     }
     const word = words[idx]!;
-    this.band.setObjective(`Counter ${idx + 1}/${words.length}: type ${word}.`);
+    this.band.setObjective(`Counter ${idx + 1}/${words.length}: type "${word}"`);
     const wordPos = this.lordDuelWordPosition(idx, words.length, 500);
     const target = this.makeLordWord({
       scene: this,
@@ -3955,7 +3961,7 @@ export class GreatBattleScene extends Phaser.Scene {
     const hasGlassFish = satchel.includes("glass-fish");
     const hasLanternMoth = satchel.includes("lantern-moth");
     const hasWispCat = satchel.includes("wisp-cat");
-    this.band.setObjective("Clear all three duel words before the Lord steadies.");
+    this.band.setObjective("Clear all three duel words to weaken the Quiet Lord.");
 
     // Round 1: 3 words from BATTLE_WORD_BANK simultaneously
     const round1Words = pickAdaptiveWords(
@@ -3966,6 +3972,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.phase2Round1Words = round1Words;
 
     let remaining = 3;
+    const round1Targets: TextWordTarget[] = [];
     for (let i = 0; i < 3; i++) {
       const word = round1Words[i]!;
       const wordPos = this.lordDuelWordPosition(i, 3, 518);
@@ -3999,12 +4006,13 @@ export class GreatBattleScene extends Phaser.Scene {
           }
         },
       });
+      round1Targets.push(target);
       this.registerActiveTarget(target, { idleFloat: true, idleIndex: i });
     }
 
     // §5.5.9 — lantern-moth: lights throne when shadow falls (injected ~halfway through)
     if (hasLanternMoth) {
-      this.time.delayedCall(4000, () => this.applyLanternMothHitWindow());
+      this.time.delayedCall(4000, () => this.applyLanternMothHitWindow(round1Targets));
     }
   }
 
@@ -4052,11 +4060,14 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   // §5.5.9 — lantern-moth: lights throne when shadow falls
-  private applyLanternMothHitWindow(): void {
-    // Only fires if there are still live targets in play (avoid double-clear)
-    if (this.activeTargets.length === 0) return;
+  private applyLanternMothHitWindow(roundTargets: readonly TextWordTarget[]): void {
+    // The timer belongs to round 1. Another round's targets must not revive
+    // this bonus or replace its objective after a fast clear, and fully typed
+    // words waiting for their exit animation are already finished.
+    if (this.runOver || !roundTargets.some((target) =>
+      this.activeTargets.includes(target) && !target.isComplete())) return;
     this.showRelicNotice("finale_companion_lantern_moth", "ally");
-    this.band.setObjective("Type throne before the lantern-moth's light fades.");
+    this.band.setObjective("Optional opening: type throne for an extra hit, or finish the duel words.");
     const companion = this.showFinaleCompanionAction("lantern-moth");
     // Warm light overlay
     const throneLight = this.add.graphics().setDepth(3).setAlpha(0);
@@ -4094,6 +4105,9 @@ export class GreatBattleScene extends Phaser.Scene {
         const idx = this.activeTargets.indexOf(bonusTarget);
         if (idx >= 0) this.activeTargets.splice(idx, 1);
         bonusTarget.destroy();
+        if (roundTargets.some((target) => this.activeTargets.includes(target) && !target.isComplete())) {
+          this.band.setObjective("Clear the remaining duel words to weaken the Quiet Lord.");
+        }
       },
     }, {
       kind: "mote",
@@ -4379,9 +4393,10 @@ export class GreatBattleScene extends Phaser.Scene {
     const lead =
       idx === 0
         ? "Answer in his own hand — mind the capitals:"
-        : "Again, deeper — his name this time:";
-    this.setNarrator(`${lead}  ${word}`, "Quiet Lord");
-    this.band.setObjective("Mind the capitals in the Quiet Lord's word.");
+        : "One last binding — mind the capitals:";
+    this.setNarrator(`${lead}  ${word}`);
+    this.band.setObjective(`Type "un" in lowercase, then hold Shift for "${word.slice(2)}".`
+      + (this.isKindnessDuel ? " The first mistake on this word costs a candle." : ""));
 
     const wordPos = this.lordDuelWordPosition(idx, words.length, 520);
     let target!: TextWordTarget;
@@ -4605,6 +4620,7 @@ export class GreatBattleScene extends Phaser.Scene {
   private deliverFinalPhrase(): void {
     const phrase = selectFinalPhrase(this.store.get().satchel);
     const words = phrase.split(" ");
+    this.setNarrator(`One word at a time, including punctuation:\n${phrase}`);
     this.band.setObjective("Type the final phrase into Again.");
     this.runFinalPhraseWords(words, 0);
   }
@@ -4615,7 +4631,7 @@ export class GreatBattleScene extends Phaser.Scene {
       return;
     }
     const word = words[idx]!;
-    this.band.setObjective(`Final phrase ${idx + 1}/${words.length}: type ${word}.`);
+    this.band.setObjective(`Final phrase ${idx + 1}/${words.length}: type "${word}"`);
 
     const wordPos = this.finalPhraseWordPosition(idx);
     const target = this.makeFinalPhraseWord({

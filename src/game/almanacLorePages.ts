@@ -33,7 +33,7 @@ export const ALMANAC_LORE_PAGES: Record<string, AlmanacLorePage> = {
     realmId: "winter-mountain",
     title: "The Wounded Fox's Name",
     body:
-      "The fox lay curled in the snow, breath shallow. When Wren said “I mean no harm” she did not run. She watched Wren from the pines for the rest of the climb. Her name, Runa later guessed, was something close to kindness in a small shape.",
+      "The fox sat in the snow, hurt and breathing shallowly. When Wren said “I mean no harm” she did not run. She watched Wren from the pines for the rest of the climb. Her name, Runa later guessed, was something close to kindness in a small shape.",
   },
 
   "the-huntress-song": {
@@ -116,7 +116,7 @@ export const ALMANAC_LORE_PAGES: Record<string, AlmanacLorePage> = {
     realmId: "clockwork-forge",
     title: "The Golem-Keeper's Code",
     body:
-      "Gregor set two words on the bench — walk, and WALK — and made Wren say which was which. Lowercase, the golem shifted its weight. Capitalized, it stood and obeyed. “A small letter is a suggestion,” Gregor said, tapping the brass. “A big one is an order. Forge folk have known the difference for three centuries. Don't you go unlearning it.”",
+      "Gregor showed Wren how the forge listened: lowercase moves them, CAPITALS command them. Wren typed turn, and the training golem turned its head. Then Wren held Shift through TURN, and the golem snapped to attention. In the foundry, each command shifted from small letters to capitals. Wren learned to change with it.",
   },
 
   "the-broken-bellows": {
@@ -160,7 +160,7 @@ export const ALMANAC_LORE_PAGES: Record<string, AlmanacLorePage> = {
     realmId: "sky-island",
     title: "The Lantern-Lighter's Vigil",
     body:
-      "A child-spirit tended the great beacon, moving along the rails with a taper that never burned down. “I light them, and I count them,” she said. “That is the whole of my work. Miscount, and the island falls.” She had been counting for two hundred years and was not tired — counting, she explained, is not the sort of thing that tires you, if you love the things you count. She let Wren help with the row along the railing, and corrected Wren, kindly, twice.",
+      "A child-spirit tended the great beacon, moving along the rails with a taper that never burned down. “I light them, and I count them,” she said. “That is the whole of my work. Miscount, and the island falls.” She had been counting for two hundred years and was not tired — counting, she explained, is not the sort of thing that tires you, if you love the things you count. Wren answered, “i came to help.” The Lantern-Lighter warned of the Scholar-Spirit's long questions, then raised its light toward the tower path. The lanterns flared, and pale shapes answered from within.",
   },
 
   "scholar-ettas-last-volume": {
@@ -172,16 +172,16 @@ export const ALMANAC_LORE_PAGES: Record<string, AlmanacLorePage> = {
 
   "the-five-temple-riddles": {
     realmId: "sky-island",
-    title: "The Five Temple Riddles",
+    title: "The Five Temple Gates",
     body:
-      "At each lantern-temple a phrase had been cut into the rim of the great lamp, longer than the one before — a line, then a couplet, then a whole verse. The lanterns would not rise until the phrase was read entire, without a stumble. By the fifth temple Wren was reading full sentences at speed, the way you read a thing you have stopped being afraid of. Each lamp Wren lit drew the island a little higher into the gold air, until Holdfast itself was a far green smudge below.",
+      "Five gates tested Wren among the lanterns. Moving scrolls crossed beams that hid their untyped letters; Wren read ahead and kept the original phrases in mind. The third gate was different: a sealed scroll waited in still air, patient with time but not with mistakes. Beyond it, three scrolls crossed at once, faster as Wren climbed. Each crossing brought Wren closer to the summit.",
   },
 
   "the-scholar-spirits-riddles": {
     realmId: "sky-island",
     title: "The Scholar-Spirit's Riddles",
     body:
-      "The Scholar-Spirit asked three riddles, each wanting a sentence back. Wren read each question and typed an answer. The spirit bowed at the first, then watched the second answer with shifting eyes. After the third, a scratched Agai crossed the Almanac. The summit fell quiet, but the spirit's tether still waited for Wren's answer.",
+      "The Scholar-Spirit asked three riddles, each wanting an answer in words. Wren read each question and typed an answer. The spirit bowed at the first, then watched the second answer with shifting eyes. A scratched Agai crossed the Almanac. As Wren typed the third answer, the spirit faded. The summit fell quiet, but the spirit's tether still waited for Wren's answer.",
   },
 
   "the-sky-true-name": {
@@ -197,7 +197,7 @@ export const ALMANAC_LORE_PAGES: Record<string, AlmanacLorePage> = {
     realmId: "haunted-wood",
     title: "The Crossroads Ghost",
     body:
-      "At the first crossroads a ghost stood waiting between the four paths, patient as a signpost. “I don't remember which way I came,” she said. “Could you tell me which way you came?” Wren pointed back along the path, the fog already closing over it. She thanked Wren as though the answer had been far larger than a direction. Then she chose a fifth way, one Wren had not seen until she stepped onto it, and walked off into the trees without looking back.",
+      "A ghost waited among the trees. “i don't know my name,” she said. Wren promised, “i'll find it.” The ghost pointed toward the shrine: its keeper might remember what she could not. She stayed near the tree line as Wren followed the path ahead. A name was waiting somewhere in the wood, and someone had finally offered to look for it.",
   },
 
   "ingas-name": {
@@ -211,14 +211,14 @@ export const ALMANAC_LORE_PAGES: Record<string, AlmanacLorePage> = {
     realmId: "haunted-wood",
     title: "Punctuation Warding",
     body:
-      "Each direction at the crossroads answered to a punctuation mark: a period north, a question mark east, an exclamation south, a comma west. “The marks are old wards,” Inga told Wren, “older than the wood. They hold open the path you face, and hold shut all the others. Mind your turning.” Wren learned to pivot mid-word — to set a comma and wheel west, to stop a charge from the north with one hard period — until the warding felt less like spelling and more like footwork.",
+      "Each direction at the crossroads answered to a punctuation mark: a period north, a question mark east, an exclamation south, a comma west. A dot hid the ward inside each ghost's word. Wren watched where the ghost approached, supplied that direction's mark, and finished the letters around it. The lost ghost waited near the trees while Wren learned the compass.",
   },
 
   "ghost-kings-true-name": {
     realmId: "haunted-wood",
     title: "The Ghost-King's True Name",
     body:
-      "The Ghost-King's true name was a single long sentence that held every mark of punctuation there is — each comma and semicolon a footstep, each colon a held breath, each period and exclamation a place to stop and be still. Wren typed it whole, without dropping a single mark, the way you carry a full cup across a dark room. Behind the throne the lesser ghosts bowed their heads. And the Ghost-King, who had been at war with his own name for longer than the wood had stood, smiled — for the first time, and the last.",
+      "The Ghost-King's true name was a passage that held all six punctuation marks Wren had learned — each comma and semicolon a footstep, each colon a held breath, each period and exclamation a place to stop and be still. Wren typed it whole, without dropping a single mark, the way you carry a full cup across a dark room. Behind the throne the lesser ghosts bowed their heads. And the Ghost-King, who had been at war with his own name for longer than the wood had stood, smiled — for the first time, and the last.",
   },
 
   "the-wood-true-name": {

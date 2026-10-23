@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import wolfLeader from "../../art/wolf/wolf-leader.png";
 import wolfPack from "../../art/wolf/wolf-pack.png";
+import { applySceneActorLighting } from "./actorLighting";
 
 /** On-screen heights at the 1920x1080 design resolution. */
 const PACK_DISPLAY_HEIGHT = 245;
@@ -26,5 +27,6 @@ export function makeWolfSprite(
   const scale = targetH / img.height;
   img.setScale(scale);
   img.scaleX = facingLeft ? -scale : scale;
+  applySceneActorLighting(scene, img);
   return img;
 }

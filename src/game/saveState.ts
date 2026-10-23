@@ -1,378 +1,635 @@
-// The single source of truth for player progress. Every scene reads from
-// and writes to a SaveState; the SaveBackend hides where it actually lives.
-//
-// Three backends ship today:
-// - LocalStorageBackend: device-local cache, works offline, always written.
-// - SupabaseBackend: cross-device cloud sync, requires sign-in.
-// - SyncedBackend: composes the two. Reads cloud when signed in (or pushes
-//   local up on first sign-in), reads local when signed out, and writes to
-//   both on save.
-
-import { supabase } from "./supabaseClient";
+// Validated player progress, durable local autosaves and optional account-scoped
+// cloud sync. Scene code only mutates SaveStore; storage and network failures
+// never turn an existing save into a new, empty profile.
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface RealmProgress {
   cleared: boolean;
   choices: Record<string, string>;
-  /** True once the §5.5.10 Quiet Lord intrusion has fired in this realm.
-   *  Persisted so revisiting a cleared realm does not re-fire the moment. */
   quietLordIntruded?: boolean;
-  /** True once the boss-defeat fragment flash has fired for this realm.
-   *  Persisted so re-defeating a boss on revisit does not replay the reveal. */
   quietLordFragmentRevealed?: boolean;
 }
-
-export interface KeyStat {
-  hits: number;
-  misses: number;
+export interface KeyStat { hits: number; misses: number }
+export type Difficulty = "forgiving" | "standard" | "purist";
+export type AudioLevel = "loud" | "medium" | "quiet" | "off";
+export type CheckpointValue = string | number | boolean | null;
+export interface SaveCheckpoint {
+  scene: "OpeningScene" | "WinterMountainScene";
+  step: string;
+  data: Record<string, CheckpointValue>;
 }
-
 export interface SaveState {
-  /** Save-format version. Bump CURRENT_SCHEMA_VERSION and add a migrate()
-   *  ladder step whenever the persisted shape changes. Versionless/legacy
-   *  saves (written before this field existed) are treated as version 0 and
-   *  migrated up. Always equals CURRENT_SCHEMA_VERSION on an in-memory state. */
   schemaVersion: number;
+  /** Distinguishes deliberate new runs from conflicting branches of one run. */
+  runId: string;
   profileName: string;
   typewriterAwakened: boolean;
-  /** §5.5.2 — Wren is gender-selectable. "boy" → sibling is Saga (girl,
-   *  holds drawing); "girl" → sibling is Magnus (older boy, leans in
-   *  doorway). null until the player picks in OpeningScene; persisted
-   *  through New Game+ so Wren's identity carries across runs. */
   wrenGender: "girl" | "boy" | null;
   realms: Record<string, RealmProgress>;
   satchel: string[];
   keyStats: Record<string, KeyStat>;
   almanacLore: string[];
-  /** Difficulty tier — how harshly a mid-word typo is punished. Default
-   *  "standard". Cycled in-game via Ctrl+Shift+P and set in Settings. */
   difficulty: Difficulty;
-  /** Player-chosen audio level. Stored as a coarse step so the Settings UI
-   *  can cycle through fixed labels; the actual volume scaling is wired
-   *  separately in the audio modules. Defaults to "medium". */
   audioLevel: AudioLevel;
+  checkpoint: SaveCheckpoint | null;
+  textScale: "standard" | "large";
+  reducedMotion: boolean;
+  reducedFlashes: boolean;
   updatedAt: number;
 }
 
-export type AudioLevel = "loud" | "medium" | "quiet" | "off";
-
-/** Difficulty tiers — how harshly a mid-word typo is punished.
- *  forgiving: a wrong key is free (the next correct key just advances).
- *  standard:  a wrong key resets the current word's typed progress (default).
- *  purist:    progress resets AND the claim drops — re-acquire under pressure. */
-export type Difficulty = "forgiving" | "standard" | "purist";
-
-/** Current persisted save-format version. Increment by one and add a
- *  matching step to the migrate() ladder below whenever you add or reshape a
- *  persisted field. v1 is the first explicitly-versioned format; it captures
- *  the shape that previously had no version field at all. */
-export const CURRENT_SCHEMA_VERSION = 1;
-
+// v0: unversioned; v1: difficulty migration; v2: checkpoints/presentation.
+export const CURRENT_SCHEMA_VERSION = 2;
 export function emptySave(profileName = "Wren"): SaveState {
   return {
-    schemaVersion: CURRENT_SCHEMA_VERSION,
-    profileName,
-    typewriterAwakened: false,
-    wrenGender: null,
-    realms: {},
-    satchel: [],
-    keyStats: {},
-    almanacLore: [],
-    difficulty: "standard",
-    audioLevel: "medium",
-    updatedAt: Date.now(),
+    schemaVersion: CURRENT_SCHEMA_VERSION, runId: globalThis.crypto?.randomUUID?.() ?? `run-${Date.now()}-${Math.random().toString(36).slice(2)}`, profileName,
+    typewriterAwakened: false, wrenGender: null, realms: {}, satchel: [],
+    keyStats: {}, almanacLore: [], difficulty: "standard", audioLevel: "medium",
+    checkpoint: null, textScale: "standard", reducedMotion: false,
+    reducedFlashes: false, updatedAt: Date.now(),
   };
 }
 
-/** A raw, pre-migration save as it came off disk/cloud: an object of unknown
- *  shape that may be any historical version (including versionless v0). */
-type RawSave = Record<string, unknown>;
-
-/** Read a save's declared schema version, treating any save without a numeric
- *  `schemaVersion` (i.e. everything written before versioning existed) as v0. */
-function readSchemaVersion(raw: RawSave): number {
-  const v = raw.schemaVersion;
-  return typeof v === "number" ? v : 0;
+export class InvalidSaveError extends Error {
+  constructor(message = "This save is damaged. Your saved data has been preserved.") {
+    super(message); this.name = "InvalidSaveError";
+  }
+}
+export class UnsupportedSaveVersionError extends Error {
+  constructor(readonly version: number) {
+    super("This save was written by a newer game version. Update the game before loading it.");
+    this.name = "UnsupportedSaveVersionError";
+  }
+}
+export class SaveConflictError extends Error {
+  constructor(message = "Local and cloud progress disagree. Both copies have been preserved; choose a save before syncing.") {
+    super(message); this.name = "SaveConflictError";
+  }
+}
+export class CloudSaveError extends Error {
+  constructor(message = "Cloud saving is unavailable. Your progress is still saved on this device.") {
+    super(message); this.name = "CloudSaveError";
+  }
 }
 
-/**
- * Bring a raw loaded save up to CURRENT_SCHEMA_VERSION by walking an explicit
- * version ladder (v0 -> v1 -> ...). Each step is responsible only for the delta
- * between two adjacent versions and must set `schemaVersion` to its target.
- *
- * This replaces the previous implicit migration — a `{ ...emptySave, ...loaded }`
- * field-merge plus an ad-hoc `purist` -> `difficulty` fix-up — with the same
- * OUTCOMES, just made explicit and extensible. Behavior is preserved exactly:
- * the v0 -> v1 step reproduces that merge-and-fix-up byte for byte.
- *
- * `raw` must be a non-null parsed object (callers handle the "no save" case by
- * starting from emptySave()). Returns a fully-populated SaveState.
- */
-export function migrate(raw: RawSave): SaveState {
-  let state = raw;
-  // Walk one version at a time so every historical save converges on the
-  // current shape regardless of how old it is.
-  while (readSchemaVersion(state) < CURRENT_SCHEMA_VERSION) {
-    switch (readSchemaVersion(state)) {
-      case 0:
-        // migrateV0ToV1 returns a typed SaveState; bridge it back to the loose
-        // RawSave the ladder walks (an interface has no string index signature,
-        // so the assignment needs the cast — structurally identical at runtime).
-        state = migrateV0ToV1(state) as unknown as RawSave;
-        break;
-      default:
-        // Unknown in-range version (should be unreachable): stop walking
-        // rather than spin forever. The merge below still backfills fields.
-        state = { ...state, schemaVersion: CURRENT_SCHEMA_VERSION };
-        break;
+type RawSave = Record<string, unknown>;
+function record(value: unknown): value is RawSave {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function safeKey(key: string): boolean {
+  return key !== "__proto__" && key !== "prototype" && key !== "constructor";
+}
+function invalid(field: string): never { throw new InvalidSaveError(`Invalid save field: ${field}. Your saved data has been preserved.`); }
+function stringField(value: unknown, fallback: string, field: string): string {
+  if (value === undefined) return fallback;
+  if (typeof value !== "string") return invalid(field);
+  return value;
+}
+function booleanField(value: unknown, fallback: boolean, field: string): boolean {
+  if (value === undefined) return fallback;
+  if (typeof value !== "boolean") return invalid(field);
+  return value;
+}
+function choice<T extends string>(value: unknown, allowed: readonly T[], fallback: T, field: string): T {
+  if (value === undefined) return fallback;
+  if (!allowed.includes(value as T)) return invalid(field);
+  return value as T;
+}
+function strings(value: unknown, field: string): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.some((v) => typeof v !== "string")) return invalid(field);
+  return [...new Set(value as string[])];
+}
+export function validateCheckpoint(value: unknown): SaveCheckpoint | null {
+  if (value === undefined || value === null) return null;
+  if (!record(value) || (value.scene !== "OpeningScene" && value.scene !== "WinterMountainScene") ||
+      typeof value.step !== "string" || !value.step.trim() || value.step.length > 100 || !record(value.data)) {
+    return invalid("checkpoint");
+  }
+  const data: Record<string, CheckpointValue> = {};
+  for (const [key, v] of Object.entries(value.data)) {
+    if (!safeKey(key) || !(v === null || typeof v === "string" || typeof v === "boolean" ||
+      (typeof v === "number" && Number.isFinite(v)))) return invalid("checkpoint.data");
+    data[key] = v;
+  }
+  return { scene: value.scene, step: value.step, data };
+}
+
+/** Validate before migration. Missing historical fields get defaults; malformed
+ * existing fields and future versions are refused, never silently erased. */
+export function migrate(raw: unknown): SaveState {
+  if (!record(raw)) return invalid("root");
+  const version = raw.schemaVersion === undefined ? 0 : raw.schemaVersion;
+  if (typeof version !== "number" || !Number.isInteger(version) || version < 0) return invalid("schemaVersion");
+  if (version > CURRENT_SCHEMA_VERSION) throw new UnsupportedSaveVersionError(version);
+  const defaults = emptySave();
+  const realms: Record<string, RealmProgress> = {};
+  if (raw.realms !== undefined) {
+    if (!record(raw.realms)) return invalid("realms");
+    for (const [id, progress] of Object.entries(raw.realms)) {
+      if (!safeKey(id) || !record(progress) || typeof progress.cleared !== "boolean" || !record(progress.choices)) return invalid("realms");
+      const choices: Record<string, string> = {};
+      for (const [key, value] of Object.entries(progress.choices)) {
+        if (!safeKey(key) || typeof value !== "string") return invalid("realms.choices");
+        choices[key] = value;
+      }
+      realms[id] = { cleared: progress.cleared, choices };
+      for (const flag of ["quietLordIntruded", "quietLordFragmentRevealed"] as const) {
+        if (progress[flag] !== undefined) realms[id][flag] = booleanField(progress[flag], false, flag);
+      }
     }
   }
-  // Final safety net, identical in spirit to the old emptySave merge: guarantee
-  // every current field is present (a forward-loaded or hand-edited save could
-  // claim a high version yet still be missing keys). emptySave first so loaded
-  // values win, then stamp the current version.
-  const loaded = state as Partial<SaveState>;
-  return {
-    ...emptySave(loaded.profileName),
-    ...loaded,
-    schemaVersion: CURRENT_SCHEMA_VERSION,
-  };
-}
-
-/**
- * v0 (versionless legacy) -> v1.
- *
- * Reproduces the original load-time migration outcomes exactly:
- *  1. `{ ...emptySave(loaded.profileName), ...loaded }` — backfill any field a
- *     pre-versioning save was missing (e.g. satchel) with sane defaults while
- *     letting saved values win.
- *  2. Legacy `purist: boolean` -> `difficulty` tier: true -> "purist";
- *     the old kid-friendly default (false) becomes "standard", raising the
- *     floor for existing saves. Then the dead `purist` field is dropped.
- *  3. Stamp schemaVersion = 1.
- */
-function migrateV0ToV1(raw: RawSave): SaveState {
-  const loaded = raw as Partial<SaveState>;
-  const state: SaveState = { ...emptySave(loaded.profileName), ...loaded };
-  const legacy = state as SaveState & { purist?: boolean };
-  if (typeof legacy.purist === "boolean") {
-    state.difficulty = legacy.purist ? "purist" : "standard";
-    delete legacy.purist;
+  const keyStats: Record<string, KeyStat> = {};
+  if (raw.keyStats !== undefined) {
+    if (!record(raw.keyStats)) return invalid("keyStats");
+    for (const [key, stat] of Object.entries(raw.keyStats)) {
+      if (!safeKey(key) || !record(stat) || ![stat.hits, stat.misses].every((v) => typeof v === "number" && Number.isSafeInteger(v) && v >= 0)) return invalid("keyStats");
+      keyStats[key] = { hits: stat.hits as number, misses: stat.misses as number };
+    }
   }
-  state.schemaVersion = 1;
+  if (raw.wrenGender !== undefined && raw.wrenGender !== null && raw.wrenGender !== "boy" && raw.wrenGender !== "girl") return invalid("wrenGender");
+  if (raw.updatedAt !== undefined && (typeof raw.updatedAt !== "number" || !Number.isFinite(raw.updatedAt) || raw.updatedAt < 0)) return invalid("updatedAt");
+  let difficulty = choice(raw.difficulty, ["forgiving", "standard", "purist"], "standard", "difficulty");
+  if (version === 0 && raw.purist !== undefined) {
+    if (typeof raw.purist !== "boolean") return invalid("purist");
+    difficulty = raw.purist ? "purist" : "standard";
+  }
+  const state: SaveState = {
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    runId: stringField(raw.runId, "legacy", "runId"),
+    profileName: stringField(raw.profileName, defaults.profileName, "profileName"),
+    typewriterAwakened: booleanField(raw.typewriterAwakened, false, "typewriterAwakened"),
+    wrenGender: (raw.wrenGender ?? null) as SaveState["wrenGender"],
+    realms, satchel: strings(raw.satchel, "satchel"), keyStats,
+    almanacLore: strings(raw.almanacLore, "almanacLore"), difficulty,
+    audioLevel: choice(raw.audioLevel, ["loud", "medium", "quiet", "off"], "medium", "audioLevel"),
+    checkpoint: validateCheckpoint(raw.checkpoint),
+    textScale: choice(raw.textScale, ["standard", "large"], "standard", "textScale"),
+    reducedMotion: booleanField(raw.reducedMotion, false, "reducedMotion"),
+    reducedFlashes: booleanField(raw.reducedFlashes, false, "reducedFlashes"),
+    updatedAt: raw.updatedAt as number ?? defaults.updatedAt,
+  };
+  const cp = state.checkpoint;
+  if (cp && ((cp.scene === "OpeningScene" && state.typewriterAwakened) ||
+      (cp.scene === "WinterMountainScene" && (!state.typewriterAwakened || state.realms["winter-mountain"]?.cleared)))) state.checkpoint = null;
   return state;
 }
 
+export interface SaveConflict {
+  local: SaveState;
+  cloud: SaveState;
+}
+export type SaveSource = "local" | "cloud";
 export interface SaveBackend {
   load(): Promise<SaveState | null>;
   save(state: SaveState): Promise<void>;
+  /** Drain optional remote work after the durable local write. */
+  flush?(): Promise<void>;
+  getLastError?(): Error | null;
+  getConflict?(): SaveConflict | null;
+  resolveConflict?(source: SaveSource): Promise<SaveState>;
 }
-
+export interface StoragePort {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
 const STORAGE_KEY = "portalwrights-almanac.save.v1";
-const SUPABASE_TABLE = "player_saves";
-
-// A separate, device-local "last known good" snapshot. We copy the prior raw
-// save here right before we overwrite it on a persisted write, and right
-// before we run a migration. If a write is interrupted/corrupted or a future
-// migration mangles a real child's save, this key still holds the previous
-// good bytes, so recovery is possible without touching the live save slot.
-// Intentionally dependency-free and best-effort: snapshotting must never throw
-// into the save path, so every access is wrapped and failures are swallowed.
-const LAST_KNOWN_GOOD_KEY = "portalwrights-almanac.save.v1.lkg";
-
-/**
- * Copy whatever raw save currently lives at STORAGE_KEY into the last-known-good
- * slot. Call this *before* mutating STORAGE_KEY (a persisted write) or before
- * running a migration, so the pre-change bytes survive a bad outcome. No-op when
- * there is nothing to back up. Never throws — snapshotting is pure safety and
- * must not break the save it is protecting (e.g. localStorage unavailable or
- * over quota). Stores the raw string verbatim; no parse/serialize round-trip,
- * so it cannot itself corrupt the payload.
- */
-export function snapshotLastKnownGood(): void {
-  try {
-    const current = localStorage.getItem(STORAGE_KEY);
-    if (current !== null) {
-      localStorage.setItem(LAST_KNOWN_GOOD_KEY, current);
-    }
-  } catch {
-    // Best-effort only; ignore quota/availability failures.
-  }
+function browserStorage(): StoragePort {
+  // Resolve at use time: constructing a store never opens Supabase or accesses
+  // player storage, and tests inject isolated storage instead.
+  return { getItem: (key) => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value) };
 }
-
-/**
- * Read back the last-known-good snapshot as a parsed SaveState, or null if none
- * exists / it cannot be parsed. The returned value is intentionally *not*
- * migrated here — callers that want a usable state should pass it through
- * migrate(). Provided for recovery tooling; the normal load path does not need
- * it. Never throws.
- */
-export function loadLastKnownGood(): SaveState | null {
-  try {
-    const raw = localStorage.getItem(LAST_KNOWN_GOOD_KEY);
-    return raw ? (JSON.parse(raw) as SaveState) : null;
-  } catch {
-    return null;
-  }
+function parseSave(raw: string): SaveState {
+  let value: unknown;
+  try { value = JSON.parse(raw); } catch { throw new InvalidSaveError(); }
+  return migrate(value);
 }
+function asError(error: unknown): Error { return error instanceof Error ? error : new Error(String(error)); }
 
-// The cloud save-load is best-effort: if Supabase is slow, paused, unreachable,
-// or the stored session token is stale, the boot must still proceed. After this
-// long, SyncedBackend.load() gives up on the cloud and boots from the local
-// save (guest/offline). Generous enough that a healthy cloud load wins easily.
-const CLOUD_LOAD_TIMEOUT_MS = 4000;
+export function snapshotLastKnownGood(storage: StoragePort = browserStorage(), key = STORAGE_KEY): void {
+  try {
+    const current = storage.getItem(key);
+    if (current !== null) { parseSave(current); storage.setItem(`${key}.lkg`, current); }
+  } catch { /* Never copy malformed/future bytes over a good backup. */ }
+}
+export function loadLastKnownGood(storage: StoragePort = browserStorage(), key = STORAGE_KEY): SaveState | null {
+  try { const raw = storage.getItem(`${key}.lkg`); return raw === null ? null : parseSave(raw); } catch { return null; }
+}
 
 export class LocalStorageBackend implements SaveBackend {
-  async load(): Promise<SaveState | null> {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? (JSON.parse(raw) as SaveState) : null;
-    } catch {
-      return null;
-    }
+  constructor(private readonly storage: StoragePort = browserStorage(), readonly userId: string | null = null) {}
+  get storageKey(): string { return this.userId === null ? STORAGE_KEY : `${STORAGE_KEY}.user.${encodeURIComponent(this.userId)}`; }
+  forUser(userId: string | null): LocalStorageBackend { return new LocalStorageBackend(this.storage, userId); }
+  preserveConflict(source: SaveSource, state: SaveState): void {
+    // Kept separately from the rotating last-known-good slot: choosing one
+    // branch must not make the unchosen branch disappear on the next autosave.
+    this.storage.setItem(`${this.storageKey}.conflict.${source}.${Date.now()}.${state.updatedAt}`, JSON.stringify(migrate(state)));
   }
-
+  async load(): Promise<SaveState | null> {
+    const raw = this.storage.getItem(this.storageKey);
+    if (raw !== null) {
+      try { return parseSave(raw); }
+      catch (error) {
+        if (error instanceof UnsupportedSaveVersionError) throw error;
+        const backup = loadLastKnownGood(this.storage, this.storageKey);
+        if (backup) return backup;
+        throw error;
+      }
+    }
+    return loadLastKnownGood(this.storage, this.storageKey);
+  }
   async save(state: SaveState): Promise<void> {
-    // Preserve the previous good bytes before we overwrite the live slot, so an
-    // interrupted/corrupted write leaves a recoverable snapshot behind.
-    snapshotLastKnownGood();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const valid = migrate(state);
+    const previous = this.storage.getItem(this.storageKey);
+    // An old game build must never overwrite progress from a newer one, even
+    // if a caller skipped load(). Corrupt bytes do not replace the backup.
+    if (previous !== null) {
+      try { parseSave(previous); }
+      catch (error) { if (error instanceof UnsupportedSaveVersionError) throw error; }
+    }
+    snapshotLastKnownGood(this.storage, this.storageKey);
+    this.storage.setItem(this.storageKey, JSON.stringify(valid));
   }
 }
 
-export class SupabaseBackend implements SaveBackend {
-  async load(): Promise<SaveState | null> {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const userId = sessionData.session?.user.id;
+export interface CloudSaveBackend {
+  currentUserId(): Promise<string | null>;
+  load(userId?: string): Promise<SaveState | null>;
+  save(state: SaveState, userId?: string): Promise<void>;
+  /** Atomic compare-and-write against the observed row; false means another
+   * writer changed/created it. Adapters without this cannot safely upload. */
+  saveIfUnchanged?(state: SaveState, observed: SaveState | null, userId?: string): Promise<boolean>;
+}
+const CLOUD_TIMEOUT_MS = 4000;
+async function deadline<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([work, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new CloudSaveError()), timeoutMs);
+    })]);
+  } finally { if (timer !== undefined) clearTimeout(timer); }
+}
+async function defaultClient(): Promise<SupabaseClient> {
+  return (await import("./supabaseClient")).supabase;
+}
+export class SupabaseBackend implements CloudSaveBackend, SaveBackend {
+  private observations = new Map<string, { state: SaveState | null; revision: string | null }>();
+  constructor(private readonly client: () => Promise<SupabaseClient> = defaultClient, private readonly timeoutMs = CLOUD_TIMEOUT_MS) {}
+  async currentUserId(): Promise<string | null> {
+    const client = await this.client();
+    const { data, error } = await deadline(client.auth.getSession(), this.timeoutMs);
+    if (error) throw new CloudSaveError();
+    return data.session?.user.id ?? null;
+  }
+  private async owner(expected?: string): Promise<string | null> {
+    const actual = await this.currentUserId();
+    if (expected !== undefined && actual !== expected) throw new CloudSaveError("The signed-in account changed. Your original account's local save is preserved; reopen the game before syncing.");
+    return actual;
+  }
+  private async request<T>(work: (signal: AbortSignal) => PromiseLike<T>): Promise<T> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try { return await work(controller.signal); }
+    finally { clearTimeout(timer); }
+  }
+  async load(expected?: string): Promise<SaveState | null> {
+    const userId = await this.owner(expected);
     if (!userId) return null;
-    const { data, error } = await supabase
-      .from(SUPABASE_TABLE)
-      .select("state")
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (error || !data) return null;
-    return data.state as SaveState;
+    const client = await this.client();
+    const { data, error } = await this.request((signal) => client.from("player_saves").select("state, updated_at").eq("user_id", userId).abortSignal(signal).maybeSingle());
+    if (error) throw new CloudSaveError();
+    const state = data === null ? null : migrate(data.state);
+    if (data !== null && typeof data.updated_at !== "string") throw new CloudSaveError("Cloud save revision is unavailable. Device progress has been preserved.");
+    this.observations.set(userId, { state, revision: data?.updated_at ?? null });
+    return state;
   }
-
-  async save(state: SaveState): Promise<void> {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const userId = sessionData.session?.user.id;
-    if (!userId) return;
-    await supabase
-      .from(SUPABASE_TABLE)
-      .upsert({ user_id: userId, state }, { onConflict: "user_id" });
-  }
-}
-
-/**
- * Local-first sync. The local cache is always written so the game stays
- * responsive offline; the cloud copy is the source of truth once Aiden
- * signs in, so the same save follows him across devices.
- *
- * First-sign-in upgrade path: if a signed-in user has no cloud row yet but
- * has a local save (he played as a guest before signing in), the local
- * save is pushed up to the cloud before being returned.
- */
-export class SyncedBackend implements SaveBackend {
-  constructor(
-    private readonly local: LocalStorageBackend = new LocalStorageBackend(),
-    private readonly cloud: SupabaseBackend = new SupabaseBackend(),
-  ) {}
-
-  async load(): Promise<SaveState | null> {
-    // The cloud path must never hang the boot. supabase.auth.getSession() has no
-    // internal timeout — it can stall or throw when the project is paused/
-    // unreachable or the stored token is stale — and TitleScene awaits this
-    // before it shows anything. Race the cloud path against a timeout; on either
-    // a timeout OR an error, fall back to the local save so the game always
-    // boots, online or off. (The `.catch` also keeps a late cloud rejection,
-    // after the timeout already won, from surfacing as an unhandled rejection.)
-    const FALLBACK = Symbol("local-fallback");
-    const cloud = this.loadViaCloud().catch(() => FALLBACK);
-    const timeout = new Promise<typeof FALLBACK>((resolve) =>
-      window.setTimeout(() => resolve(FALLBACK), CLOUD_LOAD_TIMEOUT_MS),
-    );
-    const result = await Promise.race([cloud, timeout]);
-    // typeof guard (not `=== FALLBACK`) so TS narrows the symbol out of the union.
-    return typeof result === "symbol" ? this.local.load() : result;
-  }
-
-  private async loadViaCloud(): Promise<SaveState | null> {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const signedIn = !!sessionData.session?.user;
-    if (!signedIn) return this.local.load();
-
-    const cloudState = await this.cloud.load();
-    if (cloudState) return cloudState;
-
-    const localState = await this.local.load();
-    if (localState) {
-      await this.cloud.save(localState);
+  async save(state: SaveState, expected?: string): Promise<void> {
+    const observed = await this.load(expected);
+    if (observed) {
+      assertCompatible(state, observed);
+      if (observed.updatedAt > state.updatedAt) throw new SaveConflictError();
     }
-    return localState;
+    if (!await this.saveIfUnchanged(state, observed, expected)) throw new SaveConflictError();
   }
-
-  async save(state: SaveState): Promise<void> {
-    await this.local.save(state);
-    // Fire-and-forget cloud save; failures are not fatal since local has
-    // the data and the next flush will retry implicitly.
-    void this.cloud.save(state).catch(() => {});
+  async saveIfUnchanged(state: SaveState, observed: SaveState | null, expected?: string): Promise<boolean> {
+    const valid = migrate(state);
+    const userId = await this.owner(expected);
+    if (!userId) return false;
+    const observation = this.observations.get(userId);
+    if (!observation || !sameNullableSave(observation.state, observed)) return false;
+    const client = await this.client();
+    // Existing schema already supplies a server-controlled updated_at trigger.
+    // Filtering the UPDATE by that revision makes the check and write one SQL
+    // operation. A new row uses INSERT + the unique user_id key, never upsert.
+    const result = observed === null
+      ? await this.request((signal) => client.from("player_saves")
+        .insert({ user_id: userId, state: valid }).select("state, updated_at").abortSignal(signal).maybeSingle())
+      : await this.request((signal) => client.from("player_saves")
+        .update({ state: valid }).eq("user_id", userId).eq("updated_at", observation.revision!)
+        .select("state, updated_at").abortSignal(signal).maybeSingle());
+    const { data, error } = result;
+    if (error?.code === "23505") return false;
+    if (error) throw new CloudSaveError();
+    if (data === null) return false;
+    if (typeof data.updated_at !== "string") throw new CloudSaveError();
+    this.observations.set(userId, { state: migrate(data.state), revision: data.updated_at });
+    return true;
   }
 }
 
-// A small in-memory cache + autosave debouncer, so scene code can mutate
-// state freely without thinking about persistence calls on every keystroke.
+function resolvedChoice(state: SaveState, realmId: string, key: string, value: string): boolean {
+  if ((key === "fork1" || key === "fork2") && value === "none") return false;
+  if (realmId === "winter-mountain" && key === "fox" && value === "ignored" &&
+      !state.realms[realmId]?.cleared && state.checkpoint?.scene === "WinterMountainScene" &&
+      state.checkpoint.data.foxDecided === false) return false;
+  return true;
+}
+function conflictingBranches(a: SaveState, b: SaveState): boolean {
+  // A newer device clock does not prove that an old journey supersedes a new
+  // run on another device. Reset is safe during a session only when its last
+  // observed cloud row is still current; boot-time run differences need choice.
+  if (a.runId !== b.runId) return true;
+  if (a.wrenGender && b.wrenGender && a.wrenGender !== b.wrenGender) return true;
+  for (const [id, realm] of Object.entries(a.realms)) {
+    const other = b.realms[id];
+    if (!other) continue;
+    for (const [key, value] of Object.entries(realm.choices)) {
+      if (other.choices[key] !== undefined && other.choices[key] !== value &&
+          resolvedChoice(a, id, key, value) && resolvedChoice(b, id, key, other.choices[key])) return true;
+    }
+  }
+  return false;
+}
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (record(value)) return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+function sameSave(a: SaveState, b: SaveState): boolean { return stableJson(a) === stableJson(b); }
+function sameNullableSave(a: SaveState | null, b: SaveState | null): boolean {
+  return a === null || b === null ? a === b : sameSave(a, b);
+}
+function retainsProgress(candidate: SaveState, previous: SaveState): boolean {
+  if (previous.typewriterAwakened && !candidate.typewriterAwakened) return false;
+  if (previous.wrenGender && candidate.wrenGender !== previous.wrenGender) return false;
+  for (const [id, realm] of Object.entries(previous.realms)) {
+    const next = candidate.realms[id];
+    if (realm.cleared && !next?.cleared) return false;
+    for (const [key, value] of Object.entries(realm.choices)) {
+      if (resolvedChoice(previous, id, key, value) && next?.choices[key] !== value) return false;
+    }
+  }
+  if (previous.satchel.some((id) => !candidate.satchel.includes(id)) ||
+    previous.almanacLore.some((id) => !candidate.almanacLore.includes(id))) return false;
+  for (const [key, stat] of Object.entries(previous.keyStats)) {
+    const next = candidate.keyStats[key];
+    if (!next || next.hits < stat.hits || next.misses < stat.misses) return false;
+  }
+  return true;
+}
+function assertCompatible(a: SaveState, b: SaveState): void {
+  const newer = a.updatedAt >= b.updatedAt ? a : b;
+  const older = newer === a ? b : a;
+  if (conflictingBranches(a, b) || (a.updatedAt === b.updatedAt && !sameSave(a, b)) ||
+    !retainsProgress(newer, older)) throw new SaveConflictError();
+}
+interface SyncOptions { cloudDelayMs?: number; loadTimeoutMs?: number }
+
+export class SyncedBackend implements SaveBackend {
+  private scoped: LocalStorageBackend;
+  private owner: string | null = null;
+  private bound = false;
+  private observedCloud: SaveState | null | undefined;
+  private pendingCloud: SaveState | null = null;
+  private cloudTimer: ReturnType<typeof setTimeout> | null = null;
+  private cloudChain: Promise<void> = Promise.resolve();
+  private cloudError: Error | null = null;
+  private cloudSequence = 0;
+  private conflict: SaveConflict | null = null;
+  constructor(private readonly local = new LocalStorageBackend(), private readonly cloud: CloudSaveBackend = new SupabaseBackend(), private readonly options: SyncOptions = {}) {
+    this.scoped = local;
+  }
+  getLastError(): Error | null { return this.cloudError; }
+  getConflict(): SaveConflict | null {
+    return this.conflict ? { local: migrate(this.conflict.local), cloud: migrate(this.conflict.cloud) } : null;
+  }
+  private checkCompatibility(local: SaveState, cloud: SaveState): void {
+    try { assertCompatible(local, cloud); }
+    catch (error) { this.conflict = { local: migrate(local), cloud: migrate(cloud) }; throw error; }
+  }
+  private bind(owner: string | null): void {
+    this.owner = owner; this.scoped = this.local.forUser(owner); this.bound = true;
+  }
+  async load(): Promise<SaveState | null> {
+    this.observedCloud = undefined;
+    try {
+      this.bind(await deadline(this.cloud.currentUserId(), this.options.loadTimeoutMs ?? CLOUD_TIMEOUT_MS));
+    } catch (error) {
+      this.cloudError = asError(error);
+      // Without verified identity, never expose another account's cached save.
+      // Guest progress remains playable; account caches stay untouched.
+      this.bind(null);
+      return this.scoped.load();
+    }
+    const local = await this.scoped.load();
+    if (this.owner === null) return local;
+    let remote: SaveState | null;
+    try { remote = await deadline(this.cloud.load(this.owner), this.options.loadTimeoutMs ?? CLOUD_TIMEOUT_MS); }
+    catch (error) {
+      // Invalid/newer cloud data is protected just like local data. Network
+      // failure permits local play but NEVER implies there is no cloud row.
+      if (error instanceof InvalidSaveError || error instanceof UnsupportedSaveVersionError) throw error;
+      this.cloudError = asError(error); return local;
+    }
+    this.cloudError = null;
+    const cloud = remote === null ? null : migrate(remote);
+    this.observedCloud = cloud;
+    if (cloud && local) this.checkCompatibility(local, cloud);
+    if (cloud && (!local || cloud.updatedAt > local.updatedAt)) {
+      await this.scoped.save(cloud); return cloud;
+    }
+    if (local && (!cloud || !sameSave(local, cloud))) this.queueCloud(local);
+    return local ?? cloud;
+  }
+  async save(state: SaveState): Promise<void> {
+    if (!this.bound) await this.load();
+    const valid = migrate(state);
+    await this.scoped.save(valid);
+    if (this.owner !== null) this.queueCloud(valid);
+  }
+  private queueCloud(state: SaveState): void {
+    this.pendingCloud = migrate(state);
+    this.cloudSequence++;
+    // Coalesce frequent keystroke saves with a bounded wait (continuous typing
+    // cannot postpone sync forever). One network writer preserves ordering.
+    if (this.cloudTimer !== null) return;
+    this.cloudTimer = setTimeout(() => {
+      this.cloudTimer = null;
+      void this.drainCloud().catch(() => { /* surfaced through getLastError/flush */ });
+    }, this.options.cloudDelayMs ?? 2000);
+  }
+  private drainCloud(): Promise<void> {
+    if (!this.pendingCloud || this.owner === null) return this.cloudChain;
+    const snapshot = this.pendingCloud;
+    const sequence = this.cloudSequence;
+    const owner = this.owner;
+    this.pendingCloud = null;
+    const write = this.cloudChain.then(async () => {
+      const remote = await this.cloud.load(owner);
+      const current = remote === null ? null : migrate(remote);
+      if (this.observedCloud !== undefined) {
+        if (!sameNullableSave(current, this.observedCloud)) {
+          // An uncertain previous request may already have written exactly this
+          // snapshot. Recognize that success without rewriting someone else.
+          if (current && sameSave(current, snapshot)) {
+            this.observedCloud = current;
+            this.cloudError = null;
+            return;
+          }
+          this.cloudChanged(snapshot, current);
+        }
+      } else if (current) {
+        this.checkCompatibility(snapshot, current);
+        if (current.updatedAt > snapshot.updatedAt) this.cloudChanged(snapshot, current);
+      }
+      this.observedCloud = current;
+      if (!this.cloud.saveIfUnchanged) throw new CloudSaveError("This cloud adapter cannot protect simultaneous saves. Your device progress is preserved.");
+      if (!await this.cloud.saveIfUnchanged(snapshot, current, owner)) {
+        const latest = await this.cloud.load(owner);
+        this.cloudChanged(snapshot, latest === null ? null : migrate(latest));
+      }
+      this.observedCloud = migrate(snapshot);
+      this.cloudError = null;
+    }).catch((error: unknown) => {
+      this.cloudError = asError(error);
+      // Retain the newest unsynced snapshot for an explicit retry. A failed
+      // old write must never replace an already pending newer snapshot.
+      if (sequence === this.cloudSequence && (!this.pendingCloud || this.pendingCloud.updatedAt < snapshot.updatedAt)) this.pendingCloud = snapshot;
+      throw error;
+    });
+    this.cloudChain = write.catch(() => {});
+    return write;
+  }
+  private cloudChanged(local: SaveState, cloud: SaveState | null): never {
+    if (cloud) {
+      this.conflict = { local: migrate(local), cloud: migrate(cloud) };
+      throw new SaveConflictError("The cloud save changed on another device. Both journeys are preserved; choose which to continue.");
+    }
+    throw new CloudSaveError("The cloud copy changed while you were playing. Your device progress is preserved; reopen the game before syncing.");
+  }
+  async flush(): Promise<void> {
+    if (this.cloudTimer !== null) { clearTimeout(this.cloudTimer); this.cloudTimer = null; }
+    await this.cloudChain;
+    while (this.pendingCloud) {
+      if (this.cloudTimer !== null) { clearTimeout(this.cloudTimer); this.cloudTimer = null; }
+      await this.drainCloud();
+    }
+    if (this.cloudError) throw this.cloudError;
+  }
+  async resolveConflict(source: SaveSource): Promise<SaveState> {
+    const conflict = this.getConflict();
+    if (!conflict || this.owner === null) throw new SaveConflictError("There is no pending account-save choice.");
+    if (await this.cloud.currentUserId() !== this.owner) throw new CloudSaveError("The signed-in account changed. Reopen the game before choosing a save.");
+    const latest = await this.cloud.load(this.owner);
+    if (latest && !sameSave(migrate(latest), conflict.cloud)) {
+      this.conflict = { local: conflict.local, cloud: migrate(latest) };
+      throw new SaveConflictError("The cloud save changed while this choice was open. Review the refreshed choices before continuing.");
+    }
+    this.scoped.preserveConflict("local", conflict.local);
+    this.scoped.preserveConflict("cloud", conflict.cloud);
+    const selected = migrate({ ...conflict[source], updatedAt: Math.max(Date.now(), conflict.local.updatedAt + 1, conflict.cloud.updatedAt + 1) });
+    this.observedCloud = latest === null ? null : migrate(latest);
+    await this.save(selected);
+    await this.flush();
+    this.conflict = null;
+    return selected;
+  }
+  /** Explicit opt-in only. Legacy/guest saves remain untouched; they are never
+   * silently uploaded when another person signs into a shared computer. */
+  async importGuestSave(): Promise<SaveState | null> {
+    if (!this.bound) await this.load();
+    if (this.owner === null) throw new CloudSaveError("Sign in before importing device-local guest progress.");
+    const existing = await this.scoped.load();
+    const remote = await this.cloud.load(this.owner);
+    if (existing || remote) throw new SaveConflictError("This account already has progress. Guest progress has been preserved separately.");
+    const guest = await this.local.forUser(null).load();
+    if (!guest) return null;
+    const imported = migrate({ ...guest, updatedAt: Math.max(Date.now(), guest.updatedAt + 1) });
+    this.observedCloud = null;
+    await this.save(imported); await this.flush();
+    return imported;
+  }
+}
+
+interface StoreOptions { saveDelayMs?: number; onError?: (error: Error) => void }
 export class SaveStore {
   private state: SaveState;
-  private flushTimer: number | null = null;
-
-  constructor(
-    private readonly backend: SaveBackend,
-    initial: SaveState,
-  ) {
-    this.state = initial;
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  private writeChain: Promise<void> = Promise.resolve();
+  private generation = 0;
+  private persistedGeneration = 0;
+  private inFlight: Promise<void> | null = null;
+  private queuedGeneration = -1;
+  private lastError: Error | null = null;
+  constructor(private readonly backend: SaveBackend, initial: SaveState, private readonly options: StoreOptions = {}) {
+    this.state = migrate(initial);
   }
-
-  static async load(backend: SaveBackend): Promise<SaveStore> {
+  static async load(backend: SaveBackend, options: StoreOptions = {}): Promise<SaveStore> {
     const loaded = await backend.load();
-    // No save yet → fresh state. With a save, run it up the version ladder so
-    // older saves missing newer fields (e.g. satchel) get sane defaults and the
-    // legacy `purist` → difficulty fix-up still applies — see migrate().
-    let state: SaveState;
-    if (loaded) {
-      // Snapshot the pre-migration bytes before transforming them, so a bad
-      // migration of a real save stays recoverable from the last-known-good key.
-      snapshotLastKnownGood();
-      state = migrate(loaded as unknown as RawSave);
-    } else {
-      state = emptySave();
-    }
-    return new SaveStore(backend, state);
+    return new SaveStore(backend, loaded === null ? emptySave() : migrate(loaded), options);
   }
-
-  get(): Readonly<SaveState> {
-    return this.state;
-  }
-
-  update(mutator: (s: SaveState) => void): void {
+  get(): Readonly<SaveState> { return this.state; }
+  getLastError(): Error | null { return this.lastError ?? this.backend.getLastError?.() ?? null; }
+  update(mutator: (state: SaveState) => void): void {
     mutator(this.state);
-    this.state.updatedAt = Date.now();
+    this.state.updatedAt = Math.max(Date.now(), this.state.updatedAt + 1);
+    this.generation++;
     this.scheduleFlush();
   }
-
+  setCheckpoint(checkpoint: SaveCheckpoint): void {
+    const valid = validateCheckpoint(checkpoint);
+    this.update((state) => { state.checkpoint = valid; });
+  }
+  clearCheckpoint(): void { this.update((state) => { state.checkpoint = null; }); }
   recordKeystroke(key: string, hit: boolean): void {
-    this.update((s) => {
-      const stat = s.keyStats[key] ?? { hits: 0, misses: 0 };
-      if (hit) stat.hits += 1;
-      else stat.misses += 1;
-      s.keyStats[key] = stat;
+    this.update((state) => {
+      const stat = state.keyStats[key] ?? { hits: 0, misses: 0 };
+      if (hit) stat.hits++; else stat.misses++;
+      state.keyStats[key] = stat;
     });
   }
-
+  private reportError(error: unknown): void {
+    this.lastError = asError(error);
+    try { this.options.onError?.(this.lastError); } catch { /* UI callbacks cannot break save recovery. */ }
+  }
   private scheduleFlush(): void {
     if (this.flushTimer !== null) return;
-    this.flushTimer = window.setTimeout(() => {
+    this.flushTimer = setTimeout(() => {
       this.flushTimer = null;
-      void this.backend.save(this.state);
-    }, 250);
+      void this.writeCurrent().catch(() => { /* reported by the write queue */ });
+    }, this.options.saveDelayMs ?? 250);
+  }
+  private writeCurrent(): Promise<void> {
+    if (this.persistedGeneration >= this.generation) return this.writeChain;
+    if (this.inFlight && this.queuedGeneration === this.generation) return this.inFlight;
+    const generation = this.generation;
+    let snapshot: SaveState;
+    try { snapshot = migrate(this.state); }
+    catch (error) { this.reportError(error); return Promise.reject(error); }
+    const write = this.writeChain.then(async () => {
+      await this.backend.save(snapshot);
+      this.persistedGeneration = generation; this.lastError = null;
+    }).catch((error: unknown) => { this.reportError(error); throw error; });
+    this.writeChain = write.catch(() => {});
+    this.queuedGeneration = generation; this.inFlight = write;
+    void write.finally(() => { if (this.inFlight === write) this.inFlight = null; }).catch(() => {});
+    return write;
+  }
+  /** Call before pause/quit/navigation. Awaits local durability and drains
+   * optional cloud work; rejects visibly while retaining data for retry. */
+  async flush(): Promise<void> {
+    if (this.flushTimer !== null) { clearTimeout(this.flushTimer); this.flushTimer = null; }
+    try { await this.writeCurrent(); await this.backend.flush?.(); this.lastError = null; }
+    catch (error) { this.reportError(error); throw error; }
   }
 }

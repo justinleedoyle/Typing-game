@@ -1,0 +1,143 @@
+import { readFileSync } from "node:fs";
+import ts from "typescript";
+import { navigationAction } from "../src/game/ui/navigationPolicy";
+import { decideBeatGate } from "../src/game/beatGate";
+import { assert, assertEqual, suite } from "./_assert";
+
+function source(path: string) {
+  const url = new URL(path, import.meta.url);
+  return ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
+}
+function find<T extends ts.Node>(node: ts.Node, predicate: (child: ts.Node) => child is T): T {
+  if (predicate(node)) return node;
+  let match: T | undefined;
+  node.forEachChild(child => { if (!match) { try { match = find(child, predicate); } catch {} } });
+  if (!match) throw new Error("Missing production input method");
+  return match;
+}
+function compile(code: string, result: string, globals: Record<string, unknown> = {}) {
+  const js = ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  return new Function(...Object.keys(globals), `${js}; return ${result};`)(...Object.values(globals));
+}
+
+const pauseSource = source("../src/game/ui/pauseMenu.ts");
+const pauseClass = pauseSource.statements.find(node => ts.isClassDeclaration(node) && node.name?.text === "ChapterPauseMenu") as ts.ClassDeclaration;
+const create = pauseClass.members.find(member => member.name?.getText(pauseSource) === "create")!;
+const keyDeclaration = find(create, (node): node is ts.VariableDeclaration =>
+  ts.isVariableDeclaration(node) && node.name.getText(pauseSource) === "onKey");
+const bindPauseKey = compile(`function bind() { return ${keyDeclaration.initializer!.getText(pauseSource)}; }`, "bind", { ROW_COUNT: 7 });
+const resume = pauseClass.members.find(member => member.name?.getText(pauseSource) === "resume")!;
+const Pause = compile(`class Pause { ${resume.getText(pauseSource)} }`, "Pause");
+const install = pauseSource.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "installChapterMenu")!;
+const installMenu = compile(install.getText(pauseSource).replace(/^export /, ""), "installChapterMenu", {
+  installPresentation() {}, navigationAction, localSaveNotice: () => null,
+  KEY: "ChapterPauseMenu", ChapterPauseMenu: class {}, SERIF: "serif", UI_CSS: {},
+  Phaser: { Core: { Events: { BLUR: "blur" } } },
+});
+const bellSource = source("../src/scenes/SunkenBellScene.ts");
+const bellClass = bellSource.statements.find(ts.isClassDeclaration)!;
+const bellKey = bellClass.members.find(member => member.name?.getText(bellSource) === "onKeyDown")!;
+const Bell = compile(`class Bell { ${bellKey.getText(bellSource)} }`, "Bell", {
+  isPuristToggleKey: () => false, decideBeatGate, playClack() {},
+});
+
+// Use Phaser's installed dispatcher unchanged: it replaces propagation methods
+// on queued native events and processes each active scene in registration order.
+const keyboardSource = source("../node_modules/phaser/src/input/keyboard/KeyboardPlugin.js");
+const update = find(keyboardSource, (node): node is ts.PropertyAssignment =>
+  ts.isPropertyAssignment(node) && node.name.getText(keyboardSource) === "update" && ts.isFunctionExpression(node.initializer));
+const keyboardUpdate = compile(`const update = ${update.initializer.getText(keyboardSource)};`, "update", {
+  KeyMap: { 27: "ESC", 13: "ENTER", 32: "SPACE" },
+  Events: { KEY_DOWN: "keydown-", ANY_KEY_DOWN: "keydown", KEY_UP: "keyup-", ANY_KEY_UP: "keyup" },
+});
+
+function text() {
+  return { setOrigin() { return this; }, setDepth() { return this; }, setVisible() { return this; },
+    setText() { return this; }, destroy() {} };
+}
+function fixture() {
+  const state = { ownerActive: false, pauseActive: true, launches: 0, ownerDispatches: 0, flushes: 0, claim: false };
+  const typed: string[] = [];
+  const store = { flush: () => { state.flushes += 1; return Promise.resolve(); }, getLastError: () => null };
+  const owner = new Bell();
+  let pause: any;
+  Object.assign(owner, {
+    scene: {
+      get: () => ({}), isActive: (key?: string) => key === "ChapterPauseMenu" ? state.pauseActive : state.ownerActive,
+      pause: () => { state.ownerActive = false; }, resume: () => { state.ownerActive = true; },
+      launch: () => { state.pauseActive = true; state.launches += 1; pause.openedAt = pause.time.now; }, bringToTop() {},
+    },
+    game: { events: { on() {}, off() {} } }, events: { once() {} },
+    add: { text }, time: { addEvent: () => ({ remove() {} }) },
+    reading: { handleKey: () => false }, typingInput: { handleChar: (key: string) => typed.push(key) }, beatPhase: "free",
+  });
+  owner.chapterMenu = installMenu(owner, { store, hasClaim: () => state.claim, onLeave() {} });
+  pause = new Pause();
+  Object.assign(pause, {
+    config: { store, owner }, time: { now: 1000 }, openedAt: 0, busy: false, canResolve: false, selected: 0,
+    scene: { stop: () => { state.pauseActive = false; } },
+    activate: () => pause.resume(),
+  });
+  const onPauseKey = bindPauseKey.call(pause);
+  const makePlugin = (isActive: () => boolean, handler: (event: any) => void) => ({
+    keys: [], manager: { queue: [] as any[] }, isActive,
+    emit: (name: string, event: any) => { if (name === "keydown") handler(event); },
+    update: keyboardUpdate,
+  });
+  const pausePlugin = makePlugin(() => state.pauseActive, onPauseKey);
+  const ownerPlugin = makePlugin(() => state.ownerActive, event => {
+    state.ownerDispatches += 1;
+    owner.onKeyDown(event);
+  });
+  let stamp = 0;
+  const dispatch = (key: string, order: "pause-first" | "owner-first", extra: Record<string, unknown> = {}) => {
+    const event = { key, keyCode: key === "Escape" ? 27 : key === "Enter" ? 13 : 32,
+      type: "keydown", timeStamp: ++stamp, repeat: false, ctrlKey: false, metaKey: false, altKey: false,
+      prevented: false, preventDefault() { this.prevented = true; }, ...extra };
+    pausePlugin.manager.queue = ownerPlugin.manager.queue = [event];
+    const plugins = order === "pause-first" ? [pausePlugin, ownerPlugin] : [ownerPlugin, pausePlugin];
+    plugins.forEach(plugin => plugin.update());
+    return event;
+  };
+  return { state, typed, pause, dispatch };
+}
+
+await suite("pause input: Escape, Enter and Space resume once in either Phaser scene dispatch order", () => {
+  for (const order of ["pause-first", "owner-first"] as const) for (const key of ["Escape", "Enter", " "]) {
+    const f = fixture();
+    const event = f.dispatch(key, order);
+    assert(f.state.ownerActive && !f.state.pauseActive, `${order}/${key}: gameplay resumes without reopening the pause`);
+    assertEqual(f.state.launches, 0, "the closing event cannot launch the pause menu again");
+    assertEqual(f.state.ownerDispatches, 0, "a resume key cannot also advance narration or count as gameplay input");
+    assertEqual(f.typed, [], "resuming cannot introduce a stray typed space or Escape");
+    assertEqual(f.state.flushes, 1, "the existing nonblocking save flush still runs once");
+    assert(event.prevented, "menu keyboard actions still prevent browser defaults");
+  }
+});
+
+await suite("pause input: opening guards, repeats, modifiers and typing cancellation retain their meaning", () => {
+  for (const extra of [{ repeat: true }, { ctrlKey: true }, { metaKey: true }, { altKey: true }]) {
+    const f = fixture();
+    f.dispatch("Escape", "pause-first", extra);
+    assert(!f.state.ownerActive && f.state.pauseActive, "repeat or browser-modified Escape cannot resume");
+    assertEqual(f.state.flushes, 0, "ignored input cannot initiate a save/resume");
+  }
+  const guarded = fixture();
+  guarded.pause.openedAt = guarded.pause.time.now;
+  guarded.dispatch("Escape", "pause-first");
+  assert(!guarded.state.ownerActive && guarded.state.pauseActive, "the opening Escape still respects the existing180ms guard");
+
+  const typing = fixture();
+  typing.state.ownerActive = true; typing.state.pauseActive = false; typing.state.claim = true;
+  typing.dispatch("Escape", "owner-first");
+  assertEqual(typing.typed, ["Escape"], "Escape first releases the active word through the actual scene handler");
+  assertEqual(typing.state.launches, 0, "cancelling a claim cannot pause in that same key");
+  typing.state.claim = false;
+  typing.dispatch("Escape", "owner-first");
+  assertEqual(typing.state.launches, 1, "a fresh Escape with idle typing still opens pause normally");
+  assert(!typing.state.ownerActive && typing.state.pauseActive, "the opening Escape cannot immediately close its new menu");
+  typing.pause.time.now += 200;
+  typing.dispatch("Escape", "pause-first");
+  assert(typing.state.ownerActive && !typing.state.pauseActive, "the next deliberate Escape cleanly resumes that menu");
+  assertEqual(typing.state.launches, 1, "the resume event never reopens the newly paused chapter");
+});

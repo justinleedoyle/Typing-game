@@ -1,4 +1,9 @@
+import { installChapterMenu } from "../game/ui/pauseMenu";
+import { navigationAction } from "../game/ui/navigationPolicy";
+import { reducedMotion } from "../game/presentation";
 import Phaser from "phaser";
+import { applySceneActorLighting } from "../game/actorLighting";
+import { resetSave } from "../game/resetSave";
 import { type AmbientHandle, playAmbientHub } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
@@ -82,14 +87,14 @@ interface ArchSpec {
 // painted stone frame (no programmatic surround).
 // Painted arch positions in the hub-portal-chamber-clean backdrop, measured
 // from the source 1672×941 image scaled to the 1920×1080 game canvas.
-// width × height ≈ painted arch silhouette so the portal sprite fills the
-// painted stone frame instead of floating inside it.
+// These are the inner apertures, excluding the stone surrounds. Their
+// centers are 401/618/836/1053/1271 px in the 1672 px source painting.
 const ARCHES: readonly ArchSpec[] = [
-  { id: "winter-mountain", x: 655,  width: 280, height: 360, baseY: 680, label: "Winter Mountain", sceneKey: "WinterMountainScene"  },
-  { id: "sunken-bell",     x: 913,  width: 280, height: 360, baseY: 680, label: "Sunken Bell",     sceneKey: "SunkenBellScene"      },
-  { id: "clockwork-forge", x: 1147, width: 280, height: 360, baseY: 680, label: "Clockwork Forge", sceneKey: "ClockworkForgeScene"   },
-  { id: "sky-island",      x: 1381, width: 280, height: 360, baseY: 680, label: "Sky Island",      sceneKey: "SkyIslandScene"        },
-  { id: "haunted-wood",    x: 1638, width: 280, height: 360, baseY: 680, label: "Haunted Wood",    sceneKey: "HauntedWoodScene"      },
+  { id: "winter-mountain", x: 461,  width: 142, height: 318, baseY: 696, label: "Winter Mountain", sceneKey: "WinterMountainScene"  },
+  { id: "sunken-bell",     x: 709,  width: 142, height: 318, baseY: 696, label: "Sunken Bell",     sceneKey: "SunkenBellScene"      },
+  { id: "clockwork-forge", x: 960,  width: 142, height: 318, baseY: 696, label: "Clockwork Forge", sceneKey: "ClockworkForgeScene"   },
+  { id: "sky-island",      x: 1209, width: 142, height: 318, baseY: 696, label: "Sky Island",      sceneKey: "SkyIslandScene"        },
+  { id: "haunted-wood",    x: 1459, width: 142, height: 318, baseY: 696, label: "Haunted Wood",    sceneKey: "HauntedWoodScene"      },
 ] as const;
 
 const REALM_SEQUENCE = ARCHES.map((a) => a.id);
@@ -192,9 +197,11 @@ const DESK_LINE_IDS: Record<string, string> = {
 export class PortalChamberScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
+  private chapterMenu?: ReturnType<typeof installChapterMenu>;
   private archGraphics = new Map<string, Phaser.GameObjects.Graphics>();
   private archGlows = new Map<string, Phaser.GameObjects.Graphics>();
   private archSprites = new Map<string, Phaser.GameObjects.Sprite>();
+  private portalInstructionObjects: Array<Phaser.GameObjects.Graphics | Phaser.GameObjects.Text> = [];
   private narration!: NarrationManager;
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
@@ -217,6 +224,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private hubArrival: HubArrivalSource | null = null;
   private activeZone: Zone = "portals";
   private openingUtilityScene = false;
+  private almanacOverlayOpen = false;
   private enteringGreatBattle = false;
   private restartingNewGame = false;
 
@@ -230,6 +238,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.archGraphics = new Map();
     this.archGlows = new Map();
     this.archSprites = new Map();
+    this.portalInstructionObjects = [];
     this.zoneTargets = [];
     this.portalWordAnchors = [];
     this.stationWordAnchorReleases = [];
@@ -246,6 +255,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.showPortalRevisits = false;
     this.activeZone = "portals";
     this.openingUtilityScene = false;
+    this.almanacOverlayOpen = false;
     this.enteringGreatBattle = false;
     this.restartingNewGame = false;
   }
@@ -265,6 +275,13 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.chapterMenu = installChapterMenu(this, {
+      store: this.store,
+      hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),
+      onLeave: () => this.scene.start("TitleScene"),
+      leaveLabel: "Save & return to title",
+      leaveHint: "Your journey is saved. Continue from the title to resume your latest saved place.",
+    });
     // Redirect first-time players to the opening cinematic.
     if (!this.store.get().typewriterAwakened) {
       this.scene.start("OpeningScene", { store: this.store });
@@ -311,13 +328,14 @@ export class PortalChamberScene extends Phaser.Scene {
       onCorrect: () => bobWrenSprite(this.wrenSprite),
       onMiss: () => {
         flashWrenMiss(this.wrenSprite);
-        this.cameras.main.shake(80, 0.002);
+        if (!reducedMotion(this)) this.cameras.main.shake(80, 0.002);
       },
       onClaim: () => playClaim(),
     });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.RESUME, this.resumeAfterAlmanac, this);
-    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.chapterMenu?.destroy();
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.events.off(Phaser.Scenes.Events.RESUME, this.resumeAfterAlmanac, this);
@@ -350,6 +368,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private enterZone(zone: Zone, animate = true): void {
     this.activeZone = zone;
     this.clearZoneTargets();
+    for (const object of this.portalInstructionObjects) object.setVisible(zone === "portals");
     if (zone === "shelf") this.drawDisplayShelf();
     else this.clearShelfDisplay();
     this.walkWrenTo(ZONE_X[zone], animate);
@@ -361,6 +380,9 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private clearZoneTargets(): void {
+    // A zone replacement also ends any ambiguous prefix. Unregistering every
+    // old target alone leaves that buffer invisible against the new targets.
+    this.typingInput.handleChar("Escape");
     for (const anchor of this.portalWordAnchors) {
       anchor.destroy();
     }
@@ -438,7 +460,7 @@ export class PortalChamberScene extends Phaser.Scene {
         let releaseAnchor = (): void => {};
         const battleTarget = new TextWordTarget({
           scene: this,
-          word: "defend hearthward",
+          word: "defend holdfast",
           x: this.scale.width / 2,
           y: PORTAL_CALL_WORD_Y,
           fontSize: 36,
@@ -479,7 +501,7 @@ export class PortalChamberScene extends Phaser.Scene {
             this.clearPortalFloorCallWake();
             this.playHubActorAction(HUB_STATIONS.portalFloor.x);
             this.pulseStation(HUB_STATIONS.portalFloor);
-            this.startNewGame();
+            void this.startNewGame();
           },
         });
         releaseAnchor = this.attachPortalFloorCallAnchor(ngPlusTarget, UI_HEX.brass);
@@ -1709,13 +1731,17 @@ export class PortalChamberScene extends Phaser.Scene {
       // the chamber rendered beneath it and give the overlay exclusive typing.
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
+      this.almanacOverlayOpen = true;
       this.scene.launch("AlmanacScene", { store: this.store, overlay: true });
       this.scene.pause();
     });
   }
 
   private resumeAfterAlmanac(): void {
-    if (!this.openingUtilityScene) return;
+    // Blur/pause may resume the chamber during the book's short opening beat.
+    // Only an overlay that actually launched owns this return transition.
+    if (!this.almanacOverlayOpen) return;
+    this.almanacOverlayOpen = false;
     this.openingUtilityScene = false;
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     // Rebuild the desk targets after the completed `almanac` word is gone, but
@@ -1728,10 +1754,21 @@ export class PortalChamberScene extends Phaser.Scene {
   private onKeyDown(event: KeyboardEvent): void {
     // Ctrl+Shift+P: toggle purist mode from the hub too.
     if (isPuristToggleKey(event)) {
+      event.preventDefault();
       const next = togglePuristMode(this, this.store, { announce: false });
       this.showHubDifficultyNotice(next);
       return;
     }
+    if (event.ctrlKey || event.metaKey) return;
+    const activeTyping = this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0;
+    const navigation = navigationAction(event, this.activeZone === "portals" ? "hub" : "hub-zone", activeTyping);
+    if (navigation === "ignore") return;
+    if (navigation === "back") {
+      event.preventDefault();
+      if (!this.openingUtilityScene) this.enterZone("portals");
+      return;
+    }
+    if (this.chapterMenu?.handleKey(event)) return;
     if (event.key.length === 1 || event.key === " ") playClack();
     this.typingInput.handleChar(event.key);
   }
@@ -1853,15 +1890,27 @@ export class PortalChamberScene extends Phaser.Scene {
 
     // Painted portal sprite — 168x338 frames, arch fills the frame top to
     // bottom. Anchored bottom-center on the painted arch bottom (baseY).
-    // The painted hub arches are wide-and-short (≈220×290) while the source
-    // swirl is narrow-and-tall (168×338, aspect 1:2), so we scale non-
-    // uniformly: x to match arch width, y to match arch height.
+    // Fit the swirl to the measured inner aperture, leaving the painted
+    // stone surround visible. A mask prevents light spilling onto the frame.
     const sprite = this.add
       .sprite(spec.x, spec.baseY, "portal-active", 0)
       .setOrigin(0.5, 1)
       .setVisible(false)
       .setDepth(-5);
     sprite.setScale(spec.width / 168, spec.height / 338);
+    const aperture = this.make.graphics({ x: 0, y: 0 }, false);
+    aperture.fillStyle(0xffffff);
+    aperture.fillRoundedRect(spec.x - spec.width / 2, spec.baseY - spec.height,
+      spec.width, spec.height, { tl: spec.width / 2, tr: spec.width / 2, bl: 7, br: 7 });
+    const mask = aperture.createGeometryMask();
+    sprite.setMask(mask);
+    glow.setMask(mask);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      sprite.clearMask();
+      glow.clearMask();
+      mask.destroy();
+      aperture.destroy();
+    });
     this.archSprites.set(spec.id, sprite);
   }
 
@@ -2018,9 +2067,10 @@ export class PortalChamberScene extends Phaser.Scene {
   ): void {
     const width = tone === "locked" ? 212 : 164;
     const height = subtitle ? 58 : 42;
-    const y = arch.baseY + (subtitle ? 48 : 34);
+    // Keep the instruction above the painted arch and clear of Runa on the floor.
+    const y = arch.baseY - arch.height - (subtitle ? 43 : 34);
     const isLocked = tone === "locked";
-    const alpha = isLocked ? 0.24 : tone === "next" ? 0.42 : 0.34;
+    const alpha = isLocked ? 0.24 : tone === "next" ? 0.78 : 0.34;
     const textColor = isLocked
       ? "#4a4352"
       : tone === "next"
@@ -2033,7 +2083,7 @@ export class PortalChamberScene extends Phaser.Scene {
     g.lineStyle(1, isLocked ? 0x4a4352 : UI_HEX.brass, alpha + 0.2);
     g.strokeRoundedRect(arch.x - width / 2, y - height / 2, width, height, 8);
 
-    this.add
+    const titleText = this.add
       .text(arch.x, y - (subtitle ? 9 : 1), title, {
         fontFamily: SERIF,
         fontSize: isLocked ? "17px" : "16px",
@@ -2042,16 +2092,18 @@ export class PortalChamberScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(0);
+    if (tone === "next") this.portalInstructionObjects.push(g, titleText);
 
     if (!subtitle) return;
-    this.add
+    const subtitleText = this.add
       .text(arch.x, y + 13, subtitle, {
         fontFamily: SERIF,
         fontSize: "14px",
-        color: "#4a4352",
+        color: tone === "next" ? PALETTE.cream : "#4a4352",
       })
       .setOrigin(0.5)
       .setDepth(0);
+    if (tone === "next") this.portalInstructionObjects.push(subtitleText);
   }
 
   private flashPortalForScene(sceneKey: string): void {
@@ -2849,6 +2901,7 @@ export class PortalChamberScene extends Phaser.Scene {
       .setOrigin(0.5, 1);
     this.runaSprite = img;
     img.setScale(360 / img.height);
+    applySceneActorLighting(this, img);
     addIdleBreath(this, img, { dy: -4, durationMs: 2200, delayMs: 300 });
     addContainerWake(this, img, {
       kind: "mote",
@@ -3044,24 +3097,30 @@ export class PortalChamberScene extends Phaser.Scene {
 
   // ─── New Game+ ────────────────────────────────────────────────────────────
 
-  private startNewGame(): void {
+  private async startNewGame(): Promise<void> {
     if (this.restartingNewGame) return;
     this.restartingNewGame = true;
     playChime();
     this.narration.clear();
-    // Preserve keystroke calibration so adaptive word selection carries over.
-    const oldStats = this.store.get().keyStats;
-    const oldName = this.store.get().profileName;
-    this.store.update((s) => {
-      // Reset everything...
-      s.typewriterAwakened = false;
-      s.realms = {};
-      s.satchel = [];
-      s.almanacLore = [];
-      // ...but keep the player's identity and typing stats
-      s.profileName = oldName;
-      s.keyStats = oldStats;
-    });
+    // Preserve identity/calibration and comfort settings, never chapter state.
+    resetSave(this.store, true);
+    try {
+      await this.store.flush();
+    } catch {
+      if (!this.scene.isActive()) return;
+      this.restartingNewGame = false;
+      this.clearZoneTargets();
+      this.narration.sayRaw("Could not finish saving the fresh start. Type retry to try again. Your current session is still here.");
+      const retry = new TextWordTarget({
+        scene: this, word: "retry", x: this.scale.width / 2, y: PORTAL_CALL_WORD_Y,
+        fontSize: 34, outline: true, frame: "banner",
+        onComplete: () => { void this.startNewGame(); },
+      });
+      this.typingInput.register(retry);
+      this.zoneTargets.push(retry);
+      return;
+    }
+    if (!this.scene.isActive()) return;
     this.playBeginAgainWake();
     this.time.delayedCall(320, () => {
       this.cameras.main.fadeOut(720, 10, 8, 15);

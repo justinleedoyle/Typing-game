@@ -4,6 +4,7 @@ import { AlmanacScene } from "./scenes/AlmanacScene";
 import { ClockworkForgeScene } from "./scenes/ClockworkForgeScene";
 import { GreatBattleScene } from "./scenes/GreatBattleScene";
 import { HauntedWoodScene } from "./scenes/HauntedWoodScene";
+import { HomecomingScene } from "./scenes/HomecomingScene";
 import { OpeningScene } from "./scenes/OpeningScene";
 import { PortalChamberScene } from "./scenes/PortalChamberScene";
 import { SettingsScene } from "./scenes/SettingsScene";
@@ -75,5 +76,5 @@ new Phaser.Game({
     width: DESIGN_WIDTH,
     height: DESIGN_HEIGHT,
   },
-  scene: [TitleScene, OpeningScene, PortalChamberScene, WinterMountainScene, SunkenBellScene, ClockworkForgeScene, SkyIslandScene, HauntedWoodScene, GreatBattleScene, AlmanacScene, SettingsScene],
+  scene: [TitleScene, OpeningScene, PortalChamberScene, WinterMountainScene, SunkenBellScene, ClockworkForgeScene, SkyIslandScene, HauntedWoodScene, GreatBattleScene, HomecomingScene, AlmanacScene, SettingsScene],
 });

@@ -6,6 +6,7 @@
 // wolves can burst frost, portals can burst brass, etc.
 
 import Phaser from "phaser";
+import { reducedFlashes, reducedMotion } from "./presentation";
 
 export interface WordCompleteBurstOptions {
   /** Hex color for the dots. Defaults to brass. */
@@ -27,7 +28,7 @@ export function playWordCompleteBurst(
   opts: WordCompleteBurstOptions = {},
 ): void {
   const color = opts.color ?? 0xc9a14a; // brass
-  const count = opts.count ?? 10;
+  const count = reducedMotion(scene) ? 0 : opts.count ?? 10;
   const radius = opts.radius ?? 35;
   const duration = opts.duration ?? 380;
   const dotRadius = opts.dotRadius ?? 3;
@@ -128,6 +129,7 @@ export function flashDamageVignette(
   scene: Phaser.Scene,
   color: number = 0xc23a2a,
 ): void {
+  if (reducedFlashes(scene)) return;
   const w = scene.scale.width;
   const h = scene.scale.height;
   const band = 160;

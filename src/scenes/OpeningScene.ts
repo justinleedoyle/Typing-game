@@ -1,8 +1,13 @@
 import Phaser from "phaser";
+import { applySceneActorLighting } from "../game/actorLighting";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
 import { NarrationManager } from "../game/narrationManager";
+import { OPENING_STEPS, openingStep, type OpeningStep } from "../game/chapterFlow";
+import { ChapterReading } from "../game/ui/chapterReading";
+import { installChapterMenu } from "../game/ui/pauseMenu";
+import { reducedMotion, reducedFlashes } from "../game/presentation";
 import { PALETTE_HEX } from "../game/palette";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
@@ -25,12 +30,13 @@ import { makeQuietLordSprite, preloadQuietLord } from "../game/quietLord";
 import { makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
 import runaSprite from "../../art/runa/runa-front.png";
 import siblingSprite from "../../art/sibling/sibling-front.png";
+import magnusSprite from "../../art/sibling/magnus-front.png";
 
 interface OpeningSceneData {
   store: SaveStore;
 }
 
-const IDENTITY_CHOICE_TARGET = { x: 790, y: 650 };
+const IDENTITY_CHOICE_TARGET = { x: 980, y: 650 };
 const IDENTITY_CARD_W = 230;
 const IDENTITY_CARD_H = 124;
 const IDENTITY_CARD_OFFSET_X = 150;
@@ -64,6 +70,8 @@ export class OpeningScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
+  private reading!: ChapterReading;
+  private chapterMenu?: ReturnType<typeof installChapterMenu>;
 
   // The Quiet Lord's first foreshadowing — faint silhouette during Beat 6.
   private quietLordSprite: Phaser.GameObjects.Image | null = null;
@@ -103,17 +111,26 @@ export class OpeningScene extends Phaser.Scene {
     // truly fresh save so Beat 2.5 will prompt.
     this.wrenGender = this.store.get().wrenGender;
     this.beat2_5Targets = [];
+    this.chapterMenu = undefined;
   }
 
   preload(): void {
     this.load.image("opening-backdrop", openingBackdrop);
     this.load.image("runa-sprite", runaSprite);
     this.load.image("sibling-sprite", siblingSprite);
+    this.load.image("magnus-sprite", magnusSprite);
     preloadQuietLord(this);
     preloadWren(this);
   }
 
   create(): void {
+    this.chapterMenu = installChapterMenu(this, {
+      store: this.store,
+      hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),
+      onLeave: () => {
+        this.scene.start("TitleScene");
+      },
+    });
     const { width } = this.scale;
 
     // ── Painted study backdrop ───────────────────────────────────────────────
@@ -173,6 +190,7 @@ export class OpeningScene extends Phaser.Scene {
 
     // ── Narrator text ────────────────────────────────────────────────────────
     this.narration = new NarrationManager(this, {
+      store: this.store,
       y: 120,
       framed: true,
       onSpeak: (speakerName) => this.attendSpeaker(speakerName),
@@ -182,11 +200,15 @@ export class OpeningScene extends Phaser.Scene {
     this.typingInput = new TypingInputController(this.store);
     // No Wren in the opening study; miss feedback is camera-only.
     this.typingInput.setKeystrokeHooks({
-      onMiss: () => this.cameras.main.shake(80, 0.002),
+      onMiss: () => { if (!reducedMotion(this)) this.cameras.main.shake(80, 0.002); },
       onClaim: () => playClaim(),
     });
+    this.reading = new ChapterReading(this, 1000);
+
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.reading.destroy();
+      this.chapterMenu?.destroy();
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.clearStudyWordAnchors();
@@ -196,7 +218,32 @@ export class OpeningScene extends Phaser.Scene {
     });
 
     // ── Beat sequence ────────────────────────────────────────────────────────
-    this.beat1();
+    this.resumeOpening();
+  }
+
+  private checkpoint(step: OpeningStep): void {
+    this.store.setCheckpoint({ scene: "OpeningScene", step, data: {} });
+  }
+
+  private readThen(next: () => void): void {
+    this.reading.show(next, () => this.narration.replay());
+  }
+
+  private resumeOpening(): void {
+    const saved = this.store.get().checkpoint;
+    const step = openingStep(saved?.scene === "OpeningScene" ? saved.step : undefined);
+    const index = OPENING_STEPS.indexOf(step);
+    if (index > 1) this.drawRuna();
+    if (index > 3) this.drawSibling();
+    const routes: Record<OpeningStep, () => void> = {
+      arrival: () => this.beat1(), runa: () => this.beat2(),
+      identity: () => this.beat2_5(), sibling: () => this.beat3(),
+      name: () => this.beat4(), typewriter: () => this.beat5(),
+      almanac: () => this.beat6(), "portal-wakes": () => this.beat7(),
+      "portal-name": () => this.beat8(), farewell: () => this.beat9(),
+      departure: () => this.beat10(),
+    };
+    routes[step]();
   }
 
   private startStudySourceWakes(): void {
@@ -233,11 +280,12 @@ export class OpeningScene extends Phaser.Scene {
 
   // ── Beats ──────────────────────────────────────────────────────────────────
 
-  /** Beat 1 — Narrator intro, 3 s delay, no input. */
+  /** Beat 1 — Narrator intro, held until the reader continues. */
   private beat1(): void {
+    this.checkpoint("arrival");
     this.narration.say("opening_beat1_intro");
     this.playStudyPrelude();
-    this.time.delayedCall(3000, () => this.beat2());
+    this.readThen(() => this.beat2());
   }
 
   private playStudyPrelude(): void {
@@ -264,16 +312,17 @@ export class OpeningScene extends Phaser.Scene {
     }
   }
 
-  /** Beat 2 — Runa descends the staircase (2 s). Branches forward: if Wren's
+  /** Beat 2 — Runa descends, then waits for the reader. If Wren's
    *  gender is already in saveState (revisit / New Game+), skip the identity
    *  prompt and go straight to the sibling appearance; otherwise route through
    *  Beat 2.5 to capture the choice. */
   private beat2(): void {
+    this.checkpoint("runa");
     this.narration.say("opening_beat2_runa_descends");
     this.drawRuna();
     const next = this.wrenGender === null ? () => this.beat2_5() : () => this.beat3();
-    // 2.8 s (was 2 s): the richer Runa-introduction caption needs room to read.
-    this.time.delayedCall(2800, () => next());
+    // Reading pace belongs to the player; continued/replayed lines do not alter identity.
+    this.readThen(next);
   }
 
   /** Beat 2.5 — §5.5.2 gender choice. Runa asks who Wren is; player types
@@ -281,6 +330,8 @@ export class OpeningScene extends Phaser.Scene {
    *  (sibling sprite, dialogue, farewell) branches correctly and so future
    *  revisits skip the prompt. */
   private beat2_5(): void {
+    if (this.wrenGender !== null) { this.beat3(); return; }
+    this.checkpoint("identity");
     this.setNarrator(
       "Before we begin, I should know who I am calling down into all of this. Type 'boy' or 'girl'.",
       "Runa",
@@ -301,6 +352,7 @@ export class OpeningScene extends Phaser.Scene {
       this.store.update((s) => {
         s.wrenGender = gender;
       });
+      this.checkpoint("sibling");
       playChime();
       this.playStudyPulse(STUDY_RESPONSE.identity);
       this.time.delayedCall(700, () => this.beat3());
@@ -334,10 +386,11 @@ export class OpeningScene extends Phaser.Scene {
     this.beat2_5Targets = [boy, girl];
   }
 
-  /** Beat 3 — Sibling appears in the doorway (2 s). Branches on wrenGender:
+  /** Beat 3 — Sibling appears and the reader controls the farewell pace. Branches on wrenGender:
    *  boy Wren → Saga (small, curious, drawing); girl Wren → Magnus (taller,
    *  half-amused, half-worried). Dialogue lines are spec-locked per §5.5.2. */
   private beat3(): void {
+    this.checkpoint("sibling");
     const isBoy = this.wrenGender === "boy";
     this.setNarrator(
       isBoy
@@ -346,11 +399,12 @@ export class OpeningScene extends Phaser.Scene {
       isBoy ? "Saga" : "Magnus",
     );
     this.drawSibling();
-    this.time.delayedCall(2000, () => this.beat4());
+    this.readThen(() => this.beat4());
   }
 
   /** Beat 4 — Type your name. */
   private beat4(): void {
+    this.checkpoint("name");
     this.narration.say("opening_beat4_type_name");
 
     const target = this.makeStudyTarget({
@@ -366,6 +420,7 @@ export class OpeningScene extends Phaser.Scene {
   }
 
   private onBeat4Complete(): void {
+    this.checkpoint("typewriter");
     playChime();
     this.playStudyPulse(STUDY_RESPONSE.name);
     this.time.delayedCall(500, () => this.beat5());
@@ -373,6 +428,7 @@ export class OpeningScene extends Phaser.Scene {
 
   /** Beat 5 — Type the typewriter's name. */
   private beat5(): void {
+    this.checkpoint("typewriter");
     this.narration.say("opening_beat5_type_typewriter");
 
     const target = this.makeStudyTarget({
@@ -388,21 +444,25 @@ export class OpeningScene extends Phaser.Scene {
   }
 
   private onBeat5Complete(): void {
+    this.checkpoint("almanac");
     playChime();
     this.playStudyPulse(STUDY_RESPONSE.typewriter);
     // Warm gold camera flash.
-    this.cameras.main.flash(320, 201, 161, 74); // PALETTE_HEX.brass split to r/g/b
+    if (!reducedFlashes(this)) this.cameras.main.flash(320, 201, 161, 74); // PALETTE_HEX.brass split to r/g/b
     this.time.delayedCall(400, () => this.beat6());
   }
 
   /** Beat 6 — The Almanac speech. Quiet Lord lingers visibly through the
    *  doorway so the player has time to notice him while reading the line. */
   private beat6(): void {
+    this.checkpoint("almanac");
     this.narration.say("opening_beat6_almanac_speech");
     this.fadeInQuietLord();
-    // Hold him at peak longer (2.4s) so he registers, then fade out cleanly.
-    this.time.delayedCall(4200, () => this.fadeOutQuietLord());
-    this.time.delayedCall(5400, () => this.beat7());
+    // The silhouette stays until the player has read the complete speech.
+    this.readThen(() => {
+      this.fadeOutQuietLord();
+      this.beat7();
+    });
   }
 
   /** First foreshadowing — a faint silhouette through the open doorway as
@@ -438,13 +498,15 @@ export class OpeningScene extends Phaser.Scene {
    *  portal, so the narrator beat sells the awakening on its own — no
    *  extra overlay circles. */
   private beat7(): void {
+    this.checkpoint("portal-wakes");
     this.narration.say("opening_beat7_portal_wakes");
     this.playStudyPulse(STUDY_RESPONSE.portal, { scale: 1.3, durationMs: 980 });
-    this.time.delayedCall(2400, () => this.beat8());
+    this.readThen(() => this.beat8());
   }
 
   /** Beat 8 — Type the portal name. */
   private beat8(): void {
+    this.checkpoint("portal-name");
     this.narration.say("opening_beat8_winter_woken");
 
     const target = this.makeStudyTarget({
@@ -468,6 +530,7 @@ export class OpeningScene extends Phaser.Scene {
   /** Beat 9 — Sibling farewell. Spec-locked dialogue per §5.5.2: Saga keeps
    *  the drawing line; Magnus says he'll be here, don't take long. */
   private beat9(): void {
+    this.checkpoint("farewell");
     const isBoy = this.wrenGender === "boy";
     this.setNarrator(
       isBoy
@@ -476,17 +539,19 @@ export class OpeningScene extends Phaser.Scene {
       isBoy ? "Saga" : "Magnus",
     );
     this.playSiblingFarewell();
-    this.time.delayedCall(2400, () => this.beat10());
+    this.readThen(() => this.beat10());
   }
 
   /** Beat 10 — Bridge to the Portal Chamber. Frames the hub as the next room
    *  Wren walks into, not a redundant second scene. */
   private beat10(): void {
+    this.checkpoint("departure");
     this.narration.say("opening_beat10_bridge_to_hub");
-    this.time.delayedCall(2400, () => {
+    this.readThen(() => {
       this.store.update((s) => {
         s.typewriterAwakened = true;
       });
+      this.store.clearCheckpoint();
       this.playOpeningPortalTravel();
       this.time.delayedCall(560, () => {
         this.cameras.main.fadeOut(700, 11, 10, 15);
@@ -642,6 +707,9 @@ export class OpeningScene extends Phaser.Scene {
   // ── Input ──────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
+    if (event.ctrlKey || event.metaKey) return;
+    if (this.chapterMenu?.handleKey(event)) return;
+    if (this.reading.handleKey(event)) return;
     if (event.key.length === 1 || event.key === " ") {
       playClack();
     }
@@ -1002,6 +1070,7 @@ export class OpeningScene extends Phaser.Scene {
       .setOrigin(0.5, 1);
     // 420px tall — matches painted desk + chair proportions in this study.
     img.setScale(420 / img.height);
+    applySceneActorLighting(this, img);
     actor.add(img);
     this.tweens.add({
       targets: actor,
@@ -1018,10 +1087,8 @@ export class OpeningScene extends Phaser.Scene {
    *  ≈x=1521; the sprite sits at x=1180 so the doorway frame, the painted
    *  portal through it, and the Quiet Lord (Beat 6) all stay visible past it.
    *
-   *  The sprite asset is the same in both branches (Saga reference); Magnus
-   *  is rendered as a programmatic placeholder via cooler tint + larger
-   *  scale to read as the older sibling. Real Magnus art is locked open per
-   *  §5.5.12 pending parent's reference photo.
+   *  Saga and Magnus use distinct painted portraits: a little sister with a
+   *  drawing, or an older brother with his arms folded in the doorway.
    */
   private drawSibling(): void {
     const isBoy = this.wrenGender === "boy";
@@ -1051,7 +1118,7 @@ export class OpeningScene extends Phaser.Scene {
 
     actor.add(addLocalGroundShadow(this, isBoy ? 110 : 136, 22, { y: 7, alpha: 0.28 }));
     const img = this.add
-      .image(0, 0, "sibling-sprite")
+      .image(0, 0, isBoy ? "sibling-sprite" : "magnus-sprite")
       .setOrigin(0.5, 1);
     // Magnus reads taller (older sibling) than Saga; both still sit below
     // doorway height so the painted portal stays legible past them.
@@ -1059,7 +1126,7 @@ export class OpeningScene extends Phaser.Scene {
     // Tint multipliers soften the bright nightgown+pale skin against the
     // dim study palette. Saga gets a warm cream cast (sits in lamplight);
     // Magnus gets a cool blue-gray (reads as older + a beat more distant).
-    img.setTint(isBoy ? 0xbfb0a0 : 0xa0aebf);
+    applySceneActorLighting(this, img);
     actor.add(img);
 
     if (isBoy) {

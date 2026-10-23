@@ -176,6 +176,7 @@ export class ConsoleBand {
   private objectiveContainer!: Phaser.GameObjects.Container;
   private objectiveLabel!: Phaser.GameObjects.Text;
   private objectiveText!: Phaser.GameObjects.Text;
+  private objectiveBg!: Phaser.GameObjects.Graphics;
   private bandWidth = 0;
   private objectiveWidth = 0;
   private objectiveTextMaxWidth = 0;
@@ -183,6 +184,7 @@ export class ConsoleBand {
   private renderedReadoutKey = "";
   private noticeActive = false;
   private noticeTimer: Phaser.Time.TimerEvent | null = null;
+  private noticeGeneration = 0;
   private portraitImage?: Phaser.GameObjects.Image;
   private portraitFallback?: Phaser.GameObjects.Text;
   private portraitLabel?: Phaser.GameObjects.Text;
@@ -238,8 +240,18 @@ export class ConsoleBand {
    *  fast narration cards. */
   setObjective(text: string): void {
     const trimmed = text.trim();
+    const changed = trimmed !== this.objectiveValue;
     this.objectiveValue = trimmed;
-    if (this.noticeActive) return;
+    if (this.noticeActive) {
+      if (!changed) return;
+      // A new playable beat owns the task strip immediately. Its predecessor's
+      // relic notice must not hide the next instruction or return after a stale timer.
+      this.noticeGeneration += 1;
+      this.noticeTimer?.remove(false);
+      this.noticeTimer = null;
+      this.noticeActive = false;
+      this.clearAnsweringKeepsake();
+    }
     this.renderObjective("task", trimmed);
   }
 
@@ -253,10 +265,12 @@ export class ConsoleBand {
     const label = opts.label ?? "satchel";
     const colors = noticeColorsFor(label);
     this.noticeTimer?.remove(false);
+    const generation = ++this.noticeGeneration;
     this.noticeActive = true;
     this.renderObjective(label, trimmed, colors);
     this.playNoticeSatchelWake(label, opts.itemId);
     this.noticeTimer = this.scene.time.delayedCall(opts.durationMs ?? 1900, () => {
+      if (generation !== this.noticeGeneration) return;
       this.noticeActive = false;
       this.noticeTimer = null;
       this.clearAnsweringKeepsake();
@@ -287,6 +301,7 @@ export class ConsoleBand {
     this.objectiveLabel.setColor(colors.labelColor ?? "#a59b89");
     this.objectiveText.setColor(colors.textColor ?? "#f3ead2");
     this.fitObjectiveText(trimmed);
+    this.redrawObjectivePlate();
     this.objectiveContainer.setVisible(true);
     this.scene.tweens.killTweensOf(this.objectiveContainer);
     this.objectiveContainer.setAlpha(0.78);
@@ -330,7 +345,19 @@ export class ConsoleBand {
     );
   }
 
+  private redrawObjectivePlate(): void {
+    this.objectiveWidth = Math.min(
+      this.objectiveTextMaxWidth + OBJECTIVE_TEXT_X + 18,
+      Math.max(260, OBJECTIVE_TEXT_X + this.objectiveText.width + 18),
+    );
+    this.objectiveBg.clear().fillStyle(0x0f0c08, 0.52);
+    this.objectiveBg.fillRoundedRect(0, -OBJECTIVE_H / 2, this.objectiveWidth, OBJECTIVE_H, 7);
+    this.objectiveBg.lineStyle(1, UI_HEX.frame, 0.72);
+    this.objectiveBg.strokeRoundedRect(0, -OBJECTIVE_H / 2, this.objectiveWidth, OBJECTIVE_H, 7);
+  }
+
   private destroy(): void {
+    this.noticeGeneration += 1;
     this.noticeTimer?.remove(false);
     this.noticeTimer = null;
     if (this.container.active) this.container.destroy();
@@ -933,6 +960,7 @@ export class ConsoleBand {
       .setVisible(false);
 
     const bg = scene.add.graphics();
+    this.objectiveBg = bg;
     bg.fillStyle(0x0f0c08, 0.52);
     bg.fillRoundedRect(0, -OBJECTIVE_H / 2, width, OBJECTIVE_H, 7);
     bg.lineStyle(1, UI_HEX.frame, 0.72);

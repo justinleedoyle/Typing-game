@@ -1,4 +1,9 @@
+import { installChapterMenu } from "../game/ui/pauseMenu";
+import { decorativeTween, reducedFlashes, reducedMotion } from "../game/presentation";
+import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import Phaser from "phaser";
+import { applySceneActorLighting } from "../game/actorLighting";
+import { addSoftLocalLight } from "../game/livingScene";
 import { type AmbientHandle, playAmbientBattle } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
@@ -8,13 +13,15 @@ import { getRunaLine } from "../audio/runaLines";
 import { NarrationManager } from "../game/narrationManager";
 import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
-import { cornerTicks, UI_HEX } from "../game/ui/uiTheme";
+import { UI_HEX } from "../game/ui/uiTheme";
 import { flashDamageVignette } from "../game/vfx";
 import { flashQuietLordFragment } from "../game/quietLordIntrusion";
-import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
+import { PALETTE_HEX, SERIF } from "../game/palette";
 import { candleAfterHit, candleAfterCleanWave } from "../game/winterMechanics";
 import { COMPANION_IDS, selectFinalPhrase } from "../game/relicAlignment";
 import { getActiveRelicEffects } from "../game/relicEffects";
+import { shortenFinaleWords } from "../game/finaleWords";
+import { SceneRunGuard } from "../game/sceneRunGuard";
 import {
   type Facet,
   type FacetId,
@@ -217,7 +224,7 @@ const WAVE_DEFS: WaveDef[] = [
   {
     realmId: "winter-mountain",
     bank: WINTER_WORD_BANK,
-    baseY: 602,
+    baseY: 710,
     companionId: "snow-fox-cub",
     companionLine: "The fox darts through the shadows. They scatter.",
     label: "shadow-wolves",
@@ -233,7 +240,7 @@ const WAVE_DEFS: WaveDef[] = [
   {
     realmId: "clockwork-forge",
     bank: FORGE_WORD_BANK,
-    baseY: 540,
+    baseY: 710,
     companionId: "brass-songbird",
     companionLine: "The songbird sings one note. The golems fall still.",
     label: "rogue-golems",
@@ -487,11 +494,13 @@ interface FinalPhraseWordTrace {
 // ─── Scene ─────────────────────────────────────────────────────────────────────
 
 export class GreatBattleScene extends Phaser.Scene {
+  private readonly run = new SceneRunGuard();
   private store!: SaveStore;
   private devWaveRealmId?: string;
   private devFinalePhase?: DevFinalePhase;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
+  private chapterMenu?: ReturnType<typeof installChapterMenu>;
   private band!: ConsoleBand;
   private activeTargets: TextWordTarget[] = [];
   private targetAnchors = new Map<TextWordTarget, WordBodyAnchorHandle>();
@@ -572,6 +581,7 @@ export class GreatBattleScene extends Phaser.Scene {
   // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
   init(data: BattleSceneData): void {
+    this.run.begin();
     this.store = data.store;
     this.devWaveRealmId = WAVE_DEFS.some((wave) => wave.realmId === data.devWaveRealmId)
       ? data.devWaveRealmId
@@ -586,6 +596,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.waveQueue = [];
     this.currentWaveIdx = -1;
     this.candles = WAVE_CANDLES;
+    this.drawnCandles = null;
     this.wallWard = undefined;
     this.wallWardFlames = [];
     this.wrenDefender = undefined;
@@ -597,6 +608,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
     // Ally modifier state
     this.shrineTokenForgivenThisWave = false;
+    this.sabotageWrenchWaveNoticed = false;
     this.untetheredWindSlowMult = 1.0;
     this.lastMissFeedbackAt = 0;
 
@@ -636,6 +648,12 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.chapterMenu = installChapterMenu(this, {
+      store: this.store,
+      hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),
+      onLeave: () => this.scene.start("PortalChamberScene", { store: this.store }),
+      leaveHint: "Returning to the chamber restarts the final battle. Cleared realms and your satchel stay saved.",
+    });
     this.cameras.main.fadeIn(700, 11, 10, 15);
 
     const backdrop = this.add
@@ -771,7 +789,7 @@ export class GreatBattleScene extends Phaser.Scene {
           this.playShrineForgivenessCue();
           return;
         }
-        this.cameras.main.shake(100, 0.003);
+        if (!reducedMotion(this)) this.cameras.main.shake(100, 0.003);
         // Damage-feedback parity (#73): a slip under the Lord's pressure reads
         // as a hit — same thud + edge vignette the five realms use. Throttled so
         // a burst of mistyping doesn't strobe (onMiss is per-keystroke).
@@ -784,7 +802,7 @@ export class GreatBattleScene extends Phaser.Scene {
       },
     });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
-    this.events.on(Phaser.Scenes.Events.SHUTDOWN, this.onShutdown, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.onShutdown, this);
 
     this.ambientHandle = playAmbientBattle();
 
@@ -830,6 +848,8 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private onShutdown(): void {
+    this.chapterMenu?.destroy();
+    this.run.end();
     this.typingInput.reset();
     this.clearTargetAnchors();
     this.dismissWrenDefender(0);
@@ -845,11 +865,23 @@ export class GreatBattleScene extends Phaser.Scene {
   // ─── Input ──────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
+    if (isPuristToggleKey(event)) {
+      event.preventDefault();
+      togglePuristMode(this, this.store);
+      return;
+    }
+    if (event.ctrlKey || event.metaKey) return;
+    if (this.chapterMenu?.handleKey(event)) return;
     // The finale's Phase-2 climax is mixed-case caseSensitive (unMAKE): the
     // browser already encodes Shift into the keystroke's case, so no spell/Shift
     // tracking is needed here. (The old bellows-hammer Shift-spell cooldown was
     // inert — no finale target consumes the spell variant — and has been removed.)
-    if (!event.key || (event.key.length !== 1 && event.key !== " ")) return;
+    if (event.key === "Backspace" || event.key === "Escape") {
+      event.preventDefault();
+      this.typingInput.handleChar(event.key);
+      return;
+    }
+    if (!event.key || event.key.length !== 1 || event.ctrlKey || event.metaKey) return;
     playClack();
     this.typingInput.handleChar(event.key);
   }
@@ -1261,7 +1293,7 @@ export class GreatBattleScene extends Phaser.Scene {
       // Physical stepping points on the rising courtyard path from Wren to
       // the scar. Keep the first word clear of Wren's silhouette so its trace
       // reads as a placed mark, not a second layer on the actor.
-      { x: -330, y: 300 },
+      { x: -250, y: 300 },
       { x: -190, y: 250 },
       { x: -60, y: 195 },
     ] as const;
@@ -2084,6 +2116,12 @@ export class GreatBattleScene extends Phaser.Scene {
    *  kill), and the realms' hit cue (shake + thud + edge vignette) fires. */
   private breachEnemy(enemy: Enemy): void {
     if (enemy.defeated || this.runOver) return;
+    // Typing the last character wins the deadline; its 320ms word fade does
+    // not leave a defeated enemy able to snuff a candle at the wall.
+    if (enemy.target?.isComplete()) {
+      this.defeatEnemy(enemy);
+      return;
+    }
     enemy.defeated = true;
     enemy.advanceTween?.stop();
     enemy.advanceTween = null;
@@ -2099,7 +2137,7 @@ export class GreatBattleScene extends Phaser.Scene {
       enemy.target.destroy();
       enemy.target = null;
     }
-    this.cameras.main.shake(180, 0.006);
+    if (!reducedMotion(this)) this.cameras.main.shake(180, 0.006);
     playDamageThud();
     flashDamageVignette(this);
     const wake = finaleWakeForRealm(enemy.realmId);
@@ -2137,7 +2175,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.input.keyboard?.off("keydown", this.onKeyDown, this);
     this.ambientHandle?.stop();
 
-    this.cameras.main.shake(260, 0.008);
+    if (!reducedMotion(this)) this.cameras.main.shake(260, 0.008);
     const dim = this.add.graphics().setDepth(40).setAlpha(0);
     dim.fillStyle(0x05050a, 1);
     dim.fillRect(0, 0, this.scale.width, this.scale.height);
@@ -2280,8 +2318,10 @@ export class GreatBattleScene extends Phaser.Scene {
 
     // §5.5.11 — Apprentices' Cabal (sabotage-wrench): enemy words shortened by 1 char
     if (satchel.includes("sabotage-wrench")) {
-      words = words.map((w) => (w.length > 2 ? w.slice(0, -1) : w));
-      if (!this.sabotageWrenchWaveNoticed) {
+      const shortened = shortenFinaleWords(words, waveDef.realmId);
+      const changed = shortened.some((word, index) => word !== words[index]);
+      words = shortened;
+      if (changed && !this.sabotageWrenchWaveNoticed) {
         this.sabotageWrenchWaveNoticed = true;
         this.time.delayedCall(360, () => {
           if (this.runOver) return;
@@ -2319,9 +2359,9 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private waveSpawnXs(waveDef: WaveDef): number[] {
-    if (waveDef.realmId === "winter-mountain") {
-      // Wolves are broad enough that the default center lane covers Wren.
-      // Keep the three-target wave, but make the pack pour around the ward.
+    if (waveDef.realmId === "winter-mountain" || waveDef.realmId === "clockwork-forge") {
+      // Grounded wolves and golems are broad enough that a center lane covers
+      // Wren. Keep three targets and let the bodies approach around the ward.
       return [0.22, 0.64, 0.84].map((ratio) => this.scale.width * ratio);
     }
 
@@ -2480,7 +2520,7 @@ export class GreatBattleScene extends Phaser.Scene {
         this.beginEnemyThreat(enemy, waveDef);
       },
     });
-    this.tweens.add({
+    decorativeTween(this, this.tweens.add({
       targets: enemy.body,
       scaleX: { from: 0.98, to: 1.03 },
       scaleY: { from: 1, to: 0.97 },
@@ -2489,7 +2529,7 @@ export class GreatBattleScene extends Phaser.Scene {
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
-    });
+    }));
   }
 
   private beginEnemyThreat(enemy: Enemy, waveDef: WaveDef): void {
@@ -2603,7 +2643,7 @@ export class GreatBattleScene extends Phaser.Scene {
     const homeY = body.y;
 
     if (enemy.realmId === "winter-mountain") {
-      this.tweens.add({
+      decorativeTween(this, this.tweens.add({
         targets: body,
         x: homeX + dir * 10,
         y: homeY - 4,
@@ -2612,12 +2652,12 @@ export class GreatBattleScene extends Phaser.Scene {
         yoyo: true,
         repeat: -1,
         ease: "Sine.easeInOut",
-      });
+      }));
       return;
     }
 
     if (enemy.realmId === "clockwork-forge") {
-      this.tweens.add({
+      decorativeTween(this, this.tweens.add({
         targets: body,
         x: homeX + dir * 5,
         y: homeY - 2,
@@ -2626,7 +2666,7 @@ export class GreatBattleScene extends Phaser.Scene {
         yoyo: true,
         repeat: -1,
         ease: "Sine.easeInOut",
-      });
+      }));
       return;
     }
 
@@ -2643,7 +2683,7 @@ export class GreatBattleScene extends Phaser.Scene {
           ? -10
           : -8;
 
-    this.tweens.add({
+    decorativeTween(this, this.tweens.add({
       targets: body,
       x: homeX + dir * (enemy.realmId === "sky-island" ? 9 : 6),
       y: homeY + lift,
@@ -2652,7 +2692,7 @@ export class GreatBattleScene extends Phaser.Scene {
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
-    });
+    }));
   }
 
   private stopFinaleEnemyMotion(enemy: Enemy): void {
@@ -2676,14 +2716,9 @@ export class GreatBattleScene extends Phaser.Scene {
     }));
 
     if (spec.glowColor) {
-      const glow = this.add.graphics();
-      glow.fillStyle(spec.glowColor, spec.glowAlpha ?? 0.14);
-      glow.fillEllipse(
-        0,
-        spec.glowY ?? 0,
-        spec.glowWidth ?? 92,
-        spec.glowHeight ?? 92,
-      );
+      const glow = addSoftLocalLight(this, spec.glowWidth ?? 92,
+        spec.glowHeight ?? 92, spec.glowColor, spec.glowAlpha ?? 0.14);
+      glow.y = spec.glowY ?? 0;
       body.add(glow);
     }
 
@@ -2692,6 +2727,9 @@ export class GreatBattleScene extends Phaser.Scene {
     const sprite = this.add.image(0, spec.spriteY, spec.textureKey);
     sprite.setScale(spec.height / sprite.height);
     if (spec.tint) sprite.setTint(spec.tint);
+    if (realmId === "clockwork-forge" || realmId === "winter-mountain") {
+      applySceneActorLighting(this, sprite);
+    }
     if (spec.alpha !== undefined) sprite.setAlpha(spec.alpha);
     if (this.shouldFlipFinaleEnemySprite(realmId, spec, x)) sprite.setFlipX(true);
     body.add(sprite);
@@ -2758,8 +2796,6 @@ export class GreatBattleScene extends Phaser.Scene {
     }
 
     if (realmId === "clockwork-forge") {
-      footing.fillStyle(0x1d100c, 0.24);
-      footing.fillEllipse(0, 62, 194, 32);
       footing.lineStyle(3, PALETTE_HEX.ember, 0.16);
       footing.lineBetween(-76, 52, -36, 59);
       footing.lineBetween(-28, 61, 20, 54);
@@ -3256,8 +3292,10 @@ export class GreatBattleScene extends Phaser.Scene {
     const eyeColor = forceDuel ? 0xa01010 : 0x4a1010;
     const eyeAlpha = forceDuel ? 1.0 : 0.85;
     eyes.fillStyle(eyeColor, eyeAlpha);
-    eyes.fillEllipse(-28, QUIET_LORD_EYE_Y, 20, 12);
-    eyes.fillEllipse(28, QUIET_LORD_EYE_Y, 20, 12);
+    // The painted hood sits left of the image midpoint; its trailing cloak
+    // extends to the right. Keep both eye lights inside the actual face void.
+    eyes.fillEllipse(-52, QUIET_LORD_EYE_Y, 20, 12);
+    eyes.fillEllipse(-24, QUIET_LORD_EYE_Y, 20, 12);
     lordFigure.add([lordSprite, eyes]);
 
     // §5.5.11 — ≥3 kindness relics: Lord is slightly smaller (he shrinks rather than cracks)
@@ -3377,7 +3415,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
     let descLine: string;
     if (clearedCount >= 5) {
-      descLine = "He is smaller than the stories said. The allies you gathered flicker at his edges.";
+      descLine = "He is smaller than the stories said. The realms you carried home flicker at his edges.";
     } else if (clearedCount >= 3) {
       descLine = "He is vast but unsteady. Each realm you visited is a crack in his silence.";
     } else {
@@ -3480,13 +3518,16 @@ export class GreatBattleScene extends Phaser.Scene {
     const wordPos = this.facetDefenseWordPosition(facet);
     const timer = this.time.delayedCall(FACET_CHALLENGE_MS, () => {
       if (resolved) return;
+      // The matched final letter wins immediately; its exit tween owns the
+      // success callback for another 320ms and must not turn into a late hit.
+      if (target?.isComplete()) return;
       resolved = true;
       this.clearTargetAnchor(target);
       this.clearActiveTargets();
       this.playFacetImpact(facet, "landed");
       this.clearFacetSigil();
       // It lands — the realms' hit cue + a candle gutters.
-      this.cameras.main.shake(220, 0.006);
+      if (!reducedMotion(this)) this.cameras.main.shake(220, 0.006);
       playDamageThud();
       flashDamageVignette(this);
       this.narration.say("finale_facet_lands");
@@ -3759,6 +3800,7 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private startPhase2a(): void {
+    this.narration.clear();
     const satchel = this.store.get().satchel;
     this.band.setObjective("Type the counter-words to unmake his silence.");
 
@@ -3769,7 +3811,7 @@ export class GreatBattleScene extends Phaser.Scene {
       this.band.setObjective("Bell's Tongue strikes; brace for the next counter.");
       this.time.delayedCall(1800, () => {
         this.playBellsTongueStrikeCue();
-        this.cameras.main.flash(300, 200, 200, 255, false);
+        if (!reducedFlashes(this)) this.cameras.main.flash(300, 200, 200, 255, false);
         this.tweens.add({
           targets: this.quietLordContainer,
           alpha: 0.5,
@@ -3807,7 +3849,7 @@ export class GreatBattleScene extends Phaser.Scene {
       return;
     }
     const word = words[idx]!;
-    this.band.setObjective(`Counter ${idx + 1}/${words.length}: type ${word}.`);
+    this.band.setObjective(`Counter ${idx + 1}/${words.length}: type "${word}"`);
     const wordPos = this.lordDuelWordPosition(idx, words.length, 500);
     const target = this.makeLordWord({
       scene: this,
@@ -3821,8 +3863,8 @@ export class GreatBattleScene extends Phaser.Scene {
         // §5.5.11 — force duel: camera flash + shake on each defeat
         if (this.isForceDuel) {
           this.playForceLordCrackCue("strike");
-          this.cameras.main.flash(200, 255, 180, 100, false);
-          this.cameras.main.shake(180, 0.006);
+          if (!reducedFlashes(this)) this.cameras.main.flash(200, 255, 180, 100, false);
+          if (!reducedMotion(this)) this.cameras.main.shake(180, 0.006);
         }
 
         this.tweens.add({
@@ -3843,6 +3885,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private startPhase2b(): void {
     this.clearActiveTargets();
+    this.narration.clear();
 
     const satchel = this.store.get().satchel;
 
@@ -3925,7 +3968,7 @@ export class GreatBattleScene extends Phaser.Scene {
     const hasGlassFish = satchel.includes("glass-fish");
     const hasLanternMoth = satchel.includes("lantern-moth");
     const hasWispCat = satchel.includes("wisp-cat");
-    this.band.setObjective("Clear all three duel words before the Lord steadies.");
+    this.band.setObjective("Clear all three duel words to weaken the Quiet Lord.");
 
     // Round 1: 3 words from BATTLE_WORD_BANK simultaneously
     const round1Words = pickAdaptiveWords(
@@ -3936,6 +3979,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.phase2Round1Words = round1Words;
 
     let remaining = 3;
+    const round1Targets: TextWordTarget[] = [];
     for (let i = 0; i < 3; i++) {
       const word = round1Words[i]!;
       const wordPos = this.lordDuelWordPosition(i, 3, 518);
@@ -3969,12 +4013,13 @@ export class GreatBattleScene extends Phaser.Scene {
           }
         },
       });
+      round1Targets.push(target);
       this.registerActiveTarget(target, { idleFloat: true, idleIndex: i });
     }
 
     // §5.5.9 — lantern-moth: lights throne when shadow falls (injected ~halfway through)
     if (hasLanternMoth) {
-      this.time.delayedCall(4000, () => this.applyLanternMothHitWindow());
+      this.time.delayedCall(4000, () => this.applyLanternMothHitWindow(round1Targets));
     }
   }
 
@@ -3984,9 +4029,9 @@ export class GreatBattleScene extends Phaser.Scene {
     this.band.setObjective("Type light while the glass-fish opens the corridor.");
     const companion = this.showFinaleCompanionAction("glass-fish");
     // Flash the screen briefly (light corridor effect)
-    this.cameras.main.flash(400, 160, 220, 255, false);
+    if (!reducedFlashes(this)) this.cameras.main.flash(400, 160, 220, 255, false);
     this.time.delayedCall(500, () => {
-      const wordPos = { x: this.scale.width * 0.64, y: 560 };
+      const wordPos = { x: this.scale.width * 0.64, y: 500 };
       this.playGlassFishCorridorCue();
       const bonusTarget = this.makeWindowStrikeWord({
         scene: this,
@@ -4022,11 +4067,14 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   // §5.5.9 — lantern-moth: lights throne when shadow falls
-  private applyLanternMothHitWindow(): void {
-    // Only fires if there are still live targets in play (avoid double-clear)
-    if (this.activeTargets.length === 0) return;
+  private applyLanternMothHitWindow(roundTargets: readonly TextWordTarget[]): void {
+    // The timer belongs to round 1. Another round's targets must not revive
+    // this bonus or replace its objective after a fast clear, and fully typed
+    // words waiting for their exit animation are already finished.
+    if (this.runOver || !roundTargets.some((target) =>
+      this.activeTargets.includes(target) && !target.isComplete())) return;
     this.showRelicNotice("finale_companion_lantern_moth", "ally");
-    this.band.setObjective("Type throne before the lantern-moth's light fades.");
+    this.band.setObjective("Optional opening: type throne for an extra hit, or finish the duel words.");
     const companion = this.showFinaleCompanionAction("lantern-moth");
     // Warm light overlay
     const throneLight = this.add.graphics().setDepth(3).setAlpha(0);
@@ -4064,6 +4112,9 @@ export class GreatBattleScene extends Phaser.Scene {
         const idx = this.activeTargets.indexOf(bonusTarget);
         if (idx >= 0) this.activeTargets.splice(idx, 1);
         bonusTarget.destroy();
+        if (roundTargets.some((target) => this.activeTargets.includes(target) && !target.isComplete())) {
+          this.band.setObjective("Clear the remaining duel words to weaken the Quiet Lord.");
+        }
       },
     }, {
       kind: "mote",
@@ -4136,7 +4187,7 @@ export class GreatBattleScene extends Phaser.Scene {
       duration: 6000,
     });
 
-    this.cameras.main.shake(240, 0.004);
+    if (!reducedMotion(this)) this.cameras.main.shake(240, 0.004);
 
     const wordPos = this.lordDuelWordPosition(1, 2, 480);
     const defenseTarget = this.makeWhirlwindDefenseWord({
@@ -4233,6 +4284,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private startPhase2bRound2(): void {
     // Round 2: 3 more words with no overlap
+    this.narration.clear();
     this.band.setObjective("Clear the last three duel words.");
     const allWords = (BATTLE_WORD_BANK as readonly string[]).filter(
       (w) => !this.phase2Round1Words.includes(w),
@@ -4273,7 +4325,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // §5.5.11 — force duel: Lord visually cracks open (camera shake)
     if (this.isForceDuel) {
       this.playForceLordCrackCue("open");
-      this.cameras.main.shake(300, 0.01);
+      if (!reducedMotion(this)) this.cameras.main.shake(300, 0.01);
     }
 
     // §5.5.11 — kindness duel: Lord shrinks rather than cracks
@@ -4349,9 +4401,10 @@ export class GreatBattleScene extends Phaser.Scene {
     const lead =
       idx === 0
         ? "Answer in his own hand — mind the capitals:"
-        : "Again, deeper — his name this time:";
-    this.setNarrator(`${lead}  ${word}`, "Quiet Lord");
-    this.band.setObjective("Mind the capitals in the Quiet Lord's word.");
+        : "One last binding — mind the capitals:";
+    this.setNarrator(`${lead}  ${word}`);
+    this.band.setObjective(`Type "un" in lowercase, then hold Shift for "${word.slice(2)}".`
+      + (this.isKindnessDuel ? " The first mistake on this word costs a candle." : ""));
 
     const wordPos = this.lordDuelWordPosition(idx, words.length, 520);
     let target!: TextWordTarget;
@@ -4575,6 +4628,7 @@ export class GreatBattleScene extends Phaser.Scene {
   private deliverFinalPhrase(): void {
     const phrase = selectFinalPhrase(this.store.get().satchel);
     const words = phrase.split(" ");
+    this.setNarrator(`One word at a time, including punctuation:\n${phrase}`);
     this.band.setObjective("Type the final phrase into Again.");
     this.runFinalPhraseWords(words, 0);
   }
@@ -4585,7 +4639,7 @@ export class GreatBattleScene extends Phaser.Scene {
       return;
     }
     const word = words[idx]!;
-    this.band.setObjective(`Final phrase ${idx + 1}/${words.length}: type ${word}.`);
+    this.band.setObjective(`Final phrase ${idx + 1}/${words.length}: type "${word}"`);
 
     const wordPos = this.finalPhraseWordPosition(idx);
     const target = this.makeFinalPhraseWord({
@@ -4686,7 +4740,7 @@ export class GreatBattleScene extends Phaser.Scene {
     // A still beat on "Again" (no period) so the absence registers — then snap.
     this.time.delayedCall(800, () => {
       playPeriodSnapSting();
-      this.cameras.main.shake(120, 0.004);
+      if (!reducedMotion(this)) this.cameras.main.shake(120, 0.004);
       playBodyImpact(this, this.againText, {
         kind: "mote",
         color: 0xd4b8ff,
@@ -4720,7 +4774,7 @@ export class GreatBattleScene extends Phaser.Scene {
   private runWinFlash(): void {
     // White flash
     const whiteFlash = this.add.graphics().setDepth(50);
-    whiteFlash.fillStyle(0xffffff, 1);
+    whiteFlash.fillStyle(reducedFlashes(this) ? 0x0b0a0f : 0xffffff, 1);
     whiteFlash.fillRect(0, 0, this.scale.width, this.scale.height);
     whiteFlash.setAlpha(0);
 
@@ -4742,190 +4796,11 @@ export class GreatBattleScene extends Phaser.Scene {
               this.store.update((s) => {
                 s.realms["great-battle"] = { cleared: true, choices: {} };
               });
-              this.showCredits();
+              this.scene.start("HomecomingScene", { store: this.store });
             },
           );
         });
       },
-    });
-  }
-
-  // ─── Credits ────────────────────────────────────────────────────────────────
-
-  private creditsKeyListenerAdded = false;
-
-  private showCredits(): void {
-    this.clearActiveTargets();
-
-    // Destroy all existing game objects
-    this.children.each((child) => {
-      child.destroy();
-    });
-
-    // Rebuild
-    this.cameras.main.setBackgroundColor(0x0b0a0f);
-    this.cameras.main.fadeIn(500, 11, 10, 15);
-
-    const plateW = 880;
-    const plateH = 460;
-    const plate = this.add
-      .container(this.scale.width / 2, 378)
-      .setDepth(1)
-      .setAlpha(0);
-    const bg = this.add.graphics();
-    bg.fillStyle(UI_HEX.panel, 0.72);
-    bg.fillRoundedRect(-plateW / 2, -plateH / 2, plateW, plateH, 10);
-    bg.lineStyle(3, UI_HEX.brass, 0.76);
-    bg.strokeRoundedRect(-plateW / 2, -plateH / 2, plateW, plateH, 10);
-    bg.lineStyle(1, UI_HEX.parchment, 0.18);
-    bg.strokeRoundedRect(-plateW / 2 + 12, -plateH / 2 + 12, plateW - 24, plateH - 24, 8);
-    bg.lineStyle(1, UI_HEX.brass, 0.32);
-    bg.lineBetween(-plateW / 2 + 72, -76, plateW / 2 - 72, -76);
-    plate.add(bg);
-    plate.add(cornerTicks(this, plateW, plateH, { inset: 12, size: 20, width: 3 }));
-    this.tweens.add({
-      targets: plate,
-      alpha: 1,
-      duration: 700,
-      ease: "Sine.easeOut",
-    });
-
-    const lines: Array<{
-      text: string;
-      y: number;
-      fontSize: string;
-      color: string;
-      delay: number;
-    }> = [
-      {
-        text: "The Portalwright's Almanac",
-        y: 200,
-        fontSize: "52px",
-        color: PALETTE.cream,
-        delay: 0,
-      },
-      {
-        text: "A story about words and the people who keep them.",
-        y: 280,
-        fontSize: "28px",
-        color: PALETTE.dim,
-        delay: 800,
-      },
-      {
-        text: "Co-designed by Aiden.",
-        y: 380,
-        fontSize: "34px",
-        color: "#c8a84b",
-        delay: 1600,
-      },
-      {
-        text: "Written and built by Justin.",
-        y: 430,
-        fontSize: "28px",
-        color: PALETTE.dim,
-        delay: 2400,
-      },
-    ];
-
-    for (const line of lines) {
-      const txt = this.add
-        .text(this.scale.width / 2, line.y, line.text, {
-          fontFamily: SERIF,
-          fontSize: line.fontSize,
-          color: line.color,
-          align: "center",
-        })
-        .setOrigin(0.5)
-        .setAlpha(0)
-        .setDepth(2);
-
-      this.tweens.add({
-        targets: txt,
-        alpha: 1,
-        duration: 800,
-        delay: line.delay,
-        ease: "Sine.easeOut",
-      });
-    }
-
-    // "Press any key" — shown after 3 seconds
-    const pressAny = this.add
-      .text(
-        this.scale.width / 2,
-        560,
-        "Press any key to return to the library.",
-        {
-          fontFamily: SERIF,
-          fontSize: "22px",
-          color: "#5a5248",
-          align: "center",
-        },
-      )
-      .setOrigin(0.5)
-      .setAlpha(0)
-      .setDepth(2);
-
-    this.tweens.add({
-      targets: pressAny,
-      alpha: 1,
-      duration: 800,
-      delay: 3000,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (!this.creditsKeyListenerAdded) {
-          this.creditsKeyListenerAdded = true;
-          this.input.keyboard?.once("keydown", () => this.returnFromCredits());
-        }
-      },
-    });
-  }
-
-  private returnFromCredits(): void {
-    const cx = this.scale.width / 2;
-    const cy = 560;
-    playSceneEventPulse(this, {
-      kind: "mote",
-      color: UI_HEX.brass,
-      x: cx,
-      y: cy,
-      depth: 12,
-      durationMs: 620,
-      ringWidth: 520,
-      ringHeight: 150,
-      count: 12,
-      alpha: 0.12,
-      spreadX: 220,
-      spreadY: 56,
-    });
-
-    const seal = this.add.graphics().setPosition(cx, cy).setDepth(11).setAlpha(0.7);
-    seal.lineStyle(2, UI_HEX.brass, 0.58);
-    seal.strokeEllipse(0, 0, 260, 74);
-    seal.lineStyle(1, 0x8b6ad8, 0.42);
-    seal.strokeEllipse(0, 0, 180, 48);
-    seal.fillStyle(UI_HEX.brass, 0.035);
-    seal.fillEllipse(0, 0, 260, 74);
-    this.tweens.add({
-      targets: seal,
-      alpha: 0,
-      scaleX: 1.32,
-      scaleY: 1.18,
-      duration: 540,
-      ease: "Sine.easeOut",
-      onComplete: () => seal.destroy(),
-    });
-
-    this.time.delayedCall(160, () => {
-      this.cameras.main.fadeOut(560, 11, 10, 15);
-      this.cameras.main.once(
-        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-        () => {
-          this.scene.start("PortalChamberScene", {
-            store: this.store,
-            arrival: "great-battle",
-          });
-        },
-      );
     });
   }
 

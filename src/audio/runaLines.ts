@@ -831,7 +831,7 @@ const FORGE_LINES: readonly RunaLine[] = [
     id: "forge_fork1_intro",
     scene: "forge",
     trigger: "ClockworkForgeScene.startFork1() — Smith Forn vs Apprentices' Cabal (wired)",
-    text: "Smith Forn wants to repair the bellows; the apprentices want to shut them down. Forn offers his hammer. They offer a wrench.",
+    text: "Smith Forn wants to repair the bellows; the apprentices want to shut them down. They want to choose the orders they follow and the fires they feed. Forn offers his hammer. They offer a wrench.",
     tone: "instruction",
     isNew: true,
   },

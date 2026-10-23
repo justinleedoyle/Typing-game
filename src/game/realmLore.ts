@@ -40,11 +40,11 @@ export const REALM_LORE: Record<string, RealmLore> = {
       chant:
         "Wren opened the cathedral doors slowly, on the bell's rhythm. The doors parted with grace, and Wren carried the Quiet Chant onward.",
       force:
-        "Wren forced the cathedral doors open with OPEN on the toll. A lock-bar came away from the doors and went into the satchel.",
+        "Wren forced the cathedral doors open with OPEN. A lock-bar came away from the doors and went into the satchel.",
       "free-king":
         "King Aurland had been imprisoned inside the bell's voice since the silence began. Wren unspoke the binding word by word. The king surfaced, gasping, and pressed a trident token into Wren's palm.",
       "claim-tongue":
-        "Wren climbed inside the bell and took its iron tongue. The bell went silent for good. The tide receded; whether that was a kindness remained uncertain.",
+        "Wren reached beneath the bell and took its iron tongue. The bell went silent for good. The tide receded; whether that was a kindness remained uncertain.",
       glass:
         "A glass-fish had watched from the harbor. When Wren welcomed the creature, it darted forward and tucked itself against the satchel.",
     },
@@ -94,7 +94,7 @@ export const REALM_LORE: Record<string, RealmLore> = {
       offering:
         "At the crossroads shrine, Wren said, “i remember you.” The shrine glowed, and its keeper whispered Inga's name. Wren carried away the Shrine-Token.",
       "bone-flute":
-        "Wren took the bone flute from the shrine. The ghosts recognized it immediately and gave Wren room.",
+        "Wren took the bone flute from the shrine. The ghosts grew restless, and their whispers followed Wren along the path.",
       bargain:
         "Wren answered the Ghost-King with remembrance: “you are not gone.” The king listened, bowed, and gave Wren the Ghost-King's Promise.",
       "light-grove":

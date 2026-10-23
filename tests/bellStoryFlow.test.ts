@@ -7,7 +7,7 @@ import { assert, assertEqual, suite } from "./_assert";
 const path = new URL("../src/scenes/SunkenBellScene.ts", import.meta.url);
 const source = ts.createSourceFile(path.pathname, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
-const methods = ["startBellKeepersChamber", "onWardenDefeated", "startFork2", "startFork2FreeAurland", "setStoryObjective"].map(name =>
+const methods = ["startBellKeepersChamber", "onWardenDefeated", "startFork2", "startFork2FreeAurland", "startFork2ClaimTongue", "runFreePassageChain", "setStoryObjective"].map(name =>
   owner.members.find(value => value.name?.getText(source) === name)!.getText(source));
 const code = ts.transpileModule(`class Harness { ${methods.join("\n")} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
@@ -15,10 +15,12 @@ const code = ts.transpileModule(`class Harness { ${methods.join("\n")} }`, {
 const noop = () => {};
 const Harness = new Function("Phaser", "BELL_BURST_COLOR", "PALETTE_HEX", "addLocalGroundShadow",
   "addContainerWake", "addIdleBreath", "attachWordBodyAnchor", "playBodyImpact", "dismissStagedCue", "playChime", "fadeOutStagedSprite",
+  "playWrenFocus", "playWrenAction", "playActorAttention",
   `${code}; return Harness;`)(
   { GameObjects: { Events: { DESTROY: "destroy" } } }, 0x4ab8d6, { brass: 0xbaa463 },
   () => ({}), noop, noop, () => ({ destroy() {} }), noop, noop, noop,
   (scene: { departures: unknown[] }, sprite: unknown) => scene.departures.push(sprite),
+  noop, noop, noop,
 );
 
 function story() {
@@ -127,4 +129,51 @@ await suite("Bell story: freeing Aurland holds both the binding instructions and
   assertEqual(fishGate, 0, "the companion cannot overwrite the reward response");
   s.continue();
   assertEqual(fishGate, 1, "Continue leads to the original companion offer");
+});
+
+await suite("Bell story: taking the tongue releases its hanging cue before the held consequence", () => {
+  const s = story();
+  const cue = { scene: true };
+  const events: string[] = [];
+  let target: { word: string; onComplete(): void } | undefined;
+  let fishGate = 0;
+  const recordCaption = s.h.setNarrator;
+  Object.assign(s.h, {
+    bellTongueCue: cue,
+    bellPassageWordPosition: () => ({ x: 0, y: 0 }),
+    makeBellForkWord(body: unknown, opts: typeof target) {
+      assertEqual(body, cue, "take it is anchored to the still-hanging clapper");
+      return opts;
+    },
+    registerActiveTarget(value: typeof target) { target = value; },
+    clearActiveTargets() { events.push("release-word"); },
+    fadeOutForkCue(body: unknown) {
+      if (body === cue) events.push("depart-clapper");
+    },
+    setNarrator(text: string) {
+      if (text.startsWith("The clapper tears free.")) {
+        assertEqual(s.h.bellTongueCue, null, "the hanging cue is no longer owned when the consequence is held");
+        assertEqual(events.slice(-2), ["release-word", "depart-clapper"], "the word releases before the clapper departure and response");
+      }
+      recordCaption(text);
+    },
+    startGlassFishGate() { fishGate += 1; },
+  });
+  s.h.startFork2ClaimTongue();
+  assert(!target, "the reaching introduction remains held before its target");
+  assertEqual(s.state.satchel, [], "choosing the branch does not prematurely grant the relic");
+  s.continue();
+  assertEqual(target!.word, "take it", "the exact original target remains free typing");
+  assertEqual(events, [], "the clapper remains until the target is completed");
+  target!.onComplete();
+  assert(s.hasGate(), "the torn-free consequence is still a deliberate readable card");
+  assertEqual(s.state.satchel, [], "the existing reward timing is unchanged");
+  s.continue();
+  assertEqual(s.state.satchel, ["bells-tongue"], "the original reward is granted once");
+  assertEqual(s.state.almanacLore, ["the-bells-tongue-song"], "the original lore reward is unchanged");
+  assertEqual(events.filter(value => value === "depart-clapper").length, 1, "the cue is not departed again after Continue");
+  assert(s.captions.at(-1)!.includes("settles in your satchel"), "the separate reward acknowledgment remains held");
+  assertEqual(fishGate, 0, "the next gate cannot replace the unread reward response");
+  s.continue();
+  assertEqual(fishGate, 1, "Continue still reaches the original companion-eligibility gate");
 });

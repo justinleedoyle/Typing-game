@@ -2136,12 +2136,20 @@ export class SunkenBellScene extends Phaser.Scene {
 
   /** The doors burst — four rapid free passages as they break (canon §5.5.7). */
   private startFork1ForceBreak(): void {
-    this.setNarrator("The doors burst. Words tumble through the widening gap.");
+    this.setNarrator("The crossbar strains. Type the breaking words to split it.");
     this.setStoryObjective("Type the breaking words as shown. No rhythm needed.");
     const forcePhrases = ["crash", "crack", "clear", "we pass"];
     let step = 0;
     const advance = (): void => {
       if (step >= forcePhrases.length) {
+        // The last breaking word has released its anchor. Remove the closed
+        // doorway before holding the completed, open-door acknowledgment.
+        const door = this.doorForceCue;
+        this.doorForceCue = null;
+        if (door?.scene) {
+          this.tweens.killTweensOf(door);
+          door.destroy();
+        }
         this.setNarrator("The doors burst wide. Their lock-bar rests in your hands.");
         this.setStoryObjective("Lock-Bar is yours. Continue through the open doors.");
         this.readThen(() => this.startAct3Corridor());
@@ -2687,6 +2695,10 @@ export class SunkenBellScene extends Phaser.Scene {
       {
         word: "take it",
         narrator: "The clapper tears free. The bell will never toll again.",
+        onComplete: () => {
+          this.fadeOutForkCue(this.bellTongueCue);
+          this.bellTongueCue = null;
+        },
       },
     ];
     this.readThen(() => this.runFreePassageChain(chain, () => {
@@ -2697,8 +2709,6 @@ export class SunkenBellScene extends Phaser.Scene {
         }
       });
       playChime();
-      this.fadeOutForkCue(this.bellTongueCue);
-      this.bellTongueCue = null;
       this.setNarrator("The Bell's Tongue settles in your satchel, still warm from the deep.");
       this.setStoryObjective("Bell's Tongue is yours. Continue toward the surface.");
       this.readThen(() => this.startGlassFishGate());
@@ -4038,7 +4048,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   /** Free (no beat) passage chain for fork 2 */
   private runFreePassageChain(
-    steps: Array<{ word: string; narrator: string }>,
+    steps: Array<{ word: string; narrator: string; onComplete?: () => void }>,
     onDone: () => void,
   ): void {
     // Free-passage chains run after the boss falls — the BeatClock has
@@ -4087,6 +4097,7 @@ export class SunkenBellScene extends Phaser.Scene {
           });
           idx += 1;
           this.clearActiveTargets();
+          step.onComplete?.();
           if (step.narrator) {
             this.setNarrator(step.narrator);
             this.readThen(advance);

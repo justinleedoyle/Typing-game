@@ -124,6 +124,11 @@ await suite("Realm Almanac: every fork combination records the actual chosen act
   assert(!stolen.primary.includes("uncharged") && !stolen.primary.includes("brightened"), "stealing a flame is not rewritten as repairing the beacon");
   const etta = realmPathSummary("sky-island", { fork1: "help-etta" });
   assert(!etta.primary.includes("measurements") && !etta.primary.includes("sky-chart"), "Etta's played book action replaces the abandoned measurement story");
+  for (const fork2 of ["bargain", "force"]) {
+    const flute = realmPathSummary("haunted-wood", { fork1: "bone-flute", fork2 });
+    assert(flute.primary.includes("grew restless") && flute.primary.includes("whispers followed"), "taking the flute records its actual awakened-ghost consequence for either later branch");
+    assert(!flute.primary.includes("gave Wren room"), "the journal cannot turn the restless pursuit into a peaceful response");
+  }
 });
 
 await suite("Realm Almanac: legacy aliases and incomplete saves stay truthful", () => {

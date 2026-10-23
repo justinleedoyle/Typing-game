@@ -89,6 +89,7 @@ import forgeGolemSprite from "../../art/forge/golem.png";
 import forgeCommandGolemSprite from "../../art/forge/command-golem.png";
 import fornSprite from "../../art/forge/forn.png";
 import gregorSprite from "../../art/forge/gregor.png";
+import apprenticeSprite from "../../art/forge/apprentice.png";
 import runaPortrait from "../../art/runa/runa-front.png";
 import brassSongbirdSprite from "../../art/companions/brass-songbird.png";
 import snowFoxSprite from "../../art/companions/snow-fox.png";
@@ -145,6 +146,7 @@ const TUTORIAL_GOLEM_Y = CATWALK_SURFACE_Y - TUTORIAL_GOLEM_GROUND_Y;
 // anchor. Placed left-third, feet on the foundry ground line.
 const FORN_SPRITE_HEIGHT = 360;
 const GREGOR_SPRITE_HEIGHT = 300;
+const APPRENTICE_SPRITE_HEIGHT = 310;
 
 /** Spawn slots on the foundry floor — same pattern as WinterMountainScene. */
 const FLOOR_SLOTS = [
@@ -217,6 +219,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private fornSprite?: Phaser.GameObjects.Image;
   /** Retired smith at the catwalk teaching station; distinct from Smith Forn. */
   private gregorSprite?: Phaser.GameObjects.Image;
+  /** The apprentices' speaker stays beside their valve during the first fork. */
+  private apprenticeSprite?: Phaser.GameObjects.Image;
 
   private shiftHeld = false;
   private altHeld = false;
@@ -278,6 +282,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.standDownCue = null;
     this.fightCue = null;
     this.gregorSprite = undefined;
+    this.apprenticeSprite = undefined;
     this.oneShotInvoker = null;
     this.shiftHeld = false;
     this.altHeld = false;
@@ -299,6 +304,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.load.image("forge-command-golem", forgeCommandGolemSprite);
     this.load.image("forn", fornSprite);
     this.load.image("forge-gregor", gregorSprite);
+    this.load.image("forge-apprentice", apprenticeSprite);
     this.load.image("forge-companion-songbird", brassSongbirdSprite);
     this.load.image("forge-companion-snow-fox", snowFoxSprite);
     this.load.image("band-portrait-runa", runaPortrait);
@@ -508,6 +514,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.fornSprite = undefined;
       this.gregorSprite?.destroy();
       this.gregorSprite = undefined;
+      this.apprenticeSprite?.destroy();
+      this.apprenticeSprite = undefined;
     });
 
     this.ambientHandle = playAmbientForge();
@@ -1181,9 +1189,48 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private showFork1ChoiceCues(): void {
+    this.showApprenticeSprite();
     if (!this.apprenticeCue?.scene) {
       this.apprenticeCue = this.drawApprenticeCue(1280, FLOOR_Y + 4);
     }
+  }
+
+  private showApprenticeSprite(): void {
+    if (this.apprenticeSprite?.scene) return;
+    const sprite = this.add.image(1600, FOUNDRY_GROUND_Y, "forge-apprentice");
+    sprite.setOrigin(0.5, 1);
+    sprite.setScale(APPRENTICE_SPRITE_HEIGHT / sprite.height);
+    sprite.setFlipX(true);
+    sprite.setDepth(40);
+    stageAnchoredSprite(this, sprite, {
+      shadowWidth: 94,
+      shadowHeight: 18,
+      shadowOffsetY: 8,
+      shadowAlpha: 0.28,
+      shadowDepth: 39.9,
+      entranceOffsetY: 16,
+      entranceMs: 720,
+      breathDy: -3,
+      breathMs: 2100,
+    });
+    this.apprenticeSprite = sprite;
+  }
+
+  private hideApprenticeSprite(): void {
+    const sprite = this.apprenticeSprite;
+    if (!sprite) return;
+    this.apprenticeSprite = undefined;
+    fadeOutStagedSprite(this, sprite, { durationMs: 620, ease: "Sine.easeIn" });
+  }
+
+  /** Reuse the actor's painted face, with a readable head-and-shoulders frame. */
+  private ensureApprenticePortrait(): void {
+    if (this.textures.exists("forge-apprentice-portrait")) return;
+    const portrait = this.textures.createCanvas("forge-apprentice-portrait", 240, 288);
+    if (!portrait) return;
+    const source = this.textures.get("forge-apprentice").getSourceImage() as HTMLImageElement;
+    portrait.context.drawImage(source, 260, 0, 400, 480, 0, 0, 240, 288);
+    portrait.refresh();
   }
 
   private showFork2ChoiceCues(): void {
@@ -1450,6 +1497,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     if (this.fork1Choice !== "forn") { this.startCabalBranch(); return; }
     this.clearActiveTargets();
     this.dismissForgeChoiceCue("apprentice");
+    this.hideApprenticeSprite();
     this.band.setObjective("Forn accepts your help. Press Enter or Space to begin the repair.");
     this.setNarrator(
       "Aye. I could use steady hands.",
@@ -1475,6 +1523,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     if (this.fork1Choice !== "cabal") { this.startFornBranch(); return; }
     this.clearActiveTargets();
     this.hideFornSprite();
+    this.showApprenticeSprite();
     this.pulseForgeChoiceCue(this.apprenticeCue);
     this.band.setObjective("The apprentices accept your help. Press Enter or Space to begin.");
     this.setNarrator(
@@ -1499,6 +1548,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private afterFork1(choice: "forn" | "cabal", relicId: string): void {
     // The fork is resolved — the realm moves on to the boss; Forn leaves.
     this.hideFornSprite();
+    this.hideApprenticeSprite();
     this.dismissForgeChoiceCue("apprentice");
     // Almanac lore page 3 — Forn's hammer song OR the Apprentices' manifesto.
     // Mutually exclusive per fork branch.
@@ -2525,7 +2575,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         trueNameAnchor = null;
       };
       const pos = trueNameSeal
-        ? { x: trueNameSeal.x, y: trueNameSeal.y - 118 }
+        ? { x: trueNameSeal.x, y: Math.min(trueNameSeal.y - 118, this.wrenContainer.y - 300) }
         : this.forgePassageWordPosition(owner, word);
       const opts: TextWordTargetOptions = {
         scene: this,
@@ -3205,6 +3255,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
         scale: 1.02,
         durationMs: 220,
       });
+    } else if (speakerName === "Apprentice") {
+      playActorAttention(this, this.apprenticeSprite, {
+        tint: PALETTE_HEX.ember,
+        scale: 1.02,
+        durationMs: 220,
+      });
     }
   }
 
@@ -3215,6 +3271,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.band.setPortrait("forn", "Forn");
     } else if (speakerName === "Old Gregor") {
       this.band.setPortrait("forge-gregor", "Old Gregor");
+    } else if (speakerName === "Apprentice") {
+      this.ensureApprenticePortrait();
+      this.band.setPortrait("forge-apprentice-portrait", "Apprentice");
     } else {
       this.band.setPortrait(undefined, speakerName);
     }

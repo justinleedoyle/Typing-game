@@ -10,7 +10,7 @@ const source = ts.createSourceFile(path.pathname, readFileSync(path, "utf8"),
   ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 const sceneClass = source.statements.find(ts.isClassDeclaration)!;
 const methods = ["createEchoDim", "onBeatTick", "pulseBeatRing", "pulseOffbeatRing",
-  "spawnSplitGhost", "bellPassageWordPosition"].map(name =>
+  "spawnSplitGhost", "bellPassageWordPosition", "startFork1ForceBreak"].map(name =>
   sceneClass.members.find(member => member.name?.getText(source) === name)!.getText(source));
 const code = ts.transpileModule(`class Harness { ${methods.join("\n")} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
@@ -151,4 +151,58 @@ await suite("Bell door cue: enlarged arches leave their passage words above the 
   }
   const other = { scene: true, x: 690, y: 812, scaleY: 1 };
   assertEqual(bell.bellPassageWordPosition(other, -48), { x: 840, y: 650 }, "other Bell props keep their existing word placement");
+});
+
+await suite("Bell force door: the closed prop leaves only after all four breaking words", () => {
+  const bell = new Harness();
+  const events: string[] = [];
+  const words: string[] = [];
+  let begin: (() => void) | undefined;
+  let target: { word: string; onComplete(): void } | undefined;
+  let continueReading: (() => void) | undefined;
+  const door = { scene: true, destroy() { events.push("destroy"); } };
+  Object.assign(bell, {
+    doorForceCue: door,
+    time: { delayedCall(delay: number, callback: () => void) {
+      assertEqual(delay, 400, "the original first-word delay is unchanged");
+      begin = callback;
+    } },
+    tweens: { killTweensOf(value: unknown) {
+      assertEqual(value, door, "only the completed closed doorway is stopped");
+      events.push("stop-door");
+    } },
+    setNarrator(text: string) {
+      if (text.startsWith("The doors burst wide.")) {
+        assertEqual(bell.doorForceCue, null, "the completed-open caption cannot retain a closed door");
+        assert(events.includes("destroy"), "the closed prop is gone before the acknowledgment");
+        events.push("acknowledge");
+      }
+    },
+    setStoryObjective() {},
+    bellPassageWordPosition() { return { x: 0, y: 0 }; },
+    makeBellForkWord(body: unknown, options: { word: string; onComplete(): void }) {
+      assertEqual(body, door, "all four words keep their original doorway anchor");
+      words.push(options.word);
+      return options;
+    },
+    registerActiveTarget(next: typeof target) { target = next; },
+    clearActiveTargets() { events.push("clear-word"); },
+    readThen(callback: () => void) { continueReading = callback; },
+    startAct3Corridor() { events.push("corridor"); },
+  });
+  bell.startFork1ForceBreak();
+  assertEqual(words.length, 0, "the chain still waits for the authored initial delay");
+  begin!();
+  for (const expected of ["crash", "crack", "clear", "we pass"]) {
+    assertEqual(target!.word, expected, "each exact authored target is preserved");
+    assertEqual(bell.doorForceCue, door, "the closed doorway stays through the unfinished chain");
+    assert(!events.includes("destroy"), "no earlier word falsely opens the door");
+    target!.onComplete();
+  }
+  assertEqual(words, ["crash", "crack", "clear", "we pass"], "the sequence has no extra targets");
+  assertEqual(events.slice(-4), ["clear-word", "stop-door", "destroy", "acknowledge"],
+    "the final word releases before its prop, then the readable acknowledgment begins");
+  assert(!events.includes("corridor"), "the final response remains held for Continue");
+  continueReading!();
+  assertEqual(events.at(-1), "corridor", "Continue still reaches the original corridor transition");
 });

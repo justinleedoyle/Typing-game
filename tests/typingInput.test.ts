@@ -189,3 +189,53 @@ await suite("typing input: callbacks that acquire a replacement preserve its typ
     }
   }
 });
+
+await suite("typing input: expired shared-prefix targets cannot block the following story choice", () => {
+  for (const difficulty of ["forgiving", "standard", "purist"] as const) {
+    const { store, keys } = recordingStore(difficulty);
+    const input = new TypingInputController(store);
+    const first = new Target("the lantern remembers");
+    const second = new Target("the beacon waits");
+    const unrelated = new Target("toll");
+    input.register(first);
+    input.register(second);
+    input.register(unrelated);
+    type(input, "th");
+    assert(!input.hasClaim(), "shared scroll prefix is not yet a claim");
+    input.unregister(first);
+    assertEqual(input.getTypingBuffer(), "th", "remaining matching scroll preserves accepted prefix");
+    input.unregister(second);
+    assertEqual(input.getTypingBuffer(), "", "last matching expiry clears an orphaned prefix");
+    assert(!input.hasPendingInput(), "an unrelated utility target does not keep a vanished scroll prefix alive");
+    assert(!unrelated.dimmed, "remaining utility target is no longer dimmed by a vanished prefix");
+    assertEqual(keys.length, 2, "expiry does not erase or invent keystroke telemetry");
+    const choice = new Target("steal the flame");
+    input.register(choice);
+    type(input, choice.word);
+    assertEqual(choice.completions, 1, `${difficulty}: next choice succeeds on the first full attempt without Escape`);
+  }
+});
+
+await suite("typing input: partial candidate expiry preserves raw-case matching for the survivor", () => {
+  const input = new TypingInputController();
+  const expired = new Target("ABORT", 0, true);
+  const remaining = new Target("ABOUT", 0, true);
+  input.register(expired);
+  input.register(remaining);
+  type(input, "AB");
+  input.unregister(expired);
+  assertEqual(input.getTypingBuffer(), "ab", "normalized prefix remains while a matching target survives");
+  type(input, "OUT");
+  assertEqual(remaining.completions, 1, "raw capitals remain valid when continuing the survivor");
+  const nextA = new Target("BEGIN", 0, true);
+  const nextB = new Target("BELOW", 0, true);
+  input.register(nextA);
+  input.register(nextB);
+  type(input, "BE");
+  input.unregister(nextA);
+  input.unregister(nextB);
+  const choice = new Target("C", 0, true);
+  input.register(choice);
+  type(input, "C");
+  assertEqual(choice.completions, 1, "last expiry clears both normalized and raw-case prefix buffers");
+});

@@ -1291,7 +1291,7 @@ export class GreatBattleScene extends Phaser.Scene {
       // Physical stepping points on the rising courtyard path from Wren to
       // the scar. Keep the first word clear of Wren's silhouette so its trace
       // reads as a placed mark, not a second layer on the actor.
-      { x: -330, y: 300 },
+      { x: -250, y: 300 },
       { x: -190, y: 250 },
       { x: -60, y: 195 },
     ] as const;
@@ -3516,6 +3516,9 @@ export class GreatBattleScene extends Phaser.Scene {
     const wordPos = this.facetDefenseWordPosition(facet);
     const timer = this.time.delayedCall(FACET_CHALLENGE_MS, () => {
       if (resolved) return;
+      // The matched final letter wins immediately; its exit tween owns the
+      // success callback for another 320ms and must not turn into a late hit.
+      if (target?.isComplete()) return;
       resolved = true;
       this.clearTargetAnchor(target);
       this.clearActiveTargets();
@@ -3795,6 +3798,7 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private startPhase2a(): void {
+    this.narration.clear();
     const satchel = this.store.get().satchel;
     this.band.setObjective("Type the counter-words to unmake his silence.");
 
@@ -3879,6 +3883,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private startPhase2b(): void {
     this.clearActiveTargets();
+    this.narration.clear();
 
     const satchel = this.store.get().satchel;
 
@@ -4277,6 +4282,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private startPhase2bRound2(): void {
     // Round 2: 3 more words with no overlap
+    this.narration.clear();
     this.band.setObjective("Clear the last three duel words.");
     const allWords = (BATTLE_WORD_BANK as readonly string[]).filter(
       (w) => !this.phase2Round1Words.includes(w),

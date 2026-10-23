@@ -40,6 +40,7 @@ await import("./resetSave.test.ts");
 await import("./saveChoice.test.ts");
 await import("./realmLore.test.ts");
 await import("./realmChoices.test.ts");
+await import("./revisitStory.test.ts");
 await import("./navigationPolicy.test.ts");
 await import("./homecoming.test.ts");
 

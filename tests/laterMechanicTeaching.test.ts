@@ -45,6 +45,206 @@ const wood = sceneSource("HauntedWoodScene");
 const sky = sceneSource("SkyIslandScene");
 const forge = sceneSource("ClockworkForgeScene");
 const finale = sceneSource("GreatBattleScene");
+const winter = sceneSource("WinterMountainScene");
+
+await suite("Wood force choice: the fire remains visible through the held response and king's challenge", () => {
+  for (const reduced of [false, true]) {
+    const lights: unknown[] = [];
+    const wakes: unknown[] = [];
+    const events: string[] = [];
+    const Entry = actualMethod(wood, "startFork2Force");
+    const Ignite = actualMethod(wood, "igniteGroveLightCue", {
+      addLivingLight: (_scene: unknown, opts: unknown) => { lights.push(opts); return warmth; },
+      addContainerWake: (_scene: unknown, body: unknown) => wakes.push(body),
+      reducedMotion: () => reduced,
+      Phaser: { GameObjects: { Events: { DESTROY: "destroy" } } },
+    });
+    const s = new Entry();
+    let next: (() => void) | undefined;
+    let destroyCue: (() => void) | undefined;
+    let ignited = false;
+    let drawn = 0;
+    let boss = 0;
+    const warmth = { scene: true, destroy() { events.push("release-warmth"); } };
+    const cue = {
+      scene: true, x: 1210, y: 770, alpha: 0,
+      getData: () => ignited, setData(_key: string, value: boolean) { ignited = value; },
+      setAlpha(value: number) { this.alpha = value; return this; }, setScale() { return this; },
+      add() { drawn += 1; }, once(_event: string, callback: () => void) { destroyCue = callback; },
+    };
+    const state = { satchel: [] as string[] };
+    Object.assign(s, {
+      groveLightCue: cue,
+      commitFork: (_fork: string, choice: string) => choice,
+      store: { update: (edit: (value: typeof state) => void) => edit(state) },
+      attendGhostKing() {},
+      igniteGroveLightCue: Ignite.prototype.igniteGroveLightCue,
+      tweens: { killTweensOf() {} },
+      add: { graphics: () => ({ fillStyle() {}, fillTriangle() {}, fillEllipse() {} }) },
+      setNarrator() { assert(ignited && cue.alpha === 1, "visible fire is staged before the held flare caption"); },
+      band: { setObjective() {} },
+      readThen(callback: () => void) { next = callback; },
+      startBossFight() { assertEqual(s.groveLightCue, cue, "the chosen fire survives into the king's challenge"); boss += 1; },
+    });
+    s.startFork2Force();
+    assertEqual(state.satchel, ["ash-vial"], "the existing force reward and timing are unchanged");
+    assertEqual(boss, 0, "the readable consequence remains held before combat");
+    s.igniteGroveLightCue();
+    assertEqual(drawn, 1, "a restarted committed choice cannot duplicate the flame");
+    assertEqual(lights.length, 1, "one sustained warm light replaces the missing consequence");
+    assertEqual(wakes.length, reduced ? 0 : 1, "reduced motion keeps the visible flame without drifting embers");
+    next!();
+    assertEqual(boss, 1, "the original Continue still enters the boss once");
+    destroyCue!();
+    assertEqual(events, ["release-warmth"], "the warm light cannot survive its fire cue's final cleanup");
+  }
+});
+
+await suite("Sky stolen spark: the flame leaves its stand before the held in-hand response", () => {
+  const noop = () => {};
+  const Entry = actualMethod(sky, "startFork1StealFlame");
+  const Chain = actualMethod(sky, "runPassageChain", {
+    playWrenAction: noop, playWrenFocus: noop, playActorAttention: noop,
+    playBodyImpact: noop, PALETTE_HEX: { brass: 0 },
+  });
+  const Take = actualMethod(sky, "takeBeaconSparkVisual");
+  const s = new Entry();
+  const events: string[] = [];
+  let sparkPresent = true;
+  const spark = { destroy() { sparkPresent = false; events.push("take-spark"); } };
+  const cue = {
+    scene: true, active: true,
+    getByName(name: string) { assertEqual(name, "beacon-spark", "only the removable flame is addressed"); return spark; },
+    setActive(value: boolean) { this.active = value; return this; },
+  };
+  let next: (() => void) | undefined;
+  let target: { word: string; onComplete(): void } | undefined;
+  let nextAct = 0;
+  const words: string[] = [];
+  Object.assign(s, {
+    beaconFlameCue: cue,
+    commitFork: (_fork: string, choice: string) => choice,
+    hideEtta: noop, band: { setObjective: noop },
+    readThen(callback: () => void) { assert(!next, "unread story responses are never overwritten"); next = callback; },
+    setNarrator(text: string) {
+      if (text.includes("in your palm")) {
+        assert(!sparkPresent, "the old stand cannot still display the claimed spark");
+        assertEqual(events.slice(-2), ["release-word", "take-spark"], "the completed word releases before removal and the held response");
+        assert(!cue.active, "the claimed flame no longer emits a stand wake");
+      }
+    },
+    runPassageChain: Chain.prototype.runPassageChain,
+    takeBeaconSparkVisual: Take.prototype.takeBeaconSparkVisual,
+    skyOwnedWordPosition: () => ({ x: 1500, y: 650 }),
+    makeSkyForkWord(body: unknown, opts: typeof target) {
+      assertEqual(body, cue, "even the final phrase retains its stable stand anchor"); return opts;
+    },
+    registerActiveTarget(value: typeof target) { target = value; words.push(value!.word); },
+    clearActiveTargets() { events.push("release-word"); },
+    fadeOutForkCue(body: unknown) { assertEqual(body, cue, "the original end-of-chain stand cleanup is preserved"); events.push("depart-stand"); },
+    startAct3() { nextAct += 1; },
+  });
+  const advance = () => { const callback = next; next = undefined; assert(callback, "the response waits for Continue"); callback!(); };
+  s.startFork1StealFlame();
+  assert(sparkPresent && !target, "the spark waits on its stand throughout the introduction");
+  advance();
+  for (const [i, expected] of ["reach for the flame", "the beacon dims slightly", "the spark is yours", "the island notices"].entries()) {
+    assertEqual(target!.word, expected, "every exact authored phrase remains unchanged");
+    assertEqual(sparkPresent, i < 3, "only completing the third phrase takes the spark");
+    target!.onComplete();
+    if (i < 2) assert(sparkPresent, "earlier responses still keep the waiting flame visible");
+    assertEqual(nextAct, 0, "the next act waits for the existing final Continue");
+    advance();
+  }
+  assertEqual(words.length, 4, "no additional typing requirement is introduced");
+  assertEqual(events.filter(value => value === "take-spark").length, 1, "the flame is taken exactly once");
+  assertEqual(nextAct, 1, "final Continue reaches the original boss entry");
+  assertEqual(s.beaconFlameCue, null, "the stand is released by the original end-of-chain cleanup");
+});
+
+await suite("Forge apprentice: distinct actor and portrait share one asset and leave with the first fork", () => {
+  const staged: unknown[] = [];
+  const departed: unknown[] = [];
+  const Scene = actualMethod(forge, "showApprenticeSprite", {
+    FOUNDRY_GROUND_Y: 866, APPRENTICE_SPRITE_HEIGHT: 310,
+    stageAnchoredSprite: (_scene: unknown, body: unknown) => staged.push(body),
+  });
+  const Hide = actualMethod(forge, "hideApprenticeSprite", {
+    fadeOutStagedSprite: (_scene: unknown, body: unknown) => departed.push(body),
+  });
+  const Portrait = actualMethod(forge, "ensureApprenticePortrait");
+  const Speaker = actualMethod(forge, "setBandSpeaker");
+  const s = new Scene();
+  let created = 0;
+  const actor = {
+    scene: true, x: 0, y: 0, height: 1536, scale: 0, flip: false,
+    setOrigin() {}, setScale(value: number) { this.scale = value; },
+    setFlipX(value: boolean) { this.flip = value; }, setDepth() {},
+  };
+  const source = {};
+  const draws: unknown[][] = [];
+  const portraits: string[] = [];
+  let refreshed = 0;
+  let portraitExists = false;
+  Object.assign(s, {
+    add: { image(x: number, y: number, key: string) {
+      assertEqual(key, "forge-apprentice", "the actor uses the distinct apprentice asset");
+      created += 1; actor.x = x; actor.y = y; return actor;
+    } },
+    hideApprenticeSprite: Hide.prototype.hideApprenticeSprite,
+    ensureApprenticePortrait: Portrait.prototype.ensureApprenticePortrait,
+    textures: {
+      exists: () => portraitExists,
+      get(key: string) { assertEqual(key, "forge-apprentice", "the portrait reuses the same identity"); return { getSourceImage: () => source }; },
+      createCanvas(key: string, width: number, height: number) {
+        assertEqual([key, width, height], ["forge-apprentice-portrait", 240, 288], "the HUD gets a portrait-shaped frame");
+        portraitExists = true;
+        return { context: { drawImage: (...args: unknown[]) => draws.push(args) }, refresh() { refreshed += 1; } };
+      },
+    },
+    band: { setPortrait: (key: string) => portraits.push(key) },
+  });
+  s.showApprenticeSprite(); s.showApprenticeSprite();
+  assertEqual(created, 1, "re-entering the committed branch cannot duplicate the actor");
+  assertEqual(staged, [actor], "the normal actor staging helper owns motion and preferences");
+  assertEqual([actor.x, actor.y, actor.scale * actor.height, actor.flip], [1600, 866, 310, true],
+    "the worker faces Wren from the empty right lane and shares the actual foundry boot line");
+  Speaker.prototype.setBandSpeaker.call(s, "Apprentice");
+  Speaker.prototype.setBandSpeaker.call(s, "Apprentice");
+  assertEqual(portraits, ["forge-apprentice-portrait", "forge-apprentice-portrait"], "speech never falls back to a monogram");
+  assertEqual(draws, [[source, 260, 0, 400, 480, 0, 0, 240, 288]], "the one-time runtime crop includes the painted head and shoulders");
+  assertEqual(refreshed, 1, "the shared texture is refreshed once");
+  s.hideApprenticeSprite(); s.hideApprenticeSprite();
+  assertEqual(departed, [actor], "leaving the branch stages one departure and releases ownership");
+  assertEqual(s.apprenticeSprite, undefined, "a later scene cannot retain a stale speaker");
+});
+
+await suite("Forge true-name passage: every authored phrase clears Wren's hood", () => {
+  const noop = () => {};
+  const Scene = actualMethod(forge, "runPassageChain", {
+    PALETTE_HEX: { ember: 0 },
+  });
+  for (const height of [1080, 1000]) {
+    const s = new Scene();
+    const words = ["the forge breathes.", "the brass remembers.", "its makers are remembered."];
+    const targets: Array<{ word: string; y: number; fontSize: number; onComplete(): void }> = [];
+    Object.assign(s, {
+      wrenContainer: { y: 866 }, band: { setObjective: noop },
+      makeWord: (opts: unknown) => opts,
+      registerActiveTarget: (target: typeof targets[number]) => targets.push(target),
+    });
+    // Exercise each authored target through the actual placement branch. An
+    // inert seal avoids effects/anchors while keeping the real target logic.
+    for (const word of words) {
+      s.runPassageChain([word], [""], noop, "none", { x: 960, y: height - 318, scene: false });
+      const target = targets.at(-1)!;
+      assertEqual(target.word, word, "the exact authored name text is unchanged");
+      assert(target.y + target.fontSize <= s.wrenContainer.y - 240 - 24,
+        "the full target height leaves a visible gap above the hood rather than crossing the face");
+      assert(target.y > 400, "lifting the target still leaves the upper story card clear");
+    }
+  }
+});
 
 await suite("Finale instructions: mixed-case counters explain the keys and existing candle stake", () => {
   const Scene = actualMethod(finale, "runDepthWords", { UI_HEX: { ember: 0, brass: 0 } });
@@ -249,7 +449,7 @@ await suite("Forge rewards: the collected keepsake is readable before the next c
       band: { setObjective: (text: string) => { objective = text; } },
       setNarrator: (text: string) => { caption = text; },
       readThen: (fn: () => void) => { next = fn; },
-      hideFornSprite() {}, dismissForgeChoiceCue() {}, clearForgeChoiceCues() {},
+      hideFornSprite() {}, hideApprenticeSprite() {}, dismissForgeChoiceCue() {}, clearForgeChoiceCues() {},
       [followup]: () => { challenges += 1; },
     });
     s[method](choice, item);
@@ -264,6 +464,7 @@ await suite("Forge rewards: the collected keepsake is readable before the next c
 
 await suite("Accepted companions: joining Wren precedes the held response", () => {
   for (const entry of [
+    { source: winter, method: "settleFoxByWren", field: "foxCompanion", offsetX: -124, offsetY: 0, scale: 1, grounded: true },
     { source: forge, method: "perchSongbirdOnWren", field: "songbirdCompanion", offsetX: 52, offsetY: -148, scale: 1, grounded: false },
     { source: sky, method: "settleLanternMothOnWren", field: "lanternMothCompanion", offsetX: 49, offsetY: -58, scale: 36 / 104, grounded: false },
     { source: wood, method: "settleWispCatByWren", field: "wispCatCompanion", offsetX: 136, offsetY: 0, scale: 1, grounded: true },
@@ -307,6 +508,88 @@ await suite("Accepted companions: joining Wren precedes the held response", () =
       flight!.onComplete();
     }
     assertEqual(landed, 1, "the landing presents the held response once");
+  }
+});
+
+await suite("Snow-fox answer: landing precedes acceptance reading and refusal stays unchanged", () => {
+  for (const accepted of [true, false]) {
+    const Scene = actualMethod(winter, "showCompanionAnswer");
+    const s = new Scene();
+    const save = { realms: { "winter-mountain": { choices: {} as Record<string, string> } }, satchel: [] as string[] };
+    let checkpoint: { accepted: boolean } | undefined;
+    let landed: (() => void) | undefined;
+    let reading: (() => void) | undefined;
+    let caption = "";
+    let cue = "";
+    let shown = 0;
+    let dismissed = 0;
+    let naming = 0;
+    Object.assign(s, {
+      store: { update: (fn: (state: typeof save) => void) => fn(save) },
+      checkpoint: (_step: string, data: typeof checkpoint) => { checkpoint = data; },
+      narration: { say: (key: string) => { cue = key; } },
+      band: { setObjective() {} }, setNarrator: (text: string) => { caption = text; },
+      showFoxCompanion: () => { shown += 1; },
+      settleFoxByWren: (next: () => void) => { landed = next; },
+      dismissFoxCompanion: (x: number, y: number) => { assertEqual(x, 620, "refusal keeps its original departure x"); assertEqual(y, 820, "refusal keeps its original departure y"); dismissed += 1; },
+      readThen: (next: () => void) => { reading = next; },
+      startTrueNamePassage: () => { naming += 1; },
+    });
+    s.showCompanionAnswer(accepted);
+    assertEqual(save.realms["winter-mountain"].choices.companion, accepted ? "accepted" : "declined", "the actual answer persists the original decision");
+    assertEqual(save.satchel.includes("snow-fox-cub"), accepted, "only acceptance grants the cub");
+    assertEqual(checkpoint!.accepted, accepted, "reload preserves the chosen answer");
+    if (accepted) {
+      assertEqual(shown, 1, "acceptance restores the real companion before moving it");
+      assert(!reading, "Continue cannot skip the companion's approach");
+      assert(caption.includes("comes closer"), "the approach caption does not claim the fox has landed");
+      landed!();
+      assert(caption.includes("beside your boots"), "the held response agrees with the seated art and floor position");
+      assertEqual(dismissed, 0, "acceptance never dismisses the fox");
+    } else {
+      assertEqual(cue, "winter_fox_companion_no", "refusal retains its existing narrated response");
+      assertEqual(dismissed, 1, "refusal still sends the fox away");
+      assert(!landed && shown === 0, "refusal never stages an accepted companion");
+    }
+    assertEqual(naming, 0, "the name passage waits for Continue");
+    reading!();
+    assertEqual(naming, 1, "Continue enters the original name passage once");
+  }
+});
+
+await suite("Wounded fox answer: an ignored fox is gone before the held departure caption", () => {
+  for (const spared of [true, false]) {
+    const Scene = actualMethod(winter, "showFoxAnswer", { WINTER_WREN_STAGE_Y: 842 });
+    const s = new Scene();
+    const fox = { visible: true, setVisible(value: boolean) { this.visible = value; return this; } };
+    let reading: (() => void) | undefined;
+    let shown = 0;
+    let dismissed = 0;
+    let waves = 0;
+    Object.assign(s, {
+      foxSpared: spared, foxDecided: false, foxCompanion: fox,
+      checkpoint() {}, band: { setObjective() {} },
+      showFoxCompanion: () => { shown += 1; },
+      narration: { say: (key: string) => {
+        assertEqual(key, spared ? "winter_fox_spared_ear" : "winter_fox_dismissed", "the original answer cue is preserved");
+        assertEqual(fox.visible, spared, "the fox visibility already agrees when the held caption appears");
+      } },
+      readThen: (next: () => void) => { reading = next; },
+      dismissFoxCompanion: (x: number, y: number) => {
+        assert(!fox.visible, "Continue hides the fox before starting its original departure");
+        assertEqual(x, spared ? 1640 : 460, "the original departure direction is preserved");
+        assertEqual(y, 842, "the original departure floor is preserved");
+        dismissed += 1;
+      },
+      startWave: (index: number) => { assertEqual(index, 1, "Continue preserves the next wave"); waves += 1; },
+    });
+    s.showFoxAnswer(1);
+    assertEqual(shown, spared ? 1 : 0, "only the spared fox is restored for its response");
+    assert(s.foxDecided && reading, "the answer remains decided and waits for Continue");
+    assertEqual(waves, 0, "the next wave cannot overwrite the held answer");
+    reading!();
+    assertEqual(dismissed, 1, "the original departure still runs once");
+    assertEqual(waves, 1, "the original next wave still starts once");
   }
 });
 

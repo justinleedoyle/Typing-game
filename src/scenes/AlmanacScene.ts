@@ -888,7 +888,7 @@ export class AlmanacScene extends Phaser.Scene {
     const icon = iconFor(id);
     if (icon && this.textures.exists(icon.key)) {
       const img = this.add.image(x + 17, y + 14, icon.key).setOrigin(0.5, 0.5);
-      img.setScale(34 / Math.max(1, img.height));
+      img.setScale(34 / Math.max(1, img.width, img.height));
       this.pageTexts.push(img);
       this.stagePageObject(img, this.nextPageWakeDelay(), { offsetY: 5 });
       this.addPageText(x + 46, y, name, { fontSize: "26px", color: PAGE_INK });

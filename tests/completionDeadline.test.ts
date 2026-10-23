@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { TypingInputController, type WordTarget } from "../src/game/typingInput";
 import { assert, assertEqual, suite } from "./_assert";
 
 // Exercise the actual renderer-coupled methods with inert bodies/tweens. The
@@ -148,4 +149,240 @@ await suite("finale moth: a delayed round bonus cannot overwrite a later round o
     assertEqual(objectives.length - objectiveCount, state === "live" ? 1 : 0,
       `${state}: stale timer cannot replace the current objective`);
   }
+});
+
+await suite("completion deadline: finale facets honor the final matched letter before the exit animation", () => {
+  const Finale = methods("../src/scenes/GreatBattleScene.ts", ["runFacetChallenge"], {
+    FACET_CHALLENGE_MS: 6000, reducedMotion: () => true,
+    playDamageThud() {}, flashDamageVignette() {}, playChime() {},
+  });
+  for (const finishAt of [5900, 5999, null]) {
+    let now = 0;
+    let lostCandles = 0;
+    let advances = 0;
+    let held = 0;
+    let completed = false;
+    let completion!: () => void;
+    const timers: Array<{ at: number; removed: boolean; run: () => void }> = [];
+    const battle = new Finale();
+    Object.assign(battle, {
+      runOver: false, facetSigil: null,
+      setNarrator() {}, band: { setObjective() {} }, narration: { say() {} },
+      facetDefenseWordPosition: () => ({ x: 0, y: 0 }),
+      clearTargetAnchor() {}, clearActiveTargets() {}, clearFacetSigil() {},
+      registerActiveTarget() {},
+      playFacetImpact(_facet: unknown, outcome: string) { if (outcome === "held") held += 1; },
+      loseCandle() { lostCandles += 1; },
+      time: { delayedCall(ms: number, run: () => void) {
+        const timer = { at: now + ms, removed: false, run,
+          remove() { this.removed = true; } };
+        timers.push(timer);
+        return timer;
+      } },
+      makeWord(opts: { onComplete: () => void }) {
+        completion = opts.onComplete;
+        return { isComplete: () => completed };
+      },
+    });
+    battle.runFacetChallenge({ name: "the Cold", defenseWord: "endure" }, () => { advances += 1; });
+    if (finishAt !== null) {
+      now = finishAt;
+      completed = true;
+      timers.push({ at: now + 320, removed: false, run: completion });
+    }
+    while (timers.length) {
+      timers.sort((a, b) => a.at - b.at);
+      const timer = timers.shift()!;
+      now = timer.at;
+      if (!timer.removed) timer.run();
+    }
+    completion(); // A stale animation callback cannot resolve it again.
+    assertEqual(lostCandles, finishAt === null ? 1 : 0,
+      `${finishAt}: only an unfinished answer costs a candle`);
+    assertEqual(held, finishAt === null ? 0 : 1,
+      `${finishAt}: a logically completed answer receives its held cue once`);
+    assertEqual(advances, 1, `${finishAt}: the facet advances exactly once`);
+  }
+});
+
+await suite("finale duel: the second word round clears the resolved whirlwind instruction", () => {
+  const Finale = methods("../src/scenes/GreatBattleScene.ts", ["startPhase2bRound2"], {
+    BATTLE_WORD_BANK: ["light", "voice", "break", "last", "hold", "still"],
+    pickAdaptiveWords: (words: string[], count: number) => words.slice(0, count),
+  });
+  const events: string[] = [];
+  const battle = new Finale();
+  Object.assign(battle, {
+    phase2Round1Words: ["light", "voice", "break"],
+    narration: { clear: () => events.push("clear") },
+    band: { setObjective: (text: string) => events.push(text) },
+    store: { get: () => ({ keyStats: {} }) },
+    lordDuelWordPosition: () => ({ x: 0, y: 0 }),
+    makeLordWord: (opts: { word: string }) => { events.push(opts.word); return opts; },
+    registerActiveTarget() {},
+  });
+  battle.startPhase2bRound2();
+  assertEqual(events, ["clear", "Clear the last three duel words.", "last", "hold", "still"],
+    "stale defense prose clears before the new task and three real word targets");
+});
+
+await suite("finale duel: facet narration cannot survive the Bell's Tongue and Tether opening", () => {
+  const Finale = methods("../src/scenes/GreatBattleScene.ts", ["startPhase2a", "startPhase2b"], {
+    reducedFlashes: () => true, playChime() {},
+  });
+  let caption: string | null = "You already know this grief by name.";
+  const events: string[] = [];
+  const timers: Array<() => void> = [];
+  let bindTarget!: { word: string; onComplete: () => void };
+  const battle = new Finale();
+  Object.assign(battle, {
+    bellsTongueSuperHitAvailable: true, tetherCordBindUsed: false,
+    quietLordContainer: { alpha: 1 },
+    store: { get: () => ({ satchel: ["bells-tongue", "tether-cord"] }) },
+    narration: {
+      clear() { caption = null; events.push("clear-caption"); },
+      say(id: string) { caption = id; events.push(id); },
+    },
+    band: { setObjective() {} },
+    showRelicNotice(id: string) {
+      assertEqual(caption, null, `${id}: old facet prose has left before the new relic notice`);
+      events.push(id);
+    },
+    time: { delayedCall(_ms: number, run: () => void) { timers.push(run); } },
+    tweens: { add(opts: { onComplete: () => void }) { opts.onComplete(); } },
+    playBellsTongueStrikeCue() {}, playTetherCordBindCue() {}, clearActiveTargets() {},
+    lordDuelWordPosition: () => ({ x: 0, y: 0 }),
+    makeLordWord(opts: typeof bindTarget) { bindTarget = opts; return opts; },
+    registerActiveTarget(word: typeof bindTarget) {
+      assertEqual(caption, null, "bound is readable without the prior Grief card");
+      events.push(word.word);
+    },
+    runPhase2bRounds() { events.push("round-one"); },
+  });
+  battle.startPhase2a();
+  assertEqual(battle.bellsTongueSuperHitAvailable, false, "Bell's Tongue still consumes its one-shot");
+  assertEqual(timers.length, 1, "the authored Bell's Tongue delay is retained");
+  timers.shift()!();
+  assertEqual(events, ["clear-caption", "finale_relic_bells_tongue", "clear-caption", "finale_relic_tether_cord", "bound"],
+    "actual Bell strike transitions to exactly one cleared Tether prompt");
+  assertEqual(battle.tetherCordBindUsed, true, "the Tether one-shot is committed normally");
+  bindTarget.onComplete();
+  assertEqual(caption, "finale_phase2_breaks_free", "new authored response still appears after bound");
+  timers.shift()!();
+  assertEqual(events.at(-1), "round-one", "the normal duel resumes after the original response delay");
+});
+
+await suite("finale duel: caption cleanup preserves fresh counter prose and both non-Tether routes", () => {
+  const Finale = methods("../src/scenes/GreatBattleScene.ts", ["startPhase2a", "startPhase2b"]);
+  for (const wrench of [false, true]) {
+    let caption: string | null = "old facet";
+    let words: string[] = [];
+    let rounds = 0;
+    const battle = new Finale();
+    Object.assign(battle, {
+      bellsTongueSuperHitAvailable: false,
+      store: { get: () => ({ satchel: wrench ? ["sabotage-wrench"] : [] }) },
+      narration: { clear() { caption = null; }, say(id: string) { caption = id; } },
+      band: { setObjective() {} }, showRelicNotice() {}, clearActiveTargets() {},
+      runSequentialWords(sequence: string[], _index: number, done: () => void) {
+        words = sequence;
+        assertEqual(caption, wrench ? null : "finale_phase2_unmake",
+          "base counter prose is fresh; Wrench assistance does not inherit a facet card");
+        done();
+      },
+      runPhase2bRounds() { rounds += 1; assertEqual(caption, null, "new duel starts after counter prose clears"); },
+    });
+    battle.startPhase2a();
+    assertEqual(words, wrench ? ["unmake", "unsay"] : ["unmake", "unsay", "unfound"],
+      "caption cleanup does not alter the earned counter-word sequence");
+    assertEqual(rounds, 1, "both no-Tether loadouts reach their normal duel exactly once");
+  }
+});
+
+await suite("finale final phrase: the low stepping word clears Wren's cloak", () => {
+  const Finale = methods("../src/scenes/GreatBattleScene.ts", ["finalPhraseWordPosition"]);
+  for (const width of [1920, 2450]) {
+    const battle = new Finale();
+    Object.assign(battle, { scale: { width }, againText: { x: width / 2 + 120, y: 430 } });
+    const wrenX = width / 2 - 320;
+    for (const index of [0, 3, 6, 9]) {
+      const position = battle.finalPhraseWordPosition(index);
+      // At44px the observed silence label spans roughly150px. Allow220px
+      // for a longer native word and still leave room beyond the cloak edge.
+      assert(position.x - 110 > wrenX + 65, "even a long low-path label has visible cloak clearance");
+      assertEqual(position.y, 730, "the grounded stepping point keeps its authored height");
+    }
+    const second = battle.finalPhraseWordPosition(1);
+    const third = battle.finalPhraseWordPosition(2);
+    assert(second.x < third.x && second.y > third.y, "the upper stepping path still rises toward Again");
+  }
+});
+
+await suite("Sky expiry: actual last scroll misses hand fresh input to the library fork", () => {
+  const Scroll = methods("../src/game/scrollingPhrase.ts", ["handleMiss", "dropTarget"], {
+    PALETTE: {},
+  });
+  const Sky = methods("../src/scenes/SkyIslandScene.ts", [
+    "onPhraseResolved", "onTempleCleared", "startFork1",
+  ], { playWrenHurt() {}, reducedMotion: () => true,
+    TEMPLE_PHRASE_CONFIGS: Array.from({ length: 5 }, () => ({})) });
+  const input = new TypingInputController();
+  const callbacks: Array<() => void> = [];
+  const choices: WordTarget[] = [];
+  let selected = 0;
+  let misses = 0;
+  const state = { almanacLore: [] as string[] };
+  const sky = new Sky();
+  const phraseTarget = (word: string, onDone: () => void = () => {}) => {
+    let cursor = 0;
+    return {
+      remaining: () => word.slice(cursor), isComplete: () => cursor === word.length,
+      advance: () => { cursor += 1; }, miss() {}, onClaim() {},
+      onRelease: () => { cursor = 0; }, onComplete: onDone,
+      setDimmed() {}, destroy() {},
+    };
+  };
+  const makeChoice = (opts: { word: string; onComplete: () => void }) =>
+    phraseTarget(opts.word, opts.onComplete);
+  Object.assign(sky, {
+    templeIndex: 4, templePhrasesRemaining: 2, activePhrases: [],
+    typingInput: input, wrenSprite: {}, fork1Choice: null,
+    narration: { say() {} }, band: { setObjective() {} },
+    store: { update: (mutate: (s: typeof state) => void) => mutate(state) },
+    time: { delayedCall: (_ms: number, run: () => void) => callbacks.push(run) },
+    setTempleBeamsActive() {}, showFork1Cues() {},
+    skyOwnedWordPosition: () => ({ x: 0, y: 0 }),
+    makeEttaWord: makeChoice,
+    makeSkyForkWord: (_body: unknown, opts: Parameters<typeof makeChoice>[0]) => makeChoice(opts),
+    registerActiveTarget(...targets: WordTarget[]) {
+      choices.push(...targets);
+      targets.forEach((target) => input.register(target));
+    },
+    clearActiveTargets() { choices.forEach((target) => input.unregister(target)); },
+    startFork1StealFlame() { selected += 1; }, startFork1HelpEtta() {},
+  });
+  const banners = ["the lantern remembers", "the beacon waits"].map((word) => {
+    const target = phraseTarget(word);
+    input.register(target);
+    const scroll = new Scroll();
+    Object.assign(scroll, {
+      target, resolved: false, container: body(), clearWordAttachTimer() {},
+      opts: { scene: scene(), typingInput: input,
+        onMiss() { misses += 1; sky.onPhraseResolved(false); } },
+    });
+    return scroll;
+  });
+  input.handleChar("t"); input.handleChar("h");
+  banners[0].handleMiss();
+  assertEqual(input.getTypingBuffer(), "th", "first expiry preserves the second live scroll's prefix");
+  banners[1].handleMiss();
+  banners[1].handleMiss();
+  assertEqual([misses, sky.templePhrasesRemaining], [2, 0], "both real scroll misses resolve once");
+  assert(!input.hasPendingInput(), "last miss releases orphaned prefix before scheduled fork");
+  assertEqual(callbacks.length, 1, "actual final temple schedules exactly one fork");
+  callbacks.shift()!();
+  assertEqual(choices.length, 2, "actual fork registers both help and steal choices");
+  for (const char of "steal the flame") assert(input.handleChar(char), `fresh fork consumes ${char}`);
+  assertEqual([selected, sky.fork1Choice], [1, "steal-flame"], "the first full choice works without an Escape repair");
+  assert(state.almanacLore.includes("the-five-temple-riddles"), "actual final-temple record remains intact");
 });

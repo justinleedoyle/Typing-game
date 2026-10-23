@@ -121,6 +121,16 @@ export class TypingInputController {
     const i = this.targets.indexOf(target);
     if (i >= 0) this.targets.splice(i, 1);
     if (this.claimed === target) this.releaseClaim();
+    // Moving targets can expire before a shared prefix identifies one of
+    // them. Once its last candidate leaves, that prefix has no owner and
+    // must not swallow the first input at the next encounter or story choice.
+    if (!this.claimed && this.typingBuffer.length > 0) {
+      if (this.findCandidates(this.typingBuffer, this.rawTypingBuffer).length === 0) {
+        this.typingBuffer = "";
+        this.rawTypingBuffer = "";
+      }
+      this.refreshCandidateDisplay();
+    }
   }
 
   /** Drop every registered target. Call on scene shutdown. */

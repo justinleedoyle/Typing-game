@@ -621,7 +621,11 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private revisitMemoryWordPosition(idx: number, total: number): { x: number; y: number } {
     const cue = this.revisitMemoryCuePosition(idx, total);
-    return { x: cue.x, y: cue.y - 110 };
+    // Long middle answers such as "remembered" must clear Wren's hood.
+    const y = Math.abs(cue.x - this.wrenContainer.x) < 160
+      ? Math.min(cue.y - 110, this.wrenContainer.y - 280)
+      : cue.y - 110;
+    return { x: cue.x, y };
   }
 
   private attachRevisitMemoryWordAnchor(target: TextWordTarget): void {
@@ -1622,8 +1626,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     if (this.fork2Choice !== "force") { this.startFork2Bargain(); return; }
     this.store.update(s => { if (!s.satchel.includes("ash-vial")) s.satchel.push("ash-vial"); });
     this.attendGhostKing();
-    this.fadeOutForkCue(this.groveLightCue);
-    this.groveLightCue = null;
+    this.igniteGroveLightCue();
     this.setNarrator("The grove flares. You gather a vial of ash as the Ghost-King turns toward the fire.");
     this.band.setObjective("Ash Vial collected. Press Enter or Space to face what the fire wakes.");
     this.readThen(() => this.startBossFight());
@@ -1792,6 +1795,8 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private onFinalPassageComplete(): void {
     this.clearActiveTargets();
+    this.fadeOutForkCue(this.groveLightCue, { durationMs: 800 });
+    this.groveLightCue = null;
     this.band.setObjective("The wood's name is sealed. Read its final memory.");
     const ghostKing = this.ghostKingBody;
     const fragmentX = ghostKing?.scene ? ghostKing.x : this.scale.width / 2;
@@ -2851,6 +2856,45 @@ export class HauntedWoodScene extends Phaser.Scene {
       },
     });
     return c;
+  }
+
+  /** Keep the chosen fire visible while the king answers what it has woken. */
+  private igniteGroveLightCue(): void {
+    const cue = this.groveLightCue ?? this.createGroveLightCue();
+    this.groveLightCue = cue;
+    if (cue.getData("grove-ignited")) return;
+    cue.setData("grove-ignited", true);
+    this.tweens.killTweensOf(cue);
+    cue.setAlpha(1).setScale(1);
+
+    const fire = this.add.graphics();
+    fire.fillStyle(0xc45125, 0.8);
+    fire.fillTriangle(-48, -48, -25, -152, 10, -46);
+    fire.fillTriangle(-12, -46, 8, -186, 45, -48);
+    fire.fillTriangle(24, -48, 53, -142, 68, -44);
+    fire.fillStyle(0xf4b95f, 0.92);
+    fire.fillTriangle(-23, -46, -13, -120, 13, -46);
+    fire.fillTriangle(7, -45, 16, -142, 36, -45);
+    fire.fillStyle(0xffe5a1, 0.84);
+    fire.fillEllipse(12, -58, 22, 36);
+    cue.add(fire);
+
+    const warmth = addLivingLight(this, {
+      x: cue.x, y: cue.y - 64, width: 820, height: 420,
+      color: 0xe77d32, alpha: 0.44, depth: -2,
+      durationMs: 1900, scale: 1.04,
+    });
+    cue.once(Phaser.GameObjects.Events.DESTROY, () => {
+      if (warmth.scene) warmth.destroy();
+    });
+    if (!reducedMotion(this)) {
+      addContainerWake(this, cue, {
+        kind: "ember", color: 0xf2a04b, intervalMs: 230,
+        offsetY: -108, spreadX: 42, spreadY: 24,
+        alpha: 0.32, size: 3.5, depth: 41, driftY: -70,
+        durationMs: 1100,
+      });
+    }
   }
 
   private fadeOutForkCue(

@@ -814,7 +814,11 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private revisitMemoryWordPosition(idx: number, total: number): { x: number; y: number } {
     const cue = this.revisitMemoryCuePosition(idx, total);
-    return { x: cue.x, y: cue.y - 112 };
+    // The middle memory rests under Wren; keep its answer above the hood.
+    const y = Math.abs(cue.x - this.wrenContainer.x) < 160
+      ? Math.min(cue.y - 112, this.wrenContainer.y - 280)
+      : cue.y - 112;
+    return { x: cue.x, y };
   }
 
   private attachRevisitMemoryWordAnchor(target: TextWordTarget): void {
@@ -2386,6 +2390,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.foxDecided = true;
     this.checkpoint("fox-answer");
     if (this.foxSpared) this.showFoxCompanion();
+    else this.foxCompanion?.setVisible(false);
     this.narration.say(this.foxSpared ? "winter_fox_spared_ear" : "winter_fox_dismissed");
     this.band.setObjective(this.foxSpared ? "The fox remembers your patience." : "You leave the fox behind.");
     this.readThen(() => {
@@ -2437,7 +2442,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.clearActiveTargets();
     this.dismissFireflyCue();
     this.narration.say("winter_huntress_intro");
-    this.band.setObjective("Type the passage words to free the huntress.");
+    this.band.setObjective("Help the huntress · Type the visible phrase; Enter / Space continues each response.");
     this.fadeInHuntress();
     this.store.update((s) => {
       if (!s.almanacLore.includes("the-huntress-song")) {
@@ -3026,10 +3031,42 @@ export class WinterMountainScene extends Phaser.Scene {
       if (accepted && !s.satchel.includes("snow-fox-cub")) s.satchel.push("snow-fox-cub");
     });
     this.checkpoint("companion-answer", { accepted });
-    this.narration.say(accepted ? "winter_fox_companion_yes" : "winter_fox_companion_no");
-    this.band.setObjective(accepted ? "The snow-fox joins you; the true name waits." : "The snow-fox stays behind; the true name waits.");
-    if (accepted) this.showFoxCompanion(); else this.dismissFoxCompanion(620, 820);
+    if (accepted) {
+      this.showFoxCompanion();
+      this.setNarrator("At your whisper, the snow-fox comes closer.");
+      this.band.setObjective("The snow-fox comes closer.");
+      this.settleFoxByWren(() => {
+        this.setNarrator("She settles beside your boots. She is coming with you.");
+        this.band.setObjective("The snow-fox joins you; the true name waits.");
+        this.readThen(() => this.startTrueNamePassage());
+      });
+      return;
+    }
+    this.narration.say("winter_fox_companion_no");
+    this.band.setObjective("The snow-fox stays behind; the true name waits.");
+    this.dismissFoxCompanion(620, 820);
     this.readThen(() => this.startTrueNamePassage());
+  }
+
+  private settleFoxByWren(onSettled: () => void): void {
+    const fox = this.foxCompanion;
+    if (!fox?.scene) { onSettled(); return; }
+    this.tweens.killTweensOf(fox);
+    fox.setScale(1);
+    const beside = { x: this.wrenContainer.x - 124, y: this.wrenContainer.y };
+    if (reducedMotion(this)) {
+      fox.setPosition(beside.x, beside.y).setAlpha(1);
+      onSettled();
+      return;
+    }
+    this.tweens.add({
+      targets: fox,
+      ...beside,
+      alpha: 1,
+      duration: 640,
+      ease: "Sine.easeInOut",
+      onComplete: onSettled,
+    });
   }
 
   private showFoxCompanion(
@@ -3211,7 +3248,8 @@ export class WinterMountainScene extends Phaser.Scene {
     const long = opts.long ?? word.length > 16;
     const side =
       opts.side === "left" ? -1 : opts.side === "right" ? 1
-        : body === this.cairnCue ? -1 : body.x < width / 2 ? 1 : -1;
+        : body === this.cairnCue ? -1 : body === this.peltCue ? 1
+          : body.x < width / 2 ? 1 : -1;
     const lateral = long ? 220 : 180;
     const xInset = long ? 420 : 300;
     const lift = long ? 116 : 102;

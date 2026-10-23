@@ -578,7 +578,7 @@ export class SkyIslandScene extends Phaser.Scene {
       narratorLine = "The island is higher now. You can barely see the lanterns from here.";
       words = ["the", "sky", "is", "wide", "and", "open"];
     } else if (choices["fork2"] === "answer-kindly") {
-      narratorLine = "The wind still circles where the island was. It hasn't found a new question.";
+      narratorLine = "The wind still circles the lit summit. It hasn't found a new question.";
       words = ["the", "lanterns", "hold", "the", "dark"];
     } else {
       narratorLine = "The lanterns are still burning. Someone is keeping them.";
@@ -2296,7 +2296,12 @@ export class SkyIslandScene extends Phaser.Scene {
           this.beaconFlameCue = null;
           this.startAct3();
         },
-        { body: this.beaconFlameCue, sourceOffsetY: -76, side: "right" },
+        {
+          body: this.beaconFlameCue, sourceOffsetY: -76, side: "right",
+          onPhraseComplete: (index) => {
+            if (index === 2) this.takeBeaconSparkVisual();
+          },
+        },
       );
     });
   }
@@ -3340,6 +3345,7 @@ export class SkyIslandScene extends Phaser.Scene {
       body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined;
       sourceOffsetY?: number;
       side?: "left" | "right";
+      onPhraseComplete?: (index: number) => void;
     },
   ): void {
     let step = 0;
@@ -3379,6 +3385,7 @@ export class SkyIslandScene extends Phaser.Scene {
           });
           step += 1;
           this.clearActiveTargets();
+          owner?.onPhraseComplete?.(step - 1);
           const line = narratorLines[step - 1] ?? "";
           if (line) {
             this.setNarrator(line);
@@ -3983,14 +3990,16 @@ export class SkyIslandScene extends Phaser.Scene {
     g.fillRoundedRect(-44, -38, 88, 46, 12);
     g.lineStyle(2, PALETTE_HEX.brass, 0.42);
     g.strokeRoundedRect(-44, -38, 88, 46, 12);
-    g.fillStyle(PALETTE_HEX.brass, 0.78);
-    g.fillTriangle(0, -126, -24, -62, 22, -62);
-    g.fillStyle(0xfff0a8, 0.58);
-    g.fillTriangle(4, -110, -12, -68, 18, -68);
-    g.lineStyle(2, 0xffd989, 0.38);
-    g.strokeEllipse(0, -78, 86, 54);
-    g.strokeEllipse(0, -78, 118, 76);
     c.add(g);
+    const flame = this.add.graphics().setName("beacon-spark");
+    flame.fillStyle(PALETTE_HEX.brass, 0.78);
+    flame.fillTriangle(0, -126, -24, -62, 22, -62);
+    flame.fillStyle(0xfff0a8, 0.58);
+    flame.fillTriangle(4, -110, -12, -68, 18, -68);
+    flame.lineStyle(2, 0xffd989, 0.38);
+    flame.strokeEllipse(0, -78, 86, 54);
+    flame.strokeEllipse(0, -78, 118, 76);
+    c.add(flame);
     addContainerWake(this, c, {
       kind: "mote",
       intervalMs: 430,
@@ -4015,6 +4024,15 @@ export class SkyIslandScene extends Phaser.Scene {
       },
     });
     return c;
+  }
+
+  private takeBeaconSparkVisual(): void {
+    const cue = this.beaconFlameCue;
+    if (!cue?.scene) return;
+    // The stand remains as the last passage's stable anchor, but the spark
+    // must leave it before the held in-hand response. Inactive stops its wake.
+    cue.getByName("beacon-spark")?.destroy();
+    cue.setActive(false);
   }
 
   private createKindAnswerCue(): Phaser.GameObjects.Container {

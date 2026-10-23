@@ -128,10 +128,63 @@ for (const word of ["carry the stones", "let him rest here"]) {
   assert(position.x - generousHalfWidth > 180, "the full cairn passage remains on screen");
   assert(position.y >= 280 && position.y <= 670, "passage remains in the existing reading lane");
 }
+const pelt = { scene: true, x: 1270, y: 790 };
+winter.peltCue = pelt;
+for (const y of [808, 790]) for (const word of ["claim the pelt", "carry it home"]) {
+  pelt.y = y;
+  const position = winter.winterPassageWordPosition(pelt, -38, word);
+  const generousHalfWidth = word.length * 18 / 2;
+  assert(position.x - generousHalfWidth > 1040, "the whole pelt passage clears Wren's hood throughout the prop entrance");
+  assert(position.x + generousHalfWidth < 1740, "the pelt passage remains inside the clear right reading lane");
+  assert(position.y >= 280 && position.y <= 670, "the pelt passage keeps the established reading height");
+}
 const lantern = { scene: true, x: 1330, y: 790 };
 assert.deepEqual(winter.winterPassageWordPosition(lantern, -34, "take the lantern"),
   { x: 1150, y: 654 }, "the firefly/lantern passage keeps its existing placement");
-console.log("chapterFlow: actual cairn passage layout stays clear of Wren");
+console.log("chapterFlow: actual cairn and pelt passage layouts stay clear of Wren");
+
+// These are the real revisit methods, exercised against the photographed actor
+// bounds. In particular Winter's middle "one" and Wood's "remembered" crossed
+// the hood despite the ground memory marker being correctly placed.
+for (const [sceneName, feetY, passages] of [
+  ["WinterMountainScene", 842, [
+    ["the", "old", "one", "rests", "now"],
+    ["the", "snow", "keeps", "the", "quiet"],
+  ]],
+  ["HauntedWoodScene", 826, [
+    ["the", "remembered", "rest", "now"],
+    ["we", "are", "not", "forgotten"],
+  ]],
+] as const) {
+  const path = new URL(`../src/scenes/${sceneName}.ts`, import.meta.url);
+  const source = ts.createSourceFile(path.pathname, readFileSync(path, "utf8"),
+    ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const sceneClass = source.statements.find(ts.isClassDeclaration)!;
+  const methods = ["revisitMemoryCuePosition", "revisitMemoryWordPosition"].map((name) =>
+    sceneClass.members.find((member) => member.name?.getText(source) === name)!.getText(source));
+  const code = ts.transpileModule(`class Harness { ${methods.join("\n")} }`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const Layout = new Function(`${code}; return Harness;`)();
+  const layout = new Layout();
+  layout.scale = { width: 1920, height: 1080 };
+  layout.wrenContainer = { x: 960, y: feetY };
+  for (const words of passages) words.forEach((word, index) => {
+    const cue = layout.revisitMemoryCuePosition(index, words.length);
+    const answer = layout.revisitMemoryWordPosition(index, words.length);
+    const halfWidth = word.length * 13;
+    const overlapsActorX = answer.x + halfWidth > 895 && answer.x - halfWidth < 1025;
+    if (overlapsActorX) assert(answer.y + 28 < feetY - 240,
+      `${sceneName} memory ${word} must fit wholly above Wren's hood`);
+    assert(answer.x - halfWidth > 180 && answer.x + halfWidth < 1740,
+      `${sceneName} memory ${word} stays on screen`);
+    assert(answer.y - 28 > 360, `${sceneName} memory ${word} clears the reading caption`);
+    assert.equal(answer.x, cue.x, "the answer still points to its actual ground memory");
+    if (Math.abs(cue.x - 960) >= 160) assert(answer.y >= 630,
+      "outer memories retain their established trail reading lane");
+  });
+}
+console.log("chapterFlow: actual Winter and Wood revisit answers clear Wren and the caption");
 
 // Run the offering entry and passage chain, rather than duplicating its chosen
 // side in the test. Removing that choice recreates the photographed hood overlap.

@@ -80,6 +80,8 @@ import olinSprite from "../../art/bell/olin.png";
 import aurlandSprite from "../../art/bell/aurland.png";
 import tridentTokenSprite from "../../art/relics/trident-token.png";
 import glassFishSprite from "../../art/companions/glass-fish.png";
+import naveDoorway from "../../art/bell/nave-doorway.png";
+import naveDoorLeaves from "../../art/bell/nave-door-leaves.png";
 import snowFoxSprite from "../../art/companions/snow-fox.png";
 
 // Danger ramps in over the LAST 60% of a ghost's advance — earlier portion
@@ -111,6 +113,15 @@ interface DescentLantern {
 const GHOST_KNOCKBACK_PAUSE_MS = 2000;
 const WREN_X = 960;
 const WREN_Y = 820;
+// The nave plate owns one architectural opening, in the painting's coordinates.
+// The leaf outline excludes the generated exterior aura; only solid metal is
+// drawn into the recess. Coordinates belong to the accepted1024×1536 asset.
+const NAVE_DOOR = {
+  centerX: 1118, thresholdY: 802, width: 375, height: 595,
+  wrenX: 600, wrenY: 842, wordY: 500, chantWordX: 520, forceWordX: 1510,
+  leafClip: { left: 116, seam: 512, right: 908, top: 55, bottom: 1460,
+    curve: [[512, 55], [340, 180], [220, 300], [116, 450]] },
+} as const;
 
 // Painted-sprite display heights (px). The choir ghosts started at the old
 // procedural blob height, but the living-scene pass needs the painted body to
@@ -174,6 +185,9 @@ export class SunkenBellScene extends Phaser.Scene {
   private glassFishCompanion: Phaser.GameObjects.Container | null = null;
   private doorChantCue: Phaser.GameObjects.Container | null = null;
   private doorForceCue: Phaser.GameObjects.Container | null = null;
+  private doorwayStage: Phaser.GameObjects.Container | null = null;
+  private doorwayPassagePending = false;
+  private doorwayPassageToken = 0;
   private aurlandFateCue: Phaser.GameObjects.Container | null = null;
   private bellTongueCue: Phaser.GameObjects.Container | null = null;
 
@@ -266,6 +280,9 @@ export class SunkenBellScene extends Phaser.Scene {
     this.glassFishCompanion = null;
     this.doorChantCue = null;
     this.doorForceCue = null;
+    this.doorwayStage = null;
+    this.doorwayPassagePending = false;
+    this.doorwayPassageToken += 1;
     this.aurlandFateCue = null;
     this.aurlandImage = undefined;
     this.aurlandToken = undefined;
@@ -277,6 +294,8 @@ export class SunkenBellScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image("sunken-bell-backdrop", sunkenBellBackdrop);
+    this.load.image("bell-nave-doorway", naveDoorway);
+    this.load.image("bell-nave-door-leaves", naveDoorLeaves);
     this.load.image("bell-ghost", bellGhostSprite);
     this.load.image("bell-warden", bellWardenSprite);
     this.load.image("olin", olinSprite);
@@ -1139,7 +1158,7 @@ export class SunkenBellScene extends Phaser.Scene {
     if (event.ctrlKey || event.metaKey) return;
     if (this.chapterMenu?.handleKey(event)) return;
     if (this.reading.handleKey(event)) return;
-    if (this.aurlandBindingPending) {
+    if (this.aurlandBindingPending || this.doorwayPassagePending) {
       event.preventDefault();
       return;
     }
@@ -2173,7 +2192,9 @@ export class SunkenBellScene extends Phaser.Scene {
       { word: "slow.", narrator: "The doors remember weight." },
       { word: "the doors remember weight.", narrator: "We knew them once." },
       { word: "we knew them once.", narrator: "They part with grace." },
-      { word: "they part with grace.", narrator: "(the doors open)" },
+      { word: "they part with grace.", narrator: "(the doors open)",
+        onFinalCharacter: () => this.openCathedralDoor("chant"),
+        beforeResponse: () => this.openCathedralDoor("chant", true) },
     ];
     this.runBeatLockedChain(phrases, () => {
       // §5.5.5 Fork 1A — side with Old Olin → award Quiet Chant relic
@@ -2265,11 +2286,29 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private startAct3Corridor(): void {
+    if (this.doorwayPassagePending) return;
     this.clearActiveTargets();
-    this.clearBellForkCues();
-    this.setNarrator("The Warden has been waiting.");
-    this.setStoryObjective("The doors are open. Continue toward the Bell-Warden.");
-    this.readThen(() => this.startAct3());
+    const enterCorridor = () => {
+      this.clearBellForkCues();
+      this.setNarrator("The Warden has been waiting.");
+      this.setStoryObjective("The doors are open. Continue toward the Bell-Warden.");
+      this.readThen(() => this.startAct3());
+    };
+    const stage = this.doorwayStage;
+    if (!stage?.scene || !this.wrenContainer?.scene || reducedMotion(this)) { enterCorridor(); return; }
+    this.doorwayPassagePending = true;
+    const token = ++this.doorwayPassageToken;
+    this.setStoryObjective("Wren passes through the open doors…");
+    this.tweens.killTweensOf(this.wrenContainer);
+    setWrenPose(this.wrenSprite, "walk", false);
+    this.tweens.add({
+      targets: this.wrenContainer, x: NAVE_DOOR.centerX, y: NAVE_DOOR.thresholdY - 24,
+      scaleX: 0.84, scaleY: 0.84, alpha: 0.65, duration: 650, ease: "Sine.easeInOut",
+      onComplete: () => {
+        if (token !== this.doorwayPassageToken || !stage.scene || !this.wrenContainer?.scene) return;
+        enterCorridor();
+      },
+    });
   }
 
   // ─── Act 3: The Bell-Warden ───────────────────────────────────────────────
@@ -3532,6 +3571,12 @@ export class SunkenBellScene extends Phaser.Scene {
   ): { x: number; y: number } {
     const width = this.scale.width;
     const height = this.scale.height;
+    if (body?.scene && (body === this.doorChantCue || body === this.doorForceCue)) {
+      return {
+        x: body === this.doorChantCue ? NAVE_DOOR.chantWordX : NAVE_DOOR.forceWordX,
+        y: NAVE_DOOR.wordY,
+      };
+    }
     const sourceX = body?.scene ? body.x : width / 2;
     const sourceY = body?.scene ? body.y + sourceOffsetY : height - 460;
     const side =
@@ -3541,12 +3586,9 @@ export class SunkenBellScene extends Phaser.Scene {
     const lift = opts.lift ?? (opts.long ? 116 : 102);
 
     const y = Phaser.Math.Clamp(sourceY - lift, 280, height - 430);
-    const door = body?.scene && (body === this.doorChantCue || body === this.doorForceCue)
-      ? body : null;
     return {
       x: Phaser.Math.Clamp(sourceX + side * lateral, xInset, width - xInset),
-      // Human-sized doors reach above the old miniature cue's word lane.
-      y: door ? Math.min(y, door.y - 105 * Math.abs(door.scaleY) - 44) : y,
+      y,
     };
   }
 
@@ -3556,11 +3598,24 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private showDoorCues(): void {
+    if (!this.doorwayStage?.scene) {
+      const stage = this.add.container(0, 0).setName("bell-nave-stage").setDepth(-1);
+      stage.add(this.add.image(0, 0, "bell-nave-doorway").setOrigin(0)
+        .setDisplaySize(this.scale.width, this.scale.height));
+      stage.add(this.drawCathedralDoor().setPosition(NAVE_DOOR.centerX, NAVE_DOOR.thresholdY));
+      this.doorwayStage = stage;
+      // The room cut places Wren on the painted approach, with a stationary
+      // foot/shadow contact. The normal Bell position returns with the corridor.
+      this.tweens.killTweensOf(this.wrenContainer);
+      this.resetWrenToFront();
+      this.wrenContainer.setPosition(NAVE_DOOR.wrenX, NAVE_DOOR.wrenY).setScale(1).setAlpha(1).setVisible(true);
+      if (this.wrenSprite?.scene) this.wrenSprite.setAlpha(1).setVisible(true);
+    }
     if (!this.doorChantCue?.scene) {
-      this.doorChantCue = this.createDoorCue(560, 812, "chant");
+      this.doorChantCue = this.createDoorCue(NAVE_DOOR.centerX - NAVE_DOOR.width / 2, 658, "chant");
     }
     if (!this.doorForceCue?.scene) {
-      this.doorForceCue = this.createDoorCue(1360, 812, "force");
+      this.doorForceCue = this.createDoorCue(NAVE_DOOR.centerX + NAVE_DOOR.width / 2, 658, "force");
     }
   }
 
@@ -3625,173 +3680,124 @@ export class SunkenBellScene extends Phaser.Scene {
     y: number,
     mode: "chant" | "force",
   ): Phaser.GameObjects.Container {
-    const c = this.add.container(x, y + 18).setDepth(42).setScale(2.2).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 132, 18, { y: 12, alpha: 0.2 }));
-
-    const g = this.drawCathedralDoor(mode);
-    c.add(g);
-
-    addContainerWake(this, c, {
-      kind: "bubble",
-      intervalMs: 560,
-      spreadX: 36,
-      spreadY: 18,
-      offsetY: -54,
-      alpha: 0.18,
-      size: 4,
-      depth: 41,
-      driftY: -42,
-      durationMs: 1300,
-    });
-
-    this.tweens.add({
-      targets: c,
-      y,
-      alpha: 0.88,
-      duration: 650,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (!c.scene) return;
-        addIdleBreath(this, c, { dy: -3, durationMs: 2600 });
-      },
-    });
-    return c;
+    // Both choices address the same physical doors. These empty jamb anchors
+    // carry word tethers and feedback only, never another arch or moving floor.
+    return this.add.container(x, y).setName(`nave-${mode}-anchor`).setDepth(42);
   }
 
-  private drawCathedralDoor(mode: "chant" | "force"): Phaser.GameObjects.Container {
+  private drawCathedralDoor(): Phaser.GameObjects.Container {
     const door = this.add.container(0, 0).setName("cathedral-door");
-    let g = this.add.graphics();
-    door.add(g);
-    const polygon = (points: number[][], color: number, alpha = 1): void => {
-      g.fillStyle(color, alpha);
-      g.fillPoints(points.map(([x, y]) => ({ x, y })), true);
-    };
-    const arch = (halfWidth: number, shoulder: number, crown: number, bottom: number) => {
-      const points = [{ x: -halfWidth, y: bottom }];
-      for (let stone = 0; stone <= 10; stone += 1) {
-        const angle = Math.PI + stone * Math.PI / 10;
-        points.push({ x: Math.cos(angle) * halfWidth,
-          y: shoulder + Math.sin(angle) * (shoulder - crown) });
+    const source = this.textures.get("bell-nave-door-leaves").getSourceImage() as HTMLImageElement;
+    const clip = NAVE_DOOR.leafClip;
+    const pairWidth = NAVE_DOOR.width;
+    for (const side of [-1, 1] as const) {
+      const key = side < 0 ? "bell-nave-left-leaf" : "bell-nave-right-leaf";
+      const cropX = side < 0 ? clip.left : clip.seam;
+      const cropWidth = side < 0 ? clip.seam - clip.left : clip.right - clip.seam;
+      if (!this.textures.exists(key)) {
+        const canvas = this.textures.createCanvas(key, cropWidth, clip.bottom - clip.top);
+        if (!canvas) throw new Error("Unable to prepare the nave door leaf texture");
+        const context = canvas.context;
+        const outline = [...clip.curve, [clip.left, clip.bottom], [clip.seam, clip.bottom]];
+        context.save();
+        context.beginPath();
+        outline.forEach(([x, y], index) => {
+          const px = (side < 0 ? x : clip.seam * 2 - x) - cropX;
+          const py = y - clip.top;
+          if (index === 0) context.moveTo(px, py); else context.lineTo(px, py);
+        });
+        context.closePath();
+        context.clip();
+        context.drawImage(source, -cropX, -clip.top);
+        context.restore();
+        canvas.refresh();
       }
-      points.push({ x: halfWidth, y: bottom });
-      return points;
-    };
-
-    // Fitted masonry surrounds recessed bronze leaves rather than a flat glyph.
-    g.fillStyle(0x172d32, 1);
-    g.fillPoints(arch(49, -62, -105, 7), true);
-    g.fillStyle(0x596b66, 1);
-    g.fillPoints(arch(46, -64, -104, 2), true);
-    g.fillStyle(0x293e3e, 1);
-    g.fillPoints(arch(38, -63, -96, 0), true);
-    g.lineStyle(1, 0x9aa18b, 0.58);
-    g.strokePoints(arch(45, -64, -103, 1), false);
-    g.lineStyle(1.5, 0x1a3034, 0.9);
-    for (let joint = 1; joint < 8; joint += 1) {
-      const angle = Math.PI + joint * Math.PI / 8;
-      g.lineBetween(Math.cos(angle) * 39, -63 + Math.sin(angle) * 34,
-        Math.cos(angle) * 47, -63 + Math.sin(angle) * 42);
+      const hinge = this.add.container(side * pairWidth / 2, 0)
+        .setName(side < 0 ? "door-left" : "door-right");
+      const leaf = this.add.image(0, 0, key).setOrigin(side < 0 ? 0 : 1, 1)
+        .setDisplaySize(pairWidth / 2, NAVE_DOOR.height);
+      applySceneActorLighting(this, leaf);
+      hinge.add(leaf);
+      door.add(hinge);
     }
-    for (const y of [-45, -21]) {
-      g.lineBetween(-47, y, -38, y + 2);
-      g.lineBetween(38, y + 1, 47, y - 1);
+    const bar = this.add.graphics().setName("door-crossbar");
+    const edge = pairWidth * 0.46;
+    bar.fillStyle(0x596047, 1);
+    bar.fillPoints([
+      { x: -edge - 2, y: -244 }, { x: -edge + 5, y: -249 },
+      { x: edge - 4, y: -247 }, { x: edge + 2, y: -241 },
+      { x: edge - 1, y: -226 }, { x: -edge + 3, y: -224 },
+      { x: -edge - 3, y: -230 },
+    ], true);
+    bar.lineStyle(2, 0x9b895b, 0.65);
+    bar.lineBetween(-edge + 7, -246, edge - 6, -245);
+    bar.lineStyle(2, 0x1b3838, 0.8);
+    bar.lineBetween(-edge + 3, -226, edge - 3, -228);
+    for (const [x, y, length] of [[-0.3, -238, 19], [0.08, -232, 27], [0.3, -242, 14]]) {
+      bar.lineStyle(3, 0x3c6b60, 0.58);
+      bar.lineBetween(pairWidth * x, y, pairWidth * x + length, y - 1);
+      bar.lineStyle(1, 0xa19264, 0.34);
+      bar.lineBetween(pairWidth * x + 5, y + 2, pairWidth * x + length - 2, y + 1);
     }
-
-    // Keep the accepted bronze/masonry drawing, but give each leaf its own
-    // hinge so the completed force action can open the actual doorway.
-    for (const side of [-1, 1]) {
-      const hinge = side * 35;
-      const leaf = this.add.container(hinge, 0).setName(side < 0 ? "door-left" : "door-right");
-      g = this.add.graphics().setX(-hinge);
-      leaf.add(g);
-      door.add(leaf);
-      g.fillStyle(side < 0 ? 0x5d6047 : 0x364c45, 0.96);
-      const outline = arch(35, -62, -92, -1);
-      g.fillPoints((side < 0 ? outline.slice(0, 7) : outline.slice(6)).concat([{ x: 0, y: -1 }]), true);
-      g.lineStyle(1, 0x9d9564, 0.62);
-      for (const x of [side * 18, side * 27]) {
-        g.lineBetween(x, Math.abs(x) > 20 ? -76 : -85, x, -5);
-      }
-      g.lineStyle(1, 0x182f32, 0.9);
-      g.lineBetween(0, -90, 0, 1);
-      g.lineStyle(1, 0xb2a66e, 0.7);
-      const left = side < 0 ? -33 : 3;
-      const right = side < 0 ? -3 : 33;
-      g.lineBetween(left, -57, right, -57);
-      g.lineBetween(left, -12, right, -12);
-      g.fillStyle(0x827848, 1);
-      g.fillEllipse(side * 8, -35, 8, 15);
-      g.lineStyle(1.5, 0xb2a16a, 0.9);
-      g.strokeCircle(side * 8, -32, 4);
-      g.fillStyle(0x829482, 0.42);
-      for (const chip of [0, 1, 2]) {
-        g.fillEllipse(side * (18 + chip * 6), -7 - chip * 11, 5, 2);
-      }
+    for (const x of [-pairWidth * 0.36, pairWidth * 0.36]) {
+      bar.fillStyle(0x182d32, 1);
+      bar.fillRoundedRect(x - 7, -256, 14, 40, 2);
+      bar.fillStyle(0x9c956a, 0.85);
+      bar.fillCircle(x, -250, 2);
+      bar.fillCircle(x, -222, 2);
     }
-
-    g = this.add.graphics().setName(mode === "force" ? "door-crossbar" : "door-decoration");
-    door.add(g);
-    if (mode === "chant") {
-      // The quiet route carries three carved, softly lit chant marks.
-      for (const [x, y] of [[-21, -73], [0, -80], [21, -73]]) {
-        g.lineStyle(4, 0x223e3d, 0.9);
-        g.lineBetween(x, y - 5, x, y + 5);
-        g.lineStyle(1.5, 0xa6d9ca, 0.86);
-        g.lineBetween(x, y - 5, x, y + 5);
-        g.lineBetween(x, y - 3, x + 4, y);
-        g.lineBetween(x, y + 2, x - 3, y + 5);
-      }
-      g.lineStyle(1, 0xb1c9ac, 0.45);
-      g.beginPath();
-      g.arc(0, -62, 30, Math.PI * 1.12, Math.PI * 1.88);
-      g.strokePath();
-    } else {
-      // The force route shows the weight and rivets of the obstructing crossbar.
-      polygon([[-59, -50], [57, -57], [60, -40], [-57, -34]], 0x343f32);
-      polygon([[-59, -50], [57, -57], [58, -51], [-58, -44]], 0xa0905c);
-      polygon([[-58, -44], [58, -51], [60, -40], [-57, -34]], 0x6d623e);
-      g.lineStyle(1, 0xb9a776, 0.55);
-      g.lineBetween(-53, -43, 53, -49);
-      for (const x of [-41, 40]) {
-        g.fillStyle(0x3d4940, 1);
-        g.fillRect(x - 4, -57, 8, 26);
-        g.fillStyle(0xb0a271, 1);
-        g.fillCircle(x, -50, 2);
-        g.fillCircle(x, -36, 2);
-      }
-    }
-    // The sill belongs to the masonry, so the released crossbar cannot carry
-    // it away when the leaves swing open.
-    g = this.add.graphics();
-    door.add(g);
-    polygon([[-50, 3], [43, 3], [51, 9], [-49, 9]], 0x4b625b);
-    g.lineStyle(1, 0xa5b6a0, 0.44);
-    g.lineBetween(-43, 4, 37, 4);
+    door.add(bar);
     return door;
   }
 
-  private openForceDoorCue(immediate = false): void {
-    const cue = this.doorForceCue;
-    if (!cue?.scene) return;
-    const assembly = cue.getByName("cathedral-door") as Phaser.GameObjects.Container | null;
+  private openCathedralDoor(mode: "chant" | "force", immediate = false): void {
+    const stage = this.doorwayStage;
+    if (!stage?.scene) return;
+    const assembly = stage.getByName("cathedral-door") as Phaser.GameObjects.Container | null;
     const left = assembly?.getByName("door-left") as Phaser.GameObjects.Container | null;
     const right = assembly?.getByName("door-right") as Phaser.GameObjects.Container | null;
     const bar = assembly?.getByName("door-crossbar") as Phaser.GameObjects.Graphics | null;
-    if (!left || !right || !bar) return;
-    if (cue.getData("door-open") && !immediate) return;
-    cue.setData("door-open", true);
-    this.tweens.killTweensOf(cue);
+    if (!assembly || !left || !right || !bar) return;
+    if (stage.getData("door-open") && !immediate) return;
+    stage.setData("door-open", true);
     if (immediate || reducedMotion(this)) {
       this.tweens.killTweensOf([left, right, bar]);
-      left.setScale(0.12, 1);
-      right.setScale(0.12, 1);
+      left.setScale(0.08, 1);
+      right.setScale(0.08, 1);
       bar.setVisible(false);
       return;
     }
-    // This finishes inside TextWordTarget's existing 320ms completion exit;
-    // no target, reward, reading deadline or extra Continue is introduced.
-    this.tweens.add({ targets: [left, right], scaleX: 0.12, duration: 280, ease: "Cubic.easeOut" });
-    this.tweens.add({ targets: bar, y: 24, rotation: 0.22, alpha: 0, duration: 250, ease: "Cubic.easeIn" });
+    // Both routes settle inside the existing320ms word exit, before the held
+    // open-door response. The stone surround and threshold never move.
+    this.tweens.add({ targets: [left, right], scaleX: 0.08, duration: 280,
+      ease: mode === "chant" ? "Sine.easeInOut" : "Cubic.easeOut" });
+    this.tweens.add(mode === "chant"
+      ? { targets: bar, scaleX: 0.03, alpha: 0, duration: 240, ease: "Sine.easeInOut" }
+      : { targets: bar, y: 24, rotation: 0.22, alpha: 0, duration: 250, ease: "Cubic.easeIn" });
+  }
+
+  private openForceDoorCue(immediate = false): void {
+    this.openCathedralDoor("force", immediate);
+  }
+
+  private clearDoorwayStage(): void {
+    const stage = this.doorwayStage;
+    const wasCrossing = this.doorwayPassagePending;
+    this.doorwayPassagePending = false;
+    this.doorwayPassageToken += 1;
+    this.doorwayStage = null;
+    if (stage?.scene) {
+      const assembly = stage.getByName("cathedral-door") as Phaser.GameObjects.Container | null;
+      if (assembly) this.tweens.killTweensOf(assembly.list);
+      this.tweens.killTweensOf(stage);
+      stage.destroy();
+    }
+    if ((stage || wasCrossing) && this.wrenContainer?.scene) {
+      this.tweens.killTweensOf(this.wrenContainer);
+      this.wrenContainer.setPosition(WREN_X, WREN_Y).setScale(1).setAlpha(1).setVisible(true);
+      this.resetWrenToFront();
+      if (this.wrenSprite?.scene) this.wrenSprite.setAlpha(1).setVisible(true);
+    }
   }
 
   private showFateCues(): void {
@@ -3915,6 +3921,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private clearBellForkCues(): void {
     this.clearForkChoiceWordAnchors();
+    this.clearDoorwayStage();
     for (const cue of [
       this.doorChantCue,
       this.doorForceCue,
@@ -4176,7 +4183,7 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Beat-locked passage chain (used in Fork 1 Chant) ────────────────────
 
   private runBeatLockedChain(
-    steps: Array<{ word: string; narrator: string }>,
+    steps: Array<{ word: string; narrator: string; onFinalCharacter?: () => void; beforeResponse?: () => void }>,
     onDone: () => void,
   ): void {
     let idx = 0;
@@ -4199,6 +4206,7 @@ export class SunkenBellScene extends Phaser.Scene {
         y: pos.y,
         fontSize: 34,
         onClaim: () => playWrenFocus(this.wrenSprite),
+        onAdvance: (cursor, length) => { if (cursor === length) step.onFinalCharacter?.(); },
         onComplete: () => {
           playWrenAction(this.wrenSprite);
           playBodyImpact(this, this.wrenContainer, {
@@ -4211,6 +4219,7 @@ export class SunkenBellScene extends Phaser.Scene {
           });
           idx += 1;
           this.clearActiveTargets();
+          step.beforeResponse?.();
           if (step.narrator) {
             this.setNarrator(step.narrator);
             this.readThen(advance);

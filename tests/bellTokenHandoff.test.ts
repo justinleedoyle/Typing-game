@@ -56,7 +56,7 @@ function fixture(reduced = false) {
     applySceneActorLighting: (_scene: unknown, image: any) => { image.lit = true; },
     fadeOutStagedSprite, preloadSatchelIcons: noop, preloadWren: noop,
   };
-  for (const name of ["sunkenBellBackdrop", "bellGhostSprite", "bellWardenSprite", "olinSprite",
+  for (const name of ["sunkenBellBackdrop", "naveDoorway", "naveDoorLeaves", "bellGhostSprite", "bellWardenSprite", "olinSprite",
     "aurlandSprite", "glassFishSprite", "snowFoxSprite", "runaPortrait"]) globals[name] = name;
   globals.tridentTokenSprite = "art/relics/trident-token.png";
   const Bell = new Function(...Object.keys(globals), `${code}; return Bell;`)(...Object.values(globals));

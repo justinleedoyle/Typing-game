@@ -26,6 +26,7 @@ const globals = {
   preloadSatchelIcons: (scene: any, ids: string[]) => { scene.preloadedIds.push(...ids); },
   preloadWren: noop, preloadWolves: noop, preloadWinterNpcs: noop,
   winterBackdrop: "fixture-backdrop", runaPortrait: "fixture-runa", snowFoxSprite: "fixture-fox",
+  winterTrailBackdrop: "fixture-trail", fallenPineSprite: "fixture-pine",
   playWrenAction: noop, playWrenFocus: noop, playActorAttention: noop, playBodyImpact: noop,
   playClaimLine: noop, playBodyTypePulse: (_scene: unknown, body: unknown) => bodyPulses.push(body),
   attachWordBodyAnchor: () => ({ destroy: noop }),

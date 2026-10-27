@@ -37,6 +37,7 @@ function fixture() {
     makeEttaBookWord: (opts: any) => { targets.push(opts); return opts; },
     makeSkyForkWord: (_body: unknown, opts: any) => { targets.push(opts); return opts; },
     showEttaBookCue: () => book,
+    moveEttaBook(_state: string, done: () => void) { done(); },
     readThen(callback: () => void) { assert(!next, "a new story gate cannot overwrite an unread one"); next = callback; },
     store: { update(edit: (save: typeof state) => void) { edit(state); } },
     startTemple(index: number) { entered.push(index); },

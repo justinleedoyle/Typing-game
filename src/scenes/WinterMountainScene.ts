@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { restoreSceneActorLighting } from "../game/actorLighting";
+import { applySceneActorLighting, restoreSceneActorLighting } from "../game/actorLighting";
 import { type AmbientHandle, playAmbientWinter } from "../audio/ambient";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
@@ -19,6 +19,7 @@ import { installChapterMenu } from "../game/ui/pauseMenu";
 import { decorativeTween, reducedMotion, reducedFlashes } from "../game/presentation";
 import { showAlmanacStampCard } from "../game/ui/almanacStamp";
 import { ConsoleBand } from "../game/ui/consoleBand";
+import { preloadSatchelIcons, satchelIconFor } from "../game/ui/satchelIcons";
 import runaPortrait from "../../art/runa/runa-front.png";
 import { PALETTE_HEX, SERIF } from "../game/palette";
 import { flashQuietLordFragment, playQuietLordIntrusion } from "../game/quietLordIntrusion";
@@ -254,6 +255,9 @@ export class WinterMountainScene extends Phaser.Scene {
   private heldurSprite: Phaser.GameObjects.Image | null = null;
   private heldurWordAnchors: WordBodyAnchorHandle[] = [];
   private huntressSprite: Phaser.GameObjects.Image | null = null;
+  private huntressHornSprite: Phaser.GameObjects.Image | null = null;
+  private huntressHornTransferToken = 0;
+  private huntressHornTransferPending = false;
   private riverCue: Phaser.GameObjects.Container | null = null;
   private riverCueBeat: (typeof RIVER_BEATS)[number] | null = null;
   private riverCueWordAnchor: WordBodyAnchorHandle | null = null;
@@ -316,6 +320,9 @@ export class WinterMountainScene extends Phaser.Scene {
     this.heldurSprite = null;
     this.heldurWordAnchors = [];
     this.huntressSprite = null;
+    this.huntressHornSprite = null;
+    this.huntressHornTransferToken += 1;
+    this.huntressHornTransferPending = false;
     this.riverCue = null;
     this.riverCueBeat = null;
     this.riverCueWordAnchor = null;
@@ -363,6 +370,7 @@ export class WinterMountainScene extends Phaser.Scene {
     preloadWren(this);
     preloadWolves(this);
     preloadWinterNpcs(this);
+    preloadSatchelIcons(this, ["hunters-horn"]);
     this.load.image("winter-companion-snow-fox", snowFoxSprite);
   }
 
@@ -2442,6 +2450,7 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private startHuntressBranch(nextWave: number): void {
+    this.clearHuntressHorn();
     this.fork1Choice = "huntress";
     this.checkpoint("huntress", this.savedStageData("huntress"));
     this.clearActiveTargets();
@@ -2491,6 +2500,7 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private fadeOutHuntress(): void {
+    this.clearHuntressHorn();
     if (!this.huntressSprite) return;
     const sprite = this.huntressSprite;
     this.huntressSprite = null;
@@ -2498,6 +2508,63 @@ export class WinterMountainScene extends Phaser.Scene {
       durationMs: 620,
       ease: "Sine.easeIn",
     });
+  }
+
+  private clearHuntressHorn(): void {
+    this.huntressHornTransferToken += 1;
+    this.huntressHornTransferPending = false;
+    const horn = this.huntressHornSprite;
+    this.huntressHornSprite = null;
+    if (!horn) return;
+    this.tweens.killTweensOf(horn);
+    horn.destroy();
+  }
+
+  /** This handoff illustrates the completed phrase. Inventory still changes
+   * at the existing realm ending, and a restored reading never replays it. */
+  private transferHuntressHorn(onSettled: () => void, restored = false): void {
+    this.clearHuntressHorn();
+    const icon = satchelIconFor("hunters-horn");
+    if (!icon || !this.textures.exists(icon.key)) { onSettled(); return; }
+    const token = this.huntressHornTransferToken;
+    const end = { x: this.wrenContainer.x - 42, y: this.wrenContainer.y - 122 };
+    const immediate = restored || reducedMotion(this);
+    const from = this.huntressSprite?.scene
+      ? { x: this.huntressSprite.x + 42, y: this.huntressSprite.y - 106 }
+      : end;
+    const horn = this.add.image(immediate ? end.x : from.x, immediate ? end.y : from.y, icon.key)
+      .setOrigin(0.5).setDepth(61);
+    horn.setScale(76 / Math.max(horn.width, horn.height));
+    applySceneActorLighting(this, horn);
+    this.huntressHornSprite = horn;
+    if (immediate) { onSettled(); return; }
+    this.huntressHornTransferPending = true;
+    let settled = false;
+    this.tweens.add({
+      targets: horn, ...end, duration: 650, ease: "Sine.easeInOut",
+      onComplete: () => {
+        if (settled || token !== this.huntressHornTransferToken || this.huntressHornSprite !== horn || !horn.scene) return;
+        settled = true;
+        this.huntressHornTransferPending = false;
+        onSettled();
+      },
+    });
+  }
+
+  private presentWinterPassageReaction(
+    owner: WinterPassageOwner, step: number, reaction: string,
+    onContinue: () => void, restored = false,
+  ): void {
+    const handoff = owner === "huntress" && step === HUNTRESS_PASSAGES.length - 1;
+    const present = () => {
+      this.setNarrator(reaction);
+      this.readThen(() => {
+        if (handoff) this.clearHuntressHorn();
+        onContinue();
+      });
+    };
+    if (handoff) this.transferHuntressHorn(present, restored);
+    else present();
   }
 
   private startFireflyBranch(nextWave: number): void {
@@ -2938,6 +3005,7 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private clearWinterForkCues(): void {
+    this.clearHuntressHorn();
     this.clearForkChoiceWordAnchors();
     const cues = [this.fireflyCue, this.cairnCue, this.peltCue];
     this.fireflyCue = null;
@@ -3290,8 +3358,7 @@ export class WinterMountainScene extends Phaser.Scene {
         resumeReading = false;
         const reaction = narratorLines[step] ?? "";
         if (!reaction) { step += 1; advance(); return; }
-        this.setNarrator(reaction);
-        this.readThen(() => { step += 1; advance(); });
+        this.presentWinterPassageReaction(owner, step, reaction, () => { step += 1; advance(); }, true);
         return;
       }
       if (checkpointStep) this.checkpoint(checkpointStep, { index: step, reading: false });
@@ -3336,7 +3403,12 @@ export class WinterMountainScene extends Phaser.Scene {
             durationMs: 180,
           });
         },
-        onAdvance: () => {
+        onAdvance: (cursor, wordLength) => {
+          // The target's exit animation precedes onComplete by320ms. Own
+          // early Continue as soon as the horn phrase is fully typed.
+          if (owner === "huntress" && step === HUNTRESS_PASSAGES.length - 1 && cursor === wordLength) {
+            this.huntressHornTransferPending = true;
+          }
           if (!trueNameSeal?.scene) return;
           playBodyTypePulse(this, trueNameSeal, {
             kind: "snow",
@@ -3375,8 +3447,7 @@ export class WinterMountainScene extends Phaser.Scene {
           const reaction = narratorLines[step] ?? "";
           if (checkpointStep) this.checkpoint(checkpointStep, { index: step, reading: true });
           if (reaction) {
-            this.setNarrator(reaction);
-            this.readThen(() => { step += 1; advance(); });
+            this.presentWinterPassageReaction(owner, step, reaction, () => { step += 1; advance(); });
           } else {
             step += 1;
             advance();
@@ -3431,6 +3502,9 @@ export class WinterMountainScene extends Phaser.Scene {
     if (event.ctrlKey || event.metaKey) return;
     if (this.chapterMenu?.handleKey(event)) return;
     if (this.reading.handleKey(event)) return;
+    // The received-horn acknowledgment opens only after its short handoff.
+    // Early Continue/typing must not count as a miss while no word is live.
+    if (this.huntressHornTransferPending) { event.preventDefault(); return; }
     if (event.key === "Shift") {
       this.setShiftHeld(true);
       return;

@@ -38,7 +38,7 @@ function story() {
     store: { update: (edit: (value: typeof state) => void) => edit(state) },
     setNarrator: (text: string) => captions.push(text),
     readThen: (callback: () => void) => { assert(!next, "a new story card never overwrites an unread one"); next = callback; },
-    fadeOutForkCue() {}, showAurland() {}, hideAurland() {},
+    fadeOutForkCue() {}, showAurland() {}, showAurlandToken() {}, clearAurlandToken() {}, hideAurland() {},
     clearActiveTargets() {}, setBreathActive() {}, drawBellKeeperLectern: () => ({}),
     clearBossWordAnchors() {}, departures: [] as unknown[],
     commitFork: (_fork: string, requested: string) => requested,

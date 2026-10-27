@@ -79,10 +79,13 @@ import { showAlmanacStampCard } from "../game/ui/almanacStamp";
 import hauntedWoodBackdrop from "../../art/references/haunted-wood-clean.png";
 import woodGhostSprite from "../../art/wood/ghost.png";
 import ghostKingSprite from "../../art/wood/ghost-king.png";
+import rootThroneSprite from "../../art/wood/root-throne.png";
 import runaPortrait from "../../art/runa/runa-front.png";
 import wispCatSprite from "../../art/companions/wisp-cat.png";
 import snowFoxSprite from "../../art/companions/snow-fox.png";
 import groveFireSprite from "../../art/effects/grove-fire.png";
+import boneFluteSprite from "../../art/relics/bone-flute.png";
+import ashVialSprite from "../../art/relics/ash-vial.png";
 
 interface HauntedWoodSceneData {
   store: SaveStore;
@@ -196,6 +199,9 @@ export class HauntedWoodScene extends Phaser.Scene {
   private shrineFigure: Phaser.GameObjects.Container | null = null;
   private offeringCue: Phaser.GameObjects.Container | null = null;
   private boneFluteCue: Phaser.GameObjects.Container | null = null;
+  private boneFluteProp: Phaser.GameObjects.Image | null = null;
+  private heldWoodRelic: Phaser.GameObjects.Image | null = null;
+  private fluteHandoffPending = false;
   private groveLightCue: Phaser.GameObjects.Container | null = null;
   private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
   private pathCue: Phaser.GameObjects.Container | null = null;
@@ -240,6 +246,9 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.shrineFigure = null;
     this.offeringCue = null;
     this.boneFluteCue = null;
+    this.boneFluteProp = null;
+    this.heldWoodRelic = null;
+    this.fluteHandoffPending = false;
     this.groveLightCue = null;
     this.forkChoiceWordAnchors = [];
     this.snowFoxTripNoticed = false;
@@ -264,9 +273,12 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.load.image("haunted-wood-backdrop", hauntedWoodBackdrop);
     this.load.image("wood-ghost", woodGhostSprite);
     this.load.image("ghost-king", ghostKingSprite);
+    this.load.image("wood-root-throne", rootThroneSprite);
     this.load.image("wood-companion-wisp-cat", wispCatSprite);
     this.load.image("wood-companion-snow-fox", snowFoxSprite);
     this.load.image("wood-grove-fire", groveFireSprite);
+    this.load.image("wood-bone-flute", boneFluteSprite);
+    this.load.image("wood-ash-vial", ashVialSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
@@ -1589,7 +1601,11 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.runPassageChain(
         [
           { word: "reach in", narrator: "Your fingers close around it." },
-          { word: "take it", narrator: "The flute is cold. It makes no sound. The ghosts grow restless." },
+          {
+            word: "take it",
+            narrator: "The flute is cold. It makes no sound. The ghosts grow restless.",
+            beforeResponse: (onSettled) => this.settleBoneFluteInHand(onSettled),
+          },
         ],
         () => {
           this.store.update((s) => {
@@ -1602,7 +1618,10 @@ export class HauntedWoodScene extends Phaser.Scene {
           this.boneFluteCue = null;
           this.setNarrator("The Bone-Flute joins your satchel. Restless whispers follow you beyond the shrine.");
           this.band.setObjective("Bone-Flute collected. Press Enter or Space to continue into the wood.");
-          this.readThen(() => this.startAct3());
+          this.readThen(() => {
+            this.clearHeldWoodRelic();
+            this.startAct3();
+          });
         },
         { body: this.boneFluteCue, sourceOffsetY: -62 },
       );
@@ -1725,9 +1744,13 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.store.update(s => { if (!s.satchel.includes("ash-vial")) s.satchel.push("ash-vial"); });
     this.attendGhostKing();
     this.igniteGroveLightCue();
+    this.showGatheredAshVial();
     this.setNarrator("The grove flares. You gather a vial of ash as the Ghost-King turns toward the fire.");
     this.band.setObjective("Ash Vial collected. Press Enter or Space to face what the fire wakes.");
-    this.readThen(() => this.startBossFight());
+    this.readThen(() => {
+      this.clearHeldWoodRelic();
+      this.startBossFight();
+    });
   }
 
   private startBossFight(): void {
@@ -2435,7 +2458,11 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Passage-chain helper ─────────────────────────────────────────────────
 
   private runPassageChain(
-    steps: Array<{ word: string; narrator: string }>,
+    steps: Array<{
+      word: string;
+      narrator: string;
+      beforeResponse?: (onSettled: () => void) => void;
+    }>,
     onDone: () => void,
     owner?: {
       body?: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined;
@@ -2467,6 +2494,11 @@ export class HauntedWoodScene extends Phaser.Scene {
         y: Math.min(ownerWordPos?.y ?? this.scale.height - 340, WOOD_BRANCH_WORD_Y),
         fontSize: 36,
         onClaim: () => playWrenFocus(this.wrenSprite),
+        onAdvance: (cursor, wordLength) => {
+          // Completion fades the target before its callback runs. Protect that
+          // interval too, so an early Continue cannot become a typing miss.
+          if (step.beforeResponse && cursor === wordLength) this.fluteHandoffPending = true;
+        },
         onComplete: () => {
           playChime();
           playWrenAction(this.wrenSprite);
@@ -2480,13 +2512,17 @@ export class HauntedWoodScene extends Phaser.Scene {
           });
           idx += 1;
           this.clearActiveTargets();
-          if (step.narrator) {
-            this.setNarrator(step.narrator);
-            this.band.setObjective("Phrase complete. Press Enter or Space to continue.");
-            this.readThen(advance);
-          } else {
-            advance();
-          }
+          const respond = (): void => {
+            if (step.narrator) {
+              this.setNarrator(step.narrator);
+              this.band.setObjective("Phrase complete. Press Enter or Space to continue.");
+              this.readThen(advance);
+            } else {
+              advance();
+            }
+          };
+          if (step.beforeResponse) step.beforeResponse(respond);
+          else respond();
         },
       };
       const target = owner?.ghostKing
@@ -2523,6 +2559,10 @@ export class HauntedWoodScene extends Phaser.Scene {
     if (event.ctrlKey || event.metaKey) return;
     if (this.chapterMenu?.handleKey(event)) return;
     if (this.reading.handleKey(event)) return;
+    if (this.fluteHandoffPending) {
+      event.preventDefault();
+      return;
+    }
     if (this.wardPracticeActive && event.key.length === 1 &&
       event.key.toLowerCase() !== this.wardPracticeTarget?.remaining()[0]) {
       this.band.setObjective("Practice: use the shown direction's mark at the dot. The spirit will wait.");
@@ -2879,17 +2919,13 @@ export class HauntedWoodScene extends Phaser.Scene {
     g.fillRoundedRect(-58, -38, 116, 34, 12);
     g.lineStyle(2, 0xd7ded8, 0.22);
     g.strokeRoundedRect(-58, -38, 116, 34, 12);
-    g.lineStyle(7, 0xd7ded8, 0.8);
-    g.lineBetween(-46, -60, 48, -88);
-    g.lineStyle(3, 0x6f725c, 0.58);
-    g.lineBetween(-46, -60, 48, -88);
-    g.fillStyle(0x1f241d, 0.9);
-    for (const p of [-24, 4, 30]) {
-      g.fillCircle(p, -67 - (p + 24) * 0.3, 4);
-    }
     g.lineStyle(2, PALETTE_HEX.moss, 0.28);
     g.strokeEllipse(0, -74, 132, 58);
     c.add(g);
+    const flute = this.add.image(0, -74, "wood-bone-flute");
+    flute.setScale(104 / flute.height);
+    c.add(flute);
+    this.boneFluteProp = flute;
 
     addContainerWake(this, c, {
       kind: "mist",
@@ -2917,6 +2953,59 @@ export class HauntedWoodScene extends Phaser.Scene {
       },
     });
     return c;
+  }
+
+  /** Leave the hollow empty before describing the flute in Wren's fingers. */
+  private settleBoneFluteInHand(onSettled: () => void): void {
+    const flute = this.boneFluteProp;
+    if (!flute?.scene) {
+      this.fluteHandoffPending = false;
+      onSettled();
+      return;
+    }
+    this.clearHeldWoodRelic();
+    const world = flute.getWorldTransformMatrix();
+    this.boneFluteCue?.remove(flute);
+    this.add.existing(flute);
+    flute.setPosition(world.tx, world.ty).setDepth(43).setAlpha(1);
+    flute.setScale(86 / flute.height);
+    this.boneFluteProp = null;
+    this.heldWoodRelic = flute;
+    const hand = { x: this.wrenContainer.x + 52, y: this.wrenContainer.y - 96 };
+    if (reducedMotion(this)) {
+      flute.setPosition(hand.x, hand.y);
+      onSettled();
+      return;
+    }
+    this.fluteHandoffPending = true;
+    this.band.setObjective("Taking the flute…");
+    this.tweens.add({
+      targets: flute,
+      ...hand,
+      duration: 520,
+      ease: "Sine.easeInOut",
+      onComplete: () => {
+        if (!flute.scene) return;
+        this.fluteHandoffPending = false;
+        onSettled();
+      },
+    });
+  }
+
+  private showGatheredAshVial(): void {
+    this.clearHeldWoodRelic();
+    const vial = this.add.image(this.wrenContainer.x + 52, this.wrenContainer.y - 96, "wood-ash-vial");
+    vial.setScale(62 / vial.height).setDepth(43);
+    this.heldWoodRelic = vial;
+  }
+
+  private clearHeldWoodRelic(): void {
+    this.fluteHandoffPending = false;
+    const relic = this.heldWoodRelic;
+    this.heldWoodRelic = null;
+    if (!relic?.scene) return;
+    this.tweens.killTweensOf(relic);
+    relic.destroy();
   }
 
   private createGroveLightCue(): Phaser.GameObjects.Container {
@@ -3026,6 +3115,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private clearWoodForkCues(): void {
     this.clearForkChoiceWordAnchors();
+    this.clearHeldWoodRelic();
     for (const cue of [this.offeringCue, this.boneFluteCue, this.groveLightCue]) {
       if (!cue?.scene) continue;
       this.tweens.killTweensOf(cue);
@@ -3033,6 +3123,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     }
     this.offeringCue = null;
     this.boneFluteCue = null;
+    this.boneFluteProp = null;
     this.groveLightCue = null;
   }
 
@@ -3726,7 +3817,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     const gky = 560;
     const rootBase = this.makeGhostKingRootBase(gkx, gky + 270);
 
-    // Root throne — kept as graphics (the painted sprite is just the king).
+    // The empty painted roots sit behind the unchanged, hovering king figure.
     const throne = this.drawGhostKingRootThrone(gkx, gky + 170).setAlpha(0);
 
     // Ghost-King figure — painted sprite replaces the old translucent body +
@@ -3751,43 +3842,12 @@ export class HauntedWoodScene extends Phaser.Scene {
     });
   }
 
-  private drawGhostKingRootThrone(x: number, y: number): Phaser.GameObjects.Graphics {
-    const g = this.add.graphics().setPosition(x, y);
-    const root = (points: number[][], width: number): void => {
-      const curve = new Phaser.Curves.Spline(points.map(([px, py]) => new Phaser.Math.Vector2(px, py)));
-      const path = curve.getPoints(22);
-      // Dark bark edges and a thin upper edge give each winding root a round
-      // section. Tapered ends spread into the floor instead of table legs.
-      for (const [color, extra, alpha] of [[0x17170f, 7, 1], [0x443723, 0, 1], [0x8b7851, -width + 2.5, 0.5]]) {
-        for (let i = 1; i < path.length; i += 1) {
-          const a = path[i - 1]!;
-          const b = path[i]!;
-          const thickness = Math.max(1, width * (1 - i / path.length * 0.68) + extra!);
-          g.lineStyle(thickness, color, alpha);
-          g.lineBetween(a.x, a.y, b.x, b.y);
-        }
-      }
-    };
-    root([[-70, 6], [-108, -30], [-105, -84], [-82, -130]], 15);
-    root([[70, 4], [108, -28], [104, -80], [86, -122]], 15);
-    root([[-98, -90], [-123, -104], [-126, -123]], 7);
-    root([[99, -82], [124, -96], [132, -115]], 7);
-    root([[-78, 8], [-101, 36], [-104, 70], [-150, 101]], 25);
-    root([[-42, 12], [-52, 44], [-27, 72], [-66, 103]], 21);
-    root([[-9, 14], [10, 42], [-4, 72], [36, 103]], 23);
-    root([[42, 12], [40, 44], [76, 70], [62, 101]], 20);
-    root([[78, 8], [104, 38], [107, 72], [153, 99]], 25);
-    root([[-72, 10], [-54, 38], [22, 65], [53, 100]], 17);
-    root([[70, 10], [52, 38], [-18, 72], [-65, 103]], 16);
-    root([[-96, 65], [-125, 74], [-140, 91], [-176, 97]], 9);
-    root([[104, 70], [135, 80], [148, 94], [178, 97]], 9);
-    // Interwoven boughs make the seat too; a solid plank would read as a bench.
-    root([[-106, 5], [-58, -3], [-12, 6], [41, -5], [107, 6]], 24);
-    root([[-101, 14], [-53, 8], [-2, 17], [50, 9], [103, 14]], 18);
-    root([[-85, -6], [-58, 7], [-35, -4], [-8, 5]], 9);
-    g.fillStyle(0x68714b, 0.72);
-    for (const [mx, my, radius] of [[-79, -10, 4], [-70, -11, 3], [-60, -10, 3], [65, -8, 4], [75, -6, 3], [-112, 84, 3], [120, 86, 3]]) g.fillCircle(mx!, my!, radius!);
-    return g;
+  private drawGhostKingRootThrone(x: number, y: number): Phaser.GameObjects.Image {
+    // Preserve the original root envelope and ground contact. The transparent
+    // center leaves the existing king visible, hovering just above the seat.
+    const throne = this.add.image(x, y + 120, "wood-root-throne").setOrigin(0.5, 1);
+    throne.setScale(360 / throne.width);
+    return throne;
   }
 
   private makeGhostKingRootBase(x: number, y: number): Phaser.GameObjects.Container {

@@ -92,6 +92,7 @@ await suite("Wood force choice: the fire remains visible through the held respon
       commitFork: (_fork: string, choice: string) => choice,
       store: { update: (edit: (value: typeof state) => void) => edit(state) },
       attendGhostKing() {},
+      showGatheredAshVial() {}, clearHeldWoodRelic() {},
       igniteGroveLightCue: Ignite.prototype.igniteGroveLightCue,
       tweens: { killTweensOf() {} },
       add: { image: (x: number, y: number, texture: string) => {

@@ -2,6 +2,7 @@ import { installChapterMenu } from "../game/ui/pauseMenu";
 import { rememberRealmFork, resolveRealmFork, resolveCompanionDecision, rememberCompanionDecision, type RealmFork } from "../game/realmChoices";
 import { ChapterReading } from "../game/ui/chapterReading";
 import { reducedFlashes, reducedMotion } from "../game/presentation";
+import { applySceneActorLighting } from "../game/actorLighting";
 import Phaser from "phaser";
 import { type AmbientHandle, playAmbientSkyIsland } from "../audio/ambient";
 import { playChime } from "../audio/chime";
@@ -79,6 +80,9 @@ import skyIslandBackdrop from "../../art/references/sky-island-clean.png";
 import lanternSpiritSprite from "../../art/sky/lantern-spirit.png";
 import scholarSpiritSprite from "../../art/sky/scholar-spirit.png";
 import ettaSprite from "../../art/sky/etta.png";
+import ettaEmptySprite from "../../art/sky/etta-empty.png";
+import ettaVolumeSprite from "../../art/sky/etta-volume.png";
+import ettaShelfSprite from "../../art/sky/etta-shelf.png";
 import runaPortrait from "../../art/runa/runa-front.png";
 import lanternMothSprite from "../../art/companions/lantern-moth.png";
 
@@ -246,6 +250,9 @@ export class SkyIslandScene extends Phaser.Scene {
   private ettaSprite: Phaser.GameObjects.Image | null = null;
   private ettaWordAnchors: WordBodyAnchorHandle[] = [];
   private ettaBookCue: Phaser.GameObjects.Container | null = null;
+  private ettaBookShelf: Phaser.GameObjects.Container | null = null;
+  private ettaBookGroundShadow: Phaser.GameObjects.Graphics | null = null;
+  private ettaBookMoving = false;
   private ettaBookWordAnchors: WordBodyAnchorHandle[] = [];
   private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
   private beaconFlameCue: Phaser.GameObjects.Container | null = null;
@@ -317,6 +324,9 @@ export class SkyIslandScene extends Phaser.Scene {
     this.ettaSprite = null;
     this.ettaWordAnchors = [];
     this.ettaBookCue = null;
+    this.ettaBookShelf = null;
+    this.ettaBookGroundShadow = null;
+    this.ettaBookMoving = false;
     this.ettaBookWordAnchors = [];
     this.forkChoiceWordAnchors = [];
     this.beaconFlameCue = null;
@@ -342,6 +352,9 @@ export class SkyIslandScene extends Phaser.Scene {
     this.load.image("sky-lantern-spirit", lanternSpiritSprite);
     this.load.image("scholar-spirit", scholarSpiritSprite);
     this.load.image("etta", ettaSprite);
+    this.load.image("etta-empty", ettaEmptySprite);
+    this.load.image("etta-volume", ettaVolumeSprite);
+    this.load.image("etta-shelf", ettaShelfSprite);
     this.load.image("sky-companion-lantern-moth", lanternMothSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
@@ -2020,53 +2033,59 @@ export class SkyIslandScene extends Phaser.Scene {
     this.readThen(() => {
       this.band.setObjective(`Type ${ETTA_CHAIN_1} to lift Etta's book.`);
       const bookCue = this.showEttaBookCue();
+      // Both answers keep their clear lane while the physical book changes hands.
+      const wordX = bookCue.x + 110;
       const liftTarget = this.makeEttaBookWord({
         scene: this,
         word: ETTA_CHAIN_1,
-        x: bookCue.x + 110,
+        x: wordX,
         y: ETTA_BOOK_WORD_Y,
         fontSize: 38,
+        onAdvance: (cursor, length) => { if (cursor === length) this.ettaBookMoving = true; },
         onComplete: () => {
           playChime();
-          playActorAttention(this, this.ettaSprite, {
-            tint: PALETTE_HEX.brass,
-          });
           this.clearActiveTargets();
-          this.setNarrator("The book is heavier than it looks. Old paper, dense with writing.");
-          this.band.setObjective("Book lifted. Press Enter or Space to continue.");
-          this.readThen(() => {
-            this.band.setObjective(`Type ${ETTA_CHAIN_2} to set the book safely on its shelf.`);
-            const placeTarget = this.makeEttaBookWord({
-              scene: this,
-              word: ETTA_CHAIN_2,
-              x: bookCue.x + 110,
-              y: ETTA_BOOK_WORD_Y,
-              fontSize: 38,
-              onComplete: () => {
-                playChime();
-                playActorAttention(this, this.ettaSprite, {
-                  tint: PALETTE_HEX.brass,
-                });
-                this.clearActiveTargets();
-                this.ettaDone = true;
-                this.store.update((s) => {
-                  const realm = s.realms["sky-island"] ?? { cleared: false, choices: {} };
-                  realm.choices.ettaHelped = "yes";
-                  s.realms["sky-island"] = realm;
-                  if (!s.almanacLore.includes("scholar-ettas-last-volume")) {
-                    s.almanacLore.push("scholar-ettas-last-volume");
-                  }
-                });
-                this.setNarrator(
-                  "Scholar Etta's Last Volume — a page appears in the Almanac.",
-                );
-                this.band.setObjective("Almanac memory earned. Press Enter or Space to return to the temples.");
-                this.clearEttaBookCue(true);
-                this.hideEtta();
-                this.readThen(() => this.startTemple(nextTempleIdx));
-              },
+          this.band.setObjective("Lifting the book…");
+          this.moveEttaBook("carried", () => {
+            playActorAttention(this, this.ettaSprite, { tint: PALETTE_HEX.brass });
+            this.setNarrator("The book is heavier than it looks. Old paper, dense with writing.");
+            this.band.setObjective("Book lifted. Press Enter or Space to continue.");
+            this.readThen(() => {
+              this.band.setObjective(`Type ${ETTA_CHAIN_2} to set the book safely on its shelf.`);
+              const placeTarget = this.makeEttaBookWord({
+                scene: this,
+                word: ETTA_CHAIN_2,
+                x: wordX,
+                y: ETTA_BOOK_WORD_Y,
+                fontSize: 38,
+                onAdvance: (cursor, length) => { if (cursor === length) this.ettaBookMoving = true; },
+                onComplete: () => {
+                  playChime();
+                  this.clearActiveTargets();
+                  this.band.setObjective("Setting the book on its shelf…");
+                  this.moveEttaBook("shelved", () => {
+                    playActorAttention(this, this.ettaSprite, { tint: PALETTE_HEX.brass });
+                    this.ettaDone = true;
+                    this.store.update((s) => {
+                      const realm = s.realms["sky-island"] ?? { cleared: false, choices: {} };
+                      realm.choices.ettaHelped = "yes";
+                      s.realms["sky-island"] = realm;
+                      if (!s.almanacLore.includes("scholar-ettas-last-volume")) {
+                        s.almanacLore.push("scholar-ettas-last-volume");
+                      }
+                    });
+                    this.setNarrator("Scholar Etta's Last Volume — a page appears in the Almanac.");
+                    this.band.setObjective("Almanac memory earned. Press Enter or Space to return to the temples.");
+                    // Keep the placed book and Etta visible while the player reads.
+                    this.readThen(() => {
+                      this.hideEtta();
+                      this.startTemple(nextTempleIdx);
+                    });
+                  });
+                },
+              });
+              this.registerActiveTarget(placeTarget);
             });
-            this.registerActiveTarget(placeTarget);
           });
         },
       });
@@ -2115,53 +2134,59 @@ export class SkyIslandScene extends Phaser.Scene {
   private showEttaBookCue(): Phaser.GameObjects.Container {
     if (this.ettaBookCue?.scene) return this.ettaBookCue;
 
-    const c = this.add.container(760, 806).setDepth(43).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 150, 20, { y: 16, alpha: 0.18 }));
+    // The one volume now exists as a movable prop, rather than also being
+    // painted into Etta's arms throughout the lift and placement.
+    const etta = this.ettaSprite;
+    if (etta?.scene) {
+      etta.setTexture("etta-empty");
+      etta.setScale(ETTA_SPRITE_HEIGHT / etta.height);
+    }
 
-    const g = this.add.graphics();
-    g.fillStyle(0x2d2119, 0.84);
-    g.fillRoundedRect(-62, -30, 124, 42, 8);
-    g.fillStyle(0x5f4731, 0.94);
-    g.fillRoundedRect(-56, -42, 112, 58, 8);
-    g.lineStyle(2, PALETTE_HEX.brass, 0.52);
-    g.strokeRoundedRect(-56, -42, 112, 58, 8);
-    g.lineStyle(1.5, 0xf3ead2, 0.34);
-    g.lineBetween(0, -38, 0, 12);
-    g.lineBetween(-42, -22, -10, -18);
-    g.lineBetween(10, -18, 42, -22);
-    g.fillStyle(PALETTE_HEX.brass, 0.42);
-    g.fillCircle(0, -12, 8);
-    g.fillStyle(0xf3ead2, 0.18);
-    g.fillEllipse(-26, -17, 34, 8);
-    g.fillEllipse(28, -17, 34, 8);
-    c.add(g);
+    const shelf = this.add.container(1260, 826).setDepth(42).setAlpha(0);
+    shelf.add(addLocalGroundShadow(this, 218, 24, { y: 5, alpha: 0.2 }));
+    const rack = this.add.image(0, 0, "etta-shelf").setOrigin(0.5, 0.885);
+    rack.setDisplaySize(260, 260 * rack.height / rack.width);
+    applySceneActorLighting(this, rack);
+    shelf.add(rack);
+    this.ettaBookShelf = shelf;
 
-    addContainerWake(this, c, {
-      kind: "mote",
-      intervalMs: 420,
-      spreadX: 34,
-      spreadY: 12,
-      offsetY: -34,
-      alpha: 0.22,
-      size: 3.2,
-      depth: 42,
-      driftY: -42,
-      durationMs: 980,
-    });
-
-    this.tweens.add({
-      targets: c,
-      alpha: 0.9,
-      y: 788,
-      duration: 620,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (c.scene) addIdleBreath(this, c, { dy: -3, durationMs: 2400 });
-      },
-    });
-
+    const shadow = addLocalGroundShadow(this, 134, 18, { alpha: 0.2 });
+    shadow.setPosition(760, 828).setDepth(42);
+    this.ettaBookGroundShadow = shadow;
+    const c = this.add.container(760, 826).setDepth(43).setAlpha(0);
+    const book = this.add.image(0, 0, "etta-volume").setOrigin(0.5, 0.88);
+    book.setDisplaySize(176, 176 * book.height / book.width);
+    applySceneActorLighting(this, book);
+    c.add(book);
     this.ettaBookCue = c;
+    this.tweens.add({ targets: [shelf, c], alpha: 1, duration: 420, ease: "Sine.easeOut" });
     return c;
+  }
+
+  private moveEttaBook(state: "carried" | "shelved", onDone: () => void): void {
+    const cue = this.ettaBookCue;
+    if (!cue?.scene) { this.ettaBookMoving = false; onDone(); return; }
+    this.ettaBookMoving = true;
+    this.tweens.killTweensOf(cue);
+    cue.setDepth(61).setAlpha(1);
+    this.ettaBookShelf?.setAlpha(1);
+    this.ettaBookGroundShadow?.setAlpha(0);
+    const shelf = this.ettaBookShelf;
+    const end = state === "carried"
+      ? { x: this.wrenContainer.x - 62, y: this.wrenContainer.y - 112, angle: -8 }
+      : { x: shelf?.x ?? 1260, y: (shelf?.y ?? 826) - 94, angle: 0 };
+    const finish = (): void => {
+      // Leaving or restarting the scene invalidates an unfinished prop action.
+      if (this.ettaBookCue !== cue || !cue.scene) return;
+      this.ettaBookMoving = false;
+      onDone();
+    };
+    if (reducedMotion(this)) {
+      cue.setPosition(end.x, end.y).setAngle(end.angle);
+      finish();
+      return;
+    }
+    this.tweens.add({ targets: cue, ...end, duration: 520, ease: "Sine.easeInOut", onComplete: finish });
   }
 
   private pulseEttaBookCue(complete = false): void {
@@ -2184,24 +2209,21 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private clearEttaBookCue(fade = false): void {
     this.clearEttaBookWordAnchors();
-    const cue = this.ettaBookCue;
+    const props = [this.ettaBookCue, this.ettaBookShelf];
     this.ettaBookCue = null;
-    if (!cue?.scene) return;
-    this.tweens.killTweensOf(cue);
-    if (!fade) {
-      cue.destroy();
-      return;
+    this.ettaBookShelf = null;
+    this.ettaBookMoving = false;
+    this.ettaBookGroundShadow?.destroy();
+    this.ettaBookGroundShadow = null;
+    for (const prop of props) {
+      if (!prop?.scene) continue;
+      this.tweens.killTweensOf(prop);
+      if (!fade) { prop.destroy(); continue; }
+      this.tweens.add({
+        targets: prop, alpha: 0, duration: 420, ease: "Sine.easeIn",
+        onComplete: () => { if (prop.scene) prop.destroy(); },
+      });
     }
-    this.tweens.add({
-      targets: cue,
-      y: cue.y - 14,
-      alpha: 0,
-      duration: 520,
-      ease: "Sine.easeIn",
-      onComplete: () => {
-        if (cue.scene) cue.destroy();
-      },
-    });
   }
 
   // ─── Fork 1 — Library Tower ──────────────────────────────────────────────
@@ -3446,6 +3468,7 @@ export class SkyIslandScene extends Phaser.Scene {
     if (event.ctrlKey || event.metaKey) return;
     if (this.chapterMenu?.handleKey(event)) return;
     if (this.reading.handleKey(event)) return;
+    if (this.ettaBookMoving) { event.preventDefault(); return; }
     if (event.key.length === 1 || event.key === " ") playClack();
     this.typingInput.handleChar(event.key);
   }

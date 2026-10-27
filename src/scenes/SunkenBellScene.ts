@@ -78,6 +78,7 @@ import bellGhostSprite from "../../art/bell/ghost.png";
 import bellWardenSprite from "../../art/bell/bell-warden.png";
 import olinSprite from "../../art/bell/olin.png";
 import aurlandSprite from "../../art/bell/aurland.png";
+import tridentTokenSprite from "../../art/relics/trident-token.png";
 import glassFishSprite from "../../art/companions/glass-fish.png";
 import snowFoxSprite from "../../art/companions/snow-fox.png";
 
@@ -164,6 +165,8 @@ export class SunkenBellScene extends Phaser.Scene {
   /** King Aurland's painted sprite — fades in when he's freed at fork 2 and is
    *  faded/destroyed when the realm moves past the fork (or on shutdown). */
   private aurlandImage?: Phaser.GameObjects.Image;
+  private aurlandToken?: Phaser.GameObjects.Image;
+  private aurlandBindingPending = false;
   /** Old Olin's painted sprite during the Act 1 teaching beat. */
   private olinImage?: Phaser.GameObjects.Image;
   /** Olin's low stone pew, dismissed with him when the ghost wave begins. */
@@ -264,6 +267,9 @@ export class SunkenBellScene extends Phaser.Scene {
     this.doorChantCue = null;
     this.doorForceCue = null;
     this.aurlandFateCue = null;
+    this.aurlandImage = undefined;
+    this.aurlandToken = undefined;
+    this.aurlandBindingPending = false;
     this.bellTongueCue = null;
     this.quietLordIntruded =
       this.store.get().realms["sunken-bell"]?.quietLordIntruded ?? false;
@@ -275,6 +281,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.load.image("bell-warden", bellWardenSprite);
     this.load.image("olin", olinSprite);
     this.load.image("aurland", aurlandSprite);
+    this.load.image("bell-trident-token", tridentTokenSprite);
     this.load.image("bell-companion-glass-fish", glassFishSprite);
     this.load.image("bell-companion-snow-fox", snowFoxSprite);
     this.load.image("band-portrait-runa", runaPortrait);
@@ -488,6 +495,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.aurlandBindingPending = false;
       this.clearRhythmPractice();
       this.reading.destroy();
       this.chapterMenu?.destroy();
@@ -497,6 +505,7 @@ export class SunkenBellScene extends Phaser.Scene {
       this.ambientHandle?.stop();
       this.clearBellForkCues();
       this.clearAurlandWordAnchors();
+      this.clearAurlandToken();
       this.descentLanterns.forEach((lantern) => lantern.container.destroy());
       this.descentLanterns = [];
       this.dismissRevisitMemoryCue(false);
@@ -1130,6 +1139,10 @@ export class SunkenBellScene extends Phaser.Scene {
     if (event.ctrlKey || event.metaKey) return;
     if (this.chapterMenu?.handleKey(event)) return;
     if (this.reading.handleKey(event)) return;
+    if (this.aurlandBindingPending) {
+      event.preventDefault();
+      return;
+    }
 
     const key = event.key;
     // Backspace / Escape always flow through — reverse or abort, never gated.
@@ -2664,6 +2677,8 @@ export class SunkenBellScene extends Phaser.Scene {
   private startFork2FreeAurland(): void {
     this.fork2Choice = this.commitFork("fork2", "free-aurland") as typeof this.fork2Choice;
     if (this.fork2Choice !== "free-aurland") { this.startFork2ClaimTongue(); return; }
+    this.aurlandBindingPending = false;
+    this.clearAurlandToken();
     this.setStoryObjective("Unbind King Aurland. Type the words shown freely; the bell is quiet.");
     this.fadeOutForkCue(this.bellTongueCue);
     this.bellTongueCue = null;
@@ -2686,15 +2701,60 @@ export class SunkenBellScene extends Phaser.Scene {
         }
       });
       playChime();
-      // Realm moves past the fork — the king swims off as the glass-fish gate
-      // begins.
       this.fadeOutForkCue(this.aurlandFateCue);
       this.aurlandFateCue = null;
-      this.hideAurland();
+      this.showAurlandToken();
       this.setNarrator("Aurland swims free. He presses a trident token into your hand before he goes.");
       this.setStoryObjective("Aurland's trident token is yours. Continue toward the surface.");
-      this.readThen(() => this.startGlassFishGate());
+      this.readThen(() => {
+        this.clearAurlandToken();
+        this.hideAurland();
+        this.startGlassFishGate();
+      });
     }));
+  }
+
+  /** The reward caption owns one visible handoff; Continue never waits on it. */
+  private showAurlandToken(): void {
+    this.clearAurlandToken();
+    const giver = this.aurlandImage;
+    const hand = { x: 38, y: -118 };
+    const destination = {
+      x: this.wrenContainer.x + hand.x,
+      y: this.wrenContainer.y + hand.y,
+    };
+    const immediate = reducedMotion(this) || !giver?.scene;
+    const token = this.add.image(
+      immediate ? destination.x : giver.x + 44,
+      immediate ? destination.y : giver.y - 150,
+      "bell-trident-token",
+    ).setDepth(61);
+    token.setScale(64 / Math.max(token.width, token.height));
+    applySceneActorLighting(this, token);
+    this.aurlandToken = token;
+    const settle = (): void => {
+      if (this.aurlandToken !== token || !token.scene || !this.wrenContainer.scene) return;
+      // Reparent only at arrival so the held keepsake follows Wren's quiet breath.
+      this.wrenContainer.add(token);
+      token.setPosition(hand.x, hand.y);
+      if (this.aurlandImage === giver) this.hideAurland();
+    };
+    if (immediate) settle();
+    else this.tweens.add({
+      targets: token,
+      ...destination,
+      duration: 650,
+      ease: "Sine.easeInOut",
+      onComplete: settle,
+    });
+  }
+
+  private clearAurlandToken(): void {
+    const token = this.aurlandToken;
+    this.aurlandToken = undefined;
+    if (!token) return;
+    this.tweens.killTweensOf(token);
+    if (token.scene) token.destroy();
   }
 
   /** Fade the painted King Aurland in, standing centre-left, as he's freed. */
@@ -2725,7 +2785,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.clearAurlandWordAnchors();
     this.aurlandImage = undefined;
     fadeOutStagedSprite(this, sprite, {
-      durationMs: 1000,
+      durationMs: reducedMotion(this) ? 0 : 1000,
       ease: "Sine.easeOut",
     });
   }
@@ -4199,6 +4259,13 @@ export class SunkenBellScene extends Phaser.Scene {
         y: pos.y,
         fontSize: 36,
         onClaim: () => playWrenFocus(this.wrenSprite),
+        onAdvance: (cursor, length) => {
+          // TextWordTarget fades for 320ms before onComplete installs the
+          // reward card. A quick Continue in that gap is not another attempt.
+          if (freeingAurland && idx === steps.length - 1 && cursor >= length) {
+            this.aurlandBindingPending = true;
+          }
+        },
         onComplete: () => {
           playWrenAction(this.wrenSprite);
           if (freeingAurland) {
@@ -4215,7 +4282,7 @@ export class SunkenBellScene extends Phaser.Scene {
             depth: 58,
           });
           idx += 1;
-          this.clearActiveTargets();
+          this.clearActiveTargets(this.aurlandBindingPending);
           step.onComplete?.();
           if (step.narrator) {
             this.setNarrator(step.narrator);
@@ -4239,6 +4306,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private readThen(next: () => void): void {
     this.reading.show(next, () => this.narration.replay());
+    this.aurlandBindingPending = false;
   }
 
   /** Story actions keep ordinary typing and never inherit combat penalties. */
@@ -4308,7 +4376,8 @@ export class SunkenBellScene extends Phaser.Scene {
     });
   }
 
-  private clearActiveTargets(): void {
+  private clearActiveTargets(preserveAurlandBindingPending = false): void {
+    if (!preserveAurlandBindingPending) this.aurlandBindingPending = false;
     this.clearBossWordAnchors();
     this.clearOlinWordAnchors();
     this.clearAurlandWordAnchors();

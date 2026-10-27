@@ -39,6 +39,8 @@ function fixture(dy = 0) {
     readThen(next: () => void) { assert(!gate, "an unread response cannot be replaced by another gate"); gate = next; },
     store: { update(edit: (save: typeof state) => void) { edit(state); } },
     pulseShrine: noop, returnIngaToForeground: noop, attendGhostKing: noop,
+    settleBoneFluteInHand: (onSettled: () => void) => onSettled(),
+    clearHeldWoodRelic: noop, showGatheredAshVial: noop,
     startIngaNameReveal() { entered.push("name"); },
     startAct3() { entered.push("king"); },
     startBossFight() { entered.push("boss"); },

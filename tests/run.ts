@@ -39,6 +39,7 @@ await import("./laterMechanicTeaching.test.ts");
 await import("./forgePeacefulGuards.test.ts");
 await import("./skyStoryStaging.test.ts");
 await import("./skyBookActions.test.ts");
+await import("./skyBeaconIntegration.test.ts");
 await import("./bellTokenHandoff.test.ts");
 await import("./woodStoryStaging.test.ts");
 await import("./woodPropActions.test.ts");

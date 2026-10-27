@@ -44,7 +44,6 @@ import { WaveDirector } from "../game/waveDirector";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import {
   addAmbientDrift,
-  addBackdropDrift,
   addContainerWake,
   addIdleBreath,
   attachWordBodyAnchor,
@@ -88,6 +87,9 @@ import { applySceneActorLighting, restoreSceneActorLighting } from "../game/acto
 import forgeBackdrop from "../../art/references/clockwork-forge-clean.png";
 import forgeGolemSprite from "../../art/forge/golem.png";
 import forgeCommandGolemSprite from "../../art/forge/command-golem.png";
+import forgeBellowsWorkstation from "../../art/forge/bellows-workstation.png";
+import forgeValveWorkstation from "../../art/forge/valve-workstation.png";
+import forgeCommandConsole from "../../art/forge/command-console.png";
 import fornSprite from "../../art/forge/forn.png";
 import gregorSprite from "../../art/forge/gregor.png";
 import apprenticeSprite from "../../art/forge/apprentice.png";
@@ -216,6 +218,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private revisitMemoryCue: Phaser.GameObjects.Container | null = null;
   private revisitMemoryWordAnchor: WordBodyAnchorHandle | null = null;
   private apprenticeCue: Phaser.GameObjects.Container | null = null;
+  private bellowsWorkstation: Phaser.GameObjects.Container | null = null;
   private standDownCue: Phaser.GameObjects.Container | null = null;
   private fightCue: Phaser.GameObjects.Container | null = null;
   /** Smith Forn's standing portrait — only on screen during the Fork 1 beat. */
@@ -284,6 +287,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.revisitMemoryCue = null;
     this.revisitMemoryWordAnchor = null;
     this.apprenticeCue = null;
+    this.bellowsWorkstation = null;
     this.standDownCue = null;
     this.fightCue = null;
     this.gregorSprite = undefined;
@@ -308,6 +312,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.load.image("forge-backdrop", forgeBackdrop);
     this.load.image("forge-golem", forgeGolemSprite);
     this.load.image("forge-command-golem", forgeCommandGolemSprite);
+    this.load.image("forge-bellows-workstation", forgeBellowsWorkstation);
+    this.load.image("forge-valve-workstation", forgeValveWorkstation);
+    this.load.image("forge-command-console", forgeCommandConsole);
     this.load.image("forn", fornSprite);
     this.load.image("forge-gregor", gregorSprite);
     this.load.image("forge-apprentice", apprenticeSprite);
@@ -327,12 +334,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
       leaveHint: "Returning to the chamber starts this realm again. Your completed journeys and collected keepsakes stay saved.",
     });
     this.cameras.main.fadeIn(600, 26, 16, 8);
-    const backdrop = this.add
+    this.add
       .image(0, 0, "forge-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
-    addBackdropDrift(this, backdrop, { durationMs: 15500, driftX: -5, driftY: -2 });
+    // The catwalk, floor and workstation pipes share one fixed painted room.
     addAmbientDrift(this, {
       kind: "ember",
       count: 44,
@@ -517,6 +524,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.clearFornWordAnchors();
       this.clearForkChoiceWordAnchors();
       this.clearForgeChoiceCues(false);
+      this.dismissBellowsWorkstation(false);
       this.clearPeacefulGuards();
       this.fornSprite?.destroy();
       this.fornSprite = undefined;
@@ -1208,6 +1216,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private showFork1ChoiceCues(): void {
     this.showApprenticeSprite();
+    if (!this.bellowsWorkstation?.scene) {
+      this.bellowsWorkstation = this.drawForgeWorkstation(800, FOUNDRY_GROUND_Y, "forge-bellows-workstation", 300);
+    }
     if (!this.apprenticeCue?.scene) {
       this.apprenticeCue = this.drawApprenticeCue(1280, FLOOR_Y + 4);
     }
@@ -1260,148 +1271,85 @@ export class ClockworkForgeScene extends Phaser.Scene {
     }
   }
 
-  private drawApprenticeCue(x: number, y: number): Phaser.GameObjects.Container {
-    const c = this.add.container(x, y).setDepth(39);
-    c.add(addLocalGroundShadow(this, 148, 24, { y: 10, alpha: 0.28 }));
-
-    const g = this.add.graphics();
-    g.lineStyle(8, 0x1a120d, 0.98);
-    g.lineBetween(-76, -96, -76, 0);
-    g.lineBetween(56, -82, 56, 0);
-    g.lineStyle(3, 0x5a4632, 0.62);
-    g.lineBetween(-76, -94, 56, -82);
-    g.fillStyle(0x251711, 0.98);
-    g.fillRoundedRect(-108, -34, 216, 44, 9);
-    g.lineStyle(2, PALETTE_HEX.brass, 0.38);
-    g.strokeRoundedRect(-108, -34, 216, 44, 9);
-    g.fillStyle(0x120d0a, 0.98);
-    g.fillCircle(-28, -44, 34);
-    g.lineStyle(4, PALETTE_HEX.ember, 0.5);
-    g.strokeCircle(-28, -44, 25);
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      g.lineBetween(
-        -28,
-        -44,
-        -28 + Math.cos(a) * 24,
-        -44 + Math.sin(a) * 24,
-      );
+  /** Trim transparent canvas padding once, so the painted metal base — rather
+   * than the exported image bounds — rests on the foundry floor. */
+  private forgeWorkstationTexture(key: string): string {
+    const trimmedKey = `${key}-floor-trimmed`;
+    if (this.textures.exists(trimmedKey)) return trimmedKey;
+    const source = this.textures.get(key).getSourceImage() as HTMLImageElement;
+    const width = source.naturalWidth || source.width;
+    const height = source.naturalHeight || source.height;
+    if (!width || !height) return key;
+    const scan = document.createElement("canvas");
+    scan.width = width;
+    scan.height = height;
+    const context = scan.getContext("2d", { willReadFrequently: true });
+    if (!context) return key;
+    context.drawImage(source, 0, 0);
+    const pixels = context.getImageData(0, 0, width, height).data;
+    let left = width;
+    let top = height;
+    let right = -1;
+    let bottom = -1;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (pixels[(y * width + x) * 4 + 3] < 32) continue;
+        left = Math.min(left, x);
+        top = Math.min(top, y);
+        right = Math.max(right, x);
+        bottom = Math.max(bottom, y);
+      }
     }
-    g.lineStyle(7, 0x483322, 0.95);
-    g.lineBetween(20, -28, 92, -80);
-    g.lineStyle(3, PALETTE_HEX.brass, 0.7);
-    g.lineBetween(22, -30, 88, -78);
-    g.fillStyle(PALETTE_HEX.ember, 0.28);
-    g.fillCircle(74, -70, 8);
-    g.fillCircle(-64, -22, 6);
-    c.add(g);
+    if (right < left || bottom < top) return key;
+    const texture = this.textures.createCanvas(trimmedKey, right - left + 1, bottom - top + 1);
+    if (!texture) return key;
+    texture.context.drawImage(source, left, top, right - left + 1, bottom - top + 1,
+      0, 0, right - left + 1, bottom - top + 1);
+    texture.refresh();
+    return trimmedKey;
+  }
 
-    addContainerWake(this, c, {
-      kind: "ember",
-      intervalMs: 170,
-      spreadX: 44,
-      spreadY: 20,
-      offsetY: -46,
-      alpha: 0.34,
-      size: 3,
-      depth: 38,
-      driftY: -60,
-    });
-    stageContainerEntrance(this, c, {
-      entranceOffsetY: 16,
-      entranceMs: 620,
-      breathDy: -3,
-      breathMs: 2100,
-    });
+  /** Keep the old word-owner origin while the painted base sits at the same
+   * floor as Wren. This preserves every authored target position and tether. */
+  private drawForgeWorkstation(
+    x: number, ownerY: number, key: string, visibleWidth: number,
+  ): Phaser.GameObjects.Container {
+    const c = this.add.container(x, ownerY).setDepth(5);
+    const prop = this.add.image(0, FOUNDRY_GROUND_Y - ownerY, this.forgeWorkstationTexture(key));
+    prop.setOrigin(0.5, 1);
+    prop.setScale(visibleWidth / prop.width);
+    c.add(prop);
+    if (!reducedMotion(this)) {
+      c.setAlpha(0);
+      this.tweens.add({ targets: c, alpha: 1, duration: 420, ease: "Sine.easeOut" });
+    }
     return c;
+  }
+
+  private drawApprenticeCue(x: number, y: number): Phaser.GameObjects.Container {
+    return this.drawForgeWorkstation(x, y, "forge-valve-workstation", 250);
   }
 
   private drawStandDownCue(x: number, y: number): Phaser.GameObjects.Container {
-    const c = this.add.container(x, y).setDepth(39);
-    c.add(addLocalGroundShadow(this, 140, 22, { y: 10, alpha: 0.24 }));
-
-    const g = this.add.graphics();
-    g.fillStyle(0x1d1712, 0.96);
-    g.fillRoundedRect(-80, -38, 160, 48, 10);
-    g.lineStyle(2, PALETTE_HEX.brass, 0.55);
-    g.strokeRoundedRect(-80, -38, 160, 48, 10);
-    g.lineStyle(5, 0x5a4632, 0.82);
-    g.lineBetween(-54, -94, -22, -56);
-    g.lineBetween(54, -94, 22, -56);
-    g.lineStyle(4, PALETTE_HEX.brass, 0.5);
-    g.strokeCircle(0, -56, 38);
-    g.lineStyle(2, PALETTE_HEX.brass, 0.35);
-    g.strokeCircle(0, -56, 24);
-    g.fillStyle(PALETTE_HEX.brass, 0.18);
-    g.fillCircle(0, -56, 30);
-    g.fillStyle(0x0f0c09, 0.96);
-    g.fillRoundedRect(-38, -72, 76, 28, 6);
-    g.lineStyle(3, PALETTE_HEX.brass, 0.62);
-    g.lineBetween(-24, -58, 24, -58);
-    c.add(g);
-
-    addContainerWake(this, c, {
-      kind: "mote",
-      intervalMs: 230,
-      spreadX: 34,
-      spreadY: 16,
-      offsetY: -52,
-      color: PALETTE_HEX.brass,
-      alpha: 0.28,
-      size: 2.5,
-      depth: 38,
-      driftY: -44,
-    });
-    stageContainerEntrance(this, c, {
-      entranceOffsetY: 14,
-      entranceMs: 620,
-      breathDy: -2,
-      breathMs: 2200,
-    });
-    return c;
+    return this.drawForgeWorkstation(x, y, "forge-command-console", 210);
   }
 
   private drawFightCue(x: number, y: number): Phaser.GameObjects.Container {
-    const c = this.add.container(x, y).setDepth(39);
-    c.add(addLocalGroundShadow(this, 148, 24, { y: 10, alpha: 0.28 }));
+    // The choice belongs to the foundry and its actual guard-golems. A second
+    // floating weapon emblem adds no physical object to this room.
+    return this.add.container(x, y).setDepth(5);
+  }
 
-    const g = this.add.graphics();
-    g.fillStyle(0x1a110d, 0.98);
-    g.fillRoundedRect(-88, -34, 176, 44, 9);
-    g.lineStyle(2, PALETTE_HEX.ember, 0.46);
-    g.strokeRoundedRect(-88, -34, 176, 44, 9);
-    g.fillStyle(0x4b3825, 0.96);
-    g.fillRoundedRect(-48, -68, 96, 32, 7);
-    g.lineStyle(5, 0x120c08, 0.96);
-    g.lineBetween(-74, -18, -18, -94);
-    g.lineBetween(20, -94, 78, -18);
-    g.lineStyle(3, PALETTE_HEX.brass, 0.58);
-    g.lineBetween(-70, -20, -20, -90);
-    g.lineBetween(24, -90, 74, -20);
-    g.fillStyle(PALETTE_HEX.ember, 0.35);
-    g.fillCircle(-8, -86, 7);
-    g.fillCircle(52, -32, 6);
-    g.fillCircle(-62, -30, 5);
-    c.add(g);
-
-    addContainerWake(this, c, {
-      kind: "ember",
-      intervalMs: 135,
-      spreadX: 48,
-      spreadY: 22,
-      offsetY: -46,
-      alpha: 0.42,
-      size: 3.2,
-      depth: 38,
-      driftY: -72,
+  private dismissBellowsWorkstation(animate = true): void {
+    const workstation = this.bellowsWorkstation;
+    this.bellowsWorkstation = null;
+    if (!workstation?.scene) return;
+    this.tweens.killTweensOf(workstation);
+    if (!animate || reducedMotion(this)) { workstation.destroy(); return; }
+    this.tweens.add({
+      targets: workstation, alpha: 0, duration: 460, ease: "Sine.easeIn",
+      onComplete: () => { if (workstation.scene) workstation.destroy(); },
     });
-    stageContainerEntrance(this, c, {
-      entranceOffsetY: 14,
-      entranceMs: 620,
-      breathDy: -3,
-      breathMs: 1900,
-    });
-    return c;
   }
 
   private pulseForgeChoiceCue(
@@ -1409,11 +1357,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     color: number = PALETTE_HEX.ember,
   ): void {
     if (!cue?.scene) return;
-    playActorAttention(this, cue, {
-      scale: 1.035,
-      durationMs: 220,
-      tint: color,
-    });
+    // Machinery is bolted to the room; feedback never bobs or scales its base.
     playBodyImpact(this, cue, {
       kind: "ember",
       color,
@@ -1447,14 +1391,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
     if (!cue?.scene) return;
     this.tweens.killTweensOf(cue);
     for (const child of cue.list) this.tweens.killTweensOf(child);
-    if (!animate) {
+    if (!animate || reducedMotion(this)) {
       cue.destroy();
       return;
     }
     this.tweens.add({
       targets: cue,
       alpha: 0,
-      y: cue.y + 18,
       duration: 460,
       ease: "Sine.easeIn",
       onComplete: () => {
@@ -1534,6 +1477,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.fork1Choice = this.commitFork("fork1", "cabal") as typeof this.fork1Choice;
     if (this.fork1Choice !== "cabal") { this.startFornBranch(); return; }
     this.clearActiveTargets();
+    this.dismissBellowsWorkstation();
     this.hideFornSprite();
     this.showApprenticeSprite();
     this.approachForgeWork(1100);
@@ -1564,6 +1508,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.hideFornSprite();
     this.hideApprenticeSprite();
     this.dismissForgeChoiceCue("apprentice");
+    this.dismissBellowsWorkstation();
     // Almanac lore page 3 — Forn's hammer song OR the Apprentices' manifesto.
     // Mutually exclusive per fork branch.
     const lorePageId =

@@ -44,7 +44,6 @@ import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
 import {
   addAmbientDrift,
-  addBackdropDrift,
   addContainerWake,
   attachWordBodyAnchor,
   dismissCompanionCameo,
@@ -83,6 +82,8 @@ import ettaSprite from "../../art/sky/etta.png";
 import ettaEmptySprite from "../../art/sky/etta-empty.png";
 import ettaVolumeSprite from "../../art/sky/etta-volume.png";
 import ettaShelfSprite from "../../art/sky/etta-shelf.png";
+import beaconBrazierSprite from "../../art/sky/beacon-brazier.png";
+import beaconFlameSprite from "../../art/sky/beacon-flame.png";
 import runaPortrait from "../../art/runa/runa-front.png";
 import lanternMothSprite from "../../art/companions/lantern-moth.png";
 
@@ -256,6 +257,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private ettaBookWordAnchors: WordBodyAnchorHandle[] = [];
   private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
   private beaconFlameCue: Phaser.GameObjects.Container | null = null;
+  private heldBeaconSpark: Phaser.GameObjects.Image | null = null;
   private kindAnswerCue: Phaser.GameObjects.Container | null = null;
   private tetherThreadCue: Phaser.GameObjects.Container | null = null;
   private companionChoice: "take" | "let-go" | null = null;
@@ -330,6 +332,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.ettaBookWordAnchors = [];
     this.forkChoiceWordAnchors = [];
     this.beaconFlameCue = null;
+    this.heldBeaconSpark = null;
     this.kindAnswerCue = null;
     this.tetherThreadCue = null;
     const companion = resolveCompanionDecision("sky-island", this.store.get().realms["sky-island"], this.store.get().satchel);
@@ -355,6 +358,8 @@ export class SkyIslandScene extends Phaser.Scene {
     this.load.image("etta-empty", ettaEmptySprite);
     this.load.image("etta-volume", ettaVolumeSprite);
     this.load.image("etta-shelf", ettaShelfSprite);
+    this.load.image("sky-beacon-brazier", beaconBrazierSprite);
+    this.load.image("sky-beacon-flame", beaconFlameSprite);
     this.load.image("sky-companion-lantern-moth", lanternMothSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
@@ -369,12 +374,11 @@ export class SkyIslandScene extends Phaser.Scene {
       leaveHint: "Returning to the chamber starts this realm again. Your completed journeys and collected keepsakes stay saved.",
     });
     this.cameras.main.fadeIn(600, 26, 16, 8);
-    const backdrop = this.add
+    this.add
       .image(0, 0, "sky-island-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
-    addBackdropDrift(this, backdrop, { durationMs: 17500, driftX: -2, driftY: -6 });
     addAmbientDrift(this, {
       kind: "mote",
       count: 38,
@@ -2323,6 +2327,7 @@ export class SkyIslandScene extends Phaser.Scene {
           "Something shifts in the air. The summit calls louder.",
         ],
         () => {
+          this.clearHeldBeaconSpark();
           this.fadeOutForkCue(this.beaconFlameCue);
           this.beaconFlameCue = null;
           this.startAct3();
@@ -2330,6 +2335,7 @@ export class SkyIslandScene extends Phaser.Scene {
         {
           body: this.beaconFlameCue, sourceOffsetY: -76, side: "right",
           onPhraseComplete: (index) => {
+            if (index === 1) this.dimBeaconFlameVisual();
             if (index === 2) this.takeBeaconSparkVisual();
           },
         },
@@ -3354,6 +3360,8 @@ export class SkyIslandScene extends Phaser.Scene {
     const width = this.scale.width;
     const height = this.scale.height;
     if (!body?.scene) return { x: width / 2, y: height / 2 };
+    const physicalSource = body.getData?.("sky-source-offset-y");
+    if (typeof physicalSource === "number") sourceOffsetY = physicalSource;
 
     const long = word.length > 16;
     const side =
@@ -3926,6 +3934,9 @@ export class SkyIslandScene extends Phaser.Scene {
   ): TextWordTarget {
     if (!body?.scene) return this.makeWord(opts);
 
+    const physicalSource = body.getData?.("sky-source-offset-y");
+    if (typeof physicalSource === "number") sourceOffsetY = physicalSource;
+    const feedbackBody = body === this.beaconFlameCue ? this.wrenContainer : body;
     const onClaim = opts.onClaim;
     const onAdvance = opts.onAdvance;
     const onComplete = opts.onComplete;
@@ -3950,7 +3961,7 @@ export class SkyIslandScene extends Phaser.Scene {
           body.y + sourceOffsetY,
           { color: PALETTE_HEX.brass, depth: 58 },
         );
-        playActorAttention(this, body, {
+        playActorAttention(this, feedbackBody, {
           tint: PALETTE_HEX.brass,
           scale: 1.022,
           durationMs: 180,
@@ -4015,56 +4026,84 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private createBeaconFlameCue(): Phaser.GameObjects.Container {
+    // The terrace and its masonry share a fixed contact point. Only the light
+    // changes; the physical beacon never rises, breathes or scales on claim.
     const c = this.add.container(1320, 792).setDepth(42).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 126, 18, { y: 14, alpha: 0.18 }));
-    const g = this.add.graphics();
-    g.fillStyle(0x3b3025, 0.82);
-    g.fillRoundedRect(-44, -38, 88, 46, 12);
-    g.lineStyle(2, PALETTE_HEX.brass, 0.42);
-    g.strokeRoundedRect(-44, -38, 88, 46, 12);
-    c.add(g);
-    const flame = this.add.graphics().setName("beacon-spark");
-    flame.fillStyle(PALETTE_HEX.brass, 0.78);
-    flame.fillTriangle(0, -126, -24, -62, 22, -62);
-    flame.fillStyle(0xfff0a8, 0.58);
-    flame.fillTriangle(4, -110, -12, -68, 18, -68);
-    flame.lineStyle(2, 0xffd989, 0.38);
-    flame.strokeEllipse(0, -78, 86, 54);
-    flame.strokeEllipse(0, -78, 118, 76);
+    c.setData("sky-source-offset-y", -190);
+    c.add(addLocalGroundShadow(this, 142, 18, { y: 4, alpha: 0.2 }));
+    const brazier = this.add.image(0, 0, "sky-beacon-brazier").setName("beacon-brazier");
+    this.fitBeaconPainting(brazier, 180, "brazier");
+    c.add(brazier);
+    const light = addLivingLight(this, {
+      x: 0, y: -190, width: 132, height: 144,
+      color: 0xefbd63, alpha: 0.12, depth: 42, durationMs: 2200, scale: 1.02,
+    }).setName("beacon-light");
+    c.add(light);
+    const flame = this.add.image(0, -168, "sky-beacon-flame").setName("beacon-spark");
+    this.fitBeaconPainting(flame, 70, "flame");
     c.add(flame);
     addContainerWake(this, c, {
-      kind: "mote",
-      intervalMs: 430,
-      spreadX: 34,
-      spreadY: 20,
-      offsetY: -72,
-      alpha: 0.26,
-      size: 4,
-      depth: 41,
-      driftY: -50,
-      durationMs: 1300,
+      kind: "mote", intervalMs: 430, spreadX: 22, spreadY: 16,
+      offsetY: -190, alpha: 0.2, size: 3, depth: 41, driftY: -50, durationMs: 1300,
     });
-    this.tweens.add({
-      targets: c,
-      y: 770,
-      alpha: 0.92,
-      duration: 680,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (!c.scene) return;
-        addIdleBreath(this, c, { dy: -4, durationMs: 2500 });
-      },
-    });
+    this.tweens.add({ targets: c, alpha: 1, duration: 680, ease: "Sine.easeOut" });
     return c;
+  }
+
+  /** Fit the painted silhouette, including its real bottom contact, not padding. */
+  private fitBeaconPainting(image: Phaser.GameObjects.Image, height: number, kind: "brazier" | "flame"): void {
+    // Visible alpha bounds (>10%); faint matte-edge pixels do not define
+    // masonry contact or inflate the height of the little curl of fire.
+    const bounds = kind === "brazier"
+      ? { x: 199, y: 150, width: 865, height: 1040 }
+      : { x: 341, y: 102, width: 499, height: 1136 };
+    image.setOrigin((bounds.x + bounds.width / 2) / image.width, (bounds.y + bounds.height) / image.height);
+    image.setScale(height / bounds.height);
+  }
+
+  private dimBeaconFlameVisual(): void {
+    const cue = this.beaconFlameCue;
+    if (!cue?.scene) return;
+    const flame = cue.getByName("beacon-spark") as Phaser.GameObjects.Image | null;
+    const light = cue.getByName("beacon-light") as Phaser.GameObjects.Graphics | null;
+    flame?.setAlpha(0.62);
+    if (light?.scene) {
+      this.tweens.killTweensOf(light);
+      light.setAlpha(0.045);
+    }
   }
 
   private takeBeaconSparkVisual(): void {
     const cue = this.beaconFlameCue;
-    if (!cue?.scene) return;
-    // The stand remains as the last passage's stable anchor, but the spark
-    // must leave it before the held in-hand response. Inactive stops its wake.
+    if (!cue?.scene || cue.getData?.("beacon-spark-taken")) return;
+    cue.setData?.("beacon-spark-taken", true);
+    // Keep the empty fixture as the final phrase's owner, and move its light
+    // into the story's received state synchronously before the held response.
     cue.getByName("beacon-spark")?.destroy();
     cue.setActive(false);
+    this.showHeldBeaconSpark(cue);
+  }
+
+  private showHeldBeaconSpark(cue: Phaser.GameObjects.Container): void {
+    const light = cue.getByName("beacon-light");
+    if (light?.scene) {
+      this.tweens.killTweensOf(light);
+      light.destroy();
+    }
+    this.clearHeldBeaconSpark();
+    // Keep the received curl outside the cloak and readable at a 1250px
+    // viewport. Its tip stays below the hood; the base meets the hand area.
+    const flame = this.add.image(this.wrenContainer.x + 64, this.wrenContainer.y - 96, "sky-beacon-flame").setDepth(43);
+    this.fitBeaconPainting(flame, 56, "flame");
+    this.heldBeaconSpark = flame;
+  }
+
+  private clearHeldBeaconSpark(): void {
+    const spark = this.heldBeaconSpark;
+    this.heldBeaconSpark = null;
+    if (!spark?.scene) return;
+    this.tweens.killTweensOf(spark);
+    spark.destroy();
   }
 
   private createKindAnswerCue(): Phaser.GameObjects.Container {
@@ -4163,7 +4202,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.tweens.killTweensOf(cue);
     this.tweens.add({
       targets: cue,
-      y: cue.y + (opts.riseY ?? -18),
+      y: cue === this.beaconFlameCue ? cue.y : cue.y + (opts.riseY ?? -18),
       alpha: 0,
       duration: opts.durationMs ?? 540,
       ease: "Sine.easeIn",
@@ -4175,6 +4214,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private clearSkyForkCues(): void {
     this.clearForkChoiceWordAnchors();
+    this.clearHeldBeaconSpark();
     for (const cue of [this.beaconFlameCue, this.kindAnswerCue, this.tetherThreadCue]) {
       if (!cue?.scene) continue;
       this.tweens.killTweensOf(cue);

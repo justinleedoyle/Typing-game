@@ -1,4 +1,5 @@
 import { installChapterMenu } from "../game/ui/pauseMenu";
+import { applySceneActorLighting } from "../game/actorLighting";
 import { rememberRealmFork, resolveRealmFork, resolveCompanionDecision, rememberCompanionDecision, type RealmFork } from "../game/realmChoices";
 import { ChapterReading } from "../game/ui/chapterReading";
 import { reducedFlashes, reducedMotion } from "../game/presentation";
@@ -44,7 +45,6 @@ import {
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import {
   addAmbientDrift,
-  addBackdropDrift,
   addContainerWake,
   attachWordBodyAnchor,
   dismissCompanionCameo,
@@ -86,6 +86,8 @@ import snowFoxSprite from "../../art/companions/snow-fox.png";
 import groveFireSprite from "../../art/effects/grove-fire.png";
 import boneFluteSprite from "../../art/relics/bone-flute.png";
 import ashVialSprite from "../../art/relics/ash-vial.png";
+import offeringShrineSprite from "../../art/wood/offering-shrine.png";
+import fluteHollowSprite from "../../art/wood/flute-hollow.png";
 
 interface HauntedWoodSceneData {
   store: SaveStore;
@@ -279,6 +281,8 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.load.image("wood-grove-fire", groveFireSprite);
     this.load.image("wood-bone-flute", boneFluteSprite);
     this.load.image("wood-ash-vial", ashVialSprite);
+    this.load.image("wood-offering-shrine", offeringShrineSprite);
+    this.load.image("wood-flute-hollow", fluteHollowSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
@@ -292,12 +296,12 @@ export class HauntedWoodScene extends Phaser.Scene {
       leaveHint: "Returning to the chamber starts this realm again. Your completed journeys and collected keepsakes stay saved.",
     });
     this.cameras.main.fadeIn(600, 14, 18, 14);
-    const backdrop = this.add
+    // The painted floor and its rooted props share one fixed physical frame.
+    this.add
       .image(0, 0, "haunted-wood-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
-    addBackdropDrift(this, backdrop, { durationMs: 20000, driftX: -4, driftY: -3 });
     this.ambientMistFields.push(
       addAmbientDrift(this, {
         kind: "mist",
@@ -2544,6 +2548,12 @@ export class HauntedWoodScene extends Phaser.Scene {
     const side =
       opts.side === "left" ? -1 : opts.side === "right" ? 1 : body.x < this.scale.width / 2 ? 1 : -1;
     const x = Math.max(330, Math.min(this.scale.width - 330, body.x + side * 185));
+    if (body === this.groveLightCue && !body.getData?.("grove-ignited")) {
+      return { x: 520, y: WOOD_BRANCH_WORD_Y };
+    }
+    if (body === this.offeringCue || body === this.boneFluteCue) {
+      return { x, y: WOOD_BRANCH_WORD_Y };
+    }
     const y = Math.max(330, Math.min(this.scale.height - 360, body.y + sourceOffsetY - 92));
     return { x, y };
   }
@@ -2800,11 +2810,13 @@ export class HauntedWoodScene extends Phaser.Scene {
           body.y + sourceOffsetY,
           { color: PALETTE_HEX.moss, depth: 58 },
         );
-        playActorAttention(this, body, {
-          tint: PALETTE_HEX.moss,
-          scale: 1.024,
-          durationMs: 180,
-        });
+        if (!body.getData?.("rooted-wood-prop")) {
+          playActorAttention(this, body, {
+            tint: PALETTE_HEX.moss,
+            scale: 1.024,
+            durationMs: 180,
+          });
+        }
         onClaim?.(mods);
       },
       onAdvance: (cursor, wordLength) => {
@@ -2863,95 +2875,58 @@ export class HauntedWoodScene extends Phaser.Scene {
     }
   }
 
-  private createOfferingCue(): Phaser.GameObjects.Container {
-    const c = this.add.container(690, 812).setDepth(42).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 122, 18, { y: 12, alpha: 0.2 }));
-
-    const g = this.add.graphics();
-    g.fillStyle(0x181510, 0.88);
-    g.fillEllipse(0, -24, 72, 24);
-    g.fillStyle(0x4c3e2c, 0.88);
-    g.fillEllipse(0, -30, 60, 18);
-    g.fillStyle(0xd7ded8, 0.34);
-    g.fillEllipse(0, -34, 38, 10);
-    g.fillStyle(PALETTE_HEX.moss, 0.6);
-    g.fillCircle(-20, -52, 6);
-    g.fillCircle(0, -60, 5);
-    g.fillCircle(22, -50, 6);
-    g.lineStyle(2, 0xd7ded8, 0.28);
-    g.strokeEllipse(0, -42, 104, 56);
-    c.add(g);
-
+  /** Solid stone/roots stay planted; only mist and the entrance alpha move. */
+  private createRootedWoodProp(
+    x: number,
+    texture: "wood-offering-shrine" | "wood-flute-hollow",
+    width: number,
+    mistOffsetY: number,
+    entranceMs: number,
+  ): Phaser.GameObjects.Container {
+    const c = this.add.container(x, 812).setDepth(42)
+      .setData("rooted-wood-prop", true).setAlpha(reducedMotion(this) ? 1 : 0);
+    c.add(addLocalGroundShadow(this, width * 0.86, 18, { y: 4, alpha: 0.24 }));
+    this.addRootedWoodPainting(c, texture, width);
     addContainerWake(this, c, {
-      kind: "mist",
-      intervalMs: 540,
-      spreadX: 34,
-      spreadY: 16,
-      offsetY: -38,
-      alpha: 0.2,
-      size: 4,
-      depth: 41,
-      driftX: 30,
-      driftY: -30,
-      durationMs: 1400,
+      kind: "mist", intervalMs: 540, spreadX: 34, spreadY: 16,
+      offsetY: mistOffsetY, alpha: 0.18, size: 4, depth: 41,
+      driftX: 30, driftY: -30, durationMs: 1400,
     });
-
-    this.tweens.add({
-      targets: c,
-      y: 792,
-      alpha: 0.9,
-      duration: 640,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (!c.scene) return;
-        addIdleBreath(this, c, { dy: -3, durationMs: 2700 });
-      },
+    if (!reducedMotion(this)) this.tweens.add({
+      targets: c, alpha: 1, duration: entranceMs, ease: "Sine.easeOut",
     });
     return c;
   }
 
-  private createBoneFluteCue(): Phaser.GameObjects.Container {
-    const c = this.add.container(1230, 812).setDepth(42).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 128, 18, { y: 12, alpha: 0.2 }));
+  private addRootedWoodPainting(
+    owner: Phaser.GameObjects.Container,
+    texture: "wood-offering-shrine" | "wood-flute-hollow",
+    width: number,
+  ): Phaser.GameObjects.Image {
+    const image = this.add.image(0, 0, texture);
+    // Measured solid alpha footprints of the accepted cutouts; transparent
+    // export margins never become a floating floor or shrink the world prop.
+    const footprint = texture === "wood-offering-shrine"
+      ? { left: 20, right: 1428, bottom: 907 }
+      : { left: 27, right: 1516, bottom: 991 };
+    image.setOrigin((footprint.left + footprint.right) / 2 / image.width,
+      footprint.bottom / image.height);
+    image.setScale(width / (footprint.right - footprint.left));
+    applySceneActorLighting(this, image);
+    owner.add(image);
+    return image;
+  }
 
-    const g = this.add.graphics();
-    g.fillStyle(0x1c2019, 0.88);
-    g.fillRoundedRect(-58, -38, 116, 34, 12);
-    g.lineStyle(2, 0xd7ded8, 0.22);
-    g.strokeRoundedRect(-58, -38, 116, 34, 12);
-    g.lineStyle(2, PALETTE_HEX.moss, 0.28);
-    g.strokeEllipse(0, -74, 132, 58);
-    c.add(g);
+  private createOfferingCue(): Phaser.GameObjects.Container {
+    return this.createRootedWoodProp(690, "wood-offering-shrine", 230, -72, 640);
+  }
+
+  private createBoneFluteCue(): Phaser.GameObjects.Container {
+    const c = this.createRootedWoodProp(1230, "wood-flute-hollow", 260, -74, 660);
     const flute = this.add.image(0, -74, "wood-bone-flute");
     flute.setScale(104 / flute.height);
     c.add(flute);
     this.boneFluteProp = flute;
-
-    addContainerWake(this, c, {
-      kind: "mist",
-      intervalMs: 560,
-      spreadX: 36,
-      spreadY: 18,
-      offsetY: -54,
-      alpha: 0.18,
-      size: 4,
-      depth: 41,
-      driftX: 32,
-      driftY: -28,
-      durationMs: 1350,
-    });
-
-    this.tweens.add({
-      targets: c,
-      y: 790,
-      alpha: 0.9,
-      duration: 660,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (!c.scene) return;
-        addIdleBreath(this, c, { dy: -4, durationMs: 2500 });
-      },
-    });
     return c;
   }
 
@@ -3009,51 +2984,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private createGroveLightCue(): Phaser.GameObjects.Container {
-    const c = this.add.container(1210, 790).setDepth(42).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 136, 18, { y: 12, alpha: 0.2 }));
-
-    const g = this.add.graphics();
-    g.lineStyle(4, 0x342b1e, 0.78);
-    g.lineBetween(-28, -10, -28, -92);
-    g.lineBetween(30, -10, 30, -88);
-    g.fillStyle(0x1d160f, 0.8);
-    g.fillRoundedRect(-48, -88, 96, 42, 12);
-    g.lineStyle(2, PALETTE_HEX.moss, 0.34);
-    g.strokeRoundedRect(-48, -88, 96, 42, 12);
-    g.fillStyle(0xc9a14a, 0.5);
-    g.fillEllipse(0, -66, 46, 24);
-    g.fillStyle(0xf0d78a, 0.72);
-    g.fillEllipse(0, -70, 18, 30);
-    g.lineStyle(2, 0xf0d78a, 0.28);
-    g.strokeEllipse(0, -68, 128, 72);
-    c.add(g);
-
-    addContainerWake(this, c, {
-      kind: "mist",
-      intervalMs: 520,
-      spreadX: 34,
-      spreadY: 18,
-      offsetY: -58,
-      alpha: 0.2,
-      size: 4,
-      depth: 41,
-      driftX: 28,
-      driftY: -36,
-      durationMs: 1300,
-    });
-
-    this.tweens.add({
-      targets: c,
-      y: 770,
-      alpha: 0.88,
-      duration: 680,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (!c.scene) return;
-        addIdleBreath(this, c, { dy: -3, durationMs: 2500 });
-      },
-    });
-    return c;
+    return this.createRootedWoodProp(560, "wood-offering-shrine", 230, -72, 680);
   }
 
   /** Keep the chosen fire visible while the king answers what it has woken. */
@@ -3067,10 +2998,11 @@ export class HauntedWoodScene extends Phaser.Scene {
     // resting lanes. Their containers use depth0, so the fire stays behind
     // them while its words and the king remain fully visible.
     cue.x = this.scale.width * 0.06;
+    cue.y = 770;
     cue.setDepth(-0.5).setAlpha(1).setScale(1);
 
     // The lit choice becomes a small painted fire planted on the grove floor;
-    // remove the unlit schematic without changing its gameplay/cleanup owner.
+    // replace the unlit bowl without changing its gameplay/cleanup owner.
     cue.removeAll(true);
     cue.add(addLocalGroundShadow(this, 174, 22, { y: 4, alpha: 0.28 }));
     const fire = this.add.image(0, 4, "wood-grove-fire").setOrigin(0.5, 1);
@@ -3103,7 +3035,8 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.tweens.killTweensOf(cue);
     this.tweens.add({
       targets: cue,
-      y: cue.y + (opts.riseY ?? 18),
+      ...(cue.getData("rooted-wood-prop") && !cue.getData("grove-ignited")
+        ? {} : { y: cue.y + (opts.riseY ?? 18) }),
       alpha: 0,
       duration: opts.durationMs ?? 540,
       ease: "Sine.easeIn",
@@ -3257,10 +3190,6 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private pulseShrine(): void {
     if (!this.shrineFigure?.scene) return;
-    playActorAttention(this, this.shrineFigure, {
-      scale: 1.018,
-      durationMs: 280,
-    });
     playBodyImpact(this, this.shrineFigure, {
       kind: "mist",
       color: 0xd7ded8,
@@ -3613,7 +3542,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private drawShrine(): void {
     const sx = 960;
     const sy = 810;
-    const c = this.add.container(sx, sy + 12).setDepth(-1).setAlpha(0);
+    const c = this.add.container(sx, sy).setDepth(-1).setAlpha(0);
     this.shrineFigure = c;
 
     c.add(addLocalGroundShadow(this, 150, 18, { y: 14, alpha: 0.18 }));
@@ -3625,34 +3554,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     glow.fillEllipse(0, 14, 138, 44);
     c.add(glow);
 
-    const stone = this.add.graphics();
-    stone.fillStyle(0x171f18, 0.36);
-    stone.fillRoundedRect(-72, -4, 144, 18, 6);
-    stone.fillStyle(0x263028, 1);
-    stone.fillRoundedRect(-44, -58, 88, 58, 6);
-    stone.fillStyle(0x303a31, 1);
-    stone.fillRoundedRect(-56, -68, 112, 14, 5);
-    stone.fillStyle(0x202820, 1);
-    stone.fillRoundedRect(-60, 0, 120, 12, 5);
-    stone.fillStyle(0x495248, 0.8);
-    stone.fillRoundedRect(-38, -54, 32, 12, 4);
-    stone.fillRoundedRect(8, -50, 28, 14, 4);
-    stone.fillStyle(0x394238, 0.86);
-    stone.fillRoundedRect(-30, -34, 60, 20, 5);
-    stone.lineStyle(2, 0x6f725c, 0.22);
-    stone.lineBetween(-26, -54, -38, -8);
-    stone.lineBetween(18, -50, 34, -12);
-    stone.lineBetween(-56, -68, 56, -68);
-    c.add(stone);
-
-    const bowl = this.add.graphics().setPosition(0, -70);
-    bowl.fillStyle(0x181510, 0.9);
-    bowl.fillEllipse(0, 9, 56, 18);
-    bowl.fillStyle(0x4c3e2c, 0.9);
-    bowl.fillEllipse(0, 4, 46, 14);
-    bowl.fillStyle(0xeec870, 0.26);
-    bowl.fillEllipse(0, 2, 30, 8);
-    c.add(bowl);
+    this.addRootedWoodPainting(c, "wood-offering-shrine", 180);
 
     const flame = this.add.graphics().setPosition(0, -82);
     flame.fillStyle(0xd4a040, 0.55);
@@ -3711,10 +3613,8 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.tweens.add({
       targets: c,
       alpha: 1,
-      y: sy,
       duration: 480,
       ease: "Sine.easeOut",
-      onComplete: () => addIdleBreath(this, c, { dy: -2, durationMs: 4200 }),
     });
   }
 

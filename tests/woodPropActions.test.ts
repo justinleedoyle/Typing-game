@@ -5,7 +5,7 @@ import { assert, assertClose, assertEqual, suite } from "./_assert";
 const url = new URL("../src/scenes/HauntedWoodScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const sceneClass = source.statements.find(ts.isClassDeclaration)!;
-const methods = ["init", "preload", "createBoneFluteCue", "settleBoneFluteInHand", "showGatheredAshVial", "clearHeldWoodRelic", "clearWoodForkCues", "startFork1BoneFlute", "startFork2Force", "runPassageChain", "ownerPassageWordPosition", "drawGhostKingRootThrone", "drawGhostKing", "fadeGhostKingBody", "onKeyDown"];
+const methods = ["init", "preload", "createRootedWoodProp", "addRootedWoodPainting", "createOfferingCue", "createBoneFluteCue", "createGroveLightCue", "showFork1Cues", "showFork2Cues", "startFork1", "startFork2", "makeWoodForkWord", "fadeOutForkCue", "drawShrine", "pulseShrine", "settleBoneFluteInHand", "showGatheredAshVial", "clearHeldWoodRelic", "clearWoodForkCues", "startFork1BoneFlute", "startFork2Force", "runPassageChain", "ownerPassageWordPosition", "drawGhostKingRootThrone", "drawGhostKing", "fadeGhostKingBody", "onKeyDown"];
 const constants = source.statements.filter(ts.isVariableStatement).flatMap(statement =>
   statement.declarationList.declarations.filter(declaration => ["WOOD_BRANCH_WORD_Y", "GHOST_KING_SPRITE_HEIGHT"].includes(declaration.name.getText(source)))
     .map(declaration => `const ${declaration.getText(source)};`)).join("\n");
@@ -14,6 +14,7 @@ const code = ts.transpileModule(`${constants}\nclass Wood { ${methods.map(name =
 const textures = Object.fromEntries([
   ["wood-bone-flute", "../art/relics/bone-flute.png"], ["wood-ash-vial", "../art/relics/ash-vial.png"],
   ["wood-root-throne", "../art/wood/root-throne.png"], ["ghost-king", "../art/wood/ghost-king.png"],
+  ["wood-offering-shrine", "../art/wood/offering-shrine.png"], ["wood-flute-hollow", "../art/wood/flute-hollow.png"],
 ].map(([key, path]) => {
   const png = readFileSync(new URL(path!, import.meta.url));
   return [key, { width: png.readUInt32BE(16), height: png.readUInt32BE(20) }];
@@ -28,26 +29,33 @@ function fixture(reduced = false) {
   const breaths: any[] = [];
   const loaded: string[] = [];
   const tasks: string[] = [];
+  const targets: any[] = [], attentions: any[] = [];
   const save = { satchel: [] as string[], realms: {} };
   let gate: (() => void) | undefined;
   let target: any;
-  const assets = ["hauntedWoodBackdrop", "woodGhostSprite", "ghostKingSprite", "rootThroneSprite", "wispCatSprite", "snowFoxSprite", "groveFireSprite", "runaPortrait", "boneFluteSprite", "ashVialSprite"];
-  const Wood = new Function(...assets, "preloadSatchelIcons", "preloadWren", "reducedMotion", "addLocalGroundShadow", "addContainerWake", "addIdleBreath", "playChime", "playWrenAction", "playWrenFocus", "playBodyImpact", "PALETTE_HEX", "isPuristToggleKey", "togglePuristMode", "playClack", "resolveRealmFork", "resolveCompanionDecision", code + ";return Wood;")(
+  const assets = ["hauntedWoodBackdrop", "woodGhostSprite", "ghostKingSprite", "rootThroneSprite", "wispCatSprite", "snowFoxSprite", "groveFireSprite", "runaPortrait", "boneFluteSprite", "ashVialSprite", "offeringShrineSprite", "fluteHollowSprite"];
+  const Wood = new Function(...assets, "preloadSatchelIcons", "preloadWren", "reducedMotion", "addLocalGroundShadow", "addContainerWake", "addIdleBreath", "playChime", "playWrenAction", "playWrenFocus", "playBodyImpact", "PALETTE_HEX", "isPuristToggleKey", "togglePuristMode", "playClack", "resolveRealmFork", "resolveCompanionDecision", "applySceneActorLighting", "attachWordBodyAnchor", "playClaimLine", "playActorAttention", "playBodyTypePulse", "Phaser", code + ";return Wood;")(
     ...assets, noop, noop, () => reduced, () => ({}), noop, (_scene: unknown, body: any) => breaths.push(body), noop, noop, noop, noop, { moss: 0 }, () => false, noop, noop, () => null, () => null,
+    (_scene: unknown, image: any) => { image.lit = true; }, () => ({ destroy: noop }), noop,
+    (_scene: unknown, body: any) => attentions.push(body), noop, { GameObjects: { Events: { DESTROY: "destroy" } } },
   );
   const scene = new Wood();
   const graphics = () => new Proxy({ scene: true }, { get: (value, key) => key in value ? value[key as keyof typeof value] : () => drawing });
   let drawing: any;
   const container = (x: number, y: number) => ({ x, y, scene: true, depth: 0, alpha: 1, children: [] as any[],
+    data: new Map<string, unknown>(), listeners: [] as Array<() => void>,
+    setData(key: string, value: unknown) { this.data.set(key, value); return this; },
+    getData(key: string) { return this.data.get(key); },
+    once(_event: string, callback: () => void) { this.listeners.push(callback); return this; },
     setDepth(value: number) { this.depth = value; return this; }, setAlpha(value: number) { this.alpha = value; return this; },
     add(child: any) { this.children.push(child); child.parent = this; return this; },
     remove(child: any) { this.children = this.children.filter(value => value !== child); child.parent = null; return this; },
-    destroy() { this.scene = false; for (const child of this.children) child.destroy?.(); this.children = []; },
+    destroy() { this.scene = false; for (const child of this.children) child.destroy?.(); this.children = []; for (const listener of this.listeners.splice(0)) listener(); },
   });
   Object.assign(scene, {
     scale: { width: 1920, height: 1080 },
     wrenContainer: { x: 960, y: 826 }, wrenSprite: {},
-    heldWoodRelic: null, boneFluteProp: null, fluteHandoffPending: false, offeringCue: null, groveLightCue: null,
+    heldWoodRelic: null, boneFluteProp: null, fluteHandoffPending: false, offeringCue: null, groveLightCue: null, forkChoiceWordAnchors: [],
     store: { get: () => save, update: (edit: (state: typeof save) => void) => edit(save) },
     load: { image: (key: string) => loaded.push(key) },
     add: {
@@ -72,13 +80,14 @@ function fixture(reduced = false) {
       killTweensOf(body: any) { for (const tween of tweens) if (tween.targets === body) tween.cancelled = true; },
     },
     band: { setObjective(text: string) { tasks.push(text); } },
+    narration: { say(text: string) { captions.push(text); } },
     setNarrator(text: string) { captions.push(text); },
     readThen(next: () => void) { assert(!gate, "an unread result is not overwritten"); gate = next; },
     commitFork: (_fork: string, requested: string) => requested,
     fadeOutForkCue: noop, clearForkChoiceWordAnchors: noop, clearActiveTargets: noop,
     makeWord: (options: any) => options, makeWoodForkWord: (_body: any, options: any) => options,
     makeGhostKingWord: (options: any) => options,
-    registerActiveTarget(value: any) { target = value; },
+    registerActiveTarget(...values: any[]) { targets.push(...values); target = values.at(-1); },
     attendGhostKing: noop, igniteGroveLightCue: noop,
     startAct3() { entered.push("king"); }, startBossFight() { entered.push("boss"); },
     makeGhostKingRootBase: container, playGhostKingStagePulse: noop,
@@ -89,9 +98,74 @@ function fixture(reduced = false) {
     }
     tween.onComplete?.();
   };
-  return { scene, images, tweens, captions, save, entered, loaded, breaths, tasks, target: () => target, gate: () => gate,
+  return { scene, images, tweens, captions, save, entered, loaded, breaths, tasks, targets, attentions, target: () => target, gate: () => gate,
     continue() { assert(gate, "the actual reading gate is available"); const next = gate!; gate = undefined; next(); }, finish };
 }
+
+await suite("Wood rooted props: accepted stone and hollow stay planted through creation, feedback and dismissal", () => {
+  for (const reduced of [false, true]) {
+    const f = fixture(reduced);
+    f.scene.preload();
+    assert(f.loaded.includes("wood-offering-shrine") && f.loaded.includes("wood-flute-hollow"), "a fresh chapter preloads both physical supports before a choice is earned");
+    f.scene.showFork1Cues(); f.scene.showFork2Cues();
+    const offering = f.scene.offeringCue, hollow = f.scene.boneFluteCue, grove = f.scene.groveLightCue;
+    for (const [body, x, texture] of [[offering, 690, "wood-offering-shrine"], [hollow, 1230, "wood-flute-hollow"], [grove, 560, "wood-offering-shrine"]] as const) {
+      assertEqual([body.x, body.y, body.getData("rooted-wood-prop")], [x, 812, true], "the physical support starts on its final ground anchor");
+      const painting = body.children.find((child: any) => child.key === texture);
+      assert(painting?.lit, "the stone and roots receive the scene's woodland lighting");
+      assertEqual(painting.y, 0, "the painted feet belong to the owning ground container");
+      // Accepted-image alpha measurements, independent of the production fit.
+      const [left, right, bottom, width] = texture === "wood-offering-shrine"
+        ? [20, 1428, 907, 230] : [27, 1516, 991, 260];
+      assertClose((right - left) * painting.scale, width, 0.001, "the visible painting fits its intended world width rather than the PNG's transparent export width");
+      assertClose(((left + right) / 2 - painting.originX * painting.width) * painting.scale, 0, 0.001, "the visible roots remain centered on their actual ground owner");
+      assertClose((bottom - painting.originY * painting.height) * painting.scale, 0, 0.001, "the solid painted feet meet the ground even with transparent bottom padding");
+      const movements = f.tweens.filter(tween => tween.targets === body);
+      assertEqual(movements.length, reduced ? 0 : 1, "reduced motion needs no entrance wait; ordinary arrival only fades the same solid prop");
+      assert(movements.every(tween => !["x", "y", "scaleX", "scaleY", "repeat", "yoyo"].some(key => key in tween)), "solid roots/stone never slide, breathe or scale on arrival");
+      if (movements[0]) f.finish(movements[0]);
+      assertEqual([body.x, body.y, body.alpha], [x, 812, 1], "the settled prop is fully opaque and still grounded");
+    }
+    assertEqual(f.breaths, [], "no physical choice owner gets an idle bob");
+    const count = f.images.length;
+    f.scene.showFork1Cues(); f.scene.showFork2Cues();
+    assertEqual(f.images.length, count, "repeated choice setup reuses its existing supports and single flute");
+    const actual = Object.getPrototypeOf(f.scene);
+    const word = actual.makeWoodForkWord.call(f.scene, offering, { word: "leave an offering", x: 505, y: 500, onComplete: noop }, -42);
+    word.onClaim({ spell: false, alt: false }); word.onAdvance(1, 17);
+    assertEqual(f.attentions, [], "claiming a rooted prop keeps its physical scale still while word/particle feedback remains available");
+    actual.fadeOutForkCue.call(f.scene, offering);
+    const fade = f.tweens.at(-1);
+    assert(!("y" in fade) && fade.alpha === 0 && fade.duration === 540, "dismissal retains its original duration without making stone float off the floor");
+    f.finish(fade);
+    assert(!offering.scene, "the same cleanup callback releases the finished physical support");
+    f.scene.clearWoodForkCues();
+    assert(!hollow.scene && !grove.scene, "leaving releases the remaining rooted props and their owned images");
+    assertEqual([f.scene.offeringCue, f.scene.boneFluteCue, f.scene.groveLightCue, f.scene.boneFluteProp], [null, null, null, null], "no physical prop reference survives scene cleanup");
+  }
+});
+
+await suite("Wood choices: actual fork entries leave the new world art and Ghost-King silhouette clear", () => {
+  const shrine = fixture();
+  shrine.scene.startFork1();
+  assertEqual(shrine.targets.map(target => [target.word, target.x, target.y]), [
+    ["leave an offering", 505, 500], ["take the bone-flute", 1415, 500],
+  ], "both original native choices sit above the rooted paintings without changing their words or sides");
+  const centerShrine = shrine.scene.shrineFigure;
+  assert(centerShrine.children.some((child: any) => child.key === "wood-offering-shrine"), "the central shrine uses the same painted stone and roots as its offering support");
+  shrine.scene.pulseShrine();
+  assert(!shrine.attentions.includes(centerShrine), "the shrine's glow does not swell its physical stone");
+  assert(shrine.tweens.filter(tween => tween.targets === centerShrine).every(tween => !["x", "y", "scaleX", "scaleY", "repeat"].some(key => key in tween)), "central stone shares the same stationary world frame");
+  const king = fixture();
+  king.scene.ghostKingBody = { scene: true, x: 1400, y: 604 };
+  king.scene.startFork2();
+  const fireChoice = king.targets.find(target => target.word === "light the grove");
+  assertEqual([fireChoice.x, fireChoice.y], [520, 500], "the unchanged fire choice sits in clear left space instead of across the King's torso");
+  const halfLargePlateWidth = fireChoice.word.length * 20 / 2 + 26;
+  assert(fireChoice.x + halfLargePlateWidth < 880 && fireChoice.y + 46 < 586, "even a conservative large-text plate clears Wren's hood and the King's entire right column");
+  assert(fireChoice.x - halfLargePlateWidth > 180 && fireChoice.y - 46 > 360, "the complete large plate also clears screen edges and the held-caption lane");
+  assertEqual(king.save.satchel, [], "changing the choice presentation pre-awards no relic or branch outcome");
+});
 
 await suite("Wood flute: native taking empties the hollow and shows the existing painting in Wren's hand before its held result", () => {
   for (const reduced of [false, true]) {

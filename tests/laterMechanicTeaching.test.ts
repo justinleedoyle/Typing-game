@@ -164,6 +164,7 @@ await suite("Sky stolen spark: the flame leaves its stand before the held in-han
     },
     runPassageChain: Chain.prototype.runPassageChain,
     takeBeaconSparkVisual: Take.prototype.takeBeaconSparkVisual,
+    dimBeaconFlameVisual: noop, showHeldBeaconSpark: noop, clearHeldBeaconSpark: noop,
     skyOwnedWordPosition: () => ({ x: 1500, y: 650 }),
     makeSkyForkWord(body: unknown, opts: typeof target) {
       assertEqual(body, cue, "even the final phrase retains its stable stand anchor"); return opts;
@@ -479,7 +480,7 @@ await suite("Forge rewards: the collected keepsake is readable before the next c
       band: { setObjective: (text: string) => { objective = text; } },
       setNarrator: (text: string) => { caption = text; },
       readThen: (fn: () => void) => { next = fn; },
-      hideFornSprite() {}, hideApprenticeSprite() {}, dismissForgeChoiceCue() {}, clearForgeChoiceCues() {}, clearPeacefulGuards() {}, showForgeKeepsake() {},
+      hideFornSprite() {}, hideApprenticeSprite() {}, dismissForgeChoiceCue() {}, dismissBellowsWorkstation() {}, clearForgeChoiceCues() {}, clearPeacefulGuards() {}, showForgeKeepsake() {},
       [followup]: () => { challenges += 1; },
     });
     s[method](choice, item);

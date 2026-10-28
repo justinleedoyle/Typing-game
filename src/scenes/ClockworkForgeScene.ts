@@ -271,6 +271,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
   init(data: ForgeSceneData): void {
+    this.clearForgeKeepsake();
     this.revisit = data.revisit === true;
     this.store = data.store;
     this.golems = [];
@@ -532,8 +533,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.gregorSprite = undefined;
       this.apprenticeSprite?.destroy();
       this.apprenticeSprite = undefined;
-      this.keepsakeSprite?.destroy();
-      this.keepsakeSprite = undefined;
+      this.clearForgeKeepsake();
     });
 
     this.ambientHandle = playAmbientForge();
@@ -1537,8 +1537,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── ACT 3 — The Command-Golem ────────────────────────────────────────────────
 
   private startAct3(): void {
-    this.keepsakeSprite?.destroy();
-    this.keepsakeSprite = undefined;
+    this.clearForgeKeepsake();
     this.clearActiveTargets();
     this.golems = [];
     this.waveActive = false;
@@ -1949,8 +1948,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── Brass Songbird companion gate ────────────────────────────────────────────
 
   private startCompanionGate(): void {
-    this.keepsakeSprite?.destroy();
-    this.keepsakeSprite = undefined;
+    this.clearForgeKeepsake();
     this.clearActiveTargets();
     if (resolveCompanionDecision("clockwork-forge", this.store.get().realms["clockwork-forge"], this.store.get().satchel)) {
       this.startTrueNamePassage(); return;
@@ -2566,7 +2564,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private showForgeKeepsake(id: string, fromX: number): void {
     const icon = satchelIconFor(id);
     if (!icon || !this.textures.exists(icon.key)) return;
-    this.keepsakeSprite?.destroy();
+    // Forn's phrase has already put this same hammer in Wren's hands. Keep it
+    // through the final repair phrase and reward card rather than handing it twice.
+    if (this.keepsakeSprite?.scene && this.keepsakeSprite.texture.key === icon.key) return;
+    this.clearForgeKeepsake();
     const end = { x: this.wrenContainer.x + 38, y: this.wrenContainer.y - 118 };
     const item = this.add.image(reducedMotion(this) ? end.x : fromX,
       reducedMotion(this) ? end.y : FOUNDRY_GROUND_Y - 190, icon.key).setDepth(61);
@@ -2577,6 +2578,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
       targets: item, ...end, duration: reducedMotion(this) ? 0 : 650,
       ease: "Sine.easeInOut",
     });
+  }
+
+  private clearForgeKeepsake(): void {
+    const item = this.keepsakeSprite;
+    this.keepsakeSprite = undefined;
+    if (!item?.scene) return;
+    this.tweens.killTweensOf(item);
+    item.destroy();
   }
 
   private runPassageChain(
@@ -2671,6 +2680,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
           const line = narratorLines[step] ?? "";
           step++;
           this.clearActiveTargets();
+          if (owner === "forn" && word === FORN_PASSAGES[2]) {
+            this.showForgeKeepsake("bellows-hammer", 475);
+          }
           if (line) {
             this.setNarrator(line);
             this.band.setObjective("Phrase complete. Press Enter or Space to continue.");

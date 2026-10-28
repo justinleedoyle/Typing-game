@@ -37,7 +37,6 @@ import {
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import {
   addAmbientDrift,
-  addBackdropDrift,
   addContainerWake,
   attachWordBodyAnchor,
   dismissCompanionCameo,
@@ -84,6 +83,8 @@ import {
   setWrenPose,
 } from "../game/wren";
 import winterBackdrop from "../../art/references/winter-mountain-clean.png";
+import winterAftermathCairn from "../../art/winter/aftermath-cairn.png";
+import winterAftermathPelt from "../../art/winter/aftermath-pelt.png";
 import winterTrailBackdrop from "../../art/winter/frozen-trail.png";
 import fallenPineSprite from "../../art/winter/fallen-pine.png";
 import snowFoxSprite from "../../art/companions/snow-fox.png";
@@ -274,6 +275,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private fireflyCue: Phaser.GameObjects.Container | null = null;
   private cairnCue: Phaser.GameObjects.Container | null = null;
   private peltCue: Phaser.GameObjects.Container | null = null;
+  private heldPeltSprite: Phaser.GameObjects.Image | null = null;
   private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
   private foxCompanion: Phaser.GameObjects.Container | null = null;
   private foxWordAnchors: WordBodyAnchorHandle[] = [];
@@ -343,6 +345,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.fireflyCue = null;
     this.cairnCue = null;
     this.peltCue = null;
+    this.clearHeldPelt();
     this.forkChoiceWordAnchors = [];
     this.foxCompanion = null;
     this.foxWordAnchors = [];
@@ -380,6 +383,8 @@ export class WinterMountainScene extends Phaser.Scene {
     this.load.image("winter-backdrop", winterBackdrop);
     this.load.image("winter-trail-backdrop", winterTrailBackdrop);
     this.load.image("winter-fallen-pine", fallenPineSprite);
+    this.load.image("winter-aftermath-cairn", winterAftermathCairn);
+    this.load.image("winter-aftermath-pelt", winterAftermathPelt);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadWren(this);
     preloadWolves(this);
@@ -395,12 +400,12 @@ export class WinterMountainScene extends Phaser.Scene {
       onLeave: () => this.scene.start("PortalChamberScene", { store: this.store }),
     });
     this.cameras.main.fadeIn(500, 11, 10, 15);
-    const backdrop = this.add
+    this.add
       .image(0, 0, "winter-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
-    addBackdropDrift(this, backdrop, { durationMs: 17000, driftX: -6, driftY: -4 });
+    // Rooted landmarks and aftermath props share the painted snowfield's fixed frame.
     addAmbientDrift(this, {
       kind: "snow",
       count: 70,
@@ -1465,15 +1470,19 @@ export class WinterMountainScene extends Phaser.Scene {
   // ACT 2 — Through the Pack
   // ═══════════════════════════════════════════════════════════════════════════
 
-  private startWave(idx: number): void {
+  private startWave(idx: number, opts: { retry?: boolean } = {}): void {
     this.clearActiveTargets();
     this.waveActive = false;
     this.waveIndex = idx;
     this.checkpoint("wave", { index: idx });
-    this.setNarrator(idx === 0
+    this.setNarrator(opts.retry
+      ? "Your candles went out. You are back at the start of the same encounter, with one candle lit."
+      : idx === 0
       ? "One wolf waits ahead. Type its word before it reaches Wren. Candles are your health; Heart shows accuracy. Clean typing fills Soul. When thunder is ready, hold Shift on the first letter to push the pack back. An empty Soul meter still lets you type normally."
       : WAVES[idx].intro);
-    this.band.setObjective(idx === 0
+    this.band.setObjective(opts.retry
+      ? "Retry · Press Enter or Space to try this encounter again."
+      : idx === 0
       ? "Act II · Type the wolf word. Candles keep Wren safe; Soul buys thunder."
       : idx === 1 ? "Act II · Two wolves. Type the nearer threat first; Esc releases your word."
       : "Act III · Clear the pack, then name the leader. Keep a candle lit.");
@@ -2424,6 +2433,10 @@ export class WinterMountainScene extends Phaser.Scene {
   ): void {
     const handoff = owner === "huntress" && step === HUNTRESS_PASSAGES.length - 1;
     const present = () => {
+      if (owner === "pelt" && step === PELT_PASSAGES.length - 1) {
+        this.receivePeltVisual();
+        this.band.setObjective("The pelt is in your hands. Press Enter or Space to continue.");
+      }
       this.setNarrator(reaction);
       this.readThen(() => {
         if (handoff) this.clearHuntressHorn();
@@ -2576,7 +2589,7 @@ export class WinterMountainScene extends Phaser.Scene {
       // back. (Was a free reset to 3, which made the candle stake theater.)
       this.candles = CANDLE_RESET_FLOOR;
       this.redrawCandles();
-      this.startWave(this.waveIndex);
+      this.startWave(this.waveIndex, { retry: true });
     });
   }
 
@@ -2783,96 +2796,83 @@ export class WinterMountainScene extends Phaser.Scene {
     ] : [
       "The old one's pelt is heavy with winter. You roll it carefully.",
       "It smells of frost and old forests. It will mean something at the battle.",
-    ], () => { this.clearWinterForkCues(); this.startFoxGate(); },
+    ], () => { this.clearWinterForkCues({ keepHeldPelt: !bury }); this.startFoxGate(); },
       bury ? "cairn" : "pelt", undefined, choice);
+  }
+
+  /** Fit the accepted painted footprint, leaving the original owner origins
+   * and word/tether positions intact. Export padding is not a floor contact. */
+  private addWinterAftermathPainting(
+    owner: Phaser.GameObjects.Container,
+    texture: "winter-aftermath-cairn" | "winter-aftermath-pelt",
+    groundOffsetY: number,
+  ): Phaser.GameObjects.Image {
+    const image = this.add.image(0, groundOffsetY, texture).setName(texture);
+    this.fitWinterAftermathPainting(image, texture, 180);
+    owner.add(image);
+    return image;
+  }
+
+  private fitWinterAftermathPainting(
+    image: Phaser.GameObjects.Image,
+    texture: "winter-aftermath-cairn" | "winter-aftermath-pelt",
+    visibleWidth: number,
+  ): void {
+    const footprint = texture === "winter-aftermath-cairn"
+      ? { x: 79, y: 190, width: 1383, height: 666 }
+      : { x: 14, y: 176, width: 1639, height: 617 };
+    image.setOrigin((footprint.x + footprint.width / 2) / image.width,
+      (footprint.y + footprint.height) / image.height);
+    image.setScale(visibleWidth / footprint.width);
   }
 
   private showCairnCue(): Phaser.GameObjects.Container {
     if (this.cairnCue?.scene) return this.cairnCue;
-
-    const c = this.add.container(650, 812).setDepth(43).setAlpha(0);
+    // The source was already settled at792; its low stones meet the snow at812.
+    const c = this.add.container(650, 792).setDepth(43).setAlpha(reducedMotion(this) ? 1 : 0);
     c.add(addLocalGroundShadow(this, 184, 24, { y: 20, alpha: 0.3 }));
-    const g = this.add.graphics();
-    g.fillStyle(0xa9b9c8, 0.15);
-    g.fillEllipse(0, 18, 178, 23);
-    g.fillStyle(0x172330, 0.4);
-    g.fillEllipse(0, 17, 146, 12);
-    const stones = [
-      { x: -40, y: 3, w: 86, h: 34, color: 0x596573, lean: 0.08 },
-      { x: 35, y: 3, w: 86, h: 38, color: 0x657180, lean: -0.12 },
-      { x: -6, y: -26, w: 112, h: 40, color: 0x707d8b, lean: 0.04 },
-      { x: -12, y: -58, w: 80, h: 38, color: 0x7b8794, lean: -0.09 },
-      { x: -5, y: -85, w: 50, h: 28, color: 0x87929c, lean: 0.11 },
-    ];
-    for (const stone of stones) {
-      const point = (x: number, y: number) => new Phaser.Geom.Point(
-        stone.x + (x + stone.lean * y) * stone.w, stone.y + y * stone.h,
-      );
-      const contour = [point(-0.49, 0.22), point(-0.53, -0.08), point(-0.32, -0.42),
-        point(0.1, -0.5), point(0.43, -0.26), point(0.52, 0.09),
-        point(0.32, 0.42), point(-0.2, 0.48)];
-      g.fillStyle(stone.color, 1);
-      g.fillPoints(contour, true);
-      g.lineStyle(1.5, 0x283746, 0.85);
-      g.strokePoints(contour, true);
-      // A shaded lower face gives each stone thickness where the next rests.
-      g.fillStyle(0x2c3b4c, 0.42);
-      g.fillPoints([point(-0.49, 0.22), point(-0.06, 0.1), point(0.43, -0.26),
-        point(0.52, 0.09), point(0.32, 0.42), point(-0.2, 0.48)], true);
-      g.fillStyle(0xa7b4c1, 0.3);
-      g.fillPoints([point(-0.53, -0.08), point(-0.32, -0.42), point(0.1, -0.5),
-        point(0.43, -0.26), point(-0.08, -0.16)], true);
-      // Broken snow edges, rather than a full ellipse, follow the upper facet.
-      g.fillStyle(0xd9e2e8, 0.73);
-      g.fillPoints([point(-0.38, -0.3), point(-0.28, -0.43), point(0.09, -0.5),
-        point(0.34, -0.33), point(0.19, -0.3), point(0.07, -0.37),
-        point(-0.15, -0.29), point(-0.25, -0.33)], true);
-      g.lineStyle(1, 0x344455, 0.6);
-      g.lineBetween(stone.x - stone.w * 0.18, stone.y - stone.h * 0.08,
-        stone.x + stone.w * 0.08, stone.y + stone.h * 0.16);
-    }
-    c.add(g);
-    this.tweens.add({
-      targets: c,
-      alpha: 1,
-      y: 792,
-      duration: 560,
-      ease: "Sine.easeOut",
-    });
+    this.addWinterAftermathPainting(c, "winter-aftermath-cairn", 20);
+    if (!reducedMotion(this)) this.tweens.add({ targets: c, alpha: 1, duration: 560, ease: "Sine.easeOut" });
     this.cairnCue = c;
     return c;
   }
 
   private showPeltCue(): Phaser.GameObjects.Container {
     if (this.peltCue?.scene) return this.peltCue;
-
-    const c = this.add.container(1270, 808).setDepth(43).setAlpha(0);
+    const c = this.add.container(1270, 790).setDepth(43).setAlpha(reducedMotion(this) ? 1 : 0);
     c.add(addLocalGroundShadow(this, 170, 20, { y: 18, alpha: 0.18 }));
-    const g = this.add.graphics();
-    g.fillStyle(0x726151, 0.92);
-    g.fillEllipse(-12, -10, 128, 46);
-    g.fillStyle(0x8a7662, 0.86);
-    g.fillEllipse(-46, -22, 58, 34);
-    g.fillEllipse(36, -26, 66, 30);
-    g.fillStyle(0xd8e7f0, 0.42);
-    g.fillEllipse(-42, -30, 28, 10);
-    g.fillEllipse(24, -36, 32, 10);
-    g.lineStyle(2, PALETTE_HEX.frost, 0.22);
-    g.strokeEllipse(-12, -10, 118, 36);
-    c.add(g);
-    this.tweens.add({
-      targets: c,
-      alpha: 1,
-      y: 790,
-      duration: 560,
-      ease: "Sine.easeOut",
-    });
+    this.addWinterAftermathPainting(c, "winter-aftermath-pelt", 18);
+    if (!reducedMotion(this)) this.tweens.add({ targets: c, alpha: 1, duration: 560, ease: "Sine.easeOut" });
     this.peltCue = c;
     return c;
   }
 
-  private clearWinterForkCues(): void {
+  /** The same folded pelt leaves the snow before the story calls it carried. */
+  private receivePeltVisual(): void {
+    if (this.heldPeltSprite?.scene) return;
+    const source = this.peltCue?.getByName("winter-aftermath-pelt") as Phaser.GameObjects.Image | null;
+    const pelt = source?.scene ? source : this.add.image(0, 0, "winter-aftermath-pelt");
+    if (source?.scene) {
+      this.peltCue!.remove(pelt);
+      this.peltCue!.removeAll(true);
+      this.add.existing(pelt);
+    }
+    this.fitWinterAftermathPainting(pelt, "winter-aftermath-pelt", 104);
+    pelt.setPosition(this.wrenContainer.x + 64, this.wrenContainer.y - 96).setDepth(61).setAlpha(1);
+    this.heldPeltSprite = pelt;
+  }
+
+  private clearHeldPelt(): void {
+    const pelt = this.heldPeltSprite;
+    this.heldPeltSprite = null;
+    if (!pelt?.scene) return;
+    this.tweens.killTweensOf(pelt);
+    pelt.destroy();
+  }
+
+  private clearWinterForkCues(opts: { keepHeldPelt?: boolean } = {}): void {
     this.clearHuntressHorn();
+    if (!opts.keepHeldPelt) this.clearHeldPelt();
     this.clearForkChoiceWordAnchors();
     const cues = [this.fireflyCue, this.cairnCue, this.peltCue];
     this.fireflyCue = null;
@@ -2900,6 +2900,8 @@ export class WinterMountainScene extends Phaser.Scene {
     const condBury     = this.fork2Choice === "bury";
     const foxEarned    = condFox && condHuntress && condBury;
 
+    if (this.fork2Choice === "pelt") this.receivePeltVisual();
+
     if (!foxEarned) {
       this.band.setObjective("The mountain waits for its true name.");
       const metCount = [condFox, condHuntress, condBury].filter(Boolean).length;
@@ -2914,14 +2916,12 @@ export class WinterMountainScene extends Phaser.Scene {
           // Firefly branch taken — fox returns but looks for Sigrid
           nearMissLine =
             "The fox steps into the clearing, nose working. She looks past you — searching for something, or someone. She waits a long moment. Then turns back into the pines.";
-          this.showFoxCompanion();
-          this.time.delayedCall(2200, () => this.dismissFoxCompanion(620, 820));
+          this.showFoxRefusalDeparture();
         } else {
           // Pelt taken — fox sees what Wren carries and steps away
           nearMissLine =
             "The fox pads to the clearing's edge. Her eye finds the pelt in your hands. She holds very still. Then she steps back. She is gone.";
-          this.showFoxCompanion();
-          this.time.delayedCall(2200, () => this.dismissFoxCompanion(620, 820));
+          this.showFoxRefusalDeparture();
         }
         this.setNarrator(nearMissLine);
         this.readThen(() => this.startTrueNamePassage());
@@ -2962,6 +2962,23 @@ export class WinterMountainScene extends Phaser.Scene {
     });
 
     this.registerActiveTarget(whisperTarget, letGoTarget);
+  }
+
+  /** The refusal card describes a departure, not a companion still waiting.
+   * Keep its existing Continue live while the normal step-back settles. */
+  private showFoxRefusalDeparture(): void {
+    this.showFoxCompanion();
+    const fox = this.foxCompanion;
+    if (!fox?.scene) return;
+    this.tweens.killTweensOf(fox);
+    fox.setPosition(700, 830).setScale(1).setAlpha(1);
+    if (reducedMotion(this)) {
+      this.clearFoxWordAnchors();
+      this.foxCompanion = null;
+      fox.destroy();
+      return;
+    }
+    this.dismissFoxCompanion(620, 820);
   }
 
   private showCompanionAnswer(accepted: boolean): void {
@@ -3061,6 +3078,7 @@ export class WinterMountainScene extends Phaser.Scene {
   /** The realm's true-name passage — three short lines, the mountain
    *  settling one line at a time. */
   private startTrueNamePassage(): void {
+    this.clearHeldPelt();
     this.checkpoint("true-name", this.savedStageData("true-name"));
     this.narration.say("winter_truename_intro");
     this.band.setObjective("Type the true-name passage to settle the mountain.");

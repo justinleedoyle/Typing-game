@@ -32,7 +32,6 @@ import { TypingInputController } from "../game/typingInput";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import {
   addAmbientDrift,
-  addBackdropDrift,
   addContainerWake,
   dismissCompanionCameo,
   fadeOutStagedSprite,
@@ -55,7 +54,6 @@ import {
   stageCompanionCameo,
   stageTrueNameSeal,
   dismissTrueNameSeal,
-  dismissStagedCue,
   type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import { pickAdaptiveWords, SUNKEN_BELL_WORD_BANK } from "../game/wordBank";
@@ -82,6 +80,7 @@ import tridentTokenSprite from "../../art/relics/trident-token.png";
 import glassFishSprite from "../../art/companions/glass-fish.png";
 import naveDoorway from "../../art/bell/nave-doorway.png";
 import naveDoorLeaves from "../../art/bell/nave-door-leaves.png";
+import readingLecternSprite from "../../art/bell/reading-lectern.png";
 import snowFoxSprite from "../../art/companions/snow-fox.png";
 
 // Danger ramps in over the LAST 60% of a ghost's advance — earlier portion
@@ -190,6 +189,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private doorwayPassageToken = 0;
   private aurlandFateCue: Phaser.GameObjects.Container | null = null;
   private bellTongueCue: Phaser.GameObjects.Container | null = null;
+  private bellKeeperLectern: Phaser.GameObjects.Container | null = null;
 
   private beatClock!: BeatClock;
   private beatRing!: Phaser.GameObjects.Graphics;
@@ -251,6 +251,7 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   init(data: SunkenBellSceneData): void {
+    this.clearBellKeeperLectern();
     this.revisit = data.revisit === true;
     this.store = data.store;
     this.ghosts = [];
@@ -296,6 +297,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.load.image("sunken-bell-backdrop", sunkenBellBackdrop);
     this.load.image("bell-nave-doorway", naveDoorway);
     this.load.image("bell-nave-door-leaves", naveDoorLeaves);
+    this.load.image("bell-reading-lectern", readingLecternSprite);
     this.load.image("bell-ghost", bellGhostSprite);
     this.load.image("bell-warden", bellWardenSprite);
     this.load.image("olin", olinSprite);
@@ -316,12 +318,11 @@ export class SunkenBellScene extends Phaser.Scene {
       leaveHint: "Returning to the chamber starts this realm again. Your completed journeys and collected keepsakes stay saved.",
     });
     this.cameras.main.fadeIn(600, 8, 24, 32);
-    const backdrop = this.add
+    this.add
       .image(0, 0, "sunken-bell-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
-    addBackdropDrift(this, backdrop, { durationMs: 19000, driftX: -3, driftY: -5 });
     addAmbientDrift(this, {
       kind: "bubble",
       count: 42,
@@ -516,6 +517,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.aurlandBindingPending = false;
       this.clearRhythmPractice();
+      this.clearBellKeeperLectern();
       this.reading.destroy();
       this.chapterMenu?.destroy();
       this.typingInput.reset();
@@ -2024,6 +2026,7 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Act 2: Bell-Keeper's Chamber ────────────────────────────────────────
 
   private startBellKeepersChamber(): void {
+    this.clearBellKeeperLectern();
     // Choir combat is over — retire the air gauge until the boss/fork section
     // (which has its own tempo + de-sync stakes, not the breath economy).
     this.setBreathActive(false);
@@ -2033,6 +2036,7 @@ export class SunkenBellScene extends Phaser.Scene {
       .container(this.scale.width / 2 - 260, this.scale.height - 330)
       .setDepth(42)
       .setAlpha(0);
+    this.bellKeeperLectern = cue;
     cue.add(addLocalGroundShadow(this, 130, 18, { y: 68, alpha: 0.18 }));
     cue.add(this.drawBellKeeperLectern());
     addContainerWake(this, cue, {
@@ -2048,26 +2052,19 @@ export class SunkenBellScene extends Phaser.Scene {
       driftY: -30,
       durationMs: 880,
     });
-    this.tweens.add({
-      targets: cue,
-      alpha: 0.86,
-      y: cue.y - 10,
-      duration: 360,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (cue.scene) addIdleBreath(this, cue, { dy: -3, durationMs: 2600 });
-      },
-    });
+    if (reducedMotion(this)) cue.setAlpha(1);
+    else this.tweens.add({ targets: cue, alpha: 1, duration: 360, ease: "Sine.easeOut" });
     let cueAnchor: WordBodyAnchorHandle | null = null;
     const releaseCueAnchor = (): void => {
       cueAnchor?.destroy();
       cueAnchor = null;
     };
+    let read = false;
     const target = this.makeWord({
       scene: this,
       word: "read it",
       x: cue.x,
-      y: cue.y - 92,
+      y: cue.y - 166,
       fontSize: 36,
       burstColor: BELL_BURST_COLOR,
       onClaim: () => {
@@ -2077,33 +2074,30 @@ export class SunkenBellScene extends Phaser.Scene {
           this.wrenContainer.x,
           this.wrenContainer.y - 112,
           cue.x,
-          cue.y - 8,
+          cue.y - 76,
           { color: BELL_BURST_COLOR, depth: 58 },
         );
-        playActorAttention(this, cue, {
-          scale: 1.024,
-          durationMs: 180,
-        });
       },
       onAdvance: () =>
         playBodyTypePulse(this, cue, {
           kind: "bubble",
           color: BELL_BURST_COLOR,
-          offsetY: -8,
+          offsetY: -76,
           depth: 58,
           ringRadius: 24,
         }),
       onComplete: () => {
+        if (read || this.bellKeeperLectern !== cue || !cue.scene) return;
+        read = true;
         releaseCueAnchor();
         playBodyImpact(this, cue, {
           kind: "bubble",
           color: BELL_BURST_COLOR,
-          offsetY: -8,
+          offsetY: -76,
           depth: 58,
           ringRadius: 48,
           count: 10,
         });
-        dismissStagedCue(this, cue);
         this.clearActiveTargets();
         this.store.update((s) => {
           if (!s.almanacLore.includes("old-olins-memory")) {
@@ -2113,7 +2107,11 @@ export class SunkenBellScene extends Phaser.Scene {
         playChime();
         this.setNarrator("“The bell's name is not mine to teach. Only to remember.” Olin's words settle onto a new Almanac page.");
         this.setStoryObjective("Old Olin's Memory is recorded. Continue when you are ready for the nave doors.");
-        this.readThen(() => this.startFork1());
+        this.readThen(() => {
+          if (this.bellKeeperLectern !== cue) return;
+          this.clearBellKeeperLectern();
+          this.startFork1();
+        });
       },
     });
     cueAnchor = attachWordBodyAnchor(
@@ -2124,7 +2122,7 @@ export class SunkenBellScene extends Phaser.Scene {
         color: BELL_BURST_COLOR,
         alpha: 0.2,
         depth: 43,
-        sourceOffsetY: -8,
+        sourceOffsetY: -76,
         targetOffsetY: 24,
       },
     );
@@ -3619,60 +3617,24 @@ export class SunkenBellScene extends Phaser.Scene {
     }
   }
 
-  private drawBellKeeperLectern(): Phaser.GameObjects.Graphics {
-    const g = this.add.graphics();
-    const polygon = (points: number[][], color: number, alpha = 1): void => {
-      g.fillStyle(color, alpha);
-      g.fillPoints(points.map(([x, y]) => ({ x, y })), true);
-    };
+  private drawBellKeeperLectern(): Phaser.GameObjects.Image {
+    const image = this.add.image(0, 72, "bell-reading-lectern");
+    // Fit the accepted painting's visible stone, excluding transparent padding.
+    // Its bottom pixel shares the original stand's floor contact at local y72.
+    const footprint = { left: 274, right: 1096, bottom: 1065 };
+    image.setOrigin((footprint.left + footprint.right) / 2 / image.width,
+      footprint.bottom / image.height);
+    image.setScale(170 / (footprint.right - footprint.left));
+    applySceneActorLighting(this, image);
+    return image;
+  }
 
-    // A worn stone foot and faceted shaft give the book a physical support.
-    polygon([[-50, 63], [-34, 54], [34, 54], [51, 63], [45, 72], [-45, 72]], 0x243b40);
-    polygon([[-50, 63], [-34, 54], [34, 54], [51, 63], [30, 66], [-32, 66]], 0x697574);
-    polygon([[-15, 54], [-11, 4], [10, 4], [17, 54], [7, 62], [-8, 62]], 0x435956);
-    polygon([[-15, 54], [-11, 4], [-4, 6], [-6, 58]], 0x81908a, 0.55);
-    polygon([[5, 6], [10, 4], [17, 54], [7, 62]], 0x172f35, 0.7);
-    g.lineStyle(2, 0x9a8b5b, 0.65);
-    g.lineBetween(-12, 14, 12, 14);
-    g.lineBetween(-14, 46, 15, 46);
-    g.lineStyle(1, 0x172c30, 0.8);
-    g.lineBetween(-34, 59, -25, 63);
-    g.lineBetween(26, 66, 36, 69);
-
-    // Bronze-edged reading board, with its darker underside visible in front.
-    polygon([[-58, -28], [-5, -42], [56, -26], [52, 16], [-49, 20]], 0x4d503c);
-    polygon([[-58, -28], [-49, 14], [52, 10], [52, 18], [-49, 23], [-58, -20]], 0x253a38);
-    g.lineStyle(2, 0xa89760, 0.82);
-    g.lineBetween(-57, -28, -49, 17);
-    g.lineBetween(-49, 17, 52, 13);
-    g.lineBetween(52, 13, 56, -26);
-
-    // Uneven page silhouettes and layered fore-edges read as an open volume.
-    polygon([[-52, -30], [-28, -39], [0, -31], [0, 15], [-26, 7], [-48, 11]], 0x89988a);
-    polygon([[0, -31], [25, -39], [51, -31], [48, 10], [25, 7], [0, 15]], 0xa0a796);
-    polygon([[-51, -35], [-29, -42], [-3, -34], [-2, 10], [-26, 1], [-49, 6]], 0xc4c0a0);
-    polygon([[2, -34], [25, -42], [52, -34], [48, 6], [27, 1], [2, 10]], 0xd5ceb0);
-    polygon([[-3, -34], [2, -34], [2, 10], [-2, 10]], 0x656c59);
-    g.lineStyle(1, 0xe4dfc5, 0.65);
-    g.lineBetween(-47, 8, -26, 4);
-    g.lineBetween(-26, 4, -4, 12);
-    g.lineBetween(4, 12, 27, 4);
-    g.lineBetween(27, 4, 47, 8);
-    g.lineStyle(1, 0x52675f, 0.8);
-    for (let line = 0; line < 5; line += 1) {
-      const y = -27 + line * 6;
-      g.lineBetween(-42, y - 2, -12 + (line % 2) * 5, y + 3);
-      g.lineBetween(11, y + 3, 41 - (line % 3) * 4, y - 2);
-    }
-    // A small illuminated initial and ribbon keep the pages authored and old.
-    g.lineStyle(1.5, 0x9d7650, 0.85);
-    g.lineBetween(-42, -29, -42, -17);
-    g.lineBetween(-42, -28, -35, -23);
-    g.lineBetween(-42, -21, -36, -18);
-    polygon([[3, 8], [8, 7], [12, 30], [6, 26], [3, 31]], 0x567e7d);
-    g.lineStyle(1, 0xb0d2c6, 0.45);
-    g.lineBetween(5, 9, 8, 24);
-    return g;
+  private clearBellKeeperLectern(): void {
+    const cue = this.bellKeeperLectern;
+    this.bellKeeperLectern = null;
+    if (!cue?.scene) return;
+    this.tweens.killTweensOf(cue);
+    cue.destroy();
   }
 
   private createDoorCue(

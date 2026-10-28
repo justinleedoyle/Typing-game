@@ -3531,6 +3531,7 @@ export class GreatBattleScene extends Phaser.Scene {
       playDamageThud();
       flashDamageVignette(this);
       this.narration.say("finale_facet_lands");
+      this.band.setObjective("The facet lands. A candle goes out.");
       this.loseCandle();
       finish(); // no-op if loseCandle emptied the pool (runOver guards it)
     });
@@ -3572,6 +3573,7 @@ export class GreatBattleScene extends Phaser.Scene {
         this.playFacetImpact(facet, "held");
         this.clearFacetSigil();
         this.narration.say("finale_facet_held");
+        this.band.setObjective(`${facet.name} is answered. Hold steady.`);
         finish();
       },
     });

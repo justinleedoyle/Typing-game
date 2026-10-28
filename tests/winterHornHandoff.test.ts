@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { inflateSync } from "node:zlib";
 import ts from "typescript";
 import { checkpointIndex, committedWinterChoices } from "../src/game/chapterFlow";
 import { assert, assertClose, assertEqual, suite } from "./_assert";
@@ -6,18 +7,23 @@ import { assert, assertClose, assertEqual, suite } from "./_assert";
 const url = new URL("../src/scenes/WinterMountainScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
-const names = ["preload", "checkpoint", "savedStageData", "hasSavedPassage", "startHuntressBranch",
+const names = ["init", "preload", "checkpoint", "savedStageData", "hasSavedPassage", "startHuntressBranch",
   "runPassageChain", "winterPassageOwnerBinding", "winterPassageWordPosition", "fadeOutHuntress",
-  "clearHuntressHorn", "transferHuntressHorn", "presentWinterPassageReaction", "clearWinterForkCues", "onKeyDown", "makeWinterForkWord"];
+  "clearHuntressHorn", "transferHuntressHorn", "presentWinterPassageReaction", "clearWinterForkCues", "onKeyDown", "makeWinterForkWord",
+  "addWinterAftermathPainting", "fitWinterAftermathPainting", "showCairnCue", "showPeltCue", "receivePeltVisual", "clearHeldPelt", "startFork2", "startAftermathPassage", "startFoxGate", "showFoxRefusalDeparture", "dismissFoxCompanion", "startTrueNamePassage"];
 const methods = names.map(name => owner.members.find(member => member.name?.getText(source) === name)!.getText(source));
 const passages = source.statements.filter(ts.isVariableStatement).flatMap(statement =>
-  statement.declarationList.declarations.filter(declaration => declaration.name.getText(source) === "HUNTRESS_PASSAGES")
+  statement.declarationList.declarations.filter(declaration => ["WAVE_CANDLES", "HUNTRESS_PASSAGES", "BURY_PASSAGES", "PELT_PASSAGES"].includes(declaration.name.getText(source)))
     .map(declaration => `const ${declaration.getText(source)};`)).join("\n");
 const code = ts.transpileModule(`${passages}\nclass Winter { ${methods.join("\n")} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;
 const noop = () => {};
 const bodyPulses: unknown[] = [];
+const livingSource = ts.createSourceFile("livingScene.ts", readFileSync(new URL("../src/game/livingScene.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true);
+const departure = livingSource.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "dismissCompanionCameo")!;
+const dismissCameoCode = ts.transpileModule(departure.getText(livingSource).replace(/^export /, ""), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+const dismissCameo = new Function(dismissCameoCode + "; return dismissCompanionCameo;")();
 const globals = {
   checkpointIndex, committedWinterChoices,
   reducedMotion: (scene: any) => scene.motionReduced,
@@ -25,13 +31,16 @@ const globals = {
   applySceneActorLighting: (_scene: any, item: any) => { item.lit = true; },
   preloadSatchelIcons: (scene: any, ids: string[]) => { scene.preloadedIds.push(...ids); },
   preloadWren: noop, preloadWolves: noop, preloadWinterNpcs: noop,
+  addLocalGroundShadow: () => ({}),
   winterBackdrop: "fixture-backdrop", runaPortrait: "fixture-runa", snowFoxSprite: "fixture-fox",
   winterTrailBackdrop: "fixture-trail", fallenPineSprite: "fixture-pine",
+  winterAftermathCairn: "fixture-cairn", winterAftermathPelt: "fixture-pelt",
   playWrenAction: noop, playWrenFocus: noop, playActorAttention: noop, playBodyImpact: noop,
   playClaimLine: noop, playBodyTypePulse: (_scene: unknown, body: unknown) => bodyPulses.push(body),
   attachWordBodyAnchor: () => ({ destroy: noop }),
   isPuristToggleKey: () => false,
   fadeOutStagedSprite: (_scene: any, sprite: any) => { sprite.scene = false; },
+  dismissCompanionCameo: dismissCameo,
   PALETTE_HEX: { frost: 0xa4c0d2, brass: 0xb69d5c },
   Phaser: { Math: { Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)) },
     GameObjects: { Events: { DESTROY: "destroy" } } },
@@ -275,8 +284,300 @@ await suite("Winter horn: missing art cannot trap Continue and unrelated reactio
   assertEqual(continued, 1, "the fallback can continue normally");
   for (const owner of ["firefly", "cairn", "pelt", "none"]) {
     const f = fixture();
-    f.s.presentWinterPassageReaction(owner, 1, "Unchanged reaction.", noop);
+    f.s.presentWinterPassageReaction(owner, owner === "pelt" ? 0 : 1, "Unchanged reaction.", noop);
     assertEqual([f.images.length, f.tweens.length, f.gates.length], [0, 0, 1], `${owner} has no horn handoff or extra wait`);
     assertEqual(f.captions.at(-1), "Unchanged reaction.", `${owner} preserves its existing caption`);
+  }
+});
+
+// Independently measure generated RGBA pixels rather than trusting the source
+// placement constants; transparent margins must not become a floating base.
+function aftermathPainting(file: string) {
+  const png = readFileSync(new URL(file, import.meta.url));
+  const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
+  assert(png[24] === 8 && png[25] === 6 && png[28] === 0, "aftermath cutouts retain non-interlaced RGBA8 transparency");
+  const chunks: Buffer[] = [];
+  for (let p = 8; p < png.length;) {
+    const length = png.readUInt32BE(p);
+    if (png.toString("ascii", p + 4, p + 8) === "IDAT") chunks.push(png.subarray(p + 8, p + 8 + length));
+    p += length + 12;
+  }
+  const raw = inflateSync(Buffer.concat(chunks)), stride = width * 4;
+  let previous = new Uint8Array(stride), at = 0, left = width, top = height, right = -1, bottom = -1;
+  for (let y = 0; y < height; y++) {
+    const filter = raw[at++]!, row = new Uint8Array(stride);
+    for (let b = 0; b < stride; b++) {
+      const a = b >= 4 ? row[b - 4]! : 0, up = previous[b]!, c = b >= 4 ? previous[b - 4]! : 0;
+      let predictor = 0;
+      if (filter === 1) predictor = a;
+      else if (filter === 2) predictor = up;
+      else if (filter === 3) predictor = Math.floor((a + up) / 2);
+      else if (filter === 4) {
+        const p = a + up - c, da = Math.abs(p - a), db = Math.abs(p - up), dc = Math.abs(p - c);
+        predictor = da <= db && da <= dc ? a : db <= dc ? up : c;
+      }
+      row[b] = (raw[at++]! + predictor) & 255;
+    }
+    for (let x = 0; x < width; x++) if (row[x * 4 + 3]! > 25) {
+      left = Math.min(left, x); top = Math.min(top, y); right = Math.max(right, x); bottom = Math.max(bottom, y);
+    }
+    previous = row;
+  }
+  return { width, height, left, top, right: right + 1, bottom: bottom + 1 };
+}
+const aftermathPaintings = {
+  "winter-aftermath-cairn": aftermathPainting("../art/winter/aftermath-cairn.png"),
+  "winter-aftermath-pelt": aftermathPainting("../art/winter/aftermath-pelt.png"),
+};
+
+function aftermathFixture(reduced = false) {
+  const s = new Winter();
+  const bodies: any[] = [], images: any[] = [], tweens: any[] = [], gates: Array<() => void> = [], targets: any[] = [], timers: any[] = [], tasks: string[] = [];
+  const state: any = { realms: { "winter-mountain": { cleared: false, choices: {} } }, satchel: [], almanacLore: [] };
+  let foxEntries = 0;
+  Object.assign(s, {
+    motionReduced: reduced, fireflyCue: null, cairnCue: null, peltCue: null, huntressHornSprite: null, heldPeltSprite: null,
+    huntressHornTransferToken: 0, huntressHornTransferPending: false, forkChoiceWordAnchors: [],
+    fork1Choice: "huntress", fork2Choice: null, foxDecided: true, foxSpared: true, candles: 3,
+    resumeCheckpoint: null, activeTargets: [], scale: { width: 1920, height: 1080 },
+    wrenContainer: { x: 960, y: 842, scene: true }, wrenSprite: {},
+    typingInput: { getStats: () => ({ getSoul: () => 30 }) },
+    store: { get: () => state, update: (fn: (state: any) => void) => fn(state), setCheckpoint: (value: any) => { state.checkpoint = structuredClone(value); } },
+    narration: { say: noop, bottom: () => 300 }, setNarrator: noop, band: { setObjective: (text: string) => tasks.push(text) },
+    readThen(next: () => void) { assertEqual(gates.length, 0, "each aftermath result retains exactly its existing single Continue"); gates.push(next); },
+    makeWord(options: any) { return { ...options, getAnchorX: () => options.x, getAnchorY: () => options.y }; },
+    registerActiveTarget(...words: any[]) { targets.push(...words); }, clearActiveTargets: noop, clearForkChoiceWordAnchors: noop,
+    startFoxGate() { foxEntries++; }, showFoxCompanion: noop, dismissFoxCompanion: noop,
+    time: { delayedCall(ms: number, next: () => void) { timers.push({ ms, next }); } },
+    tweens: {
+      killTweensOf(body: any) { for (const tween of tweens) if (tween.targets === body) tween.cancelled = true; },
+      add(options: any) { tweens.push(options); return options; },
+    },
+    add: {
+      container(x: number, y: number) {
+        const body: any = { x, y, scene: true, alpha: 1, children: [], destroyed: 0,
+          setDepth(depth: number) { this.depth = depth; return this; },
+          setAlpha(alpha: number) { this.alpha = alpha; return this; },
+          add(child: any) { this.children.push(child); return this; }, once: noop,
+          getByName(name: string) { return this.children.find((child: any) => child.name === name) ?? null; },
+          remove(child: any) { this.children = this.children.filter((item: any) => item !== child); return this; },
+          removeAll(destroy: boolean) { if (destroy) for (const child of this.children) child.destroy?.(); this.children = []; return this; },
+          destroy() { this.destroyed++; this.scene = false; for (const child of this.children) child.destroy?.(); },
+        };
+        bodies.push(body); return body;
+      },
+      image(x: number, y: number, key: keyof typeof aftermathPaintings) {
+        const picture: any = { x, y, key, ...aftermathPaintings[key], scene: true, scale: 1, destroyed: 0,
+          setOrigin(x: number, y: number) { this.originX = x; this.originY = y; return this; },
+          setScale(scale: number) { this.scale = scale; return this; },
+          setName(name: string) { this.name = name; return this; },
+          setPosition(x: number, y: number) { this.x = x; this.y = y; return this; },
+          setDepth(depth: number) { this.depth = depth; return this; },
+          setAlpha(alpha: number) { this.alpha = alpha; return this; },
+          destroy() { this.destroyed++; this.scene = false; },
+        };
+        images.push(picture); return picture;
+      },
+      existing: noop,
+    },
+  });
+  return { s, bodies, images, tweens, gates, targets, state, timers, tasks, foxEntries: () => foxEntries,
+    next() { const next = gates.shift(); assert(next, "the original aftermath response is held"); next!(); } };
+}
+
+await suite("Winter painted aftermath: actual alpha footprints stay planted at the existing floor and label origins", () => {
+  for (const reduced of [false, true]) {
+    const f = aftermathFixture(reduced);
+    const cairn = f.s.showCairnCue(), pelt = f.s.showPeltCue();
+    for (const [body, x, y, floor] of [[cairn, 650, 792, 812], [pelt, 1270, 790, 808]] as const) {
+      const image = body.children.find((item: any) => item.key);
+      assertEqual([body.x, body.y], [x, y], "the original settled word-owner/tether origin is preserved");
+      assertClose(body.y + image.y + (image.bottom - image.height * image.originY) * image.scale,
+        floor, 0.01, "the real painted alpha base meets the original snow contact, independent of export padding");
+      assertClose((image.right - image.left) * image.scale, 180, 0.01, "the natural visible footprint remains180px wide");
+      assertClose((image.left + image.right - 2 * image.width * image.originX) * image.scale / 2,
+        0, 0.01, "the real silhouette is centered on its existing owner");
+      assertEqual(body.alpha, reduced ? 1 : 0, "reduced motion presents the settled prop immediately");
+    }
+    assertEqual(f.s.showCairnCue(), cairn, "repeated presentation reuses the same cairn");
+    assertEqual(f.s.showPeltCue(), pelt, "repeated presentation reuses the same pelt");
+    for (const tween of f.tweens) {
+      assertEqual(Object.keys(tween).filter(key => ["x", "y", "scaleX", "scaleY", "repeat"].includes(key)), [], "solid props only fade, with no lift, bob or scaling");
+      assertEqual(tween.duration, 560, "the original entrance duration is retained");
+    }
+    f.s.clearWinterForkCues(); f.s.clearWinterForkCues();
+    assert(f.bodies.every(body => body.destroyed === 1) && f.images.every(image => image.destroyed === 1), "actual repeated cleanup destroys each physical object exactly once");
+    assert(f.tweens.every(tween => tween.cancelled), "leaving cancels unfinished alpha entrances");
+    assertEqual([f.s.cairnCue, f.s.peltCue], [null, null], "no reference can contaminate a fresh chapter entry");
+  }
+});
+
+await suite("Winter painted aftermath: both exact choices, passage responses and checkpoints preserve their existing flow", () => {
+  for (const reduced of [false, true]) for (const choice of ["bury", "pelt"]) {
+    const f = aftermathFixture(reduced);
+    f.s.startFork2();
+    assertEqual(f.targets.map(target => [target.word, target.x, target.y]), [["bury the pack leader", 590, 510], ["take the pelt", 1450, 510]], "the two native choice words and label positions remain unchanged");
+    const chosen = choice === "bury" ? f.s.cairnCue : f.s.peltCue;
+    const unused = choice === "bury" ? f.s.peltCue : f.s.cairnCue;
+    f.targets[choice === "bury" ? 0 : 1].onComplete();
+    assertEqual(unused.destroyed, 1, "selecting releases the unchosen physical object");
+    const phrases = choice === "bury" ? ["carry the stones", "let him rest here"] : ["claim the pelt", "carry it home"];
+    for (const [index, word] of phrases.entries()) {
+      const target = f.targets.at(-1);
+      assertEqual(target.word, word, "each authored passage remains exact");
+      target.onClaim({ spell: false, alt: false }); target.onAdvance(word.length, word.length);
+      target.onComplete();
+      assert(chosen.scene, "the selected painted subject stays for the existing held response");
+      assertEqual([f.state.checkpoint.step, f.state.checkpoint.data.index, f.state.checkpoint.data.reading], [choice, index, true], "the original saved response contract is unchanged");
+      assertEqual(f.state.satchel, [], "art presentation does not move the final realm reward earlier");
+      assertEqual(f.foxEntries(), 0, "the original response cannot auto-skip into the companion gate");
+      f.next();
+    }
+    assertEqual([f.state.realms["winter-mountain"].choices.fork2, f.state.checkpoint.step], [choice, "fox-gate"], "durable choice and next stable checkpoint are unchanged");
+    assertEqual([chosen.destroyed, f.foxEntries(), f.timers.map(timer => timer.ms)], [0, 0, [900]], "the last Continue retains the original900ms passage-to-gate interval");
+    f.timers[0].next();
+    assertEqual([chosen.destroyed, f.foxEntries()], [1, 1], "the last existing Continue releases the selected prop and enters the original gate once");
+  }
+});
+
+await suite("Winter painted aftermath: saved held responses reconstruct the correct physical subject without replaying completed words", () => {
+  for (const choice of ["bury", "pelt"]) {
+    const f = aftermathFixture(true);
+    f.s.resumeCheckpoint = { step: choice, data: { index: 0, reading: true } };
+    f.s.startAftermathPassage(choice);
+    assertEqual(f.targets.length, 0, "restoring an acknowledged phrase does not replay its target");
+    const body = choice === "bury" ? f.s.cairnCue : f.s.peltCue;
+    assert(body?.scene && body.children.some((child: any) => child.key === `winter-aftermath-${choice === "bury" ? "cairn" : "pelt"}`), "the saved response reconstructs its painted owner immediately");
+    f.next();
+    assertEqual(f.targets.at(-1).word, choice === "bury" ? "let him rest here" : "carry it home", "Continue asks for only the original pending second phrase");
+  }
+});
+
+await suite("Winter carried pelt: the same source empties before its held response and stays visible until the fox refusal Continue", () => {
+  for (const reduced of [false, true]) {
+    const f = aftermathFixture(reduced);
+    f.s.startAftermathPassage("pelt");
+    const cue = f.s.peltCue;
+    const source = cue.getByName("winter-aftermath-pelt");
+    f.targets.at(-1).onComplete();
+    assertEqual(f.s.heldPeltSprite, null, "claiming alone does not take the pelt before the authored carry phrase");
+    assertEqual(f.tasks.at(-1), "Type the pelt passage to carry the winter home.", "the first response retains the original passage instruction");
+    assertEqual(cue.getByName("winter-aftermath-pelt"), source, "the original painting remains on the ground during the first response");
+    f.next();
+    assertEqual(f.targets.at(-1).word, "carry it home", "the original final phrase performs the handoff");
+    let receivedResponse = 0, foxResponse = 0;
+    f.s.setNarrator = (text: string) => {
+      if (text.includes("frost and old forests")) {
+        assertEqual([f.s.heldPeltSprite, cue.children.length], [source, 0], "the actual source and its ground shadow are gone before the received response appears");
+        receivedResponse++;
+      }
+      if (text.includes("pelt in your hands")) {
+        assertEqual(f.s.heldPeltSprite, source, "the fox's actual refusal sees the same received painting still held");
+        assert(source.scene, "the received pelt cannot vanish before the refusal reading");
+        foxResponse++;
+      }
+    };
+    f.targets.at(-1).onComplete();
+    assertEqual(f.tasks.at(-1), "The pelt is in your hands. Press Enter or Space to continue.", "the final held response acknowledges the visible item instead of asking for finished typing");
+    assertEqual([receivedResponse, f.gates.length, f.timers.length], [1, 1, 0], "the synchronous transfer adds no wait, timer or Continue");
+    assertEqual([source.x, source.y, source.depth, source.alpha], [1024, 746, 61, 1], "the folded fur rests beside Wren's hand at fixed opacity");
+    assertClose((source.right - source.left) * source.scale, 104, 0.01, "the received pelt has a modest104px true-alpha width");
+    assert(!f.tweens.some(tween => tween.targets === source), "the held solid has no bob or transfer animation gate");
+    f.next();
+    assertEqual(f.timers.map(timer => timer.ms), [900], "the final response retains the original passage interval");
+    f.timers[0].next();
+    assertEqual([cue.destroyed, source.destroyed, f.s.heldPeltSprite], [1, 0, source], "ordinary branch cleanup removes the empty source while keeping received fur");
+    Winter.prototype.startFoxGate.call(f.s);
+    assertEqual([foxResponse, f.images.length, f.gates.length], [1, 1, 1], "the unchanged fox refusal reuses the held item and its original single Continue");
+    f.next();
+    assertEqual([source.destroyed, f.s.heldPeltSprite, f.state.checkpoint.step, f.gates.length], [1, null, "true-name", 1], "that existing Continue stows the pelt before the original true-name introduction");
+    assertEqual([f.targets.length, f.state.satchel], [2, []], "presentation adds no typed action or early realm reward");
+  }
+});
+
+await suite("Winter carried pelt: existing response and fox-gate checkpoints restore the truthful received state", () => {
+  for (const checkpoint of ["pelt", "fox-gate"]) {
+    const f = aftermathFixture(true);
+    if (checkpoint === "pelt") {
+      f.s.resumeCheckpoint = { step: "pelt", data: { index: 1, reading: true } };
+      f.s.startAftermathPassage("pelt");
+      assertEqual(f.s.peltCue.children.length, 0, "a restored received response leaves the reconstructed ground source empty");
+      assertEqual(f.tasks.at(-1), "The pelt is in your hands. Press Enter or Space to continue.", "the existing saved final response restores its truthful held objective too");
+    } else {
+      f.s.fork2Choice = "pelt";
+      Winter.prototype.startFoxGate.call(f.s);
+      assertEqual(f.s.peltCue, null, "the later checkpoint reconstructs only the received item, without inventing a ground copy");
+    }
+    const pelt = f.s.heldPeltSprite;
+    assert(pelt?.scene, "the existing checkpoint recreates the pelt before its held reading");
+    assertEqual([f.targets.length, f.gates.length], [0, 1], "restoration replays no completed words and retains only the original reading gate");
+    f.s.receivePeltVisual();
+    assertEqual([f.s.heldPeltSprite, f.images.length], [pelt, 1], "reconstructing received state is idempotent");
+    f.s.clearWinterForkCues();
+    assertEqual([pelt.destroyed, f.s.heldPeltSprite], [1, null], "leaving either restored state releases its received prop");
+  }
+});
+
+await suite("Winter carried pelt: full cleanup and actual scene init cannot retain a received item across reuse", () => {
+  const f = aftermathFixture();
+  f.s.showPeltCue();
+  const source = f.s.peltCue.getByName("winter-aftermath-pelt");
+  f.s.receivePeltVisual();
+  f.s.clearWinterForkCues(); f.s.clearWinterForkCues();
+  assertEqual([source.destroyed, f.s.heldPeltSprite], [1, null], "shutdown cleanup destroys the detached received painting once");
+  f.s.receivePeltVisual();
+  const fresh = f.s.heldPeltSprite;
+  assert(fresh !== source && fresh.scene, "a subsequent entry can reconstruct a fresh received state");
+  f.s.init({ store: f.s.store });
+  assertEqual([fresh.destroyed, f.s.heldPeltSprite], [1, null], "actual init clears the old received object as well as its reference");
+});
+
+await suite("Winter fox refusal: normal departure is finite during the same reading; reduced motion is already absent", () => {
+  for (const reduced of [false, true]) for (const missing of ["huntress", "burial"]) {
+    const f = aftermathFixture(reduced);
+    f.s.fork1Choice = missing === "huntress" ? "firefly" : "huntress";
+    f.s.fork2Choice = missing === "burial" ? "pelt" : "bury";
+    let fox: any;
+    let captions = 0;
+    f.s.clearFoxWordAnchors = noop;
+    f.s.dismissFoxCompanion = Winter.prototype.dismissFoxCompanion;
+    f.s.showFoxCompanion = () => {
+      fox = { x: 610, y: 830, alpha: 0, scale: 1, scene: true, destroyed: 0,
+        setPosition(x: number, y: number) { this.x = x; this.y = y; return this; },
+        setScale(scale: number) { this.scale = scale; return this; },
+        setAlpha(alpha: number) { this.alpha = alpha; return this; },
+        destroy() { this.scene = false; this.destroyed++; },
+      };
+      f.s.foxCompanion = fox;
+      f.s.tweens.add({ targets: fox, x: 700, y: 830, alpha: 1, duration: 720 });
+    };
+    f.s.setNarrator = (text: string) => {
+      assert(missing === "burial" ? text.includes("pelt in your hands") : text.includes("turns back into the pines"), "the exact refusal still describes the same unearned condition");
+      if (reduced) assertEqual([fox.scene, fox.destroyed], [false, 1], "reduced motion has no lingering fox when the departure card appears");
+      else {
+        const outgoing = f.tweens.at(-1);
+        assertEqual([fox.x, fox.y, fox.alpha, outgoing.x, outgoing.y, outgoing.alpha, outgoing.duration], [700, 830, 1, 620, 820, 0, 760], "normal motion visibly steps back and fades from the existing clearing contact without a delayed wait");
+      }
+      captions++;
+    };
+    Winter.prototype.startFoxGate.call(f.s);
+    assertEqual([captions, f.gates.length, f.timers.length, f.targets.length], [1, 1, 0, 0], "the same refusal reading has one existing Continue and no delayed departure or extra typed action");
+    assertEqual(f.s.foxCompanion, null, "a departed fox is released synchronously from the chapter's active companion reference");
+    assert(f.tweens[0].cancelled, "departure cancels the original arrival instead of letting it bring the fox back");
+    if (missing === "burial") assert(f.s.heldPeltSprite?.scene, "the received pelt remains visible through the fox's refusal");
+    if (!reduced) {
+      const outgoing = f.tweens.at(-1);
+      Object.assign(fox, { x: outgoing.x, y: outgoing.y, alpha: outgoing.alpha });
+      outgoing.onComplete();
+      assertEqual([fox.scene, fox.destroyed], [false, 1], "the normal departure actually removes the old body while the reading remains held");
+      assertEqual(f.gates.length, 1, "settling departure cannot advance or replace the held card");
+      const replacement = { scene: true };
+      f.s.foxCompanion = replacement;
+      outgoing.onComplete();
+      assertEqual([replacement.scene, f.s.foxCompanion], [true, replacement], "a late old callback cannot remove a new fox or re-read scene state");
+    }
+    f.next();
+    assertEqual([f.state.checkpoint.step, f.gates.length, f.state.satchel], ["true-name", 1, []], "the same Continue keeps the original true-name gate and rewards");
+    assertEqual(f.s.heldPeltSprite, null, "the existing Continue still stows any received pelt");
   }
 });

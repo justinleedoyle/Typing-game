@@ -424,6 +424,7 @@ await suite("Later realm passages: the task follows each phrase and held respons
   for (const source of [forge, sky, wood]) {
     const Scene = actualMethod(source, "runPassageChain", {
       playWrenAction: noop, playWrenFocus: noop, playChime: noop,
+      FORN_PASSAGES: stringArray(forge, "FORN_PASSAGES"),
       WOOD_BRANCH_WORD_Y: 500,
       playBodyImpact: noop, playActorAttention: noop, PALETTE_HEX: { ember: 0, brass: 0, moss: 0 },
     });

@@ -1,7 +1,7 @@
 import { installChapterMenu } from "../game/ui/pauseMenu";
 import { rememberRealmFork, resolveRealmFork, resolveCompanionDecision, rememberCompanionDecision, type RealmFork } from "../game/realmChoices";
 import { ChapterReading } from "../game/ui/chapterReading";
-import { reducedFlashes, reducedMotion } from "../game/presentation";
+import { decorativeTween, reducedFlashes, reducedMotion } from "../game/presentation";
 import { applySceneActorLighting } from "../game/actorLighting";
 import Phaser from "phaser";
 import { type AmbientHandle, playAmbientSkyIsland } from "../audio/ambient";
@@ -84,6 +84,8 @@ import ettaVolumeSprite from "../../art/sky/etta-volume.png";
 import ettaShelfSprite from "../../art/sky/etta-shelf.png";
 import beaconBrazierSprite from "../../art/sky/beacon-brazier.png";
 import beaconFlameSprite from "../../art/sky/beacon-flame.png";
+import traversalStonesSprite from "../../art/sky/traversal-stones.png";
+import traversalLanternSprite from "../../art/sky/traversal-lantern.png";
 import runaPortrait from "../../art/runa/runa-front.png";
 import lanternMothSprite from "../../art/companions/lantern-moth.png";
 
@@ -153,6 +155,10 @@ const SKY_WREN_STAGE_Y = 826;
 const SKY_BALANCE_CUE_Y = 776;
 const SKY_LANTERN_CUE_Y = 640;
 const SKY_STEPPING_CUE_Y = 788;
+const SKY_PATH_PAINTINGS = {
+  stones: { left: 36, top: 331, right: 1846, bottom: 639 },
+  lantern: { left: 244, top: 139, right: 873, bottom: 1241 },
+} as const;
 
 /** Lantern-Lighter typed conversation */
 const LIGHTER_LINE_1 =
@@ -302,6 +308,7 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   init(data: SkyIslandSceneData): void {
+    this.dismissPathCue(false);
     this.revisit = data.revisit === true;
     this.store = data.store;
     this.spirits = [];
@@ -360,6 +367,8 @@ export class SkyIslandScene extends Phaser.Scene {
     this.load.image("etta-shelf", ettaShelfSprite);
     this.load.image("sky-beacon-brazier", beaconBrazierSprite);
     this.load.image("sky-beacon-flame", beaconFlameSprite);
+    this.load.image("sky-traversal-stones", traversalStonesSprite);
+    this.load.image("sky-traversal-lantern", traversalLanternSprite);
     this.load.image("sky-companion-lantern-moth", lanternMothSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
@@ -555,8 +564,7 @@ export class SkyIslandScene extends Phaser.Scene {
       this.oneShotInvoker = null;
       this.bossRingTween?.stop();
       if (this.wrenContainer?.scene) this.tweens.killTweensOf(this.wrenContainer);
-      this.pathCue = null;
-      this.pathCueBeat = null;
+      this.dismissPathCue(false);
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
       this.clearAmbientLanterns();
@@ -854,10 +862,11 @@ export class SkyIslandScene extends Phaser.Scene {
           : this.drawSteppingStonesCue();
     this.pathCue = cue;
     this.pathCueBeat = beat;
+    const alpha = beat === "balance" ? 0.97 : beat === "lantern" ? 0.98 : 0.96;
+    if (reducedMotion(this)) { cue.setAlpha(alpha); return; }
     this.tweens.add({
       targets: cue,
-      alpha: beat === "balance" ? 0.97 : beat === "lantern" ? 0.98 : 0.96,
-      y: beat === "balance" ? cue.y : cue.y - 8,
+      alpha,
       duration: 380,
       ease: "Sine.easeOut",
     });
@@ -951,97 +960,19 @@ export class SkyIslandScene extends Phaser.Scene {
     });
   }
 
+  private drawPathStonePainting(x: number, bottomY: number, visibleWidth: number): Phaser.GameObjects.Image {
+    const image = this.add.image(x, bottomY, "sky-traversal-stones");
+    const bounds = SKY_PATH_PAINTINGS.stones;
+    image.setOrigin((bounds.left + bounds.right) / 2 / image.width, bounds.bottom / image.height);
+    image.setScale(visibleWidth / (bounds.right - bounds.left));
+    applySceneActorLighting(this, image);
+    return image;
+  }
+
   private drawBalanceBridgeCue(): Phaser.GameObjects.Container {
-    const c = this.add
-      .container(this.scale.width / 2 - 92, SKY_BALANCE_CUE_Y)
-      .setDepth(-1)
-      .setAlpha(0);
-    const stones = this.add.graphics().setAngle(-3);
-    const footholds = [
-      {
-        fill: 0x575342,
-        points: [
-          { x: -298, y: -26 },
-          { x: -276, y: -39 },
-          { x: -235, y: -37 },
-          { x: -214, y: -23 },
-          { x: -226, y: -7 },
-          { x: -268, y: -3 },
-          { x: -296, y: -12 },
-        ],
-      },
-      {
-        fill: 0x625c46,
-        points: [
-          { x: -220, y: -5 },
-          { x: -198, y: -18 },
-          { x: -157, y: -16 },
-          { x: -136, y: -2 },
-          { x: -148, y: 14 },
-          { x: -188, y: 18 },
-          { x: -216, y: 9 },
-        ],
-      },
-      {
-        fill: 0x6b6248,
-        points: [
-          { x: -143, y: 15 },
-          { x: -120, y: 2 },
-          { x: -79, y: 4 },
-          { x: -58, y: 19 },
-          { x: -70, y: 34 },
-          { x: -111, y: 37 },
-          { x: -139, y: 29 },
-        ],
-      },
-      {
-        fill: 0x5f5942,
-        points: [
-          { x: -66, y: 34 },
-          { x: -43, y: 21 },
-          { x: -3, y: 23 },
-          { x: 18, y: 38 },
-          { x: 6, y: 52 },
-          { x: -34, y: 55 },
-          { x: -62, y: 48 },
-        ],
-      },
-    ];
-
-    footholds.forEach((foothold, index) => {
-      const centerX =
-        foothold.points.reduce((sum, point) => sum + point.x, 0) / foothold.points.length;
-      const lowerY = Math.max(...foothold.points.map((point) => point.y));
-      stones.fillStyle(0x18130f, 0.24);
-      stones.fillEllipse(centerX + 2, lowerY + 6, 66, 11);
-      stones.fillStyle(foothold.fill, 0.96);
-      stones.lineStyle(1.5, 0x262119, 0.48);
-      stones.fillPoints(foothold.points, true);
-      stones.strokePoints(foothold.points, true);
-      stones.lineStyle(1.1, 0xb9aa72, 0.12);
-      stones.lineBetween(
-        foothold.points[1]!.x + 7,
-        foothold.points[1]!.y + 5,
-        foothold.points[2]!.x - 7,
-        foothold.points[2]!.y + 5,
-      );
-      stones.lineStyle(1.2, 0x211c16, 0.38);
-      stones.lineBetween(
-        centerX - 9,
-        foothold.points[1]!.y + 9,
-        centerX + (index % 2 === 0 ? 7 : 12),
-        lowerY - 4,
-      );
-    });
-
-    stones.fillStyle(0x7c744f, 0.42);
-    stones.fillEllipse(-275, -15, 18, 5);
-    stones.fillEllipse(-113, 25, 16, 4);
-    stones.fillEllipse(-28, 43, 13, 4);
-    stones.fillStyle(0x394326, 0.72);
-    stones.fillEllipse(-207, 4, 12, 5);
-    stones.fillEllipse(-84, 23, 10, 4);
-    c.add(stones);
+    const c = this.add.container(this.scale.width / 2 - 92, SKY_BALANCE_CUE_Y).setDepth(-1).setAlpha(0);
+    // Painted front edges extend below the unchanged boot/contact positions.
+    c.add(this.drawPathStonePainting(-140, 70, 320));
     return c;
   }
 
@@ -1052,14 +983,6 @@ export class SkyIslandScene extends Phaser.Scene {
     cord.lineBetween(0, -250, 0, -55);
     cord.lineStyle(1.5, 0x9b7d57, 0.66);
     cord.lineBetween(0, -250, 0, -55);
-    cord.lineStyle(2.4, 0x6f4f2a, 0.72);
-    cord.lineBetween(-42, -55, 42, -55);
-    cord.lineStyle(1, 0xe2bb68, 0.54);
-    cord.lineBetween(-31, -51, 31, -51);
-    cord.fillStyle(0x3d2d20, 0.94);
-    cord.fillCircle(0, -55, 5);
-    cord.lineStyle(1.2, 0xc9a14a, 0.64);
-    cord.strokeCircle(0, -55, 4.5);
     c.add(cord);
 
     const glow = this.add.graphics();
@@ -1069,45 +992,16 @@ export class SkyIslandScene extends Phaser.Scene {
     glow.fillEllipse(0, -7, 94, 100);
     c.add(glow);
 
-    const paper = this.add.graphics();
-    paper.fillStyle(0x332419, 0.88);
-    paper.fillEllipse(6, -8, 88, 108);
-    paper.fillStyle(0xb96f27, 0.96);
-    paper.fillEllipse(0, -12, 80, 102);
-    paper.fillStyle(0xe0a644, 0.88);
-    paper.fillEllipse(-2, -12, 58, 88);
-    paper.fillStyle(0xf4c96a, 0.5);
-    paper.fillEllipse(-6, -10, 28, 78);
-    paper.lineStyle(3, 0x4f321d, 0.9);
-    paper.strokeEllipse(0, -12, 80, 102);
-    paper.lineStyle(1.5, 0xffedb0, 0.72);
-    paper.strokeEllipse(-3, -13, 72, 94);
-    paper.lineStyle(1.5, 0x6a431e, 0.72);
-    paper.strokeEllipse(0, -36, 58, 18);
-    paper.strokeEllipse(0, -15, 70, 22);
-    paper.strokeEllipse(0, 8, 62, 18);
-    paper.lineStyle(1.4, 0x6a431e, 0.72);
-    paper.lineBetween(-26, -42, -20, 22);
-    paper.lineBetween(-12, -48, -9, 31);
-    paper.lineBetween(12, -48, 9, 31);
-    paper.lineBetween(26, -42, 20, 22);
-    paper.fillStyle(0x70431f, 0.98);
-    paper.fillRoundedRect(-21, -61, 42, 9, 5);
-    paper.fillRoundedRect(-22, 34, 44, 8, 5);
-    paper.lineStyle(1.3, 0xe6b660, 0.84);
-    paper.strokeRoundedRect(-21, -61, 42, 9, 5);
-    paper.strokeRoundedRect(-22, 34, 44, 8, 5);
-    paper.fillStyle(0xffe49b, 0.92);
-    paper.fillEllipse(0, -6, 18, 32);
-    paper.lineStyle(1.3, 0x5e3b21, 0.78);
-    paper.lineBetween(0, 42, 0, 67);
-    paper.fillStyle(0xd99c36, 0.94);
-    paper.fillCircle(0, 55, 3.5);
-    paper.fillEllipse(0, 68, 12, 7);
-    paper.setAngle(-1.2);
+    const paper = this.add.image(0, -55, "sky-traversal-lantern").setName("path-lantern-body");
+    const bounds = SKY_PATH_PAINTINGS.lantern;
+    // Pivot at the visible top eye, so its small sway cannot detach the cord.
+    paper.setOrigin((bounds.left + bounds.right) / 2 / paper.width, bounds.top / paper.height);
+    paper.setScale(136 / (bounds.bottom - bounds.top));
+    paper.setAngle(reducedMotion(this) ? 0 : -1.2);
+    applySceneActorLighting(this, paper);
     c.add(paper);
 
-    this.tweens.add({
+    decorativeTween(this, this.tweens.add({
       targets: glow,
       alpha: { from: 0.74, to: 1 },
       scaleX: 1.035,
@@ -1116,90 +1010,25 @@ export class SkyIslandScene extends Phaser.Scene {
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
-    });
-    this.tweens.add({
+    }));
+    decorativeTween(this, this.tweens.add({
       targets: paper,
       angle: 1.2,
       duration: 2100,
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
+    }));
+    c.once(Phaser.GameObjects.Events.DESTROY, () => {
+      this.tweens.killTweensOf(glow);
+      this.tweens.killTweensOf(paper);
     });
     return c;
   }
 
   private drawSteppingStonesCue(): Phaser.GameObjects.Container {
     const c = this.add.container(this.scale.width / 2 + 36, SKY_STEPPING_CUE_Y).setDepth(-1).setAlpha(0);
-    const stones = this.add.graphics();
-    const stoneSpecs = [
-      {
-        x: -132,
-        y: 18,
-        tint: 0x69654d,
-        points: [
-          { x: -44, y: -5 }, { x: -29, y: -16 }, { x: 20, y: -18 },
-          { x: 43, y: -7 }, { x: 36, y: 8 }, { x: -8, y: 13 }, { x: -40, y: 7 },
-        ],
-      },
-      {
-        x: -54,
-        y: -4,
-        tint: 0x756d51,
-        points: [
-          { x: -46, y: -5 }, { x: -25, y: -19 }, { x: 24, y: -17 },
-          { x: 48, y: -4 }, { x: 37, y: 10 }, { x: -15, y: 13 }, { x: -42, y: 6 },
-        ],
-      },
-      {
-        x: 34,
-        y: 12,
-        tint: 0x666248,
-        points: [
-          { x: -42, y: -6 }, { x: -22, y: -17 }, { x: 22, y: -15 },
-          { x: 42, y: -3 }, { x: 31, y: 11 }, { x: -12, y: 13 }, { x: -39, y: 5 },
-        ],
-      },
-      {
-        x: 116,
-        y: -12,
-        tint: 0x7f7454,
-        points: [
-          { x: -48, y: -5 }, { x: -29, y: -19 }, { x: 27, y: -18 },
-          { x: 49, y: -4 }, { x: 39, y: 11 }, { x: -15, y: 13 }, { x: -44, y: 6 },
-        ],
-      },
-      {
-        x: 204,
-        y: 3,
-        tint: 0x897b59,
-        points: [
-          { x: -54, y: -6 }, { x: -31, y: -21 }, { x: 32, y: -19 },
-          { x: 56, y: -5 }, { x: 45, y: 13 }, { x: -18, y: 15 }, { x: -50, y: 7 },
-        ],
-      },
-    ];
-    stoneSpecs.forEach((stone, index) => {
-      const points = stone.points.map((point) => ({
-        x: stone.x + point.x,
-        y: stone.y + point.y,
-      }));
-      const shadow = points.map((point) => ({ x: point.x + 4, y: point.y + 9 }));
-
-      stones.fillStyle(0x2b261d, index === stoneSpecs.length - 1 ? 0.62 : 0.5);
-      stones.fillPoints(shadow, true);
-      stones.fillStyle(stone.tint, 0.98);
-      stones.fillPoints(points, true);
-      stones.lineStyle(1.8, 0x29251d, 0.68);
-      stones.strokePoints(points, true);
-      stones.lineStyle(1.2, 0xd3c38e, index === stoneSpecs.length - 1 ? 0.42 : 0.3);
-      stones.lineBetween(stone.x - 27, stone.y - 8, stone.x + 20, stone.y - 10);
-      stones.lineStyle(1.15, 0x373226, 0.58);
-      stones.lineBetween(stone.x - 6, stone.y - 10, stone.x + 3, stone.y - 2);
-      stones.lineBetween(stone.x + 3, stone.y - 2, stone.x + (index % 2 === 0 ? 13 : 9), stone.y + 5);
-      stones.fillStyle(0x4c5835, 0.72);
-      stones.fillEllipse(stone.x - 23, stone.y - 8, 13, 5);
-    });
-    c.add(stones);
+    c.add(this.drawPathStonePainting(42, 56, 440));
     return c;
   }
 
@@ -1221,11 +1050,8 @@ export class SkyIslandScene extends Phaser.Scene {
       });
       return;
     }
+    if (completion) this.liftPathLanternAside();
     const sourceOffset = this.pathCueSourceOffset();
-    playActorAttention(this, this.pathCue, {
-      scale: completion ? 1.035 : 1.018,
-      durationMs: completion ? 260 : 180,
-    });
     playBodyImpact(this, this.pathCue, {
       kind: "mote",
       color: PALETTE_HEX.brass,
@@ -1236,6 +1062,16 @@ export class SkyIslandScene extends Phaser.Scene {
       count: completion ? 9 : 5,
       durationMs: completion ? 460 : 260,
     });
+  }
+
+  private liftPathLanternAside(): void {
+    if (this.pathCueBeat !== "lantern" || !this.pathCue?.scene) return;
+    const paper = this.pathCue.getByName("path-lantern-body") as Phaser.GameObjects.Image | null;
+    if (!paper?.scene) return;
+    this.tweens.killTweensOf(paper);
+    // Rotate the body about its attached eye; the rope and word stay fixed.
+    if (reducedMotion(this)) { paper.setAngle(-22); return; }
+    this.tweens.add({ targets: paper, angle: -22, duration: 420, ease: "Sine.easeOut" });
   }
 
   private dismissPathCue(animate = true): void {
@@ -1249,14 +1085,13 @@ export class SkyIslandScene extends Phaser.Scene {
     this.pathCue = null;
     this.pathCueBeat = null;
     this.tweens.killTweensOf(cue);
-    if (!animate) {
+    if (!animate || reducedMotion(this)) {
       cue.destroy();
       return;
     }
     this.tweens.add({
       targets: cue,
       alpha: 0,
-      y: cue.y - 20,
       duration: 260,
       ease: "Sine.easeIn",
       onComplete: () => cue.destroy(),
@@ -3611,9 +3446,9 @@ export class SkyIslandScene extends Phaser.Scene {
           cue.y + sourceOffset.y,
           { color: PALETTE_HEX.brass, depth: 58 },
         );
-        playActorAttention(this, feedbackBody, {
+        if (groundedBeat) playActorAttention(this, feedbackBody, {
           tint: PALETTE_HEX.brass,
-          scale: groundedBeat ? 1.012 : 1.022,
+          scale: 1.012,
           durationMs: 180,
         });
         onClaim?.(mods);

@@ -5,7 +5,7 @@ import { assert, assertEqual, suite } from "./_assert";
 const url = new URL("../src/scenes/ClockworkForgeScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const sceneClass = source.statements.find(ts.isClassDeclaration)!;
-const methods = ["showPeacefulGuards", "clearPeacefulGuards", "drawGolemInto", "startFork2PeacefulBranch", "afterFork2", "staticGolemWordPosition", "gregorTutorialMove", "gregorTutorialCommand", "catwalkCueX", "catwalkWrenX", "dismissBellowsWorkstation"];
+const methods = ["showPeacefulGuards", "clearPeacefulGuards", "drawGolemInto", "startFork2PeacefulBranch", "afterFork2", "staticGolemWordPosition", "gregorTutorialMove", "gregorTutorialCommand", "catwalkCueX", "catwalkWrenX", "dismissBellowsWorkstation", "clearForgeKeepsake"];
 const constants = source.statements.filter(ts.isVariableStatement).flatMap(statement =>
   statement.declarationList.declarations.filter(declaration =>
     ["CATWALK_Y", "FLOOR_Y", "GOLEM_SPRITE_HEIGHT", "FOUNDRY_GROUND_Y", "CATWALK_SURFACE_Y", "TUTORIAL_GOLEM_GROUND_Y", "TUTORIAL_GOLEM_Y"].includes(declaration.name.getText(source)))

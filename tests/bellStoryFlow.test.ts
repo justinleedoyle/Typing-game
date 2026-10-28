@@ -7,7 +7,7 @@ import { assert, assertEqual, suite } from "./_assert";
 const path = new URL("../src/scenes/SunkenBellScene.ts", import.meta.url);
 const source = ts.createSourceFile(path.pathname, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
-const methods = ["startBellKeepersChamber", "onWardenDefeated", "startFork2", "startFork2FreeAurland", "startFork2ClaimTongue", "runFreePassageChain", "setStoryObjective"].map(name =>
+const methods = ["startBellKeepersChamber", "clearBellKeeperLectern", "onWardenDefeated", "startFork2", "startFork2FreeAurland", "startFork2ClaimTongue", "runFreePassageChain", "setStoryObjective"].map(name =>
   owner.members.find(value => value.name?.getText(source) === name)!.getText(source));
 const code = ts.transpileModule(`class Harness { ${methods.join("\n")} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
@@ -15,12 +15,12 @@ const code = ts.transpileModule(`class Harness { ${methods.join("\n")} }`, {
 const noop = () => {};
 const Harness = new Function("Phaser", "BELL_BURST_COLOR", "PALETTE_HEX", "addLocalGroundShadow",
   "addContainerWake", "addIdleBreath", "attachWordBodyAnchor", "playBodyImpact", "dismissStagedCue", "playChime", "fadeOutStagedSprite",
-  "playWrenFocus", "playWrenAction", "playActorAttention",
+  "playWrenFocus", "playWrenAction", "playActorAttention", "reducedMotion",
   `${code}; return Harness;`)(
   { GameObjects: { Events: { DESTROY: "destroy" } } }, 0x4ab8d6, { brass: 0xbaa463 },
   () => ({}), noop, noop, () => ({ destroy() {} }), noop, noop, noop,
   (scene: { departures: unknown[] }, sprite: unknown) => scene.departures.push(sprite),
-  noop, noop, noop,
+  noop, noop, noop, () => false,
 );
 
 function story() {
@@ -53,7 +53,7 @@ await suite("Bell story: read it is free typing and its earned memory waits for 
   const s = story();
   let complete: (() => void) | undefined;
   let doors = 0;
-  const cue = { x: 960, y: 690, setDepth() { return this; }, setAlpha() { return this; }, add() {}, once() {} };
+  const cue = { x: 960, y: 690, scene: true, setDepth() { return this; }, setAlpha() { return this; }, add() {}, once() {}, destroy() { this.scene = false; } };
   Object.assign(s.h, {
     add: { container: () => cue },
     makeWord: (opts: { word: string; onComplete: () => void }) => {

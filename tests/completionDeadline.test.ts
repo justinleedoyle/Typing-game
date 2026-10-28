@@ -162,16 +162,18 @@ await suite("completion deadline: finale facets honor the final matched letter b
     let advances = 0;
     let held = 0;
     let completed = false;
+    let objective = "";
+    let resolvedAt = -1;
     let completion!: () => void;
     const timers: Array<{ at: number; removed: boolean; run: () => void }> = [];
     const battle = new Finale();
     Object.assign(battle, {
       runOver: false, facetSigil: null,
-      setNarrator() {}, band: { setObjective() {} }, narration: { say() {} },
+      setNarrator() {}, band: { setObjective(text: string) { objective = text; } }, narration: { say() {} },
       facetDefenseWordPosition: () => ({ x: 0, y: 0 }),
       clearTargetAnchor() {}, clearActiveTargets() {}, clearFacetSigil() {},
       registerActiveTarget() {},
-      playFacetImpact(_facet: unknown, outcome: string) { if (outcome === "held") held += 1; },
+      playFacetImpact(_facet: unknown, outcome: string) { if (outcome === "held") held += 1; resolvedAt = now; },
       loseCandle() { lostCandles += 1; },
       time: { delayedCall(ms: number, run: () => void) {
         const timer = { at: now + ms, removed: false, run,
@@ -185,6 +187,7 @@ await suite("completion deadline: finale facets honor the final matched letter b
       },
     });
     battle.runFacetChallenge({ name: "the Cold", defenseWord: "endure" }, () => { advances += 1; });
+    assertEqual(objective, "Type endure before the facet lands.", "the live timed defense retains its original instruction");
     if (finishAt !== null) {
       now = finishAt;
       completed = true;
@@ -194,7 +197,14 @@ await suite("completion deadline: finale facets honor the final matched letter b
       timers.sort((a, b) => a.at - b.at);
       const timer = timers.shift()!;
       now = timer.at;
-      if (!timer.removed) timer.run();
+      if (!timer.removed) {
+        if (resolvedAt >= 0 && now === resolvedAt + 1200) {
+          assertEqual(advances, 0, "the original response interval cannot advance the next facet early");
+          assertEqual(objective, finishAt === null ? "The facet lands. A candle goes out." : "the Cold is answered. Hold steady.",
+            "the response interval acknowledges the outcome instead of asking for a vanished defense target");
+        }
+        timer.run();
+      }
     }
     completion(); // A stale animation callback cannot resolve it again.
     assertEqual(lostCandles, finishAt === null ? 1 : 0,
@@ -202,6 +212,8 @@ await suite("completion deadline: finale facets honor the final matched letter b
     assertEqual(held, finishAt === null ? 0 : 1,
       `${finishAt}: a logically completed answer receives its held cue once`);
     assertEqual(advances, 1, `${finishAt}: the facet advances exactly once`);
+    assertEqual(objective, finishAt === null ? "The facet lands. A candle goes out." : "the Cold is answered. Hold steady.",
+      `${finishAt}: a stale completion callback cannot replace the resolved objective`);
   }
 });
 

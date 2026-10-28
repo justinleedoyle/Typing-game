@@ -8,7 +8,7 @@ const url = new URL("../src/scenes/SunkenBellScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
 const names = ["init", "preload", "startFork2FreeAurland", "runFreePassageChain", "readThen",
-  "showAurlandToken", "clearAurlandToken", "hideAurland", "onKeyDown", "clearActiveTargets"];
+  "showAurlandToken", "clearAurlandToken", "hideAurland", "onKeyDown", "clearActiveTargets", "clearBellKeeperLectern"];
 let shutdown: ts.ArrowFunction | undefined;
 const create = owner.members.find(member => member.name?.getText(source) === "create")!;
 function findShutdown(node: ts.Node): void {
@@ -56,7 +56,7 @@ function fixture(reduced = false) {
     applySceneActorLighting: (_scene: unknown, image: any) => { image.lit = true; },
     fadeOutStagedSprite, preloadSatchelIcons: noop, preloadWren: noop,
   };
-  for (const name of ["sunkenBellBackdrop", "naveDoorway", "naveDoorLeaves", "bellGhostSprite", "bellWardenSprite", "olinSprite",
+  for (const name of ["sunkenBellBackdrop", "naveDoorway", "naveDoorLeaves", "readingLecternSprite", "bellGhostSprite", "bellWardenSprite", "olinSprite",
     "aurlandSprite", "glassFishSprite", "snowFoxSprite", "runaPortrait"]) globals[name] = name;
   globals.tridentTokenSprite = "art/relics/trident-token.png";
   const Bell = new Function(...Object.keys(globals), `${code}; return Bell;`)(...Object.values(globals));

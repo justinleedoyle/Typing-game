@@ -6,7 +6,7 @@ import { assert, assertClose, assertEqual, suite } from "./_assert";
 const path = new URL("../src/scenes/WinterMountainScene.ts", import.meta.url);
 const source = ts.createSourceFile(path.pathname, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
 const sceneClass = source.statements.find(ts.isClassDeclaration)!;
-const methods = ["init", "preload", "resumeWinter", "startAct1", "runRiverBeats", "showRiverCue", "ensureTrailStage", "riverCuePosition", "riverWordPosition", "trailWrenPosition", "stageWrenAtTrailEntrance", "walkWrenToTrailBeat", "completeRiverBeat", "resetWrenToWinterStage", "moveWrenTo", "attachRiverCueWordAnchor", "releaseRiverCueWordAnchor", "pulseRiverCue", "dismissRiverCue", "startHeldur", "onKeyDown"];
+const methods = ["init", "clearHeldPelt", "preload", "resumeWinter", "startAct1", "runRiverBeats", "showRiverCue", "ensureTrailStage", "riverCuePosition", "riverWordPosition", "trailWrenPosition", "stageWrenAtTrailEntrance", "walkWrenToTrailBeat", "completeRiverBeat", "resetWrenToWinterStage", "moveWrenTo", "attachRiverCueWordAnchor", "releaseRiverCueWordAnchor", "pulseRiverCue", "dismissRiverCue", "startHeldur", "onKeyDown"];
 const constants = source.statements.filter(ts.isVariableStatement).map(statement => statement.getText(source)).join("\n");
 const compiled = ts.transpileModule(`${constants}\nclass Winter { ${methods.map(name => sceneClass.members.find(member => member.name?.getText(source) === name)!.getText(source)).join("\n")} }`,
   { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -65,6 +65,7 @@ function fixture(reduced = false) {
     isPuristToggleKey: () => false, togglePuristMode: noop, playClack: noop, SPELL_COST: 50,
     checkpointIndex, winterStep, PALETTE_HEX: { frost: 0 },
     winterBackdrop: "vista", winterTrailBackdrop: "trail", fallenPineSprite: "pine", runaPortrait: "runa", snowFoxSprite: "fox",
+    winterAftermathCairn: "cairn", winterAftermathPelt: "pelt",
     preloadWren: noop, preloadWolves: noop, preloadWinterNpcs: noop, preloadSatchelIcons: noop,
   };
   const Winter = new Function(...Object.keys(bindings), compiled + "; return Winter;")(...Object.values(bindings));

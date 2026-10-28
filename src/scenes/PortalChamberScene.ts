@@ -79,6 +79,7 @@ interface ArchSpec {
   readonly baseY: number;
   readonly label: string;
   readonly sceneKey: string;
+  readonly glyph: "mountain" | "bell" | "cog" | "lantern" | "branch";
 }
 
 // Geometry maps each arch onto a painted opening in the hub backdrop art.
@@ -89,11 +90,11 @@ interface ArchSpec {
 // These are the inner apertures, excluding the stone surrounds. Their
 // centers are 401/618/836/1053/1271 px in the 1672 px source painting.
 const ARCHES: readonly ArchSpec[] = [
-  { id: "winter-mountain", x: 461,  width: 142, height: 318, baseY: 696, label: "Winter Mountain", sceneKey: "WinterMountainScene"  },
-  { id: "sunken-bell",     x: 709,  width: 142, height: 318, baseY: 696, label: "Sunken Bell",     sceneKey: "SunkenBellScene"      },
-  { id: "clockwork-forge", x: 960,  width: 142, height: 318, baseY: 696, label: "Clockwork Forge", sceneKey: "ClockworkForgeScene"   },
-  { id: "sky-island",      x: 1209, width: 142, height: 318, baseY: 696, label: "Sky Island",      sceneKey: "SkyIslandScene"        },
-  { id: "haunted-wood",    x: 1459, width: 142, height: 318, baseY: 696, label: "Haunted Wood",    sceneKey: "HauntedWoodScene"      },
+  { id: "winter-mountain", x: 461,  width: 142, height: 318, baseY: 696, label: "Winter Mountain", sceneKey: "WinterMountainScene", glyph: "mountain" },
+  { id: "sunken-bell",     x: 709,  width: 142, height: 318, baseY: 696, label: "Sunken Bell",     sceneKey: "SunkenBellScene", glyph: "bell" },
+  { id: "clockwork-forge", x: 960,  width: 142, height: 318, baseY: 696, label: "Clockwork Forge", sceneKey: "ClockworkForgeScene", glyph: "cog" },
+  { id: "sky-island",      x: 1209, width: 142, height: 318, baseY: 696, label: "Sky Island",      sceneKey: "SkyIslandScene", glyph: "lantern" },
+  { id: "haunted-wood",    x: 1459, width: 142, height: 318, baseY: 696, label: "Haunted Wood",    sceneKey: "HauntedWoodScene", glyph: "branch" },
 ] as const;
 
 const REALM_SEQUENCE = ARCHES.map((a) => a.id);
@@ -107,8 +108,7 @@ const ZONE_X: Record<Zone, number> = {
   shelf:   1510,
   account: 1660,
 };
-// Stand in the foreground of the portal thresholds, leaving their nameplates
-// clear above Wren's head even when all five revisits are visible.
+// Stand in the foreground of the portal thresholds.
 const WREN_Y = 1000;
 const SHELF_GRID = {
   cols: 4,
@@ -1948,7 +1948,7 @@ export class PortalChamberScene extends Phaser.Scene {
         return;
       }
       // The painted arch is the frame. A second, smaller drawn arch looked
-      // like a misplaced doorway; the inset completion seal carries status.
+      // like a misplaced doorway; the carved keystone carries status.
       if (glow) {
         this.drawPortalGlow(
           glow,
@@ -1997,53 +1997,94 @@ export class PortalChamberScene extends Phaser.Scene {
 
     ARCHES.forEach((arch, i) => {
       if (!arch.label) return;
-      const isNext    = i === nextIdx;
       const isCleared = state.realms[arch.id]?.cleared === true;
-      const isLocked  = i > nextIdx;
+      const isNext = !isCleared && i === nextIdx;
+
+      this.drawArchKeystone(arch, isCleared ? "cleared" : isNext ? "next" : "locked");
 
       if (isNext) {
         this.drawArchStatusPlaque(arch, "type to enter", "", "next");
-      } else if (isCleared) {
-        this.drawArchStateSeal(arch, "cleared");
-      } else if (isLocked) {
-        this.drawArchStateSeal(arch, "locked");
       }
     });
   }
 
-  private drawArchStateSeal(
+  private drawArchKeystone(
     arch: ArchSpec,
-    tone: "cleared" | "locked",
+    tone: "next" | "cleared" | "locked",
   ): void {
     const x = arch.x;
-    const y = arch.baseY - 50;
+    // The existing trapezoidal stone is centered at source y311 (game y357).
+    // Engrave its face directly; do not add a badge or another stone surround.
+    const y = arch.baseY - arch.height - 21;
     const cleared = tone === "cleared";
-    const color = cleared ? UI_HEX.brass : 0x4a4352;
-    const alpha = cleared ? 0.42 : 0.24;
+    const color = cleared ? 0xe0bf70 : tone === "next" ? 0x9bdaed : 0x8b877d;
+    const alpha = tone === "locked" ? 0.64 : 0.96;
     const g = this.add.graphics().setDepth(-1);
 
-    g.fillStyle(UI_HEX.panel, alpha * 0.72);
-    g.fillCircle(x, y, cleared ? 18 : 16);
-    g.lineStyle(1.5, color, alpha + 0.18);
-    g.strokeCircle(x, y, cleared ? 18 : 16);
-    g.lineStyle(1, color, alpha * 0.78);
-    g.strokeCircle(x, y, cleared ? 12 : 10);
+    if (tone !== "locked") {
+      g.fillStyle(color, 0.08);
+      g.fillEllipse(x, y - 2, 26, 30);
+    }
+    // A recessed edge keeps even the unlit glyph legible against painted stone.
+    this.drawKeystoneGlyph(g, arch.glyph, x + 0.8, y - 1.2, 0x080a0c, 0.8);
+    this.drawKeystoneGlyph(g, arch.glyph, x, y - 2, color, alpha);
 
     if (cleared) {
-      g.lineStyle(2, color, alpha + 0.28);
+      // Shape as well as color distinguishes a finished realm from an open one.
+      g.lineStyle(1.7, color, 1);
       g.beginPath();
-      g.moveTo(x - 8, y + 1);
-      g.lineTo(x - 2, y + 7);
-      g.lineTo(x + 10, y - 8);
+      g.moveTo(x - 4, y + 11);
+      g.lineTo(x - 1, y + 14);
+      g.lineTo(x + 5, y + 9);
       g.strokePath();
-      return;
     }
+  }
 
-    g.lineStyle(2, color, alpha + 0.16);
-    g.strokeRoundedRect(x - 8, y - 2, 16, 13, 3);
-    g.beginPath();
-    g.arc(x, y - 2, 8, Math.PI, Math.PI * 2);
-    g.strokePath();
+  private drawKeystoneGlyph(
+    g: Phaser.GameObjects.Graphics,
+    glyph: ArchSpec["glyph"],
+    x: number,
+    y: number,
+    color: number,
+    alpha: number,
+  ): void {
+    g.lineStyle(1.8, color, alpha);
+    const path = (points: readonly (readonly [number, number])[]) => {
+      g.beginPath();
+      points.forEach(([dx, dy], i) => i ? g.lineTo(x + dx, y + dy) : g.moveTo(x + dx, y + dy));
+      g.strokePath();
+    };
+    switch (glyph) {
+      case "mountain":
+        path([[-10, 8], [-1, -9], [9, 8], [-10, 8]]);
+        path([[-5, -1], [-1, 1], [3, -1]]);
+        break;
+      case "bell":
+        path([[-9, 6], [-6, 2], [-6, -3], [-3, -7], [3, -7], [6, -3], [6, 2], [9, 6], [-9, 6]]);
+        g.lineBetween(x, y - 10, x, y - 7);
+        g.lineBetween(x - 2, y + 9, x + 2, y + 9);
+        break;
+      case "cog":
+        g.strokeCircle(x, y, 6);
+        g.strokeCircle(x, y, 2);
+        for (let i = 0; i < 8; i++) {
+          const angle = i * Math.PI / 4;
+          g.lineBetween(x + Math.cos(angle) * 7, y + Math.sin(angle) * 7,
+            x + Math.cos(angle) * 10, y + Math.sin(angle) * 10);
+        }
+        break;
+      case "lantern":
+        // Peaked roof and tapered cage distinguish this from a padlock.
+        path([[-9, -4], [0, -10], [9, -4], [-9, -4]]);
+        path([[-7, -3], [-5, 8], [5, 8], [7, -3]]);
+        path([[0, -1], [2, 3], [0, 6], [-2, 3], [0, -1]]);
+        break;
+      case "branch":
+        path([[0, 9], [0, -9]]);
+        path([[0, -3], [-8, -8], [-7, -2], [0, 2]]);
+        path([[0, 2], [8, -4], [7, 2], [0, 6]]);
+        break;
+    }
   }
 
   private drawArchStatusPlaque(
@@ -2054,8 +2095,7 @@ export class PortalChamberScene extends Phaser.Scene {
   ): void {
     const width = arch.width - 18;
     const height = subtitle ? 50 : 30;
-    // Instruction and status belong inside this opening; the nameplate sits
-    // across its stone threshold, using the same center and base.
+    // The entry hint stays inside the opening; the typed name sits above it.
     const y = arch.baseY - 64;
     const isLocked = tone === "locked";
     const alpha = isLocked ? 0.24 : tone === "next" ? 0.78 : 0.34;
@@ -3170,8 +3210,8 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 }
 
-// A nameplate fixed to the threshold can stay readable without overflowing a
-// narrow aperture or alternating between unrelated heights.
+// Center the typed name above its arch, below the caption lane and clear of
+// both the carved keystone and foreground furniture.
 function archTargetY(arch: ArchSpec, _archIndex: number): number {
-  return arch.baseY + 18;
+  return arch.baseY - arch.height - 80;
 }

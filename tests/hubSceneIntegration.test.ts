@@ -9,7 +9,7 @@ import { assert, assertClose, assertEqual, suite } from "./_assert";
 const url = new URL("../src/scenes/PortalChamberScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
-const names = ["drawRoom", "drawRuna", "drawWren", "drawArch", "renderArch", "drawPortalGlow", "drawArchLabels", "drawArchStateSeal", "drawArchStatusPlaque", "registerPortalZoneTargets", "registerRealmPortalTarget", "registerShelfZoneTargets", "registerPortalReturnTarget", "registerDeskAlmanacTarget", "registerNavTarget", "stageHubTarget", "drawDisplayShelf", "clearShelfDisplay", "stageShelfObject", "openAlmanac", "resumeAfterAlmanac", "enterZone", "clearZoneTargets", "onKeyDown"];
+const names = ["drawRoom", "drawRuna", "drawWren", "drawArch", "renderArch", "drawPortalGlow", "drawArchLabels", "drawArchKeystone", "drawKeystoneGlyph", "drawArchStatusPlaque", "registerPortalZoneTargets", "registerRealmPortalTarget", "registerShelfZoneTargets", "registerPortalReturnTarget", "registerDeskAlmanacTarget", "registerNavTarget", "stageHubTarget", "drawDisplayShelf", "clearShelfDisplay", "stageShelfObject", "openAlmanac", "resumeAfterAlmanac", "enterZone", "clearZoneTargets", "onKeyDown"];
 const constants = source.statements.filter(ts.isVariableStatement).map(node => node.getText(source)).join("\n");
 const targetY = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "archTargetY")!;
 const create = owner.members.find(node => node.name?.getText(source) === "create") as ts.MethodDeclaration;
@@ -34,6 +34,26 @@ const advances: Record<string, number> = { "Winter Mountain": 7.7884, "Sunken Be
 const wordSource = ts.createSourceFile("wordTarget.ts", readFileSync(new URL("../src/game/wordTarget.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true);
 const bannerConstant = (name: string) => Number(wordSource.statements.filter(ts.isVariableStatement).flatMap(node => node.declarationList.declarations).find(node => node.name.getText(wordSource) === name)!.initializer!.getText(wordSource));
 const bannerPad = bannerConstant("BANNER_PAD_X"), bannerPadY = bannerConstant("BANNER_PAD_Y");
+type DrawOp = { name: string; args: number[] };
+function inkBounds(ops: DrawOp[]) {
+  const points: number[][] = [];
+  let halfStroke = 0;
+  for (const { name, args: a } of ops) {
+    if (name === "lineStyle") halfStroke = a[0] / 2;
+    const point = (x: number, y: number, outset = halfStroke) => points.push([x-outset, y-outset], [x+outset, y+outset]);
+    if (name === "moveTo" || name === "lineTo") point(a[0], a[1]);
+    if (name === "lineBetween") { point(a[0], a[1]); point(a[2], a[3]); }
+    if (name === "strokeCircle") { point(a[0]-a[2], a[1]-a[2]); point(a[0]+a[2], a[1]+a[2]); }
+    if (name === "fillEllipse") { point(a[0]-a[2]/2, a[1]-a[3]/2, 0); point(a[0]+a[2]/2, a[1]+a[3]/2, 0); }
+  }
+  return { left: Math.min(...points.map(p => p[0])), right: Math.max(...points.map(p => p[0])), top: Math.min(...points.map(p => p[1])), bottom: Math.max(...points.map(p => p[1])) };
+}
+function glyphSignature(call: { ops: DrawOp[]; x: number; y: number }) {
+  return JSON.stringify(call.ops.filter(op => op.name !== "lineStyle").map(({ name, args }) => ({ name, args: args.map((value, i) => {
+    const coordinate = ["moveTo", "lineTo", "lineBetween"].includes(name) || (name === "strokeCircle" && i < 2);
+    return Math.round((coordinate ? value - (i % 2 ? call.y : call.x) : value) * 10000) / 10000;
+  }) })));
+}
 
 function fixture(satchel: string[] = [], cleared = 0) {
   let now = 0, paused = false;
@@ -142,7 +162,10 @@ await suite("Hub integration: the painted architecture and every portal mask sha
   assert(f.masks.every(mask => mask.destroyed === 1), "scene shutdown releases every actual aperture mask once");
 });
 
-await suite("Hub integration: threshold nameplates and inset status stay attached and clear their neighboring arches", () => {
+await suite("Hub integration: above-arch names and carved realm glyphs stay on their painted architecture", () => {
+  const expectedGlyphs = ["mountain", "bell", "cog", "lantern", "branch"];
+  const stoneX = [402, 619, 836, 1053, 1270];
+  let originalGlyphs: string[] | undefined;
   for (const cleared of [0, 1, 5]) {
     const f = fixture([], cleared); f.hub.registerPortalZoneTargets();
     f.hub.placeWren();
@@ -150,20 +173,45 @@ await suite("Hub integration: threshold nameplates and inset status stay attache
     const labels = f.words.filter(word => f.geometry.ARCHES.some((arch: any) => arch.label === word.opts.word)).sort((a,b) => a.opts.x-b.opts.x);
     for (const word of labels) {
       const arch = f.geometry.ARCHES.find((arch: any) => arch.label === word.opts.word);
-      assertEqual(word.opts.frame, "banner", "realm text belongs to a threshold plate rather than overflowing a narrow aperture");
+      assertEqual(word.opts.frame, "banner", "realm names have complete readable plates above their doors");
       assertEqual(word.opts.x, arch.x, "every nameplate shares its own painted door center");
-      assert(word.opts.y >= arch.baseY && word.opts.y <= arch.baseY + 40, "nameplate lies on the threshold instead of a detached alternating row");
       // A deliberately generous 1.5em text line plus the real banner padding
       // contains the full plate; reserve the existing four-pixel idle breath too.
-      assert(actorTop - 4 > word.opts.y + (word.opts.fontSize * 1.5 + bannerPadY) / 2, "Wren's full head bounds stay below every threshold plate, including the centered Forge revisit");
+      const halfHeight = (word.opts.fontSize * 1.5 + bannerPadY) / 2;
+      assert(word.opts.y - halfHeight >= 250 && word.opts.y + halfHeight < 296 / backdrop.height * 1080 - 8, "the full plate stays below the caption lane and above the painted keystone");
+      assert(actorTop - 4 > word.opts.y + halfHeight, "Wren's full head bounds stay below every nameplate, including the centered Forge revisit");
+      assert(word.opts.y + halfHeight < 575 / backdrop.height * 1080, "the plate clears the measured chair crest instead of returning to its threshold overlap");
     }
     for (let i = 1; i < labels.length; i++) assert(labels[i-1].opts.x + labels[i-1].width/2 + 8 < labels[i].opts.x-labels[i].width/2, "measured complete titles leave a readable gap to the next nameplate");
-    for (const arch of f.geometry.ARCHES) {
-      for (const tone of ["cleared", "locked"]) {
-        const before = f.objects.length; f.hub.drawArchStateSeal(arch, tone);
-        const circle = f.objects[before].ops.find((op: any) => op.name === "fillCircle").args;
-        assert(circle[0]-circle[2] >= arch.x-arch.width/2 && circle[0]+circle[2] <= arch.x+arch.width/2 && circle[1]+circle[2] <= arch.baseY && circle[1]-circle[2] >= arch.baseY-arch.height, "completion/lock status stays within its own painted opening");
-      }
+    const carvings: any[] = [], calls: any[] = [];
+    const drawStone = f.hub.drawArchKeystone.bind(f.hub), drawGlyph = f.hub.drawKeystoneGlyph.bind(f.hub);
+    f.hub.drawArchKeystone = (arch: any, tone: string) => { const before = f.objects.length; drawStone(arch, tone); carvings.push({ arch, tone, g: f.objects[before] }); };
+    f.hub.drawKeystoneGlyph = (g: any, glyph: string, x: number, y: number, color: number, alpha: number) => {
+      const start = g.ops.length; drawGlyph(g, glyph, x, y, color, alpha); calls.push({ glyph, x, y, color, alpha, ops: g.ops.slice(start) });
+    };
+    f.hub.drawArchLabels();
+    assertEqual(carvings.length, 5, "actual chapter-state rendering creates one keystone for every realm, including the next available one");
+    assertEqual(calls.length, 10, "each carving has one recessed edge and one visible realm glyph");
+    const faces = calls.filter((_: any, i: number) => i % 2);
+    assertEqual(faces.map((call: any) => call.glyph), expectedGlyphs, "the five canonical realms keep their own symbols in every progress state");
+    const signatures = faces.map(glyphSignature);
+    assertEqual(new Set(signatures).size, 5, "realm identity is five distinct drawn shapes rather than a shared lock");
+    if (originalGlyphs) assertEqual(signatures, originalGlyphs, "progress changes state treatment without replacing a realm's carved symbol");
+    else originalGlyphs = signatures;
+    for (const [i, { arch, tone, g }] of carvings.entries()) {
+      const expectedTone = i < cleared ? "cleared" : i === cleared ? "next" : "locked";
+      assertEqual(tone, expectedTone, "saved progress gives completed, available, and locked stones the correct treatment");
+      assertEqual([faces[i].color, faces[i].alpha], tone === "cleared" ? [0xe0bf70, 0.96] : tone === "next" ? [0x9bdaed, 0.96] : [0x8b877d, 0.64], "finished brass, available blue, and locked muted gray remain distinct");
+      assertClose(faces[i].x / 1920 * backdrop.width, stoneX[i], 2.5, "the glyph is horizontally carved into its independently measured stone");
+      assertClose(faces[i].y / 1080 * backdrop.height, 309.5, 1.5, "the glyph face is centered on the painted keystone face");
+      const bounds = inkBounds(g.ops);
+      assert(bounds.left / 1920 * backdrop.width >= stoneX[i] - 15 && bounds.right / 1920 * backdrop.width <= stoneX[i] + 15 && bounds.top / 1080 * backdrop.height >= 295 && bounds.bottom / 1080 * backdrop.height <= 327, "all carved ink, completion chevron, and local light fit the painted keystone");
+      assert(!g.ops.some((op: DrawOp) => ["arc", "fillCircle", "fillRoundedRect", "strokeRoundedRect"].includes(op.name)), "the stone never gains a generic lock or a detached badge surround");
+      const afterFace = g.ops.slice(g.ops.indexOf(faces[i].ops.at(-1)) + 1);
+      const completionPoints = afterFace.filter((op: DrawOp) => op.name === "moveTo" || op.name === "lineTo").map((op: DrawOp) => op.args);
+      assertEqual(completionPoints.length, tone === "cleared" ? 3 : 0, "only completed realms add a separate completion mark after their unchanged symbol");
+      if (tone === "cleared") assert(completionPoints[0][0] < completionPoints[1][0] && completionPoints[1][0] < completionPoints[2][0] && completionPoints[1][1] > completionPoints[0][1] && completionPoints[2][1] < completionPoints[0][1], "the completion stroke reads as a rising chevron instead of another lock or flat underline");
+      assertEqual(g.ops.filter((op: DrawOp) => op.name === "fillEllipse").length, tone === "locked" ? 0 : 1, "the locked carving has no available/completed light wash");
     }
     const profile = f.words.find(word => word.opts.word === "profile");
     assert(profile.opts.x + profile.width/2 < 1920 && profile.opts.x-profile.width/2 > 1700 && profile.opts.y >= 85 && profile.opts.y < 140, "profile is a contained top-right utility below Pause");

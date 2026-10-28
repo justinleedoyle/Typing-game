@@ -23,7 +23,6 @@ import { TextWordTarget } from "../game/wordTarget";
 import { difficultyLabel, isPuristToggleKey, togglePuristMode } from "../game/purist";
 import {
   addAmbientDrift,
-  addBackdropDrift,
   addContainerWake,
   addGroundShadow,
   addIdleBreath,
@@ -103,40 +102,41 @@ const REALM_SEQUENCE = ARCHES.map((a) => a.id);
 // desk (left), portal floor (centre), and utility stations. Shelf uses the
 // cabinet's approach lane so the expanded keepsakes stay on the shelves.
 const ZONE_X: Record<Zone, number> = {
-  desk:    300,
+  desk:    420,
   portals: 990,
   shelf:   1510,
   account: 1660,
 };
-const WREN_Y = 900;
+// Stand in the foreground of the portal thresholds, leaving their nameplates
+// clear above Wren's head even when all five revisits are visible.
+const WREN_Y = 1000;
 const SHELF_GRID = {
-  cols: 5,
-  startX: 1648,
-  startY: 448,
-  colGap: 46,
-  rowGap: 56,
-  tileSize: 40,
-  iconSize: 30,
+  cols: 4,
+  startX: 1750,
+  colGap: 28,
+  // Centers above the four painted shelf surfaces, not a floating UI grid.
+  rowY: [444, 530, 620, 693],
+  iconSize: 24,
 } as const;
 const SHELF_STATION = {
-  x: 1740,
-  y: 558,
-  width: 220,
-  height: 100,
-  summaryY: 536,
-  targetY: 592,
+  x: 1788,
+  y: 580,
+  width: 150,
+  height: 310,
+  summaryY: 780,
+  targetY: 852,
 } as const;
 const RUNA_DESK_STATION = {
-  x: 274,
-  y: 788,
-  width: 152,
+  x: 250,
+  y: 1010,
+  width: 170,
   height: 48,
-  targetX: 274,
-  targetY: 791,
+  targetX: 250,
+  targetY: 1046,
 } as const;
 const DESK_REFLECTION_CARD = {
   x: 258,
-  y: 704,
+  y: 628,
   width: 218,
   height: 82,
 } as const;
@@ -162,7 +162,7 @@ const HUB_STATIONS = {
     width: RUNA_DESK_STATION.width,
     height: RUNA_DESK_STATION.height,
   },
-  almanac: { x: 190, y: 734, width: 210, height: 50 },
+  almanac: { x: 230, y: 690, width: 185, height: 42 },
   portalFloor: { x: 960, y: 962, width: 330, height: 46 },
   shelf: {
     x: SHELF_STATION.x,
@@ -225,6 +225,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private activeZone: Zone = "portals";
   private openingUtilityScene = false;
   private almanacOverlayOpen = false;
+  private almanacReturnZone: "desk" | "shelf" = "desk";
   private enteringGreatBattle = false;
   private restartingNewGame = false;
 
@@ -256,6 +257,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.activeZone = "portals";
     this.openingUtilityScene = false;
     this.almanacOverlayOpen = false;
+    this.almanacReturnZone = "desk";
     this.enteringGreatBattle = false;
     this.restartingNewGame = false;
   }
@@ -441,7 +443,7 @@ export class PortalChamberScene extends Phaser.Scene {
       // Primary portal target — next uncompleted realm.
       const arch = ARCHES[nextAvailableIdx];
       this.registerRealmPortalTarget(arch, nextAvailableIdx, false, {
-        fontSize: 30,
+        fontSize: 24,
         entryDelayMs: 40,
       });
       // First-arrival narration — only while nothing is cleared yet (the
@@ -520,7 +522,7 @@ export class PortalChamberScene extends Phaser.Scene {
     if (!allRealmsCleared || this.showPortalRevisits) {
       for (let i = 0; i < nextAvailableIdx; i++) {
         this.registerRealmPortalTarget(ARCHES[i], i, true, {
-          fontSize: 22,
+          fontSize: 20,
           priority: -1,
           entryDelayMs: 80 + i * 28,
         });
@@ -576,12 +578,13 @@ export class PortalChamberScene extends Phaser.Scene {
     // settings/sign-in controls after the player intentionally focuses it.
     this.registerNavTarget(
       "profile",
-      ACCOUNT_STATION.x,
-      ACCOUNT_STATION.y,
+      this.scale.width - 104,
+      104,
       () => this.enterZone("account"),
       {
         fontSize: 17,
-        stationPulse: HUB_STATIONS.account,
+        // Account controls are utilities alongside Pause, not a floating
+        // pretend object on the painted bookcase.
         frame: "banner",
         entryDelayMs: 190,
         idleAlpha: 0.84,
@@ -604,6 +607,7 @@ export class PortalChamberScene extends Phaser.Scene {
       fontSize: opts.fontSize,
       priority: opts.priority,
       outline: true,
+      frame: "banner",
       onClaim: () => {
         this.playPortalClaimLine(arch);
         this.focusPortalForScene(arch.sceneKey);
@@ -981,7 +985,14 @@ export class PortalChamberScene extends Phaser.Scene {
     this.narration.clear();
     this.playShelfDisplayWake();
 
-    this.registerPortalReturnTarget(70);
+    this.registerNavTarget("almanac", SHELF_STATION.x, SHELF_STATION.targetY,
+      () => this.openAlmanac(), {
+        fontSize: 20, stationPulse: HUB_STATIONS.shelf, frame: "banner", entryDelayMs: 70,
+      });
+    this.registerNavTarget("portals", SHELF_STATION.x, SHELF_STATION.targetY + 58,
+      () => this.enterZone("portals"), {
+        fontSize: 19, stationPulse: HUB_STATIONS.shelf, frame: "banner", entryDelayMs: 100,
+      });
   }
 
   private registerPortalReturnTarget(entryDelayMs: number): void {
@@ -1176,11 +1187,7 @@ export class PortalChamberScene extends Phaser.Scene {
       durationMs,
       offsetY: 10,
     });
-    target.playIdleFloat({
-      delayMs: delayMs + durationMs + 140,
-      dy: -2,
-      durationMs: 1900,
-    });
+    // Commands are attached to fixed objects; do not let their labels drift.
   }
 
   private attachStationWordAnchor(
@@ -1722,13 +1729,15 @@ export class PortalChamberScene extends Phaser.Scene {
   private openAlmanac(): void {
     if (this.openingUtilityScene) return;
     this.openingUtilityScene = true;
+    this.almanacReturnZone = this.activeZone === "shelf" ? "shelf" : "desk";
+    const station = this.almanacReturnZone === "shelf" ? HUB_STATIONS.shelf : HUB_STATIONS.almanac;
     playChime();
-    this.playHubActorAction(HUB_STATIONS.almanac.x, true);
-    this.pulseStation(HUB_STATIONS.almanac);
-    this.playUtilityStationExitWake(HUB_STATIONS.almanac, "book");
+    this.playHubActorAction(station.x, true);
+    this.pulseStation(station);
+    this.playUtilityStationExitWake(station, "book");
     this.time.delayedCall(210, () => {
-      // The Almanac is a book on Runa's desk, not a separate destination. Keep
-      // the chamber rendered beneath it and give the overlay exclusive typing.
+      // Keep the chamber and the initiating station beneath the book overlay,
+      // with exclusive typing until it closes.
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.almanacOverlayOpen = true;
@@ -1744,9 +1753,8 @@ export class PortalChamberScene extends Phaser.Scene {
     this.almanacOverlayOpen = false;
     this.openingUtilityScene = false;
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
-    // Rebuild the desk targets after the completed `almanac` word is gone, but
-    // retain Wren's exact desk position and all chamber actors beneath the book.
-    this.enterZone("desk", false);
+    // Rebuild the initiating station after its completed word is gone.
+    this.enterZone(this.almanacReturnZone ?? "desk", false);
   }
 
   // ─── Input ────────────────────────────────────────────────────────────────
@@ -1939,13 +1947,8 @@ export class PortalChamberScene extends Phaser.Scene {
         if (sprite.anims.isPlaying) sprite.stop();
         return;
       }
-      // Dormant amber trace — cleared portals should read as stamped passages,
-      // not five active blue panes competing with the main floor call.
-      const archTopY = spec.baseY - spec.height + 54;
-      const shoulderY = archTopY + spec.width * 0.3;
-      const bottomY = spec.baseY - 8;
-      const leftX = spec.x - spec.width * 0.31;
-      const rightX = spec.x + spec.width * 0.31;
+      // The painted arch is the frame. A second, smaller drawn arch looked
+      // like a misplaced doorway; the inset completion seal carries status.
       if (glow) {
         this.drawPortalGlow(
           glow,
@@ -1955,22 +1958,6 @@ export class PortalChamberScene extends Phaser.Scene {
         );
         glow.setVisible(true);
       }
-      g.lineStyle(2, PALETTE_HEX.brass, 0.3);
-      g.beginPath();
-      g.moveTo(leftX, bottomY);
-      g.lineTo(leftX, shoulderY);
-      g.arc(spec.x, shoulderY, spec.width * 0.31, Math.PI, 0);
-      g.lineTo(rightX, bottomY);
-      g.strokePath();
-      g.lineStyle(1.25, PALETTE_HEX.brass, 0.18);
-      g.beginPath();
-      g.moveTo(leftX + 18, bottomY - 12);
-      g.lineTo(leftX + 18, shoulderY + 20);
-      g.arc(spec.x, shoulderY + 20, spec.width * 0.31 - 18, Math.PI, 0);
-      g.lineTo(rightX - 18, bottomY - 12);
-      g.strokePath();
-      g.lineStyle(1.5, PALETTE_HEX.brass, 0.2);
-      g.lineBetween(spec.x - 44, bottomY - 18, spec.x + 44, bottomY - 18);
       sprite.setVisible(false);
       if (sprite.anims.isPlaying) sprite.stop();
       return;
@@ -2015,7 +2002,7 @@ export class PortalChamberScene extends Phaser.Scene {
       const isLocked  = i > nextIdx;
 
       if (isNext) {
-        this.drawArchStatusPlaque(arch, "open passage", "type name", "next");
+        this.drawArchStatusPlaque(arch, "type to enter", "", "next");
       } else if (isCleared) {
         this.drawArchStateSeal(arch, "cleared");
       } else if (isLocked) {
@@ -2029,7 +2016,7 @@ export class PortalChamberScene extends Phaser.Scene {
     tone: "cleared" | "locked",
   ): void {
     const x = arch.x;
-    const y = arch.baseY + 34;
+    const y = arch.baseY - 50;
     const cleared = tone === "cleared";
     const color = cleared ? UI_HEX.brass : 0x4a4352;
     const alpha = cleared ? 0.42 : 0.24;
@@ -2065,10 +2052,11 @@ export class PortalChamberScene extends Phaser.Scene {
     subtitle: string,
     tone: "next" | "cleared" | "locked",
   ): void {
-    const width = tone === "locked" ? 212 : 164;
-    const height = subtitle ? 58 : 42;
-    // Keep the instruction above the painted arch and clear of Runa on the floor.
-    const y = arch.baseY - arch.height - (subtitle ? 43 : 34);
+    const width = arch.width - 18;
+    const height = subtitle ? 50 : 30;
+    // Instruction and status belong inside this opening; the nameplate sits
+    // across its stone threshold, using the same center and base.
+    const y = arch.baseY - 64;
     const isLocked = tone === "locked";
     const alpha = isLocked ? 0.24 : tone === "next" ? 0.78 : 0.34;
     const textColor = isLocked
@@ -2086,7 +2074,7 @@ export class PortalChamberScene extends Phaser.Scene {
     const titleText = this.add
       .text(arch.x, y - (subtitle ? 9 : 1), title, {
         fontFamily: SERIF,
-        fontSize: isLocked ? "17px" : "16px",
+        fontSize: "14px",
         fontStyle: "italic",
         color: textColor,
       })
@@ -2193,12 +2181,12 @@ export class PortalChamberScene extends Phaser.Scene {
   // ─── Drawing ──────────────────────────────────────────────────────────────
 
   private drawRoom(): void {
-    const backdrop = this.add
+    this.add
       .image(0, 0, "hub-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
-    addBackdropDrift(this, backdrop, { durationMs: 18000, driftX: -3, driftY: -2 });
+    // Architecture and its masks/labels share one stationary painted frame.
     addAmbientDrift(this, {
       kind: "mote",
       count: 34,
@@ -2895,12 +2883,13 @@ export class PortalChamberScene extends Phaser.Scene {
 
   /** Painted Runa stands at her desk on the far left of the hub. */
   private drawRuna(): void {
-    addGroundShadow(this, 420, 982, 170, 26, { depth: -1, alpha: 0.34 });
+    addGroundShadow(this, 250, 1016, 140, 22, { depth: -1, alpha: 0.34 });
     const img = this.add
-      .image(420, 975, "runa-sprite")
+      .image(250, 1010, "runa-sprite")
       .setOrigin(0.5, 1);
     this.runaSprite = img;
-    img.setScale(360 / img.height);
+    // Foreground desk space leaves the first arch and its nameplate readable.
+    img.setScale(280 / img.height);
     applySceneActorLighting(this, img);
     addIdleBreath(this, img, { dy: -4, durationMs: 2200, delayMs: 300 });
     addContainerWake(this, img, {
@@ -2919,58 +2908,49 @@ export class PortalChamberScene extends Phaser.Scene {
     });
   }
 
-  /** Relic icons displayed on the painted cabinet shelves (far right). */
+  /** Collected keepsakes sit on the cabinet's painted shelf surfaces. */
   private drawDisplayShelf(): void {
-    const items = this.store.get().satchel;
+    const items = this.store.get().satchel.filter(id => !!RELICS[id]);
     this.clearShelfDisplay();
 
-    if (items.length === 0) {
-      this.drawShelfEmptyPlate();
-      return;
-    }
-
-    this.drawShelfGridBacker(items.length);
+    const label = this.add.text(SHELF_STATION.x, SHELF_STATION.summaryY,
+      items.length ? `${items.length} keepsake${items.length === 1 ? "" : "s"} collected` : "Your shelf is empty", {
+        fontFamily: SERIF, fontSize: "18px", color: PALETTE.cream, align: "center",
+        stroke: "#0b0a0f", strokeThickness: 4,
+      }).setOrigin(0.5).setDepth(1);
+    const hint = this.add.text(SHELF_STATION.x, SHELF_STATION.summaryY + 28,
+      items.length ? "Read their stories in the" : "Find keepsakes beyond the portals.", {
+        fontFamily: SERIF, fontSize: "15px", fontStyle: "italic", color: PALETTE.cream,
+        align: "center", stroke: "#0b0a0f", strokeThickness: 3,
+      }).setOrigin(0.5).setDepth(1);
+    this.shelfDisplayObjects.push(label, hint);
+    this.stageShelfObject(label, 35);
+    this.stageShelfObject(hint, 35);
 
     items.forEach((id, i) => {
       const relic = RELICS[id];
-      if (!relic) return;
-
+      const row = Math.floor(i / SHELF_GRID.cols);
+      const iy = SHELF_GRID.rowY[row];
+      if (iy === undefined) return;
       const ix = SHELF_GRID.startX + (i % SHELF_GRID.cols) * SHELF_GRID.colGap;
-      const iy = SHELF_GRID.startY + Math.floor(i / SHELF_GRID.cols) * SHELF_GRID.rowGap;
-      const tile = this.add.container(ix, iy).setDepth(1).setAlpha(0.9);
+      const tile = this.add.container(ix, iy).setDepth(1).setAlpha(0.95);
       this.shelfDisplayObjects.push(tile);
       this.stageShelfObject(tile, 80 + i * 28);
-      const tileBg = this.add.graphics();
-      const half = SHELF_GRID.tileSize / 2;
-      tileBg.fillStyle(UI_HEX.panel, 0.42);
-      tileBg.fillRoundedRect(-half, -half, SHELF_GRID.tileSize, SHELF_GRID.tileSize, 7);
-      tileBg.lineStyle(1, UI_HEX.brass, 0.34);
-      tileBg.strokeRoundedRect(-half, -half, SHELF_GRID.tileSize, SHELF_GRID.tileSize, 7);
-      tile.add(tileBg);
-
+      const shadow = this.add.graphics();
+      shadow.fillStyle(0x080807, 0.45);
+      shadow.fillEllipse(0, 13, 23, 4);
+      tile.add(shadow);
       const icon = satchelIconFor(id);
       if (icon && this.textures.exists(icon.key)) {
         const img = this.add.image(0, 0, icon.key);
         img.setScale(Math.min(SHELF_GRID.iconSize / img.width, SHELF_GRID.iconSize / img.height));
-        img.setAlpha(0.9);
         tile.add(img);
       } else {
-        tile.add(
-          this.add
-            .text(0, 0, relic.name.slice(0, 1), {
-              fontFamily: SERIF,
-              fontSize: "22px",
-              color: "#d6c087",
-            })
-            .setOrigin(0.5),
-        );
+        tile.add(this.add.text(0, 0, relic.name.slice(0, 1), {
+          fontFamily: SERIF, fontSize: "20px", color: PALETTE.brass,
+        }).setOrigin(0.5));
       }
-
-      addIdleBreath(this, tile, {
-        dy: -2,
-        durationMs: 1800 + (i % SHELF_GRID.cols) * 150,
-        delayMs: i * 45,
-      });
+      // Keepsakes rest on wood; no floating tiles or independent idle bob.
     });
   }
 
@@ -2980,53 +2960,6 @@ export class PortalChamberScene extends Phaser.Scene {
       obj.destroy();
     }
     this.shelfDisplayObjects = [];
-  }
-
-  private drawShelfEmptyPlate(): void {
-    const width = 180;
-    const height = 42;
-    const x = SHELF_STATION.x;
-    const y = SHELF_STATION.summaryY;
-    const plate = this.add.graphics().setDepth(0);
-    this.shelfDisplayObjects.push(plate);
-    this.stageShelfObject(plate, 35);
-    plate.fillStyle(UI_HEX.panel, 0.34);
-    plate.fillRoundedRect(x - width / 2, y - height / 2, width, height, 8);
-    plate.lineStyle(1, UI_HEX.brass, 0.34);
-    plate.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 8);
-
-    const label = this.add
-      .text(x, y, "nothing yet", {
-        fontFamily: SERIF,
-        fontSize: "17px",
-        fontStyle: "italic",
-        color: "#8f8161",
-      })
-      .setOrigin(0.5)
-      .setDepth(1);
-    this.shelfDisplayObjects.push(label);
-    this.stageShelfObject(label, 70);
-  }
-
-  private drawShelfGridBacker(itemCount: number): void {
-    const rows = Math.ceil(itemCount / SHELF_GRID.cols);
-    const width = SHELF_GRID.colGap * (SHELF_GRID.cols - 1) + SHELF_GRID.tileSize + 24;
-    const height = SHELF_GRID.rowGap * Math.max(0, rows - 1) + SHELF_GRID.tileSize + 26;
-    const x = SHELF_GRID.startX + ((SHELF_GRID.cols - 1) * SHELF_GRID.colGap) / 2;
-    const y = SHELF_GRID.startY + ((rows - 1) * SHELF_GRID.rowGap) / 2;
-    const backer = this.add.graphics().setDepth(-1);
-    this.shelfDisplayObjects.push(backer);
-    this.stageShelfObject(backer, 35);
-    backer.fillStyle(UI_HEX.panel, 0.18);
-    backer.fillRoundedRect(x - width / 2, y - height / 2, width, height, 10);
-    backer.lineStyle(1, UI_HEX.brass, 0.22);
-    backer.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 10);
-
-    for (let row = 0; row < rows; row++) {
-      const railY = SHELF_GRID.startY + row * SHELF_GRID.rowGap + SHELF_GRID.tileSize / 2 + 9;
-      backer.lineStyle(1, UI_HEX.brass, 0.13);
-      backer.lineBetween(x - width / 2 + 16, railY, x + width / 2 - 16, railY);
-    }
   }
 
   private stageShelfObject(
@@ -3237,9 +3170,8 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 }
 
-// Stagger portal typing targets inside their painted arch surfaces so the words
-// belong to the portal instead of hovering above the room.
-function archTargetY(arch: ArchSpec, archIndex: number): number {
-  const surfaceCenter = arch.baseY - arch.height * 0.5;
-  return surfaceCenter + (archIndex % 2 === 0 ? 30 : -26);
+// A nameplate fixed to the threshold can stay readable without overflowing a
+// narrow aperture or alternating between unrelated heights.
+function archTargetY(arch: ArchSpec, _archIndex: number): number {
+  return arch.baseY + 18;
 }

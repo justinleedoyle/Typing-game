@@ -54,6 +54,7 @@ await import("./bellStoryFlow.test.ts");
 await import("./bellLectern.test.ts");
 await import("./completionDeadline.test.ts");
 await import("./chamberNavigation.test.ts");
+await import("./hubSceneIntegration.test.ts");
 await import("./resetSave.test.ts");
 await import("./saveChoice.test.ts");
 await import("./realmLore.test.ts");

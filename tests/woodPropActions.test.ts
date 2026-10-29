@@ -35,7 +35,9 @@ function fixture(reduced = false) {
   let gate: (() => void) | undefined;
   let target: any;
   const assets = ["hauntedWoodBackdrop", "woodGhostSprite", "ghostKingSprite", "rootThroneSprite", "wispCatSprite", "snowFoxSprite", "groveFireSprite", "runaPortrait", "boneFluteSprite", "ashVialSprite", "offeringShrineSprite", "fluteHollowSprite"];
-  const Wood = new Function("woodStep", "woodIndex", ...assets, "preloadSatchelIcons", "preloadWren", "reducedMotion", "addLocalGroundShadow", "addContainerWake", "addIdleBreath", "playChime", "playWrenAction", "playWrenFocus", "playBodyImpact", "PALETTE_HEX", "isPuristToggleKey", "togglePuristMode", "playClack", "resolveRealmFork", "resolveCompanionDecision", "applySceneActorLighting", "attachWordBodyAnchor", "playClaimLine", "playActorAttention", "playBodyTypePulse", "Phaser", code + ";return Wood;")(
+  const Wood = new Function("beginAssetLoad", "assetLoadBlocked", "woodStep", "woodIndex", ...assets, "preloadSatchelIcons", "preloadWren", "reducedMotion", "addLocalGroundShadow", "addContainerWake", "addIdleBreath", "playChime", "playWrenAction", "playWrenFocus", "playBodyImpact", "PALETTE_HEX", "isPuristToggleKey", "togglePuristMode", "playClack", "resolveRealmFork", "resolveCompanionDecision", "applySceneActorLighting", "attachWordBodyAnchor", "playClaimLine", "playActorAttention", "playBodyTypePulse", "Phaser", code + ";return Wood;")(
+    // Artwork failure lifecycle is covered separately; this fixture isolates prop actions.
+    noop, () => false,
     woodStep, woodIndex, ...assets, noop, noop, () => reduced, () => ({}), noop, (_scene: unknown, body: any) => breaths.push(body), noop, noop, noop, noop, { moss: 0 }, () => false, noop, noop, () => null, () => null,
     (_scene: unknown, image: any) => { image.lit = true; }, () => ({ destroy: noop }), noop,
     (_scene: unknown, body: any) => attentions.push(body), noop, { GameObjects: { Events: { DESTROY: "destroy" } } },

@@ -1,3 +1,4 @@
+import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
 import Phaser from "phaser";
 import type { SaveStore } from "../game/saveState";
 import { homecomingLines } from "../game/homecoming";
@@ -44,6 +45,7 @@ export class HomecomingScene extends Phaser.Scene {
     this.reunionActor = null;
   }
   preload(): void {
+    beginAssetLoad(this);
     this.load.image("homecoming-study", study);
     this.load.image("homecoming-runa", runa);
     this.load.image("homecoming-saga", saga);
@@ -53,6 +55,7 @@ export class HomecomingScene extends Phaser.Scene {
     preloadWren(this);
   }
   create(): void {
+    if (assetLoadBlocked(this)) return;
     this.menu = installChapterMenu(this, {
       store: this.store, hasClaim: () => false,
       onLeave: () => this.returnToLibrary(),

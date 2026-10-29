@@ -79,6 +79,8 @@ function fixture(reduced = false) {
     };
   }
   const globals: Record<string, unknown> = {
+    // Artwork failure lifecycle is covered by assetLoadRecovery.test; this fixture isolates staging.
+    beginAssetLoad: noop, assetLoadBlocked: () => false,
     Phaser: { GameObjects: { Events: { DESTROY: "destroy" } } },
     BELL_BURST_COLOR: 0x4ab8d6, reducedMotion: () => reduced,
     resolveRealmFork: () => null, preloadSatchelIcons: noop, preloadWren: noop,

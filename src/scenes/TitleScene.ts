@@ -3,6 +3,9 @@ import { playClack } from "../audio/clack";
 import { setAudioLevel } from "../audio/context";
 import { applyDevUnlock, parseDevTarget } from "../game/devUnlock";
 import { SceneRunGuard } from "../game/sceneRunGuard";
+import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
+import { downloadSaveRecovery, saveRecoveryPresentation } from "../game/saveRecovery";
+import { showRecoveryDialog, type RecoveryDialog } from "../game/ui/recoveryDialog";
 import { titleCheckpoint } from "../game/titleResume";
 import { saveChoiceFocus, saveChoicePresentation, saveJourneySummary } from "../game/saveChoice";
 import { SERIF } from "../game/palette";
@@ -17,10 +20,14 @@ import {
   emptySave,
   SaveStore,
   SyncedBackend,
+  InvalidSaveError,
+  UnsupportedSaveVersionError,
+  CloudSaveError,
   type SaveBackend,
   type SaveConflict,
   type SaveSource,
   type SaveState,
+  type SaveRecoverySnapshot,
 } from "../game/saveState";
 import openingBackdrop from "../../art/references/opening-typewriter-study-clean.png";
 
@@ -45,6 +52,8 @@ export class TitleScene extends Phaser.Scene {
   private saveChoiceMessage?: Phaser.GameObjects.Text;
   private selectedSave: SaveSource | null = null;
   private resolvingSave = false;
+  private recoveryDialog?: RecoveryDialog;
+  private recoveringSave = false;
   private readonly run = new SceneRunGuard();
 
   constructor() {
@@ -56,6 +65,9 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private resetTitleRun(): void {
+    this.recoveryDialog?.destroy();
+    this.recoveryDialog = undefined;
+    this.recoveringSave = false;
     this.run.begin();
     this.store = undefined;
     this.storePromise = undefined;
@@ -73,10 +85,12 @@ export class TitleScene extends Phaser.Scene {
   }
 
   preload(): void {
+    beginAssetLoad(this);
     this.load.image("title-backdrop", openingBackdrop);
   }
 
   create(): void {
+    if (assetLoadBlocked(this)) return;
     this.resetTitleRun();
     const { width, height } = this.scale;
 
@@ -173,6 +187,9 @@ export class TitleScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.run.end();
+      this.recoveryDialog?.destroy();
+      this.recoveryDialog = undefined;
+      this.recoveringSave = false;
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.store = undefined;
       this.storePromise = undefined;
@@ -490,17 +507,11 @@ export class TitleScene extends Phaser.Scene {
       const loaded = await (this.storePromise ?? this.loadStore());
       if (!this.run.isCurrent(token)) return;
       this.store = loaded;
-    } catch {
+    } catch (error) {
       if (!this.run.isCurrent(token)) return;
       this.storePromise = undefined;
       this.run.release("transition");
-      const conflict = this.backend?.getConflict?.();
-      if (conflict && this.backend?.resolveConflict) {
-        this.showSaveChoice(conflict);
-        return;
-      }
-      this.prompt.setText("Saved progress could not load.\nPress any key to retry.");
-      this.redrawPromptPlate();
+      await this.presentSaveLoadFailure(error, token);
       return;
     }
     this.playTitleDepartureWake();
@@ -530,6 +541,111 @@ export class TitleScene extends Phaser.Scene {
         },
       );
     });
+  }
+
+  private async presentSaveLoadFailure(error: unknown, token: number, message?: string): Promise<void> {
+    let snapshot: SaveRecoverySnapshot | null | undefined;
+    let storageUnavailable = false;
+    let recoveryFailed = false;
+    try { snapshot = await this.backend?.getRecovery?.(); }
+    catch (recoveryError) {
+      recoveryFailed = true;
+      storageUnavailable = !(recoveryError instanceof CloudSaveError);
+    }
+    if (!this.run.isCurrent(token)) return;
+    // Damaged current bytes can coexist with a valid pending device choice.
+    // That choice cannot safely resolve until the unreadable bytes are handled.
+    if (!snapshot && !recoveryFailed && !(error instanceof InvalidSaveError) && !(error instanceof UnsupportedSaveVersionError)) {
+      const conflict = this.backend?.getConflict?.();
+      if (conflict && this.backend?.resolveConflict) { this.showSaveChoice(conflict); return; }
+    }
+    this.showSaveRecovery(error, snapshot, storageUnavailable, message);
+  }
+
+  private showSaveRecovery(error: unknown, snapshot?: SaveRecoverySnapshot | null, storageUnavailable = false, message?: string): void {
+    this.recoveryDialog?.destroy();
+    this.recoveringSave = false;
+    this.promptTween?.stop();
+    const token = this.run.token();
+    const copy = saveRecoveryPresentation(error, snapshot, storageUnavailable);
+    const actions = [{ label: "Try loading again · R", shortcut: "r", onSelect: () => {
+      if (!this.run.isCurrent(token)) return;
+      this.recoveryDialog?.destroy(); this.recoveryDialog = undefined;
+      this.storePromise = undefined;
+      this.run.release("transition");
+      this.prompt.setText("Loading your saved journey…");
+      this.redrawPromptPlate();
+      void this.beginTransition();
+    } }];
+    if (snapshot) actions.push({ label: "Download a recovery copy · D", shortcut: "d", onSelect: () => {
+      if (this.run.isCurrent(token)) void this.downloadRecovery(snapshot);
+    } });
+    if (snapshot?.canStartFresh && this.backend?.startFreshAfterRecovery) actions.push({ label: "Start a new journey… · N", shortcut: "n", onSelect: () => {
+      if (this.run.isCurrent(token)) this.confirmRecoveryJourney(snapshot);
+    } });
+    this.recoveryDialog = showRecoveryDialog({ title: copy.title, message: message ?? copy.message, detail: copy.detail, actions });
+  }
+
+  private confirmRecoveryJourney(snapshot: SaveRecoverySnapshot): void {
+    const token = this.run.token();
+    this.recoveryDialog?.destroy();
+    this.recoveryDialog = showRecoveryDialog({
+      title: "Start a new journey?",
+      message: "You will begin again at the opening. The unreadable saved data will first be kept in a separate recovery copy on this device.",
+      detail: "This does not repair the old journey. Keep a downloaded recovery copy if you want one outside this device.",
+      actions: [
+        { label: "Go back · Esc", shortcut: "Escape", onSelect: () => {
+          if (this.run.isCurrent(token)) this.showSaveRecovery(new InvalidSaveError(), snapshot);
+        } },
+        { label: "Keep the old data and start a new journey", onSelect: () => {
+          if (this.run.isCurrent(token)) void this.startRecoveryJourney(snapshot);
+        } },
+      ],
+    });
+  }
+
+  private async downloadRecovery(snapshot: SaveRecoverySnapshot): Promise<void> {
+    if (this.recoveringSave || !this.backend?.getRecovery) return;
+    const token = this.run.token();
+    this.recoveringSave = true; this.recoveryDialog?.setBusy(true);
+    try {
+      // Recheck identity/current bytes before exposing an account-scoped file.
+      const current = await this.backend.getRecovery();
+      if (!this.run.isCurrent(token)) return;
+      if (!current || current.token !== snapshot.token) {
+        this.showSaveRecovery(new InvalidSaveError(), current, false, "The saved data changed. Review the current recovery choices before downloading a copy.");
+        return;
+      }
+      downloadSaveRecovery(current);
+      this.recoveryDialog?.setMessage("Your browser will save a recovery file. Keep it somewhere safe. The saved journey on this device has not changed.");
+    } catch {
+      if (this.run.isCurrent(token)) this.recoveryDialog?.setMessage("The recovery copy could not be downloaded. Your saved data has been kept. Try loading again to review its current recovery options.");
+    } finally {
+      if (this.run.isCurrent(token)) { this.recoveringSave = false; this.recoveryDialog?.setBusy(false); }
+    }
+  }
+
+  private async startRecoveryJourney(snapshot: SaveRecoverySnapshot): Promise<void> {
+    if (this.recoveringSave || !this.backend?.startFreshAfterRecovery) return;
+    const token = this.run.token();
+    if (!this.run.isCurrent(token)) return;
+    this.recoveringSave = true; this.recoveryDialog?.setBusy(true);
+    this.recoveryDialog?.setMessage("Keeping the old data before opening a new journey…");
+    try {
+      const state = await this.backend.startFreshAfterRecovery(snapshot);
+      if (!this.run.isCurrent(token)) return;
+      this.store = new SaveStore(this.backend, state);
+      this.storePromise = Promise.resolve(this.store);
+      setAudioLevel(state.audioLevel);
+      this.recoveryDialog?.destroy(); this.recoveryDialog = undefined;
+      this.recoveringSave = false;
+      this.run.release("transition");
+      void this.beginTransition();
+    } catch (error) {
+      if (!this.run.isCurrent(token)) return;
+      this.recoveringSave = false;
+      await this.presentSaveLoadFailure(error, token, "A new journey could not open safely. Your saved data has been kept. Review the current choices, or try loading again.");
+    }
   }
 
   private showSaveChoice(conflict: SaveConflict, message?: string): void {

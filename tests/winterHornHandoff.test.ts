@@ -32,6 +32,8 @@ const huntressFactory = npcSource.statements.find(node => ts.isFunctionDeclarati
 const npcCode = ts.transpileModule(`const ${huntressHeight.getText(npcSource)};\n${huntressFactory.getText(npcSource).replace(/^export /, "")}`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 const makeHuntressSprite = new Function(npcCode + ";return makeHuntressSprite;")();
 const globals = {
+    // Artwork failure lifecycle is covered by assetLoadRecovery.test; this fixture isolates staging.
+    beginAssetLoad: noop, assetLoadBlocked: () => false,
   checkpointIndex, committedWinterChoices,
   reducedMotion: (scene: any) => scene.motionReduced,
   satchelIconFor: () => ({ key: "almanac-icon-hunters-horn", url: "fixture-only" }),

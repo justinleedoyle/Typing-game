@@ -1,3 +1,4 @@
+import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
 import { installChapterMenu } from "../game/ui/pauseMenu";
 import { checkpointIndex } from "../game/chapterFlow";
 import { forgePassageIndex, forgeStep, type ForgeStep } from "../game/forgeCheckpoint";
@@ -330,6 +331,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   preload(): void {
+    beginAssetLoad(this);
     this.load.image("forge-backdrop", forgeBackdrop);
     this.load.image("forge-golem", forgeGolemSprite);
     this.load.image("forge-command-golem", forgeCommandGolemSprite);
@@ -349,6 +351,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (assetLoadBlocked(this)) return;
     this.chapterMenu = installChapterMenu(this, {
       store: this.store,
       hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),

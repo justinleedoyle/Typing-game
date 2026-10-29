@@ -93,6 +93,8 @@ function fixture(reduced = false) {
     };
   }
   const globals: Record<string, unknown> = {
+    // Artwork failure lifecycle is covered by assetLoadRecovery.test; this fixture isolates staging.
+    beginAssetLoad: noop, assetLoadBlocked: () => false,
     Phaser: { GameObjects: { Events: { DESTROY: "destroy" } } },
     reducedMotion: () => save.reducedMotion, decorativeTween,
     resolveRealmFork: () => null, resolveCompanionDecision: () => null,

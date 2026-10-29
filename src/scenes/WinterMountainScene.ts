@@ -1,3 +1,4 @@
+import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
 import Phaser from "phaser";
 import { applySceneActorLighting, restoreSceneActorLighting } from "../game/actorLighting";
 import { type AmbientHandle, playAmbientWinter } from "../audio/ambient";
@@ -382,6 +383,7 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   preload(): void {
+    beginAssetLoad(this);
     this.load.image("winter-backdrop", winterBackdrop);
     this.load.image("winter-trail-backdrop", winterTrailBackdrop);
     this.load.image("winter-fallen-pine", fallenPineSprite);
@@ -396,6 +398,7 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (assetLoadBlocked(this)) return;
     this.chapterMenu = installChapterMenu(this, {
       store: this.store,
       hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),

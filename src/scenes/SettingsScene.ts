@@ -1,3 +1,4 @@
+import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
 import { CloudSaveError, SaveConflictError } from "../game/saveState";
 import { installPresentation, PRESENTATION_CHANGED, rememberLocalSaveNotice } from "../game/presentation";
 import { navigationAction } from "../game/ui/navigationPolicy";
@@ -120,10 +121,12 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   preload(): void {
+    beginAssetLoad(this);
     this.load.image("settings-hub-backdrop", hubBackdrop);
   }
 
   create(): void {
+    if (assetLoadBlocked(this)) return;
     installPresentation(this, this.store);
     this.cameras.main.fadeIn(350, 11, 10, 15);
     this.drawLedgerBackdrop();

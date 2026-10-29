@@ -1,3 +1,4 @@
+import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
 import { installChapterMenu } from "../game/ui/pauseMenu";
 import { rememberRealmFork, resolveRealmFork, resolveCompanionDecision, rememberCompanionDecision, type RealmFork } from "../game/realmChoices";
 import { ChapterReading } from "../game/ui/chapterReading";
@@ -303,6 +304,7 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   preload(): void {
+    beginAssetLoad(this);
     this.load.image("sunken-bell-backdrop", sunkenBellBackdrop);
     this.load.image("bell-nave-doorway", naveDoorway);
     this.load.image("bell-nave-door-leaves", naveDoorLeaves);
@@ -320,6 +322,7 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (assetLoadBlocked(this)) return;
     this.chapterMenu = installChapterMenu(this, {
       store: this.store,
       hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),

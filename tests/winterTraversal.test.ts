@@ -53,6 +53,8 @@ function fixture(reduced = false) {
     destroy() { this.scene = false; for (const child of this.children) child.destroy?.(); },
   });
   const bindings = {
+    // Artwork failure lifecycle is covered by assetLoadRecovery.test; this fixture isolates staging.
+    beginAssetLoad: noop, assetLoadBlocked: () => false,
     reducedMotion: () => reduced,
     addLocalGroundShadow: () => ({ shadow: true }),
     addIdleBreath: (_scene: unknown, body: any) => breaths.push(body),

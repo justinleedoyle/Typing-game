@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
-import { emptySave, SaveStore, SaveConflictError, type SaveBackend, type SaveConflict, type SaveState } from "../src/game/saveState";
+import { emptySave, SaveStore, SaveConflictError, InvalidSaveError, UnsupportedSaveVersionError, type SaveBackend, type SaveConflict, type SaveState } from "../src/game/saveState";
 import { applyDevUnlock, parseDevTarget } from "../src/game/devUnlock";
 import { SceneRunGuard } from "../src/game/sceneRunGuard";
 import { titleCheckpoint } from "../src/game/titleResume";
@@ -12,7 +12,7 @@ import { assert, assertEqual, suite } from "./_assert";
 const url = new URL("../src/scenes/TitleScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
-const names = ["loadStore", "beginTransition", "createTemporaryDevStore"];
+const names = ["loadStore", "beginTransition", "createTemporaryDevStore", "presentSaveLoadFailure"];
 const code = ts.transpileModule(`class Title { ${names.map(name => owner.members.find(member => member.name?.getText(source) === name)!.getText(source)).join("\n")} }`,
   { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 
@@ -31,11 +31,12 @@ function fixture(search: string, conflict?: SaveConflict) {
     getConflict: () => conflict ?? null,
     async resolveConflict() { return durable; },
   };
-  const Title = new Function("location", "parseDevTarget", "applyDevUnlock", "emptySave", "SaveStore", "SyncedBackend", "setAudioLevel", "titleCheckpoint", "Phaser",
+  const Title = new Function("location", "parseDevTarget", "applyDevUnlock", "emptySave", "SaveStore", "SyncedBackend", "setAudioLevel", "titleCheckpoint", "Phaser", "InvalidSaveError", "UnsupportedSaveVersionError",
     `${code}; return Title;`)(
     { search }, parseDevTarget, applyDevUnlock, emptySave, SaveStore,
     class { constructor() { throw new Error("unexpected default account backend"); } }, () => {}, titleCheckpoint,
     { Cameras: { Scene2D: { Events: { FADE_OUT_COMPLETE: "fade" } } } },
+    InvalidSaveError, UnsupportedSaveVersionError,
   );
   const scene = new Title();
   const run = new SceneRunGuard(); run.begin();

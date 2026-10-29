@@ -196,6 +196,24 @@ export interface SaveConflict {
   kind?: "cloud" | "device";
 }
 export type SaveSource = "local" | "cloud";
+/** Exact device bytes for a player-requested download. None of these values
+ * are interpreted as a playable save or silently uploaded to an account. */
+export interface SaveRecoverySnapshot {
+  version: 1;
+  capturedAt: number;
+  scope: "guest" | "account";
+  reason: "damaged" | "newer-version";
+  canStartFresh: boolean;
+  message: string;
+  /** Opaque confirmation of a snapshot issued by this backend instance. */
+  token: string;
+  copies: {
+    primary: string | null;
+    backup: string | null;
+    pendingDeviceChoice: string | null;
+    previousDeviceChoice: string | null;
+  };
+}
 export interface SaveBackend {
   load(): Promise<SaveState | null>;
   save(state: SaveState): Promise<void>;
@@ -204,6 +222,8 @@ export interface SaveBackend {
   getLastError?(): Error | null;
   getConflict?(): SaveConflict | null;
   resolveConflict?(source: SaveSource): Promise<SaveState>;
+  getRecovery?(): Promise<SaveRecoverySnapshot | null>;
+  startFreshAfterRecovery?(snapshot: SaveRecoverySnapshot): Promise<SaveState>;
 }
 export interface StoragePort {
   getItem(key: string): string | null;
@@ -252,9 +272,19 @@ function asError(error: unknown): Error { return error instanceof Error ? error 
 
 export function snapshotLastKnownGood(storage: StoragePort = browserStorage(), key = STORAGE_KEY): void {
   try {
+    const backup = storage.getItem(`${key}.lkg`);
+    if (backup !== null) {
+      try { parseSave(backup); }
+      catch (error) { if (error instanceof UnsupportedSaveVersionError) throw error; }
+    }
     const current = storage.getItem(key);
     if (current !== null) { parseSave(current); storage.setItem(`${key}.lkg`, current); }
-  } catch { /* Never copy malformed/future bytes over a good backup. */ }
+  } catch (error) {
+    // A newer-format copy may contain progress this build cannot understand.
+    // Refuse the write rather than rotating that active copy out of the slot.
+    if (error instanceof UnsupportedSaveVersionError) throw error;
+    /* Never copy malformed bytes over a good backup. */
+  }
 }
 export function loadLastKnownGood(storage: StoragePort = browserStorage(), key = STORAGE_KEY): SaveState | null {
   try { const raw = storage.getItem(`${key}.lkg`); return raw === null ? null : parseSave(raw); } catch { return null; }
@@ -262,6 +292,7 @@ export function loadLastKnownGood(storage: StoragePort = browserStorage(), key =
 
 export class LocalStorageBackend implements SaveBackend {
   private observedRaw: string | null | undefined;
+  private recoverySnapshot: SaveRecoverySnapshot | null = null;
   private readonly writer = `${Date.now()}-${++localWriterSequence}-${Math.random().toString(36).slice(2)}`;
   constructor(private readonly storage: StoragePort = browserStorage(), readonly userId: string | null = null, private readonly lock: LocalSaveLock = defaultLocalLock) {}
   get storageKey(): string { return this.userId === null ? STORAGE_KEY : `${STORAGE_KEY}.user.${encodeURIComponent(this.userId)}`; }
@@ -269,10 +300,15 @@ export class LocalStorageBackend implements SaveBackend {
   private get pendingKey(): string { return `${this.storageKey}.device-conflict.pending`; }
   private get recoveryKey(): string { return `${this.storageKey}.device-conflict.previous`; }
   private readDeviceRecord(key: string): DeviceConflictRecord | null {
-    const raw = this.storage.getItem(key);
+    return this.parseDeviceRecord(this.storage.getItem(key));
+  }
+  private parseDeviceRecord(raw: string | null): DeviceConflictRecord | null {
     if (raw === null || raw === "null") return null;
     let value: unknown;
     try { value = JSON.parse(raw); } catch { throw new InvalidSaveError("Device save recovery data could not load. It has been preserved."); }
+    if (record(value) && typeof value.version === "number" && Number.isInteger(value.version) && value.version > 1) {
+      throw new UnsupportedSaveVersionError(value.version);
+    }
     if (!record(value) || value.version !== 1 || typeof value.writer !== "string" ||
         !(value.currentRaw === null || typeof value.currentRaw === "string")) return invalid("device conflict");
     return { version: 1, writer: value.writer, currentRaw: value.currentRaw, local: migrate(value.local), cloud: migrate(value.cloud) };
@@ -301,16 +337,109 @@ export class LocalStorageBackend implements SaveBackend {
       this.storage.getItem(this.storageKey) === this.observedRaw && !this.readDeviceRecord(this.pendingKey));
   }
   private currentState(raw: string | null): SaveState | null {
+    // A missing primary is only a new game when there is no backup either.
+    // Malformed/future backup bytes and denied storage reads must not become
+    // an empty profile through the convenience last-known-good helper.
+    const backupRaw = this.storage.getItem(`${this.storageKey}.lkg`);
+    let backup: SaveState | null = null, backupError: unknown;
+    if (backupRaw !== null) {
+      try { backup = parseSave(backupRaw); }
+      catch (error) {
+        if (error instanceof UnsupportedSaveVersionError) throw error;
+        backupError = error;
+      }
+    }
     if (raw !== null) {
       try { return parseSave(raw); }
       catch (error) {
         if (error instanceof UnsupportedSaveVersionError) throw error;
-        const backup = loadLastKnownGood(this.storage, this.storageKey);
         if (backup) return backup;
         throw error;
       }
     }
-    return loadLastKnownGood(this.storage, this.storageKey);
+    if (backupError) throw backupError;
+    return backup;
+  }
+  private recoveryCopies(): SaveRecoverySnapshot["copies"] {
+    return {
+      primary: this.storage.getItem(this.storageKey),
+      backup: this.storage.getItem(`${this.storageKey}.lkg`),
+      pendingDeviceChoice: this.storage.getItem(this.pendingKey),
+      previousDeviceChoice: this.storage.getItem(this.recoveryKey),
+    };
+  }
+  private recoveryReason(copies: SaveRecoverySnapshot["copies"]): SaveRecoverySnapshot["reason"] | null {
+    let damaged = false;
+    // Check every possibly active copy for a newer format before permitting
+    // an explicit new journey. A usable primary still loads normally when its
+    // backup is malformed; only an actual load failure enters recovery.
+    let primary: SaveState | null = null, backup: SaveState | null = null;
+    for (const [name, raw] of [["primary", copies.primary], ["backup", copies.backup]] as const) {
+      if (raw === null) continue;
+      try {
+        const value = parseSave(raw);
+        if (name === "primary") primary = value; else backup = value;
+      } catch (error) {
+        if (error instanceof UnsupportedSaveVersionError) return "newer-version";
+        damaged = true;
+      }
+    }
+    try { this.parseDeviceRecord(copies.pendingDeviceChoice); }
+    catch (error) {
+      if (error instanceof UnsupportedSaveVersionError) return "newer-version";
+      return "damaged";
+    }
+    return damaged && !primary && !backup ? "damaged" : null;
+  }
+  async getRecovery(): Promise<SaveRecoverySnapshot | null> {
+    return this.lock.run(this.storageKey, () => {
+      const copies = this.recoveryCopies();
+      const reason = this.recoveryReason(copies);
+      if (!reason) { this.recoverySnapshot = null; return null; }
+      if (this.recoverySnapshot && this.recoverySnapshot.reason === reason &&
+          stableJson(this.recoverySnapshot.copies) === stableJson(copies)) return structuredClone(this.recoverySnapshot);
+      this.recoverySnapshot = {
+        version: 1, capturedAt: Date.now(), scope: this.userId === null ? "guest" : "account",
+        reason, canStartFresh: reason === "damaged" && this.userId === null,
+        message: reason === "newer-version"
+          ? "This progress needs a newer game version. Update the game and retry. Your saved copies are unchanged."
+          : this.userId === null
+            ? "The saved journey could not be read. Download a copy or retry. Starting a new journey first keeps the unreadable copies on this device."
+            : "This account's saved device copies could not be read. Download a copy or retry. Account and cloud progress will not be replaced here.",
+        token: globalThis.crypto?.randomUUID?.() ?? `recovery-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        copies,
+      };
+      return structuredClone(this.recoverySnapshot);
+    });
+  }
+  async startFreshAfterRecovery(snapshot: SaveRecoverySnapshot): Promise<SaveState> {
+    return this.lock.run(this.storageKey, () => {
+      const issued = this.recoverySnapshot;
+      if (!issued || stableJson(issued) !== stableJson(snapshot) || !issued.canStartFresh || this.userId !== null) {
+        throw new InvalidSaveError("A new journey cannot replace these saved copies. Retry to review their current recovery options.");
+      }
+      const copies = this.recoveryCopies();
+      if (stableJson(copies) !== stableJson(issued.copies) || this.recoveryReason(copies) !== "damaged") {
+        this.recoverySnapshot = null;
+        throw new InvalidSaveError("The saved copies changed while recovery was open. Retry before choosing a new journey.");
+      }
+      // Each explicit recovery gets its own immutable archive. Ordinary saves
+      // never add/rotate these records or overwrite a previous incident.
+      const archiveKey = `${this.storageKey}.damaged-recovery.${issued.token}`;
+      const archive = JSON.stringify(issued);
+      const prior = this.storage.getItem(archiveKey);
+      if (prior !== null && prior !== archive) throw new InvalidSaveError("The recovery archive changed. Your current copies have not been replaced.");
+      if (prior === null) this.storage.setItem(archiveKey, archive);
+      // A failed archive write aborts before any active bytes change. If a
+      // later storage write fails, the exact originals are already retained.
+      if (copies.pendingDeviceChoice !== null && copies.pendingDeviceChoice !== "null") this.storage.setItem(this.pendingKey, "null");
+      const fresh = emptySave();
+      const raw = JSON.stringify(fresh);
+      this.storage.setItem(this.storageKey, raw);
+      this.observedRaw = raw;
+      this.recoverySnapshot = null;
+      return fresh;
+    });
   }
   private keepDeviceConflict(state: SaveState, raw: string | null): never {
     const current = this.currentState(raw) ?? emptySave();
@@ -553,6 +682,44 @@ export class SyncedBackend implements SaveBackend {
     const device = this.scoped.getConflict();
     if (device) return device;
     return this.conflict ? { local: migrate(this.conflict.local), cloud: migrate(this.conflict.cloud) } : null;
+  }
+  private async verifyRecoveryOwner(): Promise<void> {
+    if (!this.bound) throw new InvalidSaveError("Retry loading before opening save recovery.");
+    let owner: string | null;
+    try { owner = await deadline(this.cloud.currentUserId(), this.options.loadTimeoutMs ?? CLOUD_TIMEOUT_MS); }
+    catch (error) {
+      // Offline guest recovery can only touch the guest slot. An account
+      // cache, however, is never exported without verifying its identity.
+      if (this.owner !== null) throw new CloudSaveError("The account could not be verified. Retry before downloading its device save.");
+      return;
+    }
+    if (owner !== this.owner) throw new CloudSaveError("The signed-in account changed. Retry loading before opening save recovery.");
+  }
+  async getRecovery(): Promise<SaveRecoverySnapshot | null> {
+    const scoped = this.scoped;
+    const owner = this.owner;
+    await this.verifyRecoveryOwner();
+    if (scoped !== this.scoped || owner !== this.owner) throw new CloudSaveError("The signed-in account changed. Retry loading before opening save recovery.");
+    const snapshot = await scoped.getRecovery();
+    // Reading can wait behind another document's storage lock. Recheck both
+    // identity and the exact cache binding after that wait, before exposing
+    // any raw account data to a download or another caller.
+    await this.verifyRecoveryOwner();
+    if (scoped !== this.scoped || owner !== this.owner) throw new CloudSaveError("The signed-in account changed. Retry loading before opening save recovery.");
+    return snapshot;
+  }
+  async startFreshAfterRecovery(snapshot: SaveRecoverySnapshot): Promise<SaveState> {
+    await this.verifyRecoveryOwner();
+    // A damaged device cache must never authorize replacing an account's
+    // remote journey. Signed-in players can download/retry without mutation.
+    if (this.owner !== null) throw new InvalidSaveError("Account progress cannot be replaced from this recovery screen.");
+    if (this.cloudTimer !== null) { clearTimeout(this.cloudTimer); this.cloudTimer = null; }
+    this.pendingCloud = null; this.cloudSequence++;
+    await this.cloudChain;
+    await this.verifyRecoveryOwner();
+    const fresh = await this.scoped.startFreshAfterRecovery(snapshot);
+    this.observedCloud = undefined; this.cloudError = null; this.conflict = null;
+    return fresh;
   }
   private checkCompatibility(local: SaveState, cloud: SaveState): void {
     try { assertCompatible(local, cloud); }

@@ -1,3 +1,4 @@
+import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
 import { installChapterMenu } from "../game/ui/pauseMenu";
 import { decorativeTween, reducedFlashes, reducedMotion } from "../game/presentation";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
@@ -630,6 +631,7 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   preload(): void {
+    beginAssetLoad(this);
     this.load.image("great-battle-backdrop", greatBattleBackdrop);
     this.load.image("band-portrait-runa", runaPortrait);
     this.load.image("finale-wolf-pack", finaleWolfSprite);
@@ -648,6 +650,7 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (assetLoadBlocked(this)) return;
     this.chapterMenu = installChapterMenu(this, {
       store: this.store,
       hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),

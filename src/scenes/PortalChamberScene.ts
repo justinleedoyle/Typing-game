@@ -1,3 +1,4 @@
+import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
 import { installChapterMenu } from "../game/ui/pauseMenu";
 import { navigationAction } from "../game/ui/navigationPolicy";
 import { decorativeTween, PRESENTATION_CHANGED, reducedMotion } from "../game/presentation";
@@ -265,6 +266,7 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   preload(): void {
+    beginAssetLoad(this);
     this.load.image("hub-backdrop", hubBackdrop);
     this.load.image("runa-sprite", runaSprite);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
@@ -279,6 +281,7 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (assetLoadBlocked(this)) return;
     this.chapterMenu = installChapterMenu(this, {
       store: this.store,
       hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),

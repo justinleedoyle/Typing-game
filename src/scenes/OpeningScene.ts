@@ -1,3 +1,4 @@
+import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
 import Phaser from "phaser";
 import { applySceneActorLighting } from "../game/actorLighting";
 import { playChime } from "../audio/chime";
@@ -124,6 +125,7 @@ export class OpeningScene extends Phaser.Scene {
   }
 
   preload(): void {
+    beginAssetLoad(this);
     this.load.image("opening-backdrop", openingBackdrop);
     this.load.image("runa-sprite", runaSprite);
     this.load.image("sibling-sprite", siblingSprite);
@@ -134,6 +136,7 @@ export class OpeningScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (assetLoadBlocked(this)) return;
     this.chapterMenu = installChapterMenu(this, {
       store: this.store,
       hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),

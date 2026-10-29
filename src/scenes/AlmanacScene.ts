@@ -1,3 +1,4 @@
+import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
 import Phaser from "phaser";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
@@ -145,6 +146,7 @@ export class AlmanacScene extends Phaser.Scene {
   }
 
   preload(): void {
+    beginAssetLoad(this);
     // Load every satchel icon that has art (relics + companions). Keyed by id;
     // ids without a file are simply skipped (the row falls back to a bullet).
     for (const id of Object.keys(RELICS)) {
@@ -154,6 +156,7 @@ export class AlmanacScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (assetLoadBlocked(this)) return;
     installPresentation(this, this.store);
     this.cameras.main.fadeIn(350, 11, 10, 15);
 

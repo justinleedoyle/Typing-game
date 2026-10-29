@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import ts from "typescript";
 import { checkpointIndex, committedWinterChoices } from "../src/game/chapterFlow";
+import { SessionStats } from "../src/game/sessionStats";
 import { assert, assertClose, assertEqual, suite } from "./_assert";
 
 const url = new URL("../src/scenes/WinterMountainScene.ts", import.meta.url);
@@ -59,6 +60,7 @@ const WordExit = new Function("playWordCompleteBurst", "PALETTE_HEX", `${exitCod
 
 function fixture(options: { reduced?: boolean; restored?: boolean; missingArt?: boolean } = {}) {
   const s = new Winter();
+  const stats = new SessionStats();
   const images: any[] = [], tweens: any[] = [], killed: any[] = [], gates: Array<() => void> = [];
   const targets: any[] = [], captions: string[] = [], checkpoints: any[] = [], timers: any[] = [], waves: number[] = [];
   const state: any = { realms: { "winter-mountain": { cleared: false, choices: {} } }, satchel: [], almanacLore: [] };
@@ -74,7 +76,7 @@ function fixture(options: { reduced?: boolean; restored?: boolean; missingArt?: 
       ? { scene: "WinterMountainScene", step: "huntress", data: { index: 1, reading: true } } : null,
     preloadedIds: [], load: { image: noop },
     textures: { exists: () => !options.missingArt },
-    typingInput: { getStats: () => ({ getSoul: () => 0 }) },
+    typingInput: { getStats: () => stats },
     store: {
       update: (change: (value: typeof state) => void) => change(state),
       setCheckpoint: (checkpoint: any) => { state.checkpoint = structuredClone(checkpoint); checkpoints.push(state.checkpoint); },
@@ -84,6 +86,7 @@ function fixture(options: { reduced?: boolean; restored?: boolean; missingArt?: 
     readThen: (next: () => void) => gates.push(next),
     band: { setObjective: noop },
     fadeInHuntress: noop, dismissFireflyCue: noop, clearForkChoiceWordAnchors: noop,
+    showFireflyHollow: noop, receiveFireflyLanternVisual: noop, clearFireflyLantern: noop,
     makeWinterForkWord: (_body: unknown, word: any) => word,
     makeWord: (word: any) => word,
     registerActiveTarget: (target: any) => { targets.push(target); s.activeTargets.push(target); },
@@ -113,7 +116,7 @@ function fixture(options: { reduced?: boolean; restored?: boolean; missingArt?: 
 await suite("Winter horn: the actual two phrases transfer painted art before the held acknowledgment", () => {
   const f = fixture();
   f.s.preload();
-  assertEqual(f.s.preloadedIds, ["hunters-horn"], "Winter preloads the accepted horn even before it enters the satchel");
+  assertEqual(f.s.preloadedIds, ["hunters-horn", "firefly-lantern"], "Winter preloads both accepted fork keepsakes before either enters the satchel");
   f.s.startHuntressBranch(2);
   assertEqual(f.images.length, 0, "the branch introduction does not give the horn early");
   assertEqual(f.targets.length, 0, "the intro keeps its existing Continue gate");
@@ -332,16 +335,19 @@ const aftermathPaintings = {
 
 function aftermathFixture(reduced = false) {
   const s = new Winter();
+  const stats = new SessionStats();
+  stats.bankSoulFraction(0.3);
   const bodies: any[] = [], images: any[] = [], tweens: any[] = [], gates: Array<() => void> = [], targets: any[] = [], timers: any[] = [], tasks: string[] = [];
   const state: any = { realms: { "winter-mountain": { cleared: false, choices: {} } }, satchel: [], almanacLore: [] };
   let foxEntries = 0;
   Object.assign(s, {
     motionReduced: reduced, fireflyCue: null, cairnCue: null, peltCue: null, huntressHornSprite: null, heldPeltSprite: null,
+    clearFireflyLantern: noop,
     huntressHornTransferToken: 0, huntressHornTransferPending: false, forkChoiceWordAnchors: [],
     fork1Choice: "huntress", fork2Choice: null, foxDecided: true, foxSpared: true, candles: 3,
     resumeCheckpoint: null, activeTargets: [], scale: { width: 1920, height: 1080 },
     wrenContainer: { x: 960, y: 842, scene: true }, wrenSprite: {},
-    typingInput: { getStats: () => ({ getSoul: () => 30 }) },
+    typingInput: { getStats: () => stats },
     store: { get: () => state, update: (fn: (state: any) => void) => fn(state), setCheckpoint: (value: any) => { state.checkpoint = structuredClone(value); } },
     narration: { say: noop, bottom: () => 300 }, setNarrator: noop, band: { setObjective: (text: string) => tasks.push(text) },
     readThen(next: () => void) { assertEqual(gates.length, 0, "each aftermath result retains exactly its existing single Continue"); gates.push(next); },

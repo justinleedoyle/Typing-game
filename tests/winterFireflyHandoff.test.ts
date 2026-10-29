@@ -1,0 +1,127 @@
+import { readFileSync } from "node:fs";
+import ts from "typescript";
+import { checkpointIndex, committedWinterChoices } from "../src/game/chapterFlow";
+import { emptySave, SaveStore, type SaveState } from "../src/game/saveState";
+import { SessionStats } from "../src/game/sessionStats";
+import { assert, assertEqual, suite } from "./_assert";
+
+// Run the production branch, phrase reactions and prop movement. Rendering
+// objects are inert; the earned checkpoints roundtrip through real SaveStore.
+const url = new URL("../src/scenes/WinterMountainScene.ts", import.meta.url);
+const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
+const owner = source.statements.find(ts.isClassDeclaration)!;
+const names = ["checkpoint", "savedStageData", "hasSavedPassage", "startFireflyBranch", "showFireflyCue",
+  "showFireflyHollow", "receiveFireflyLanternVisual", "clearFireflyLantern", "dismissFireflyCue", "clearWinterForkCues",
+  "presentWinterPassageReaction", "runPassageChain", "winterPassageOwnerBinding", "winterPassageWordPosition"];
+const constants = source.statements.filter(ts.isVariableStatement).map(statement => statement.getText(source)).join("\n");
+const code = ts.transpileModule(`${constants}\nclass Winter {
+  ${names.map(name => owner.members.find(member => member.name?.getText(source) === name)!.getText(source)).join("\n")}
+}`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+const noop = () => {};
+const globals = {
+  checkpointIndex, committedWinterChoices,
+  PALETTE_HEX: { frost: 1, brass: 2 },
+  Phaser: { Math: { Clamp: (value: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, value)) } },
+  reducedMotion: () => true, satchelIconFor: (id: string) => ({ key: `almanac-icon-${id}` }),
+  addLocalGroundShadow: () => display(), addContainerWake: noop, addIdleBreath: noop,
+  decorativeTween: noop, applySceneActorLighting: (_scene: unknown, item: any) => { item.lit = true; },
+  playWrenAction: noop, playWrenFocus: noop, playBodyImpact: noop,
+};
+const Winter = new Function(...Object.keys(globals), `${code}; return Winter;`)(...Object.values(globals));
+const dimensions = Object.fromEntries([
+  ["winter-fallen-pine", "../art/winter/fallen-pine.png"],
+  ["almanac-icon-firefly-lantern", "../art/relics/firefly-lantern.png"],
+].map(([key, path]) => {
+  const png = readFileSync(new URL(path, import.meta.url));
+  return [key, { width: png.readUInt32BE(16), height: png.readUInt32BE(20) }];
+}));
+function display(x = 0, y = 0, key = ""): any {
+  const item: any = { x, y, key, scene: true, name: "", parentContainer: null, children: [], ...dimensions?.[key],
+    setName(value: string) { this.name = value; return this; }, setDepth(value: number) { this.depth = value; return this; },
+    setOrigin(...value: number[]) { this.origin = value; return this; }, setScale(value: number) { this.scale = value; return this; },
+    setPosition(x: number, y: number) { this.x = x; this.y = y; return this; }, setAlpha(value: number) { this.alpha = value; return this; },
+    add(child: any) { this.children.push(child); child.parentContainer = this; return this; },
+    remove(child: any) { this.children.splice(this.children.indexOf(child), 1); child.parentContainer = null; },
+    getByName(name: string) { return this.children.find((child: any) => child.name === name); },
+    fillStyle() { return this; }, fillEllipse() { return this; }, fillCircle() { return this; },
+    lineStyle() { return this; }, strokeEllipse() { return this; },
+    destroy() { this.scene = false; for (const child of this.children) child.destroy(); this.children = []; },
+  };
+  return item;
+}
+const stores: SaveStore[] = [];
+function fixture(initial: SaveState = emptySave()) {
+  initial.typewriterAwakened = true;
+  let persisted: SaveState | null = null;
+  const store = new SaveStore({ load: async () => initial, save: async state => { persisted = structuredClone(state); } }, initial, { saveDelayMs: 60_000 });
+  stores.push(store);
+  const scene = new Winter(), images: any[] = [], tweens: any[] = [], timers: any[] = [], captions: string[] = [], waves: number[] = [];
+  const stats = new SessionStats();
+  let gate: (() => void) | null = null, target: any = null;
+  Object.assign(scene, {
+    store, typingInput: { getStats: () => stats }, resumeCheckpoint: initial.checkpoint,
+    candles: 3, foxDecided: true, foxSpared: true, fork1Choice: null, fork2Choice: null,
+    fireflyCue: null, fireflyLanternSprite: null, scale: { width: 1920, height: 1080 },
+    wrenContainer: display(960, 842), wrenSprite: display(), textures: { exists: () => true },
+    add: { container: display, graphics: () => display(),
+      image(x: number, y: number, key: string) { const image = display(x, y, key); images.push(image); return image; },
+      existing(image: any) { assertEqual(image.parentContainer, null, "the lantern leaves the tree before entering the scene"); },
+    },
+    tweens: { add(options: any) { tweens.push(options); return options; },
+      killTweensOf(body: any) { for (const tween of tweens) if (tween.targets === body) tween.cancelled = true; } },
+    time: { delayedCall(ms: number, next: () => void) { timers.push({ ms, next }); } },
+    band: { setObjective: noop }, narration: { say: (text: string) => captions.push(text) }, setNarrator: (text: string) => captions.push(text),
+    readThen(next: () => void) { assert(!gate, "the original response retains one held Continue"); gate = next; },
+    clearActiveTargets() { target = null; }, registerActiveTarget(value: any) { target = value; },
+    makeWinterForkWord: (_body: unknown, options: any) => options,
+    clearForkChoiceWordAnchors: noop, fadeOutHuntress: noop, clearHuntressHorn: noop, clearHeldPelt: noop,
+    startWave: (index: number) => waves.push(index),
+  });
+  return { scene, store, captions, images, tweens, timers, waves, target: () => target, gate: () => gate,
+    continue() { assert(gate, "the native Continue is held"); const next = gate!; gate = null; next(); },
+    async reload() { await store.flush(); return fixture(persisted!); },
+  };
+}
+
+await suite("Winter fireflies: the first earned response reveals a grounded hollow and its real lantern", async () => {
+  const f = fixture(); f.scene.startFireflyBranch(2);
+  assertEqual(f.images.length, 0, "the first story card keeps only its trail of lights");
+  f.continue();
+  assertEqual(f.target().word, "follow the lights", "the original first phrase stays exact");
+  const looseLights = f.scene.fireflyCue;
+  f.target().onComplete();
+  assert(!looseLights.scene, "loose floating fireflies retire when they enter the paper lantern");
+  const tree = f.scene.fireflyCue.getByName("winter-firefly-tree"), lantern = f.scene.fireflyLanternSprite;
+  assert(tree.lit && lantern.lit, "both existing paintings share the chapter lighting");
+  assertEqual([tree.key, lantern.key], ["winter-fallen-pine", "almanac-icon-firefly-lantern"], "the hollow reuses accepted winter wood and paper-lantern art");
+  assertEqual([f.scene.fireflyCue.x, f.scene.fireflyCue.y, lantern.parentContainer], [1330, 790, f.scene.fireflyCue], "the lantern waits inside a stationary tree at the original choice anchor");
+  assert(!f.tweens.some(tween => tween.targets === f.scene.fireflyCue), "the hollow cannot inherit the fireflies' floating entrance or idle bob");
+  assert(f.gate() && f.captions.at(-1)!.includes("hollow tree"), "the unchanged hollow-tree response is held with its physical subject visible");
+  assertEqual(f.store.get().satchel, [], "the new visual cannot award the relic early");
+  const restored = await f.reload(); restored.scene.startFireflyBranch(2);
+  assert(restored.gate() && restored.scene.fireflyLanternSprite.parentContainer === restored.scene.fireflyCue, "the actual earned first response restores the waiting lantern");
+  restored.continue();
+  assertEqual(restored.target().word, "take the lantern", "one original Continue reaches the second phrase");
+});
+
+await suite("Winter fireflies: taking and reloading carry the same lantern and leave the hollow empty", async () => {
+  const f = fixture(); f.scene.startFireflyBranch(2); f.continue(); f.target().onComplete(); f.continue();
+  const lantern = f.scene.fireflyLanternSprite, hollow = f.scene.fireflyCue;
+  f.target().onComplete();
+  assertEqual([f.scene.fireflyLanternSprite, lantern.parentContainer, lantern.x, lantern.y, lantern.depth], [lantern, null, 1014, 722, 61], "the same lantern is removed from the hollow and placed in Wren's hand");
+  assert(!hollow.children.includes(lantern), "the taken lantern cannot remain duplicated in the hollow");
+  assertEqual(f.images.filter(image => image.key === "almanac-icon-firefly-lantern").length, 1, "taking reuses one physical painting");
+  assert(f.gate() && f.captions.at(-1)!.includes("in your hands"), "the original carried-lantern acknowledgment has no added wait");
+  const restored = await f.reload(); restored.scene.startFireflyBranch(2);
+  assertEqual([restored.scene.fireflyLanternSprite.parentContainer, restored.scene.fireflyLanternSprite.x, restored.scene.fireflyLanternSprite.y], [null, 1014, 722], "the actual held second response restores empty tree and carried lantern");
+  restored.continue();
+  assertEqual(restored.timers.map(timer => timer.ms), [900], "Continue retains the original post-passage delay");
+  restored.timers.shift().next();
+  assertEqual(restored.waves, [2], "the original callback continues to the final pack");
+  assertEqual(restored.scene.fireflyLanternSprite, null, "the held lantern stows when the branch ends");
+  assertEqual(restored.store.get().satchel, [], "the original realm ending still owns the reward");
+  f.scene.clearWinterForkCues();
+  assert(!lantern.scene && !hollow.scene, "scene cleanup releases both held art and the planted tree");
+});
+
+await Promise.all(stores.map(store => store.flush()));

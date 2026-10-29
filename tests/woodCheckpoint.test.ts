@@ -114,6 +114,43 @@ await suite("Wood reading: branch response resumes without retyping or repeating
   }
 });
 
+await suite("Wood earned flute branch: both actual held responses reload with its locked choice and entry equipment", async () => {
+  let blob = JSON.stringify({ ...emptySave(), typewriterAwakened: true, satchel: ["bells-tongue"] });
+  const backend = { load: async () => JSON.parse(blob), save: async (state: SaveState) => { blob = JSON.stringify(state); } };
+  const f = fixture();
+  f.scene.store = await SaveStore.load(backend, { saveDelayMs: 60000 });
+  f.scene.init({ store: f.scene.store });
+  f.stats.record(true); f.stats.record(false); f.stats.record(true);
+  f.scene.startFork1BoneFlute(); f.next();
+  assertEqual(f.targets.at(-1).word, "reach in", "the original first phrase earns the held marker");
+  f.targets.at(-1).onComplete();
+  const restore = async (previous: ReturnType<typeof fixture>) => {
+    await previous.scene.store.flush();
+    const store = await SaveStore.load(backend, { saveDelayMs: 60000 });
+    const next = fixture(structuredClone(store.get()) as SaveState);
+    next.scene.store = store;
+    next.scene.init({ store });
+    next.stats.restoreCheckpoint(store.get().checkpoint!.data);
+    next.scene.resumeWood(store.get().checkpoint);
+    return next;
+  };
+  const first = await restore(f);
+  assertEqual([first.targets.length, first.gates.length], [0, 1], "the earned first response stays held without retyping");
+  assertEqual(first.scene.fork1Choice, "bone-flute", "the actual committed route survives backend reload");
+  assertEqual(first.stats.captureCheckpoint(), f.stats.captureCheckpoint(), "held responses retain completed resources");
+  first.next(); assertEqual(first.targets.at(-1).word, "take it", "Continue requests only the remaining original phrase");
+  first.targets.at(-1).onComplete();
+  const second = await restore(first);
+  assertEqual([second.targets.length, second.gates.length], [0, 1], "the actual final phrase restores its handoff response");
+  assert(second.staged.includes("flute-in-hand"), "the finished handoff is reconstructed before the response");
+  second.next();
+  assertEqual(second.scene.store.get().satchel, ["bells-tongue", "bone-flute"], "acknowledgment earns the original reward once");
+  const reward = await restore(second);
+  assertEqual(reward.scene.combatSatchel, ["bells-tongue"], "newly earned flute never activates in the entry loadout after reload");
+  assertEqual(reward.scene.store.get().satchel, ["bells-tongue", "bone-flute"], "reward reload keeps one actual earned flute");
+  await reward.scene.store.flush();
+});
+
 await suite("Wood passage: final-word timer gap saves the next word and never replays the first half", () => {
   const f = fixture(); let done = 0;
   f.scene.runWordByWordPassage(["but", "we", "are", "not", "silent."], () => done++, "final2", 3);

@@ -9,7 +9,7 @@ const url = new URL("../src/scenes/SunkenBellScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
 const names = ["init", "preload", "startFork2FreeAurland", "showFork2Reward", "takeStageData", "runFreePassageChain", "readThen",
-  "showAurlandToken", "clearAurlandToken", "hideAurland", "onKeyDown", "clearActiveTargets", "clearBellKeeperLectern"];
+  "showAurlandToken", "clearAurlandToken", "hideAurland", "onKeyDown", "clearActiveTargets", "clearBellKeeperLectern", "clearHeldLockBar"];
 let shutdown: ts.ArrowFunction | undefined;
 const create = owner.members.find(member => member.name?.getText(source) === "create")!;
 function findShutdown(node: ts.Node): void {

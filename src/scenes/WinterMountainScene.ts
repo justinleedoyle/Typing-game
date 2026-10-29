@@ -273,6 +273,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private revisitMemoryCue: Phaser.GameObjects.Container | null = null;
   private revisitMemoryWordAnchor: WordBodyAnchorHandle | null = null;
   private fireflyCue: Phaser.GameObjects.Container | null = null;
+  private fireflyLanternSprite: Phaser.GameObjects.Image | null = null;
   private cairnCue: Phaser.GameObjects.Container | null = null;
   private peltCue: Phaser.GameObjects.Container | null = null;
   private heldPeltSprite: Phaser.GameObjects.Image | null = null;
@@ -343,6 +344,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.revisitMemoryCue = null;
     this.revisitMemoryWordAnchor = null;
     this.fireflyCue = null;
+    this.clearFireflyLantern();
     this.cairnCue = null;
     this.peltCue = null;
     this.clearHeldPelt();
@@ -389,7 +391,7 @@ export class WinterMountainScene extends Phaser.Scene {
     preloadWren(this);
     preloadWolves(this);
     preloadWinterNpcs(this);
-    preloadSatchelIcons(this, ["hunters-horn"]);
+    preloadSatchelIcons(this, ["hunters-horn", "firefly-lantern"]);
     this.load.image("winter-companion-snow-fox", snowFoxSprite);
   }
 
@@ -570,8 +572,14 @@ export class WinterMountainScene extends Phaser.Scene {
 
     this.typingInput = new TypingInputController(this.store);
     this.director = new WaveDirector(this.typingInput.getStats());
-    const soulSave = this.resumeCheckpoint?.data.soul;
-    if (typeof soulSave === "number") this.typingInput.getStats().bankSoulFraction(soulSave / 100);
+    const checkpointData = this.resumeCheckpoint?.data;
+    if (checkpointData) {
+      this.typingInput.getStats().restoreCheckpoint(checkpointData);
+      if (typeof checkpointData.statsSoul !== "number" && typeof checkpointData.soul === "number") {
+        this.typingInput.getStats().bankSoulFraction(checkpointData.soul / 100);
+      }
+    }
+    this.refreshThunderPips();
     this.typingInput.setKeystrokeHooks({
       onCorrect: () => {
         if (!reducedMotion(this)) bobWrenSprite(this.wrenSprite);
@@ -653,7 +661,8 @@ export class WinterMountainScene extends Phaser.Scene {
       s.realms["winter-mountain"] = realm;
     });
     this.store.setCheckpoint({ scene: "WinterMountainScene", step, data: {
-      candles: this.candles, soul: this.typingInput.getStats().getSoul(), ...data, foxDecided: this.foxDecided,
+      candles: this.candles, soul: this.typingInput.getStats().getSoul(),
+      ...this.typingInput.getStats().captureCheckpoint(), ...data, foxDecided: this.foxDecided,
     } });
   }
 
@@ -2433,6 +2442,10 @@ export class WinterMountainScene extends Phaser.Scene {
   ): void {
     const handoff = owner === "huntress" && step === HUNTRESS_PASSAGES.length - 1;
     const present = () => {
+      if (owner === "firefly") {
+        if (step === 0) this.showFireflyHollow();
+        else this.receiveFireflyLanternVisual();
+      }
       if (owner === "pelt" && step === PELT_PASSAGES.length - 1) {
         this.receivePeltVisual();
         this.band.setObjective("The pelt is in your hands. Press Enter or Space to continue.");
@@ -2536,7 +2549,65 @@ export class WinterMountainScene extends Phaser.Scene {
     return c;
   }
 
+  /** Reuse the snowy fallen pine and the actual paper-lantern keepsake. The
+   * tree is planted; only the earlier loose fireflies float above the snow. */
+  private showFireflyHollow(): Phaser.GameObjects.Container {
+    if (this.fireflyCue?.getByName("winter-firefly-tree")) return this.fireflyCue;
+    const lights = this.fireflyCue;
+    if (lights?.scene) {
+      this.tweens.killTweensOf(lights);
+      lights.destroy();
+    }
+    const cue = this.add.container(1330, 790).setDepth(43);
+    cue.add(addLocalGroundShadow(this, 420, 26, { x: 70, y: 52, alpha: 0.22 }));
+    const tree = this.add.image(80, 52, "winter-fallen-pine")
+      .setName("winter-firefly-tree").setOrigin(0.5, 0.83);
+    tree.setScale(520 / tree.width);
+    applySceneActorLighting(this, tree);
+    cue.add(tree);
+    const hollow = this.add.graphics().setName("winter-firefly-hollow");
+    hollow.fillStyle(0x100e12, 0.96);
+    hollow.fillEllipse(-80, -4, 62, 88);
+    hollow.lineStyle(4, 0x514344, 0.88);
+    hollow.strokeEllipse(-80, -4, 64, 90);
+    hollow.lineStyle(2, 0xb8c8d4, 0.5);
+    hollow.strokeEllipse(-82, -7, 68, 94);
+    cue.add(hollow);
+    const icon = satchelIconFor("firefly-lantern");
+    if (icon && this.textures.exists(icon.key)) {
+      const lantern = this.add.image(-80, -4, icon.key).setName("winter-firefly-lantern");
+      lantern.setScale(88 / lantern.height);
+      applySceneActorLighting(this, lantern);
+      cue.add(lantern);
+      this.fireflyLanternSprite = lantern;
+    }
+    this.fireflyCue = cue;
+    return cue;
+  }
+
+  /** The existing take-the-lantern result empties the hollow and carries the
+   * same painting. Its inventory award stays at the original realm ending. */
+  private receiveFireflyLanternVisual(): void {
+    const cue = this.showFireflyHollow();
+    const lantern = this.fireflyLanternSprite;
+    if (!lantern?.scene) return;
+    if (lantern.parentContainer === cue) {
+      cue.remove(lantern);
+      this.add.existing(lantern);
+    }
+    lantern.setPosition(this.wrenContainer.x + 54, this.wrenContainer.y - 120).setDepth(61);
+  }
+
+  private clearFireflyLantern(): void {
+    const lantern = this.fireflyLanternSprite;
+    this.fireflyLanternSprite = null;
+    if (!lantern?.scene) return;
+    this.tweens.killTweensOf(lantern);
+    lantern.destroy();
+  }
+
   private dismissFireflyCue(): void {
+    this.clearFireflyLantern();
     const cue = this.fireflyCue;
     this.clearForkChoiceWordAnchors();
     if (!cue?.scene) {
@@ -2872,6 +2943,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private clearWinterForkCues(opts: { keepHeldPelt?: boolean } = {}): void {
     this.clearHuntressHorn();
+    this.clearFireflyLantern();
     if (!opts.keepHeldPelt) this.clearHeldPelt();
     this.clearForkChoiceWordAnchors();
     const cues = [this.fireflyCue, this.cairnCue, this.peltCue];
@@ -3230,6 +3302,7 @@ export class WinterMountainScene extends Phaser.Scene {
     let step = checkpointIndex(resume.index, passages.length);
     let resumeReading = resume.reading === true;
     if (checkpointStep && this.resumeCheckpoint?.step === checkpointStep) this.resumeCheckpoint = null;
+    if (owner === "firefly" && step > 0) this.showFireflyHollow();
 
     const advance = (): void => {
       if (step >= passages.length) {
@@ -3543,10 +3616,9 @@ export class WinterMountainScene extends Phaser.Scene {
    *  every cast, so this is driven from the keystroke hook and after a cast —
    *  Winter has no per-frame update loop. */
   private refreshThunderPips(): void {
-    const castable = Math.min(
-      WAVE_CHARGES,
-      Math.floor(this.typingInput.getStats().getSoul() / SPELL_COST),
-    );
+    const stats = this.typingInput.getStats();
+    let castable = 0;
+    while (castable < WAVE_CHARGES && stats.canCast((castable + 1) * SPELL_COST)) castable += 1;
     if (castable === this.castableThunder) return;
     this.castableThunder = castable;
     this.redrawCharges();

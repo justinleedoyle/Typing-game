@@ -10,10 +10,10 @@ const path = new URL("../src/scenes/SunkenBellScene.ts", import.meta.url);
 const source = ts.createSourceFile(path.pathname, readFileSync(path, "utf8"),
   ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 const sceneClass = source.statements.find(ts.isClassDeclaration)!;
-const methods = ["createEchoDim", "onBeatTick", "pulseBeatRing", "pulseOffbeatRing",
+const methods = ["createEchoDim", "createRhythmTrack", "setStoryObjective", "onBeatTick", "pulseBeatRing", "pulseOffbeatRing",
   "spawnSplitGhost", "bellPassageWordPosition", "startFork1ForceBreak", "showFork1Reward", "takeStageData", "openForceDoorCue",
   "clearBellForkCues", "drawCathedralDoor", "showDoorCues", "createDoorCue", "openCathedralDoor",
-  "clearDoorwayStage", "runBeatLockedChain", "startFork1Chant", "startFork1Force", "startFork1", "startAct3Corridor", "onKeyDown"].map(name =>
+  "clearDoorwayStage", "showHeldLockBar", "clearHeldLockBar", "runBeatLockedChain", "startFork1Chant", "startFork1Force", "startFork1", "startAct3Corridor", "onKeyDown"].map(name =>
   sceneClass.members.find(member => member.name?.getText(source) === name)!.getText(source));
 const constants = source.statements.filter(ts.isVariableStatement).flatMap(statement =>
   statement.declarationList.declarations.filter(declaration => ["NAVE_DOOR", "WREN_X", "WREN_Y"].includes(declaration.name.getText(source)))
@@ -24,7 +24,7 @@ const code = ts.transpileModule(`${constants}\nclass Harness { static nave = NAV
 const noop = () => {};
 const Harness = new Function("bellIndex", "reducedFlashes", "reducedMotion", "PALETTE_HEX", "Phaser",
   "applySceneActorLighting", "playWrenFocus", "playWrenAction", "playBodyImpact", "playDamageThud", "BELL_BURST_COLOR",
-  "setWrenPose", "isPuristToggleKey", "playClack",
+  "setWrenPose", "isPuristToggleKey", "playClack", "satchelIconFor",
   `${code}; return Harness;`)(
   bellIndex, (scene: { reducedFlashes: boolean }) => scene.reducedFlashes,
   (scene: { reducedMotion: boolean }) => scene.reducedMotion,
@@ -32,6 +32,7 @@ const Harness = new Function("bellIndex", "reducedFlashes", "reducedMotion", "PA
   { Math: { Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(value, max)) } },
   (_scene: unknown, actor: { lit: boolean }) => { actor.lit = true; }, noop, noop, noop, noop, 0x4ab8d6,
   (actor: { pose: string }, pose: string) => { actor.pose = pose; }, () => false, noop,
+  (id: string) => ({ key: `almanac-icon-${id}` }),
 );
 
 function encounter(tempo: number, phase: "on" | "off" | "free", reducedFlashes = true) {
@@ -52,7 +53,7 @@ function encounter(tempo: number, phase: "on" | "off" | "free", reducedFlashes =
   const harness = new Harness();
   Object.assign(harness, {
     beatRing: blue, offbeatRing: orange, beatPhase: phase,
-    rhythmLabel: cue(),
+    rhythmLabel: cue(), rhythmTrack: cue(),
     reducedFlashes, combat: { warmLight: 0.2 },
     add: { graphics: () => dim }, scale: { width: 1920 }, band: { bandTopY: 860 },
     cameras: { main: { flash() { throw new Error("Rhythm cue must never use a full-camera black flash"); } } },
@@ -67,6 +68,29 @@ function encounter(tempo: number, phase: "on" | "off" | "free", reducedFlashes =
     runNext() { const callback = callbacks.shift()!; now = callback.at; callback.run(); },
   };
 }
+
+await suite("Bell rhythm cue: the neutral resting ring remains findable between exact timed invitations", () => {
+  const f = encounter(2000, "on");
+  const track: any = { x: 0, y: 0, alpha: 1, depth: 0,
+    setPosition(x: number, y: number) { this.x = x; this.y = y; return this; },
+    setDepth(depth: number) { this.depth = depth; return this; },
+    setAlpha(alpha: number) { this.alpha = alpha; return this; },
+    lineStyle(_width: number, color: number) { this.color = color; },
+    strokeCircle(...circle: number[]) { this.circle = circle; },
+  };
+  f.harness.add.graphics = () => track;
+  f.harness.createRhythmTrack(1270, 950);
+  assertEqual([track.x, track.y, track.depth, track.circle, track.alpha], [1270, 950, 1499, [0, 0, 32], 0], "the fixed outline uses the actual console pulse anchor and starts hidden in story");
+  f.harness.onBeatTick();
+  assertEqual(track.alpha, 0.38, "rhythm starts a persistent neutral location marker");
+  assert(track.color !== 0xabcdef && track.color !== 0xfedcba, "the waiting outline is neither the blue nor orange start invitation");
+  assert(track.depth > 1400 && track.depth < f.blue.depth, "the track stays above the console and below the live pulse");
+  assertEqual(f.pulses.find(pulse => pulse.ring === f.blue)!.duration, 350, "discoverability cannot lengthen the original acceptance pulse");
+  assert(!f.pulses.some(pulse => pulse.ring === track), "the location marker cannot fade out or inherit the timing pulse's scale");
+  f.harness.band.setObjective = noop;
+  f.harness.setStoryObjective("Continue when ready.");
+  assertEqual([track.alpha, f.blue.alpha, f.orange.alpha], [0, 0, 0], "ordinary story phases remove both the resting location and timed invitation");
+});
 
 await suite("Bell rhythm cue: visible openings match slow and fast acceptance windows", () => {
   for (const tempo of [2000, 1000]) {
@@ -208,7 +232,7 @@ function doorFixture(reducedMotion = false) {
     },
     textures: {
       get(key: string) { assertEqual(key, "bell-nave-door-leaves", "leaf construction reads the accepted original painting"); return { getSourceImage: () => original }; },
-      exists: (key: string) => canvases.has(key),
+      exists: (key: string) => key === "almanac-icon-lock-bar" || canvases.has(key),
       createCanvas(key: string, width: number, height: number) {
         const texture = { width, height, path: [] as number[][], clipped: false, draws: [] as unknown[][], refreshed: 0,
           context: {} as any, refresh() { this.refreshed += 1; } };

@@ -27,6 +27,8 @@ const code = ts.transpileModule(`${constants}\nclass Bell { ${methods}\n initial
 const noop = () => {};
 const globals: Record<string, unknown> = {
   bellStep, bellIndex, TypingInputController, resolveCombatLoadout, rememberRealmFork, resolveRealmFork, rememberCompanionDecision, resolveCompanionDecision,
+  satchelIconFor: (id: string) => ({ key: `almanac-icon-${id}` }),
+  applySceneActorLighting: (_scene: unknown, item: any) => { item.lit = true; },
   Phaser: { Math: { Clamp: (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n)) },
     GameObjects: { Events: { DESTROY: "destroy" } }, Cameras: { Scene2D: { Events: { FADE_OUT_COMPLETE: "fade" } } } },
   reducedMotion: () => true, reducedFlashes: () => true,
@@ -47,9 +49,10 @@ class MemoryBackend implements SaveBackend {
   async save(state: SaveState) { this.saved = JSON.parse(JSON.stringify(state)); }
 }
 function node(x = 960, y = 600): any {
-  return { x, y, scene: true, alpha: 1, tint: 0, lit: false,
+  return { x, y, scene: true, alpha: 1, tint: 0, lit: false, width: 256, height: 129, children: [] as any[],
     setDepth() { return this; }, setAlpha(v: number) { this.alpha = v; return this; },
-    setTint(v: number) { this.tint = v; return this; }, add() {}, once() {},
+    setScale(value: number) { this.scale = value; return this; },
+    setTint(v: number) { this.tint = v; return this; }, add(child: any) { if (child) { this.children.push(child); child.parentContainer = this; } }, once() {},
     destroy() { this.scene = false; },
   };
 }
@@ -78,7 +81,8 @@ function fixture(initial = emptySave(), revisit = false) {
     time: { delayedCall(ms: number, run: () => void) { timers.push({ ms, run }); } },
     cameras: { main: { shake() {}, fadeOut() {}, once() {} } },
     tweens: { killTweensOf() {}, add() {} },
-    add: { container: (x: number, y: number) => node(x, y), text: (x: number, y: number) => node(x, y) },
+    add: { container: (x: number, y: number) => node(x, y), text: (x: number, y: number) => node(x, y), image: (x: number, y: number) => node(x, y) },
+    textures: { exists: () => true },
     clearActiveTargets() { scene.activeTargets = []; },
     drawOlin() { events.push("olin"); scene.olinImage = node(); },
     dismissOlin() { scene.olinImage = undefined; },
@@ -259,6 +263,64 @@ await suite("Bell checkpoints: force remains committed and resumes the next brea
   assertEqual(resumed.store.get().satchel, ["lock-bar"], "force restart does not duplicate or switch relics");
 });
 
+await suite("Bell checkpoints: earned force-door and corridor restores start the first Warden combat clock", async () => {
+  for (const step of ["force", "force-break", "corridor"]) {
+    const f = fixture(chosen(null, null)); f.scene.startFork1();
+    f.scene.activeTargets.find((target: any) => target.word === "force them open").onComplete();
+    if (step !== "force") { f.next(); f.complete(); }
+    if (step === "corridor") {
+      f.tick();
+      for (let i = 0; i < 4; i++) f.complete();
+      f.next();
+    }
+    assertEqual(f.store.get().checkpoint!.step, step, "the checkpoint is earned through the original force-door callbacks");
+    const restored = await f.reload(); restored.scene.resumeBell();
+    assert(!restored.scene.beatClock.running, "door and corridor story phases stay quiet after reload");
+    if (step === "force") { restored.next(); restored.complete(); }
+    if (step !== "corridor") {
+      restored.tick();
+      for (let i = 0; i < 4; i++) restored.complete();
+      restored.next();
+    }
+    restored.next();
+    assert(!restored.scene.beatClock.running && restored.hasGate(), "the Warden arrival remains an untimed reading card");
+    restored.next();
+    assertEqual([restored.scene.beatClock.running, restored.scene.beatClock.tempo, restored.scene.beatPhase], [true, 2000, "on"], "the actual first Warden combat starts its original blue-pulse clock");
+    assertEqual(restored.scene.activeTargets.map((target: any) => target.word), ["weight", "silence", "deep"], "the original three boss targets and Continue count are unchanged");
+  }
+});
+
+await suite("Bell rhythm handoff: consumed practice Continue replaces the stale objective during its original delay", () => {
+  const f = fixture(); f.scene.showRhythmPracticeComplete();
+  assert(f.tasks.at(-1)!.includes("Press Enter or Space"), "the held practice result still advertises its original Continue");
+  f.next();
+  assertEqual(f.tasks.at(-1), "Listen for the bell. The tide-ghosts are drawing close.", "the consumed Continue cannot leave another Continue instruction during the handoff");
+  assertEqual(f.timers.map(timer => timer.ms), [2000], "the original encounter delay stays exactly two seconds");
+  assertEqual([f.scene.beatClock.running, f.scene.beatClock.tempo], [true, 2000], "the ordinary rhythm restart is unchanged");
+  assertEqual(f.store.get().checkpoint!.step, "practice-done", "the presentation update cannot advance saved progress early");
+});
+
+await suite("Bell checkpoints: the earned force reward and reload retain a painted Lock-Bar in Wren's hand", async () => {
+  const f = fixture(chosen(null, null)); f.scene.startFork1();
+  f.scene.activeTargets.find((target: any) => target.word === "force them open").onComplete();
+  const earned = [...f.store.get().satchel];
+  assertEqual(f.scene.heldLockBarSprite, null, "choosing force does not display the taken bar before the doors break");
+  f.next(); f.complete(); f.tick();
+  for (let i = 0; i < 4; i++) f.complete();
+  const bar = f.scene.heldLockBarSprite;
+  assert(bar?.scene && bar.lit && bar.parentContainer === f.scene.wrenContainer, "the actual reward card shows the lit bar attached to Wren");
+  assertEqual([bar.x, bar.y, bar.scale], [52, -112, 132 / 256], "the held painting occupies the accepted hand position at a bounded size");
+  assert(f.hasGate() && f.captions.at(-1)!.includes("rests in your hands"), "the received prop accompanies the unchanged held acknowledgment immediately");
+  const restored = await f.reload(); restored.scene.resumeBell();
+  const restoredBar = restored.scene.heldLockBarSprite;
+  assert(restored.hasGate() && restoredBar?.scene && restoredBar.parentContainer === restored.scene.wrenContainer, "the earned reward checkpoint restores its held bar without retyping the breaking words");
+  assertEqual(restored.store.get().satchel, earned, "the visible handoff neither advances nor duplicates the original force reward");
+  restored.next();
+  assertEqual([restoredBar.scene, restored.scene.heldLockBarSprite, restored.store.get().checkpoint!.step], [false, null, "corridor"], "the original reward Continue stows the bar before the corridor");
+  f.scene.clearHeldLockBar();
+  assertEqual([bar.scene, f.scene.heldLockBarSprite], [false, null], "interrupted cleanup releases the received bar");
+});
+
 await suite("Bell checkpoints: Aurland binding, token reward and companion answer retain all original gates", async () => {
   const f = fixture(chosen("chant", null)); f.scene.showFateCues(); f.scene.startFork2FreeAurland();
   f.next(); f.complete();
@@ -324,6 +386,28 @@ await suite("Bell checkpoints: a fresh realm records its once-only intrusion bef
   const resumed = await f.reload(); resumed.scene.resumeBell();
   assertEqual(resumed.scene.quietLordIntruded, true, "actual init restores the once-only flag");
   assertEqual(resumed.timers.length, 0, "restarting the current wave cannot replay the intrusion");
+});
+
+await suite("Bell checkpoints: the settled final Warden word survives the gap before its defeat toll", async () => {
+  const f = fixture(chosen("chant", null));
+  f.scene.makeWardenWord = (_warden: unknown, options: any) => ({
+    ...options, setDepth: noop, setVisualAlpha: noop, isComplete: () => false,
+  });
+  f.scene.startWardenPhase3(node());
+  f.next();
+  const toll = () => { for (const callback of f.beats.splice(0)) callback(); };
+  toll();
+  for (const expected of ["i", "am", "the", "bell.", "i", "drink", "the", "sea."]) {
+    assertEqual(f.scene.activeTargets[0].word, expected, "the original verse prompts remain in order");
+    f.complete();
+    if (expected !== "sea.") toll();
+  }
+  assertEqual(f.store.get().checkpoint!.step, "warden-defeated", "the last settled word saves defeat before the next original toll");
+  assertEqual(f.beats.length, 2, "the original deadline and next-toll visual transition are retained");
+  const resumed = await f.reload();
+  resumed.scene.resumeBell();
+  assert(resumed.hasGate() && resumed.scene.activeTargets.length === 0, "saving after all eight words resumes defeat acknowledgment without repeating the verse");
+  assert(!resumed.scene.beatClock.running, "the settled encounter resumes with its combat clock stopped");
 });
 
 await suite("Bell checkpoints: read lectern persists and actual completion clears only its own checkpoint", async () => {

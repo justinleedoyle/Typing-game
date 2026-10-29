@@ -70,7 +70,7 @@ import {
   setWrenPose,
 } from "../game/wren";
 import { ConsoleBand } from "../game/ui/consoleBand";
-import { preloadSatchelIcons } from "../game/ui/satchelIcons";
+import { preloadSatchelIcons, satchelIconFor } from "../game/ui/satchelIcons";
 import runaPortrait from "../../art/runa/runa-front.png";
 import sunkenBellBackdrop from "../../art/references/sunken-bell-clean.png";
 import bellGhostSprite from "../../art/bell/ghost.png";
@@ -195,6 +195,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private beatClock!: BeatClock;
   private beatRing!: Phaser.GameObjects.Graphics;
   private offbeatRing!: Phaser.GameObjects.Graphics;
+  private rhythmTrack?: Phaser.GameObjects.Graphics;
   private echoDim!: Phaser.GameObjects.Graphics;
 
   // Rhythm-gate state (Tier 1 — make the Bell's rhythm demanding):
@@ -248,6 +249,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private revisit = false;
   private resumeCheckpoint: SaveCheckpoint | null = null;
   private combatSatchel: string[] = [];
+  private heldLockBarSprite: Phaser.GameObjects.Image | null = null;
 
   constructor() {
     super("SunkenBellScene");
@@ -255,6 +257,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   init(data: SunkenBellSceneData): void {
     this.clearBellKeeperLectern();
+    this.clearHeldLockBar();
     this.revisit = data.revisit === true;
     this.store = data.store;
     const saved = this.store.get().checkpoint;
@@ -312,7 +315,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.load.image("bell-companion-glass-fish", glassFishSprite);
     this.load.image("bell-companion-snow-fox", snowFoxSprite);
     this.load.image("band-portrait-runa", runaPortrait);
-    preloadSatchelIcons(this, this.store.get().satchel ?? []);
+    preloadSatchelIcons(this, [...(this.store.get().satchel ?? []), "lock-bar"]);
     preloadWren(this);
   }
 
@@ -495,6 +498,7 @@ export class SunkenBellScene extends Phaser.Scene {
     // advancing ghosts. The ring's opening remains the timing cue in muted play.
     const ringX = this.breathAnchor.x + 260;
     const ringY = this.breathAnchor.y - 20;
+    this.createRhythmTrack(ringX, ringY);
     this.beatRing = this.add.graphics().setDepth(1500).setAlpha(0);
     this.beatRing.x = ringX;
     this.beatRing.y = ringY;
@@ -622,7 +626,7 @@ export class SunkenBellScene extends Phaser.Scene {
       case "force-break": this.startFork1ForceBreak(); break;
       case "fork1-reward": this.showFork1Reward(); break;
       case "corridor": this.startAct3Corridor(); break;
-      case "warden": this.resumeWardenClock(2000); this.startAct3(); break;
+      case "warden": this.startAct3(); break;
       case "warden1-cleared": this.resumeWardenClock(2000); this.showWardenPhase1Cleared(this.drawWarden()); break;
       case "warden2": {
         this.resumeWardenClock(2000);
@@ -857,6 +861,15 @@ export class SunkenBellScene extends Phaser.Scene {
 
   // ─── Beat mechanic ────────────────────────────────────────────────────────
 
+  /** A neutral resting outline keeps the pulse's location discoverable when
+   * the short blue/orange acceptance invitation is between tolls. */
+  private createRhythmTrack(x: number, y: number): void {
+    const track = this.add.graphics().setPosition(x, y).setDepth(1499).setAlpha(0);
+    track.lineStyle(2, 0x9d9b91, 1);
+    track.strokeCircle(0, 0, 32);
+    this.rhythmTrack = track;
+  }
+
   private createEchoDim(): void {
     // The echo hides the world briefly, never the HUD's timing invitation.
     // A camera flash would composite black over the rhythm ring as it fades.
@@ -870,6 +883,7 @@ export class SunkenBellScene extends Phaser.Scene {
    *  half-beat window so its entire visible span accepts a new word. */
   private onBeatTick(): void {
     if (this.beatPhase === "free") return;
+    this.rhythmTrack?.setAlpha(0.38);
     this.rhythmLabel.setAlpha(0.9);
     this.pulseBeatRing();
     if (this.beatPhase === "off") {
@@ -1942,6 +1956,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   /** Original combat clock and encounter delay begin only after rehearsal. */
   private beginRhythmEncounters(): void {
+    this.band.setObjective("Listen for the bell. The tide-ghosts are drawing close.");
     this.beatPhase = "on";
     this.rhythmLabel.setAlpha(0.9);
     this.beatClock.setTempo(2000);
@@ -2431,6 +2446,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.checkpoint("fork1-reward");
     this.openCathedralDoor(this.fork1Choice === "force" ? "force" : "chant", true);
     if (this.fork1Choice === "force") {
+      this.showHeldLockBar();
       this.setNarrator("The doors burst wide. Their lock-bar rests in your hands.");
       this.setStoryObjective("Lock-Bar is yours. Continue through the open doors.");
     } else {
@@ -2442,6 +2458,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startAct3Corridor(): void {
     if (this.doorwayPassagePending) return;
+    this.clearHeldLockBar();
     this.checkpoint("corridor");
     if (this.resumeCheckpoint?.step === "corridor") {
       this.openCathedralDoor(this.fork1Choice === "force" ? "force" : "chant", true);
@@ -2571,6 +2588,9 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startWardenPhase1(wardenSprite: Phaser.GameObjects.Image): void {
     this.beatPhase = "on";
+    // Door/corridor checkpoints restore quiet story stages with a stopped
+    // clock. Actual combat owns its restart, whichever path reached it.
+    this.resumeWardenClock(2000);
     this.band.setObjective("First letter on the blue pulse, then finish freely. Speak the Warden's words.");
     const words = ["weight", "silence", "deep"];
     let remaining = words.length;
@@ -2711,6 +2731,9 @@ export class SunkenBellScene extends Phaser.Scene {
         settled = true;
         playChime();
         wordIndex += 1;
+        // The last word is settled even while its original next-toll defeat
+        // transition is pending. Leaving in that gap must not repeat the verse.
+        if (wordIndex >= words.length) this.checkpoint("warden-defeated");
         const nextSentence = SENTENCE_STARTS.find((s) => s > sentenceCheckpoint);
         if (nextSentence !== undefined && wordIndex >= nextSentence) {
           sentenceCheckpoint = nextSentence;
@@ -3955,6 +3978,27 @@ export class SunkenBellScene extends Phaser.Scene {
     this.openCathedralDoor("force", immediate);
   }
 
+  /** The force reward's existing acknowledgment owns this received keepsake.
+   * Parenting it to Wren keeps the bar in hand through the quiet idle breath. */
+  private showHeldLockBar(): void {
+    if (this.heldLockBarSprite?.scene) return;
+    const icon = satchelIconFor("lock-bar");
+    if (!icon || !this.textures.exists(icon.key)) return;
+    const bar = this.add.image(52, -112, icon.key).setDepth(61);
+    bar.setScale(132 / Math.max(bar.width, bar.height));
+    applySceneActorLighting(this, bar);
+    this.wrenContainer.add(bar);
+    this.heldLockBarSprite = bar;
+  }
+
+  private clearHeldLockBar(): void {
+    const bar = this.heldLockBarSprite;
+    this.heldLockBarSprite = null;
+    if (!bar?.scene) return;
+    this.tweens.killTweensOf(bar);
+    bar.destroy();
+  }
+
   private clearDoorwayStage(): void {
     const stage = this.doorwayStage;
     const wasCrossing = this.doorwayPassagePending;
@@ -4095,6 +4139,7 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private clearBellForkCues(): void {
+    this.clearHeldLockBar();
     this.clearForkChoiceWordAnchors();
     this.clearDoorwayStage();
     for (const cue of [
@@ -4538,6 +4583,7 @@ export class SunkenBellScene extends Phaser.Scene {
     this.tweens.killTweensOf(this.offbeatRing);
     this.beatRing.setAlpha(0);
     this.offbeatRing.setAlpha(0);
+    this.rhythmTrack?.setAlpha(0);
     this.rhythmLabel.setAlpha(0);
   }
 

@@ -30,6 +30,7 @@ import { makeQuietLordSprite, preloadQuietLord } from "../game/quietLord";
 import { makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
 import runaSprite from "../../art/runa/runa-front.png";
 import siblingSprite from "../../art/sibling/sibling-front.png";
+import siblingEmptyHands from "../../art/sibling/sibling-empty-hands.png";
 import magnusSprite from "../../art/sibling/magnus-front.png";
 
 interface OpeningSceneData {
@@ -77,8 +78,12 @@ export class OpeningScene extends Phaser.Scene {
   private quietLordSprite: Phaser.GameObjects.Image | null = null;
   private runaActor: Phaser.GameObjects.Container | null = null;
   private siblingActor: Phaser.GameObjects.Container | null = null;
+  private siblingPortrait: Phaser.GameObjects.Image | null = null;
   private openingWren: Phaser.GameObjects.Container | null = null;
+  private openingWrenSprite: Phaser.GameObjects.Image | null = null;
+  private openingDepartureStarted = false;
   private siblingKeepsake: Phaser.GameObjects.Graphics | null = null;
+  private carriedKeepsake: Phaser.GameObjects.Graphics | null = null;
   private studyTypingPulseTimes = new WeakMap<StudyResponsePoint, number>();
   private studyWordAnchorReleases: Array<() => void> = [];
   private identityChoiceCards: Phaser.GameObjects.Container[] = [];
@@ -97,12 +102,16 @@ export class OpeningScene extends Phaser.Scene {
   }
 
   init(data: OpeningSceneData): void {
+    this.clearCarriedKeepsake();
     this.store = data.store;
     // Stale sprite reference from a previous run; clear before Beat 6.
     this.quietLordSprite = null;
     this.runaActor = null;
     this.siblingActor = null;
+    this.siblingPortrait = null;
     this.openingWren = null;
+    this.openingWrenSprite = null;
+    this.openingDepartureStarted = false;
     this.siblingKeepsake = null;
     this.studyTypingPulseTimes = new WeakMap();
     this.studyWordAnchorReleases = [];
@@ -118,6 +127,7 @@ export class OpeningScene extends Phaser.Scene {
     this.load.image("opening-backdrop", openingBackdrop);
     this.load.image("runa-sprite", runaSprite);
     this.load.image("sibling-sprite", siblingSprite);
+    this.load.image("sibling-empty-hands", siblingEmptyHands);
     this.load.image("magnus-sprite", magnusSprite);
     preloadQuietLord(this);
     preloadWren(this);
@@ -213,8 +223,11 @@ export class OpeningScene extends Phaser.Scene {
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.clearStudyWordAnchors();
       this.clearIdentityChoiceCards();
+      this.clearCarriedKeepsake();
       this.siblingKeepsake = null;
+      this.siblingPortrait = null;
       this.openingWren = null;
+      this.openingWrenSprite = null;
     });
 
     // ── Beat sequence ────────────────────────────────────────────────────────
@@ -546,6 +559,7 @@ export class OpeningScene extends Phaser.Scene {
    *  Wren walks into, not a redundant second scene. */
   private beat10(): void {
     this.checkpoint("departure");
+    this.receiveSiblingKeepsake(true);
     this.narration.say("opening_beat10_bridge_to_hub");
     this.readThen(() => {
       this.store.update((s) => {
@@ -638,9 +652,8 @@ export class OpeningScene extends Phaser.Scene {
     }
   }
 
-  /** Wren only enters the study's visible staging for the final crossing, so
-   * the player becomes the source of the portal handoff rather than a fade. */
-  private stageOpeningWrenDeparture(): Phaser.GameObjects.Container | null {
+  /** The same grounded Wren can receive Saga's drawing before crossing. */
+  private showOpeningWren(): Phaser.GameObjects.Container {
     if (this.openingWren?.scene) return this.openingWren;
 
     const actor = this.add.container(982, 936).setDepth(0).setAlpha(0);
@@ -648,14 +661,22 @@ export class OpeningScene extends Phaser.Scene {
     actor.add(addLocalGroundShadow(this, 92, 22, { y: 6, alpha: 0.3 }));
     actor.add(sprite);
     this.openingWren = actor;
+    this.openingWrenSprite = sprite;
 
     this.tweens.add({
       targets: actor,
       alpha: 0.96,
-      duration: 120,
+      duration: reducedMotion(this) ? 0 : 120,
       ease: "Sine.easeOut",
     });
-    setWrenPose(sprite, "walk");
+    return actor;
+  }
+
+  private stageOpeningWrenDeparture(): Phaser.GameObjects.Container | null {
+    const actor = this.showOpeningWren();
+    if (this.openingDepartureStarted) return actor;
+    this.openingDepartureStarted = true;
+    if (this.openingWrenSprite) setWrenPose(this.openingWrenSprite, "walk");
     this.tweens.add({
       targets: actor,
       x: PORTAL_TARGET.x - 20,
@@ -667,6 +688,45 @@ export class OpeningScene extends Phaser.Scene {
       ease: "Sine.easeIn",
     });
     return actor;
+  }
+
+  private receiveSiblingKeepsake(immediate = false): void {
+    if (this.wrenGender !== "boy") return;
+    const held = { x: 20, y: -112 };
+    if (this.carriedKeepsake?.scene) {
+      if (immediate || reducedMotion(this)) {
+        this.tweens.killTweensOf(this.carriedKeepsake);
+        this.carriedKeepsake.setPosition(held.x, held.y).setScale(1).setAlpha(0.92);
+      }
+      return;
+    }
+    const prop = this.siblingKeepsake;
+    if (!prop?.scene || !this.siblingActor?.scene || !this.siblingPortrait?.scene ||
+        !this.textures.exists("sibling-empty-hands")) return;
+    const world = prop.getWorldTransformMatrix().transformPoint(0, 0);
+    const wren = this.showOpeningWren();
+    const start = wren.getWorldTransformMatrix().applyInverse(world.x, world.y);
+    this.tweens.killTweensOf(prop);
+    this.siblingActor.remove(prop);
+    wren.add(prop);
+    this.siblingPortrait.setTexture("sibling-empty-hands");
+    this.siblingPortrait.setScale(260 / this.siblingPortrait.height);
+    this.siblingKeepsake = null;
+    this.carriedKeepsake = prop;
+    prop.setPosition(start.x, start.y).setScale(1).setAlpha(0.92);
+    if (immediate || reducedMotion(this)) {
+      prop.setPosition(held.x, held.y);
+      return;
+    }
+    this.tweens.add({ targets: prop, x: held.x, y: held.y, duration: 420, ease: "Sine.easeInOut" });
+  }
+
+  private clearCarriedKeepsake(): void {
+    if (this.carriedKeepsake?.scene) {
+      this.tweens?.killTweensOf(this.carriedKeepsake);
+      this.carriedKeepsake.destroy();
+    }
+    this.carriedKeepsake = null;
   }
 
   private playOpeningPortalFlecks(
@@ -736,7 +796,7 @@ export class OpeningScene extends Phaser.Scene {
       scale: 1.03,
       durationMs: 260,
     });
-    this.pulseSiblingKeepsake();
+    this.receiveSiblingKeepsake();
   }
 
   private pulseSiblingKeepsake(): void {
@@ -1128,6 +1188,7 @@ export class OpeningScene extends Phaser.Scene {
     // Magnus gets a cool blue-gray (reads as older + a beat more distant).
     applySceneActorLighting(this, img);
     actor.add(img);
+    this.siblingPortrait = img;
 
     if (isBoy) {
       const drawing = this.add.graphics().setPosition(24, -116).setAlpha(0.92);

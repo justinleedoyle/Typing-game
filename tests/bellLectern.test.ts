@@ -44,7 +44,7 @@ const art = painting("../art/bell/reading-lectern.png");
 const url = new URL("../src/scenes/SunkenBellScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
-const names = ["init", "preload", "startBellKeepersChamber", "showBellKeeperRead", "drawBellKeeperLectern", "clearBellKeeperLectern", "setStoryObjective"];
+const names = ["init", "preload", "startBellKeepersChamber", "showBellKeeperRead", "drawBellKeeperLectern", "clearBellKeeperLectern", "clearHeldLockBar", "setStoryObjective"];
 const create = owner.members.find(member => member.name?.getText(source) === "create")!;
 let shutdown: ts.ArrowFunction | undefined;
 function findShutdown(node: ts.Node): void {

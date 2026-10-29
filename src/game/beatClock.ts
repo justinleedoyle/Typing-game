@@ -44,7 +44,9 @@ export class BeatClock {
   private readonly onBeat?: () => void;
   private readonly audio: boolean;
   private timer: Phaser.Time.TimerEvent | null = null;
-  private lastBeatAt = 0;
+  /** Phase already elapsed before the current timer was scheduled. Tempo
+   * changes reschedule the next toll without inventing a new visible beat. */
+  private elapsedAtTimerStart = 0;
   private running = false;
 
   private readonly oneShotListeners: Array<() => void> = [];
@@ -86,9 +88,12 @@ export class BeatClock {
 
   /** Change tempo mid-flight. Reschedules the next beat from now. */
   setTempo(ms: number): void {
+    const elapsed = this.elapsedSinceBeat();
     this.tempoMs = ms;
     if (this.running) {
       this.timer?.remove();
+      this.timer = null;
+      this.elapsedAtTimerStart = elapsed;
       this.scheduleNext();
     }
   }
@@ -108,8 +113,7 @@ export class BeatClock {
    *  perceive rhythm — you commit just after the beat hits, not before it. */
   isInWindow(): boolean {
     if (!this.running) return true;
-    const since = this.scene.time.now - this.lastBeatAt;
-    return isOnBeat(since, this.getWindowMs());
+    return isOnBeat(this.elapsedSinceBeat(), this.getWindowMs());
   }
 
   /** True if right now is within the OFF-beat ("antiphon") window — the answer
@@ -118,20 +122,26 @@ export class BeatClock {
    *  Used for the antiphon (off-beat) enemy encounter. */
   isInOffbeatWindow(): boolean {
     if (!this.running) return true;
-    const since = this.scene.time.now - this.lastBeatAt;
-    return isOffBeat(since, this.tempoMs, this.getWindowMs());
+    return isOffBeat(this.elapsedSinceBeat(), this.tempoMs, this.getWindowMs());
+  }
+
+  /** TimerEvent.elapsed pauses with its owner, just like the visible pulse.
+   * Clock.now is global game time and jumps across a scene pause instead. */
+  private elapsedSinceBeat(): number {
+    return this.elapsedAtTimerStart + (this.timer?.elapsed ?? 0);
   }
 
   private scheduleNext(): void {
     this.timer = this.scene.time.delayedCall(this.tempoMs, () => {
       if (!this.running) return;
+      this.timer = null;
       this.fire();
       this.scheduleNext();
     });
   }
 
   private fire(): void {
-    this.lastBeatAt = this.scene.time.now;
+    this.elapsedAtTimerStart = 0;
     if (this.audio) playBellToll();
     this.onBeat?.();
     if (this.oneShotListeners.length > 0) {

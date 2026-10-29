@@ -2695,7 +2695,7 @@ export class SkyIslandScene extends Phaser.Scene {
       this.readThen(() => this.startLanternMothGate());
     };
     if (resume.reading === true) { response(); return; }
-    this.readThen(() => {
+    const begin = (): void => {
       this.checkpoint("answer-kindly", { typing: true });
       this.band.setObjective("Type you kept the light to answer the spirit.");
       const pos = this.skyOwnedWordPosition(this.kindAnswerCue, -56, "you kept the light", { side: "left" });
@@ -2704,7 +2704,8 @@ export class SkyIslandScene extends Phaser.Scene {
         onComplete: () => { playChime(); this.clearActiveTargets(); response(); },
       }, -56);
       this.registerActiveTarget(target);
-    });
+    };
+    if (resume.typing === true) begin(); else this.readThen(begin);
   }
 
   private startFork2CutTether(): void {
@@ -3372,10 +3373,13 @@ export class SkyIslandScene extends Phaser.Scene {
 
     if (this.spirits.every((s) => s.defeated)) {
       this.spirits = [];
+      // The bloom is presentation time: leaving during it must keep the wave cleared.
       if (this.templeIndex === -1) {
         // First encounter
+        this.checkpoint("first-spirits", { reading: true });
         this.time.delayedCall(1600, () => this.onFirstEncounterCleared());
       } else {
+        this.checkpoint("temple-cleared", { index: this.templeIndex });
         this.time.delayedCall(1600, () => this.onTempleCleared());
       }
     }

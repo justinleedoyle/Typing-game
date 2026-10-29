@@ -13,7 +13,7 @@ const url = new URL("../src/scenes/SkyIslandScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
 const methods = ["init", "checkpoint", "savedStageData", "resumeSky", "settleResumedActor", "resumePath", "resumeBoss", "restoreEttaBookPose", "resumeEttaBook", "finishRestoredEttaBook",
-  "runPathBeats", "startLanternLighter", "onLighterConvoComplete", "startFirstSpiritEncounter", "beginFirstSpiritEncounter", "startFirstSpiritEncounterFixed", "onFirstEncounterCleared",
+  "runPathBeats", "startLanternLighter", "onLighterConvoComplete", "startFirstSpiritEncounter", "beginFirstSpiritEncounter", "startFirstSpiritEncounterFixed", "defeatSpirit", "onFirstEncounterCleared",
   "startAct2", "startTemple", "onTempleCleared", "startSealedScrollTemple", "startEttaEncounter", "startEttaHelp", "moveEttaBook", "startFork1", "startFork1HelpEtta", "startFork1StealFlame", "startAct3",
   "startBossPhase1", "startBossPhase2", "startBossPhase3", "onBossDefeated", "startFork2", "startFork2KindEnding", "startFork2CutTether", "startLanternMothGate", "showMothAnswer", "restoreMothPerch",
   "startTrueNamePassage", "startEnding", "commitFork", "runPassageChain", "applyOneShot"];
@@ -40,7 +40,7 @@ function prop(x = 0, y = 0): any {
   return { x, y, scene: true, alpha: 1, angle: 0, scale: 1,
     setPosition(x: number, y: number) { this.x = x; this.y = y; return this; },
     setAlpha(n: number) { this.alpha = n; return this; }, setScale(n: number) { this.scale = n; return this; },
-    setAngle(n: number) { this.angle = n; return this; }, setDepth() { return this; }, setVisible() { return this; },
+    setAngle(n: number) { this.angle = n; return this; }, setDepth() { return this; }, setVisible() { return this; }, setTint() { return this; },
     getAt() { return prop(); }, getByName() { return this.paper ??= prop(); }, once: noop, destroy() { this.scene = false; } };
 }
 function fixture(initial?: SaveState, reduced = false) {
@@ -154,6 +154,28 @@ await suite("Sky restored staging: fresh entrances cannot later overwrite saved 
   assert(actorEntrance.cancelled && shadowEntrance.cancelled, "restored actor and planted shadow release stale entrance tweens together");
   assertEqual([etta.x, etta.y, etta.alpha, shadow.alpha], [520, 760, .9, .9], "the carried-book response begins with its original settled actor and shadow");
   await restored.flush();
+});
+
+await suite("Sky first spirits: actual final defeat survives reload during the bloom delay", async () => {
+  const f = fixture();
+  f.scene.spawnSpirit = () => f.scene.spirits.push({
+    defeated: false, container: prop(), glowGfx: prop(), lanternSprite: prop(),
+  });
+  f.scene.startFirstSpiritEncounterFixed();
+  const [first, last] = f.scene.spirits;
+  f.scene.defeatSpirit(first);
+  assertEqual(f.store.get().checkpoint?.data.reading, undefined, "a remaining spirit keeps the encounter unfinished");
+  f.stats.record(true); f.stats.record(false); f.stats.record(true);
+  f.scene.defeatSpirit(last);
+  assertEqual(f.gates.length, 0, "the original bloom still precedes its held response");
+  assertEqual(f.timers.at(-1)?.delay, 1600, "the native presentation delay remains unchanged");
+  const restored = await f.reload(); restored.scene.resumeSky();
+  assertEqual(restored.scene.spirits, [], "settled spirits never respawn after the final actual defeat");
+  assertEqual([restored.targets.length, restored.gates.length], [0, 1], "the cleared response is the only pending action");
+  assertEqual(restored.stats.captureCheckpoint(), f.stats.captureCheckpoint(), "completed encounter resources survive with the settled enemies");
+  restored.next(); assertEqual(restored.store.get().checkpoint?.step, "temple-intro", "the original Continue enters the temple introduction once");
+  f.timers.at(-1)!.callback(); assertEqual(f.gates.length, 1, "uninterrupted play still receives exactly one response");
+  await restored.flush(); await f.flush();
 });
 
 await suite("Sky encounters: restart uses entry resources and preserves completed one-shot consumption", async () => {
@@ -276,6 +298,9 @@ await suite("Sky boss: each actual answered riddle restores its response and pen
 
 await suite("Sky aftermath routes: kindly and cut passages preserve every committed answer and held response", async () => {
   const kind = fixture(); kind.scene.showFork2Cues(); kind.scene.startFork2KindEnding(); kind.next();
+  const pendingKind = await kind.reload(); pendingKind.scene.resumeSky();
+  assertEqual([pendingKind.targets.at(-1)?.word, pendingKind.gates.length], ["you kept the light", 0], "an acknowledged kind introduction restores its unfinished answer directly");
+  await pendingKind.flush();
   assertEqual(kind.targets.at(-1).word, "you kept the light", "kind answer keeps the original exact phrase"); kind.complete();
   const kindRestored = await kind.reload(); kindRestored.scene.resumeSky();
   assertEqual([kindRestored.targets.length, kindRestored.gates.length], [0, 1], "completed kind answer restores only the held response");

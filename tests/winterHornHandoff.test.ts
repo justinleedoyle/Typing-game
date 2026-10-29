@@ -11,10 +11,10 @@ const owner = source.statements.find(ts.isClassDeclaration)!;
 const names = ["init", "preload", "checkpoint", "savedStageData", "hasSavedPassage", "startHuntressBranch",
   "runPassageChain", "winterPassageOwnerBinding", "winterPassageWordPosition", "fadeOutHuntress",
   "clearHuntressHorn", "transferHuntressHorn", "presentWinterPassageReaction", "clearWinterForkCues", "onKeyDown", "makeWinterForkWord",
-  "addWinterAftermathPainting", "fitWinterAftermathPainting", "showCairnCue", "showPeltCue", "receivePeltVisual", "clearHeldPelt", "startFork2", "startAftermathPassage", "startFoxGate", "showFoxRefusalDeparture", "dismissFoxCompanion", "startTrueNamePassage"];
+  "addWinterAftermathPainting", "fitWinterAftermathPainting", "showCairnCue", "showPeltCue", "receivePeltVisual", "clearHeldPelt", "winterForkChoiceWordPosition", "startFork1", "fadeInHuntress", "showFireflyCue", "startFork2", "startAftermathPassage", "startFoxGate", "showFoxRefusalDeparture", "dismissFoxCompanion", "startTrueNamePassage"];
 const methods = names.map(name => owner.members.find(member => member.name?.getText(source) === name)!.getText(source));
 const passages = source.statements.filter(ts.isVariableStatement).flatMap(statement =>
-  statement.declarationList.declarations.filter(declaration => ["WAVE_CANDLES", "HUNTRESS_PASSAGES", "BURY_PASSAGES", "PELT_PASSAGES"].includes(declaration.name.getText(source)))
+    statement.declarationList.declarations.filter(declaration => ["WAVE_CANDLES", "WINTER_WREN_STAGE_Y", "HUNTRESS_PASSAGES", "BURY_PASSAGES", "PELT_PASSAGES"].includes(declaration.name.getText(source)))
     .map(declaration => `const ${declaration.getText(source)};`)).join("\n");
 const code = ts.transpileModule(`${passages}\nclass Winter { ${methods.join("\n")} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
@@ -25,6 +25,12 @@ const livingSource = ts.createSourceFile("livingScene.ts", readFileSync(new URL(
 const departure = livingSource.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "dismissCompanionCameo")!;
 const dismissCameoCode = ts.transpileModule(departure.getText(livingSource).replace(/^export /, ""), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 const dismissCameo = new Function(dismissCameoCode + "; return dismissCompanionCameo;")();
+const npcSource = ts.createSourceFile("winterNpcs.ts", readFileSync(new URL("../src/game/winterNpcs.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true);
+const huntressHeight = npcSource.statements.filter(ts.isVariableStatement).flatMap(statement => statement.declarationList.declarations)
+  .find(declaration => declaration.name.getText(npcSource) === "HUNTRESS_DISPLAY_HEIGHT")!;
+const huntressFactory = npcSource.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "makeHuntressSprite")!;
+const npcCode = ts.transpileModule(`const ${huntressHeight.getText(npcSource)};\n${huntressFactory.getText(npcSource).replace(/^export /, "")}`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+const makeHuntressSprite = new Function(npcCode + ";return makeHuntressSprite;")();
 const globals = {
   checkpointIndex, committedWinterChoices,
   reducedMotion: (scene: any) => scene.motionReduced,
@@ -33,6 +39,8 @@ const globals = {
   preloadSatchelIcons: (scene: any, ids: string[]) => { scene.preloadedIds.push(...ids); },
   preloadWren: noop, preloadWolves: noop, preloadWinterNpcs: noop,
   addLocalGroundShadow: () => ({}),
+  makeHuntressSprite, stageAnchoredSprite: noop, addContainerWake: noop, decorativeTween: noop,
+  addIdleBreath: (scene: any, body: any, options: any) => scene.testBreaths?.push({ body, ...options }),
   winterBackdrop: "fixture-backdrop", runaPortrait: "fixture-runa", snowFoxSprite: "fixture-fox",
   winterTrailBackdrop: "fixture-trail", fallenPineSprite: "fixture-pine",
   winterAftermathCairn: "fixture-cairn", winterAftermathPelt: "fixture-pelt",
@@ -81,7 +89,7 @@ function fixture(options: { reduced?: boolean; restored?: boolean; missingArt?: 
       update: (change: (value: typeof state) => void) => change(state),
       setCheckpoint: (checkpoint: any) => { state.checkpoint = structuredClone(checkpoint); checkpoints.push(state.checkpoint); },
     },
-    narration: { say: (line: string) => captions.push(line) },
+    narration: { say: (line: string) => captions.push(line), bottom: () => 300 },
     setNarrator: (text: string) => captions.push(text),
     readThen: (next: () => void) => gates.push(next),
     band: { setObjective: noop },
@@ -156,6 +164,23 @@ await suite("Winter horn: the actual two phrases transfer painted art before the
   f.timers.shift().next();
   assertEqual(f.waves, [2], "the original next wave starts exactly once");
   assertEqual(f.state.satchel, [], "the next wave still precedes the original ending award");
+});
+
+await suite("Winter Huntress passages: both actual words stay with her and the complete Horn phrase clears Wren", () => {
+  for (const captionBottom of [300, 430]) {
+    const f = fixture();
+    f.s.narration.bottom = () => captionBottom;
+    f.s.startHuntressBranch(2); f.continue();
+    f.targets[0].onComplete(); f.continue();
+    for (const target of f.targets) {
+      assertEqual([target.x, target.y], [f.s.huntressSprite.x, 576], "the live Huntress owns each unchanged passage rather than the generic center lane");
+      const halfWidth = target.word.length * target.fontSize * 0.6 / 2 + 24;
+      assert(target.x + halfWidth < f.s.wrenContainer.x - 90, "even the full Horn phrase stays outside Wren's hood lane");
+      assert(target.x - halfWidth > 180, "the entire phrase remains comfortably on screen");
+      assert(target.y - 36 > captionBottom + 24 && target.y + 36 < 622, "the complete phrase clears narration and the Huntress silhouette");
+    }
+    assertEqual(f.targets.map(target => target.word), ["free her hands", "she gives you her horn"], "physical alignment changes neither authored phrase");
+  }
 });
 
 await suite("Winter horn: final-letter input owns the actual320ms word exit before the handoff callback", () => {
@@ -332,6 +357,8 @@ const aftermathPaintings = {
   "winter-aftermath-cairn": aftermathPainting("../art/winter/aftermath-cairn.png"),
   "winter-aftermath-pelt": aftermathPainting("../art/winter/aftermath-pelt.png"),
 };
+const huntressBytes = readFileSync(new URL("../art/winter/huntress.png", import.meta.url));
+const huntressDimensions = { width: huntressBytes.readUInt32BE(16), height: huntressBytes.readUInt32BE(20) };
 
 function aftermathFixture(reduced = false) {
   const s = new Winter();
@@ -342,6 +369,7 @@ function aftermathFixture(reduced = false) {
   let foxEntries = 0;
   Object.assign(s, {
     motionReduced: reduced, fireflyCue: null, cairnCue: null, peltCue: null, huntressHornSprite: null, heldPeltSprite: null,
+    testBreaths: [],
     clearFireflyLantern: noop,
     huntressHornTransferToken: 0, huntressHornTransferPending: false, forkChoiceWordAnchors: [],
     fork1Choice: "huntress", fork2Choice: null, foxDecided: true, foxSpared: true, candles: 3,
@@ -372,8 +400,9 @@ function aftermathFixture(reduced = false) {
         };
         bodies.push(body); return body;
       },
-      image(x: number, y: number, key: keyof typeof aftermathPaintings) {
-        const picture: any = { x, y, key, ...aftermathPaintings[key], scene: true, scale: 1, destroyed: 0,
+      image(x: number, y: number, key: keyof typeof aftermathPaintings | "huntress") {
+        const dimensions = key === "huntress" ? huntressDimensions : aftermathPaintings[key];
+        const picture: any = { x, y, key, ...dimensions, scene: true, scale: 1, destroyed: 0, once: noop,
           setOrigin(x: number, y: number) { this.originX = x; this.originY = y; return this; },
           setScale(scale: number) { this.scale = scale; return this; },
           setName(name: string) { this.name = name; return this; },
@@ -384,12 +413,88 @@ function aftermathFixture(reduced = false) {
         };
         images.push(picture); return picture;
       },
+      graphics() {
+        return { circles: [] as Array<{ x: number; y: number; radius: number }>,
+          fillStyle() { return this; },
+          fillCircle(x: number, y: number, radius: number) { this.circles.push({ x, y, radius }); return this; },
+        };
+      },
       existing: noop,
     },
   });
   return { s, bodies, images, tweens, gates, targets, state, timers, tasks, foxEntries: () => foxEntries,
     next() { const next = gates.shift(); assert(next, "the original aftermath response is held"); next!(); } };
 }
+
+function assertNearbyWinterChoice(target: any, top: number, captionBottom: number): void {
+  // A generous full-banner envelope: the live words use30/32px serif type.
+  const halfWidth = target.word.length * target.fontSize * 0.6 / 2 + 24;
+  assert(target.y + 36 < top, "the complete choice banner clears its actual subject silhouette");
+  assert(top - target.y - 36 < 60, "the choice no longer leaves a detached stretch of empty world above its subject");
+  assert(target.y - 36 > captionBottom + 24, "the complete choice banner also clears the narration card");
+  assert(target.x + halfWidth < 870 || target.x - halfWidth > 1050,
+    "even a conservative full-width banner clears Wren's central hood lane");
+}
+
+await suite("Winter fork labels: original choices sit close to their own Huntress and actual firefly glow", () => {
+  for (const reduced of [false, true]) for (const captionBottom of [300, 430]) {
+    const f = aftermathFixture(reduced);
+    const entered: Array<[string, number]> = [];
+    Object.assign(f.s, {
+      fork1Choice: null, narration: { say: noop, bottom: () => captionBottom },
+      startHuntressBranch: (wave: number) => entered.push(["huntress", wave]),
+      startFireflyBranch: (wave: number) => entered.push(["firefly", wave]),
+    });
+    f.s.startFork1(2);
+    const huntress = f.s.huntressSprite, fireflies = f.s.fireflyCue;
+    const entrance = f.tweens.find(tween => tween.targets === fireflies && typeof tween.y === "number");
+    fireflies.y = entrance.y; entrance.onComplete?.();
+    assertEqual(f.targets.map(target => target.word), ["save the huntress", "follow the fireflies"], "the original native alternatives and order stay exact");
+    const huntressTop = huntress.y - huntress.height * huntress.scale;
+    const glow = fireflies.children.find((child: any) => child.circles);
+    const breath = f.s.testBreaths.find((item: any) => item.body === fireflies);
+    const glowTop = fireflies.y + Math.min(...glow.circles.map((circle: any) => circle.y - circle.radius)) + Math.min(0, breath.dy);
+    for (const [target, body, top] of [[f.targets[0], huntress, huntressTop], [f.targets[1], fireflies, glowTop]]) {
+      assertEqual(target.x, body.x, "each choice uses its own physical subject's actual column");
+      assertNearbyWinterChoice(target, top, captionBottom);
+      target.onAdvance(1, target.word.length);
+      assertEqual(bodyPulses.at(-1), body, "typing feedback remains attached to that same subject rather than Wren or another cue");
+    }
+    assertEqual([huntress.x, huntress.y, fireflies.x, fireflies.y], [560, 842, 1330, 774], "closer labels move no physical subject or its settled footing");
+    assertEqual([f.state.checkpoint.step, f.state.satchel], ["fork1", []], "the existing checkpoint and unrewarded choice state are unchanged");
+    f.targets[0].onComplete();
+    assertEqual(entered, [["huntress", 2]], "the original Huntress action still enters the same next-wave branch");
+  }
+  const f = aftermathFixture();
+  let resumedWave = -1;
+  Object.assign(f.s, { fork1Choice: null, startFireflyBranch: (wave: number) => { resumedWave = wave; } });
+  f.s.startFork1(2); f.targets[1].onComplete();
+  assertEqual([f.s.fork1Choice, resumedWave], ["firefly", 2], "the opposite native choice retains its original consequence too");
+});
+
+await suite("Winter aftermath labels: original banners clear real painted bounds and keep narration protection", () => {
+  for (const reduced of [false, true]) for (const captionBottom of [300, 430]) {
+    const f = aftermathFixture(reduced);
+    f.s.narration.bottom = () => captionBottom;
+    f.s.startFork2();
+    for (const [target, body] of [[f.targets[0], f.s.cairnCue], [f.targets[1], f.s.peltCue]]) {
+      const image = body.children.find((child: any) => child.key);
+      const top = body.y + image.y + (image.top - image.height * image.originY) * image.scale;
+      assertEqual(target.x, body.x, "cairn and pelt choices align to their own painted footprint rather than the former generic columns");
+      assertNearbyWinterChoice(target, top, captionBottom);
+      assertEqual(target.frame, "banner", "the existing readable word presentation stays intact");
+    }
+    assertEqual([f.s.cairnCue.x, f.s.cairnCue.y, f.s.peltCue.x, f.s.peltCue.y], [650, 792, 1270, 790], "the aftermath props retain their original snow contact and geometry");
+    assertEqual(f.state.checkpoint.step, "fork2", "only the existing unanswered aftermath checkpoint is written");
+    f.s.narration.bottom = () => 650;
+    for (const kind of ["huntress", "firefly", "cairn", "pelt"]) {
+      assert(f.s.winterForkChoiceWordPosition(kind).y >= 728, "the previous narration-bottom plus78px protection remains available for taller copy");
+    }
+    f.s.cairnCue.x += 24; f.s.peltCue.x -= 24;
+    assertEqual(f.s.winterForkChoiceWordPosition("cairn").x, f.s.cairnCue.x, "cairn identity resolves the actual live cue");
+    assertEqual(f.s.winterForkChoiceWordPosition("pelt").x, f.s.peltCue.x, "pelt identity cannot accidentally resolve another sprite");
+  }
+});
 
 await suite("Winter painted aftermath: actual alpha footprints stay planted at the existing floor and label origins", () => {
   for (const reduced of [false, true]) {
@@ -422,7 +527,7 @@ await suite("Winter painted aftermath: both exact choices, passage responses and
   for (const reduced of [false, true]) for (const choice of ["bury", "pelt"]) {
     const f = aftermathFixture(reduced);
     f.s.startFork2();
-    assertEqual(f.targets.map(target => [target.word, target.x, target.y]), [["bury the pack leader", 590, 510], ["take the pelt", 1450, 510]], "the two native choice words and label positions remain unchanged");
+    assertEqual(f.targets.map(target => target.word), ["bury the pack leader", "take the pelt"], "the two native choice words retain their original order");
     const chosen = choice === "bury" ? f.s.cairnCue : f.s.peltCue;
     const unused = choice === "bury" ? f.s.peltCue : f.s.cairnCue;
     f.targets[choice === "bury" ? 0 : 1].onComplete();
@@ -431,6 +536,7 @@ await suite("Winter painted aftermath: both exact choices, passage responses and
     for (const [index, word] of phrases.entries()) {
       const target = f.targets.at(-1);
       assertEqual(target.word, word, "each authored passage remains exact");
+      assertEqual([target.x, target.y], [chosen.x, 660], "each live aftermath phrase stays above its actual selected painted prop");
       target.onClaim({ spell: false, alt: false }); target.onAdvance(word.length, word.length);
       target.onComplete();
       assert(chosen.scene, "the selected painted subject stays for the existing held response");

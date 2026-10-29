@@ -76,7 +76,7 @@ function fixture(initial?: SaveState, reduced = false) {
     showEtta() { scene.ettaSprite ??= prop(); }, hideEtta() { scene.ettaSprite = null; },
     showEttaBookCue() { scene.ettaBookCue ??= prop(760, 826); scene.ettaBookShelf ??= prop(1260, 826); scene.ettaBookGroundShadow ??= prop(760, 828); return scene.ettaBookCue; },
     fadeOutForkCue: noop, showFork1Cues() { scene.ettaSprite = prop(); scene.beaconFlameCue = prop(); },
-    showFork2Cues() { scene.kindAnswerCue = prop(); scene.tetherThreadCue = prop(); },
+    showFork2Cues() { scene.kindAnswerCue = prop(); scene.tetherThreadCue = prop(); scene.fork2Scholar = prop(776,710); scene.beaconFlameCue = prop(1140,792); },
     dimBeaconFlameVisual() { scene.dimmed = true; }, takeBeaconSparkVisual() { scene.taken = true; scene.heldBeaconSpark = prop(); }, clearHeldBeaconSpark: noop,
     drawScholarSpirit: () => prop(960, 400), scholarBossWordPosition: () => ({ x: 960, y: 500 }), tweenBossBow: noop, flashBossEyes: noop, spawnBossLanternBurst: noop,
     showLanternMothCompanion() { scene.lanternMothCompanion ??= prop(1160, 650); }, pulseLanternMothCompanion: noop,

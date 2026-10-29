@@ -2,9 +2,11 @@ import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import type Phaser from "phaser";
+import { EventEmitter } from "node:events";
 import { woodIndex } from "../src/game/woodCheckpoint";
 import { checkpointIndex, committedWinterChoices, openingStep, readingAction, winterStep } from "../src/game/chapterFlow";
 import { ChapterReading } from "../src/game/ui/chapterReading";
+import { PRESENTATION_CHANGED } from "../src/game/presentation";
 
 assert.equal(readingAction("Enter"), "continue");
 assert.equal(readingAction(" "), "continue");
@@ -63,10 +65,10 @@ class ReadingDisplay {
 }
 const displays: ReadingDisplay[] = [];
 const display = () => { const value = new ReadingDisplay(); displays.push(value); return value; };
-let listeners = 0;
+const readingEvents = new EventEmitter();
+const readingBindings: Array<{ event: string; callback: () => void; context: unknown; bound: () => void }> = [];
 const clock = { now: 0 };
 let readingTextScale: "standard" | "large" = "standard";
-let presentationRedraw: (() => void) | null = null;
 const readingScene = {
   time: clock,
   scale: { width: 1920 },
@@ -78,9 +80,20 @@ const readingScene = {
   } },
   data: { get: () => ({ get: () => ({ textScale: readingTextScale }) }) },
   events: {
-    on: (_event: string, callback: () => void, context: unknown) => {
-      listeners += 1; presentationRedraw = () => callback.call(context);
-    }, off: () => { listeners -= 1; },
+    on: (event: string, callback: () => void, context: unknown) => {
+      const bound = () => callback.call(context);
+      readingBindings.push({ event, callback, context, bound });
+      readingEvents.on(event, bound);
+    },
+    off: (event: string, callback: () => void, context: unknown) => {
+      const binding = readingBindings.find(value => value.event === event && value.callback === callback && value.context === context);
+      if (binding) {
+        readingEvents.off(event, binding.bound);
+        readingBindings.splice(readingBindings.indexOf(binding), 1);
+      } else readingEvents.off(event, callback);
+    },
+    once: (event: string, callback: () => void) => readingEvents.once(event, callback),
+    emit: (event: string) => readingEvents.emit(event),
   },
 } as unknown as Phaser.Scene;
 const gate = new ChapterReading(readingScene, 316);
@@ -101,7 +114,7 @@ assert(primaryHint.fontSize > replayHint.fontSize && replayHint.fontSize >= 17,
   "Continue leads while the secondary control remains readable");
 assert(!displays.some((value) => value.text.includes("Esc")), "the central hint does not duplicate persistent pause chrome");
 readingTextScale = "large";
-(presentationRedraw as (() => void) | null)?.();
+readingEvents.emit(PRESENTATION_CHANGED);
 assert.equal(primaryHint.fontSize, 28);
 assert.equal(replayHint.fontSize, 22, "large text enlarges the replay control too");
 assert.equal(primaryHint.y, 316);
@@ -135,9 +148,25 @@ assert.equal(continued, 2, "replay never becomes an accidental credit exit");
 assert.equal(key("Enter"), true);
 assert.equal(continued, 3, "credits retain a deliberate exit");
 gate.destroy();
-assert.equal(listeners, 0, "shutdown removes the presentation listener");
+assert.equal(readingEvents.eventNames().length, 0, "destroy removes presentation and shutdown listeners");
 assert(displays.every((value) => value.destroyed && !value.visible), "shutdown removes the reading UI");
 console.log("chapterFlow: actual reading gate protects deliberate progression and replay");
+
+const readingTransitions: boolean[] = [];
+readingEvents.on(ChapterReading.STATE_CHANGED, () => readingTransitions.push(ChapterReading.activeIn(readingScene)));
+const oldReader = new ChapterReading(readingScene, 316);
+const replacementReader = new ChapterReading(readingScene, 316);
+oldReader.show(() => {}, null);
+oldReader.show(() => {}, null);
+replacementReader.show(() => {}, null);
+oldReader.destroy();
+assert(ChapterReading.activeIn(readingScene), "destroying an older card cannot clear its replacement");
+assert.deepEqual(readingTransitions, [true], "the shared channel publishes state changes rather than repeated redraws");
+readingEvents.emit("shutdown");
+assert(!ChapterReading.activeIn(readingScene), "a scene shutdown clears its held-card ownership");
+assert.deepEqual(readingTransitions, [true, false]);
+replacementReader.destroy();
+console.log("chapterFlow: shared held-card ownership survives replacement and clears on shutdown");
 
 // Run the actual layout method against the photographed cairn/actor geometry.
 // The renderer is unnecessary for this label-placement regression.
@@ -146,7 +175,8 @@ const winterSource = ts.createSourceFile(winterPath.pathname, readFileSync(winte
   ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 const winterClass = winterSource.statements.find(ts.isClassDeclaration)!;
 const passageMethod = winterClass.members.find((member) => member.name?.getText(winterSource) === "winterPassageWordPosition")!;
-const passageCode = ts.transpileModule(`class Harness { ${passageMethod.getText(winterSource)} }`, {
+const choiceMethod = winterClass.members.find((member) => member.name?.getText(winterSource) === "winterForkChoiceWordPosition")!;
+const passageCode = ts.transpileModule(`class Harness { ${choiceMethod.getText(winterSource)} ${passageMethod.getText(winterSource)} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;
 const PassageLayout = new Function("Phaser", `${passageCode}; return Harness;`)({
@@ -154,7 +184,7 @@ const PassageLayout = new Function("Phaser", `${passageCode}; return Harness;`)(
 });
 const cairn = { scene: true, x: 650, y: 792 };
 const winter = new PassageLayout();
-Object.assign(winter, { scale: { width: 1920, height: 1080 }, cairnCue: cairn });
+Object.assign(winter, { scale: { width: 1920, height: 1080 }, cairnCue: cairn, narration: { bottom: () => 300 } });
 for (const word of ["carry the stones", "let him rest here"]) {
   const position = winter.winterPassageWordPosition(cairn, -42, word);
   const generousHalfWidth = word.length * 18 / 2;
@@ -172,9 +202,16 @@ for (const y of [808, 790]) for (const word of ["claim the pelt", "carry it home
   assert(position.x + generousHalfWidth < 1740, "the pelt passage remains inside the clear right reading lane");
   assert(position.y >= 280 && position.y <= 670, "the pelt passage keeps the established reading height");
 }
-const lantern = { scene: true, x: 1330, y: 790 };
-assert.deepEqual(winter.winterPassageWordPosition(lantern, -34, "take the lantern"),
-  { x: 1150, y: 654 }, "the firefly/lantern passage keeps its existing placement");
+let hollowVisible = false;
+const lantern = { scene: true, x: 1330, y: 790, getByName: (name: string) => hollowVisible && name === "winter-firefly-hollow" ? {} : null };
+winter.fireflyCue = lantern;
+assert.deepEqual(winter.winterPassageWordPosition(lantern, -34, "follow the lights"),
+  { x: 1330, y: 650 }, "the live firefly passage stays over the actual light group instead of Wren");
+hollowVisible = true;
+assert.deepEqual(winter.winterPassageWordPosition(lantern, -4, "take the lantern"),
+  { x: 1250, y: 650 }, "the take passage follows the real hollow80px left of its tree owner");
+assert.deepEqual(winter.winterPassageWordPosition({ scene: true, x: 1330, y: 790 }, -34, "take the lantern"),
+  { x: 1150, y: 654 }, "unrecognized owners retain their existing generic placement");
 console.log("chapterFlow: actual cairn and pelt passage layouts stay clear of Wren");
 
 // These are the real revisit methods, exercised against the photographed actor

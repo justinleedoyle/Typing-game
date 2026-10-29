@@ -8,6 +8,7 @@ import { addIdleBreath, addLocalGroundShadow } from "../game/livingScene";
 import { applySceneActorLighting } from "../game/actorLighting";
 import { reducedMotion } from "../game/presentation";
 import { makeWrenSprite, preloadWren } from "../game/wren";
+import { makeSiblingDrawing } from "../game/siblingDrawing";
 import { SERIF } from "../game/palette";
 import { cornerTicks, UI_CSS, UI_HEX } from "../game/ui/uiTheme";
 import study from "../../art/references/opening-typewriter-study-clean.png";
@@ -28,9 +29,14 @@ export class HomecomingScene extends Phaser.Scene {
   private wrenActor: Phaser.GameObjects.Container | null = null;
   private siblingActor: Phaser.GameObjects.Container | null = null;
   private reunionActor: Phaser.GameObjects.Container | null = null;
+  private returnedDrawing: Phaser.GameObjects.Graphics | null = null;
+  private deskAlmanac: Phaser.GameObjects.Graphics | null = null;
+  private drawingOnDesk = false;
+  private returningDrawing = false;
 
   constructor() { super("HomecomingScene"); }
   init(data: { store: SaveStore }): void {
+    this.clearDrawingReturn();
     this.store = data.store;
     this.leaving = false;
     this.wrenActor = null;
@@ -68,37 +74,112 @@ export class HomecomingScene extends Phaser.Scene {
     sprite.setScale(320 / sprite.height);
     wren.add(sprite);
     addIdleBreath(this, wren, { dy: -2, durationMs: 2600 });
+    this.showCarriedDrawing();
     const gender = this.store.get().wrenGender;
     if (gender) this.siblingActor = this.actor(gender === "boy" ? "homecoming-saga" : "homecoming-magnus", 1430, 950, gender === "boy" ? 270 : 350);
     this.narration = new NarrationManager(this, { store: this.store, framed: true, y: 260, depth: 20 });
     this.reading = new ChapterReading(this, 1005);
     const lines = homecomingLines(gender);
     const show = (index: number): void => {
+      if (this.leaving) return;
       if (index === lines.length) { title.setText("The Portalwright's Almanac"); this.showCredits(); return; }
+      if (index === 2) this.closeDeskAlmanac();
       const line = lines[index];
+      const finishReading = (): void => {
+        if (this.leaving) return;
+        this.reading.show(() => show(index + 1), () => this.narration.replay());
+      };
       const present = (): void => {
         if (this.leaving) return;
         this.narration.sayRaw(line.text, { speakerName: line.speaker });
-        this.reading.show(() => show(index + 1), () => this.narration.replay());
+        finishReading();
       };
       if (index === 1 && gender) {
         this.narration.clear();
-        this.showSiblingEmbrace(present);
+        if (gender === "boy") {
+          this.narration.sayRaw(line.text, { speakerName: line.speaker });
+          this.returnDrawingToDesk(() => this.showSiblingEmbrace(finishReading));
+        } else this.showSiblingEmbrace(present);
       } else present();
     };
     show(0);
     const onKey = (event: KeyboardEvent): void => {
+      if (this.leaving) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (this.menu?.handleKey(event)) return;
       this.reading.handleKey(event);
     };
     this.input.keyboard?.on("keydown", onKey);
     this.events.once("shutdown", () => {
+      this.leaving = true;
+      this.clearDrawingReturn();
       this.input.keyboard?.off("keydown", onKey);
       this.reading.destroy();
       this.menu?.destroy();
     });
     this.cameras.main.fadeIn(reducedMotion(this) ? 0 : 700, 11, 10, 15);
+  }
+  private showCarriedDrawing(): void {
+    if (this.store.get().wrenGender !== "boy" || !this.wrenActor || this.returnedDrawing) return;
+    const book = this.add.graphics().setPosition(708, 655).setDepth(0.5);
+    // A small open cover rests on the painted desktop, beside the return spot.
+    book.fillStyle(0x3c2d29, .95).fillRoundedRect(-41, -21, 82, 43, 3);
+    book.fillStyle(0xd8c7a5, .94).fillRoundedRect(-37, -18, 74, 35, 2);
+    book.lineStyle(2, 0x9c7847, .8).lineBetween(0, -17, 0, 17);
+    book.lineStyle(1, 0x80694b, .4);
+    for (const x of [-30, 8]) for (const y of [-8, -1, 6]) book.lineBetween(x, y, x + 22, y);
+    book.setScale(1, .58).setAngle(-7);
+    this.deskAlmanac = book;
+    const drawing = makeSiblingDrawing(this).setPosition(20, -112);
+    this.wrenActor.add(drawing);
+    this.returnedDrawing = drawing;
+  }
+  private returnDrawingToDesk(onReady: () => void): void {
+    const drawing = this.returnedDrawing;
+    const wren = this.wrenActor;
+    if (this.leaving) return;
+    if (!drawing?.scene || !wren?.scene || this.drawingOnDesk) { onReady(); return; }
+    if (this.returningDrawing) return;
+    this.returningDrawing = true;
+    const current = (): boolean => !this.leaving && !!drawing.scene && this.returnedDrawing === drawing;
+    const settle = (): void => {
+      if (!current()) return;
+      drawing.setPosition(786, 664).setScale(1.3, .7).setAngle(-7).setDepth(3);
+      this.drawingOnDesk = true;
+      this.returningDrawing = false;
+      onReady();
+    };
+    const place = (): void => {
+      if (!current()) return;
+      const at = drawing.getWorldTransformMatrix().transformPoint(0, 0);
+      wren.remove(drawing);
+      drawing.setPosition(at.x, at.y).setDepth(3);
+      if (reducedMotion(this)) { settle(); return; }
+      this.tweens.add({ targets: drawing, x: 786, y: 664, scaleX: 1.3, scaleY: .7, angle: -7,
+        duration: 650, ease: "Sine.easeInOut", onComplete: settle });
+    };
+    if (reducedMotion(this)) { place(); return; }
+    this.tweens.add({ targets: drawing, scaleX: 1.5, scaleY: 1.3,
+      duration: 300, ease: "Sine.easeInOut", onComplete: place });
+  }
+  private clearDrawingReturn(): void {
+    if (this.returnedDrawing?.scene) {
+      this.tweens?.killTweensOf(this.returnedDrawing);
+      this.returnedDrawing.destroy();
+    }
+    if (this.deskAlmanac?.scene) this.deskAlmanac.destroy();
+    this.returnedDrawing = null;
+    this.deskAlmanac = null;
+    this.drawingOnDesk = false;
+    this.returningDrawing = false;
+  }
+  private closeDeskAlmanac(): void {
+    const book = this.deskAlmanac;
+    if (!book?.scene) return;
+    book.clear().fillStyle(0x3c2d29, .95).fillRoundedRect(-41, -21, 82, 43, 3);
+    book.lineStyle(2, 0xb18b4c, .85).strokeRoundedRect(-37, -17, 74, 35, 2);
+    book.lineStyle(1, 0xb18b4c, .6).strokeCircle(0, 0, 8);
+    book.lineBetween(-11, 0, 11, 0).lineBetween(0, -11, 0, 11);
   }
   private actor(texture: string, x: number, y: number, height: number): Phaser.GameObjects.Container {
     const actor = this.add.container(x, y).setDepth(1);
@@ -111,6 +192,7 @@ export class HomecomingScene extends Phaser.Scene {
     return actor;
   }
   private showSiblingEmbrace(onReady: () => void): void {
+    if (this.leaving) return;
     const gender = this.store.get().wrenGender;
     if (!gender || !this.wrenActor?.scene || !this.siblingActor?.scene || this.reunionActor?.scene) {
       onReady();
@@ -129,7 +211,7 @@ export class HomecomingScene extends Phaser.Scene {
     this.tweens.killTweensOf(wren);
     this.tweens.killTweensOf(sibling);
     const settle = (): void => {
-      if (this.leaving || !pair.scene) return;
+      if (this.leaving || !pair.scene || this.reunionActor !== pair) return;
       wren.setVisible(false);
       sibling.setVisible(false);
       pair.setVisible(true);
@@ -163,6 +245,7 @@ export class HomecomingScene extends Phaser.Scene {
   private returnToLibrary(): void {
     if (this.leaving) return;
     this.leaving = true;
+    this.clearDrawingReturn();
     this.scene.start("PortalChamberScene", { store: this.store, arrival: "great-battle" });
   }
 }

@@ -235,12 +235,13 @@ await suite("Sky final choice: painted subjects and connected tether clear uncha
     const f = fork2Fixture(reduced, fork1); f.s.startFork2();
     const spirit = f.s.fork2Scholar, beacon = f.s.beaconFlameCue, tether = f.s.fork2Tether;
     assert(spirit?.scene && beacon?.scene && tether?.scene, "the choice names an actual visible spirit, beacon and joining thread");
-    assertEqual(f.targets.map(t => [t.word, t.x, t.y]), [["answer kindly", 520, 640], ["cut the tether", 1400, 638]], "both original choice words retain their exact anchors");
-    assertEqual(f.anchors.map(a => a.options.sourceOffsetY), [-56, -58], "the existing source anchors and feedback offsets are preserved");
+    assertEqual(f.targets.map(t => [t.word, t.x, t.y]), [["answer kindly", 776, 530], ["cut the tether", 1140, 530]], "original choice words sit directly above the actual subjects");
+    assertEqual(f.anchors.map(a => a.options.sourceOffsetY), [-42, -95], "claim lines reach the visible spirit and actual tether endpoint");
     const body = paintedBounds(spirit.getByName("fading-scholar"), spirit);
     const base = paintedBounds(beacon.getByName("beacon-brazier"), beacon);
     assertClose(base.bottom, 792, 0.1, "the real alpha silhouette rests on the paving");
-    assert(body.left > 480 + 205 + 8 && base.right < 1400 - 180 - 4, "paintings clear even the longer branch phrase plates in their unchanged lanes");
+    assert(f.targets.every(target => target.y + 38 < Math.min(body.top, base.top, 581)), "complete command plates clear both painted subjects and Wren's highest hood");
+    assertEqual(f.anchors.map(anchor => anchor.body), [spirit, beacon], "feedback belongs to the real visible subjects rather than empty choice markers");
     assert(body.right < 960 - 90 - 8 && base.left > 960 + 90 + 8, "both painted subjects clear Wren's full cloak lane");
     const points = tether.children[0].points;
     assert(points.length > 2 && points[0].x > body.left && points[0].x < body.right && points[0].y > body.top && points[0].y < body.bottom,

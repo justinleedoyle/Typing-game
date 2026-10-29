@@ -475,6 +475,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // tiles ("always on"); the offensive one-shots drop in as charge cards. This
     // replaces the floating top-right HUD and the centered one-shot stack.
     this.band = new ConsoleBand(this, {
+      activity: () => (
+        this.waveActive
+        || (Boolean(this.bossContainer?.scene) && this.activeTargets.some(target => !target.isComplete()))) ? "combat" : "story",
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,

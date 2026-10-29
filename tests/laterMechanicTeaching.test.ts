@@ -635,7 +635,7 @@ await suite("Wounded fox answer: an ignored fox is gone before the held departur
   }
 });
 
-await suite("Sky fork passages: words stay on the clear side of their cue", () => {
+await suite("Sky fork passages: words track their visible subject and clear Wren", () => {
   const noop = () => {};
   const Position = actualMethod(sky, "skyOwnedWordPosition", {
     Phaser: { Math: { Clamp: (value: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, value)) } },
@@ -645,7 +645,7 @@ await suite("Sky fork passages: words stay on the clear side of their cue", () =
   let next: (() => void) | undefined;
   let target: { word: string; x: number; y: number } | undefined;
   Object.assign(s, {
-    scale: { width: 1920, height: 1080 }, kindAnswerCue: { scene: {}, x: 700, y: 778 },
+    scale: { width: 1920, height: 1080 }, fork2Scholar: { scene: {}, x: 776, y: 710 }, fork2Tether: { scene: {} },
     skyOwnedWordPosition: Position.prototype.skyOwnedWordPosition,
     commitFork: (_fork: string, choice: string) => choice,
     fadeOutForkCue: noop, band: { setObjective: noop }, setNarrator: noop,
@@ -657,11 +657,12 @@ await suite("Sky fork passages: words stay on the clear side of their cue", () =
   assert(!target, "the kind response retains its readable introductory gate");
   next!();
   assertEqual(target!.word, "you kept the light", "the original accepted phrase is unchanged");
-  assert(target!.x < s.kindAnswerCue.x, "the kind phrase is on the empty left side instead of over Wren's central hood");
+  assertEqual(target!.x, s.fork2Scholar.x, "the kind phrase is directly above the visible spirit");
+  assert(target!.y + 38 < 581, "the complete phrase clears Wren's highest hood position");
 
   for (const [method, field, x, y, offset] of [
     ["startFork1StealFlame", "beaconFlameCue", 1320, 770, -76],
-    ["startFork2CutTether", "tetherThreadCue", 1220, 778, -58],
+    ["startFork2CutTether", "beaconFlameCue", 1140, 792, -95],
   ] as const) {
     const Branch = actualMethod(sky, method);
     const b = new Branch();
@@ -678,8 +679,11 @@ await suite("Sky fork passages: words stay on the clear side of their cue", () =
     gate!();
     assertEqual(owner!.side, "right", `${method} explicitly uses the outer side of its right-hand prop`);
     assertEqual(owner!.sourceOffsetY, offset, "the existing prop attachment remains unchanged");
+    s.beaconFlameCue = method === "startFork2CutTether" ? owner!.body : null;
     const pos = s.skyOwnedWordPosition(owner!.body, offset, "the shown passage", { side: owner!.side });
-    assert(pos.x > owner!.body.x, "the opposite route also keeps the phrase away from Wren's central body");
+    if (method === "startFork2CutTether") {
+      assertEqual([pos.x, pos.y], [1140, 530], "the final cut phrase stays above the real masonry endpoint");
+    } else assert(pos.x > owner!.body.x, "the earlier flame phrase keeps its original clear outer lane");
   }
 });
 

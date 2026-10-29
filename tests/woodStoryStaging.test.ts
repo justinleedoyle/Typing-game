@@ -67,8 +67,9 @@ await suite("Wood shrine phrases: real offering and flute actions clear Wren whi
         const target = f.targets[index]!;
         assertEqual(target.word, words[index], "the native phrase and punctuation are unchanged");
         assertEqual(target.body, owner, "the target remains attached to its original ground prop");
-        assertEqual(target.x, method === "startFork1Offering" ? 505 : 1045, "the existing owner-specific horizontal lane is preserved");
-        assert(target.y + 30 < 826 - 240 - 5, "the whole 36px phrase and idle float clear Wren's highest hood position");
+        assertEqual(target.x, owner.x, "the phrase is centered over its actual rooted prop");
+        assertEqual(target.y, owner.y - 200, "the phrase stays near the prop through its authored vertical range");
+        assert(Math.abs(target.x - 960) > 230, "the 36px phrase clears Wren horizontally instead of floating above his hood");
         assert(target.y - 30 > 360, "the phrase remains below the reading-card lane");
         target.onComplete();
         assertEqual(f.state.satchel, [], "the held phrase result does not award its item early");

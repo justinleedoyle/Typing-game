@@ -514,6 +514,7 @@ export class WinterMountainScene extends Phaser.Scene {
     // UI cohesion — the console band houses the meters + Winter's candle/thunder
     // status. Realm 1 has no satchel, so those dock in the satchel zone.
     this.band = new ConsoleBand(this, {
+      activity: () => (this.waveActive || this.coldDecayTimer !== null) ? "combat" : "story",
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: [],
@@ -1801,7 +1802,7 @@ export class WinterMountainScene extends Phaser.Scene {
   private makeWinterForkWord(
     body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined,
     opts: TextWordTargetOptions,
-    vfx: { kind: "snow" | "mote"; color: number; sourceOffsetY: number },
+    vfx: { kind: "snow" | "mote"; color: number; sourceOffsetX?: number; sourceOffsetY: number },
   ): TextWordTarget {
     if (!body?.scene) return this.makeWord(opts);
 
@@ -1825,13 +1826,14 @@ export class WinterMountainScene extends Phaser.Scene {
           this,
           this.wrenContainer.x,
           this.wrenContainer.y - 112,
-          body.x,
+          body.x + (vfx.sourceOffsetX ?? 0),
           body.y + vfx.sourceOffsetY,
           { color: vfx.color, depth: 58 },
         );
         playBodyTypePulse(this, body, {
           kind: vfx.kind,
           color: vfx.color,
+          offsetX: vfx.sourceOffsetX ?? 0,
           offsetY: vfx.sourceOffsetY,
           depth: 58,
           ringRadius: 24,
@@ -1842,6 +1844,7 @@ export class WinterMountainScene extends Phaser.Scene {
         playBodyTypePulse(this, body, {
           kind: vfx.kind,
           color: vfx.color,
+          offsetX: vfx.sourceOffsetX ?? 0,
           offsetY: vfx.sourceOffsetY,
           depth: 58,
           ringRadius: 22,
@@ -1853,6 +1856,7 @@ export class WinterMountainScene extends Phaser.Scene {
         playBodyImpact(this, body, {
           kind: vfx.kind,
           color: vfx.color,
+          offsetX: vfx.sourceOffsetX ?? 0,
           offsetY: vfx.sourceOffsetY,
           depth: 58,
           ringRadius: 44,
@@ -1870,6 +1874,7 @@ export class WinterMountainScene extends Phaser.Scene {
         color: vfx.color,
         alpha: 0.18,
         depth: 44,
+        sourceOffsetX: vfx.sourceOffsetX ?? 0,
         sourceOffsetY: vfx.sourceOffsetY,
         targetOffsetY: 24,
       },
@@ -2298,6 +2303,20 @@ export class WinterMountainScene extends Phaser.Scene {
     });
   }
 
+  private winterForkChoiceWordPosition(kind: "huntress" | "firefly" | "cairn" | "pelt"): { x: number; y: number } {
+    const subjects = {
+      huntress: { body: this.huntressSprite, x: 560, y: 576 },
+      firefly: { body: this.fireflyCue, x: 1330, y: 650 },
+      cairn: { body: this.cairnCue, x: 650, y: 660 },
+      pelt: { body: this.peltCue, x: 1270, y: 660 },
+    };
+    const subject = subjects[kind];
+    return {
+      x: subject.body?.scene ? subject.body.x : subject.x,
+      y: Math.max(subject.y, this.narration.bottom() + 78),
+    };
+  }
+
   private startFork1(nextWave: number): void {
     if (this.fork1Choice === "huntress") { this.startHuntressBranch(nextWave); return; }
     if (this.fork1Choice === "firefly") { this.startFireflyBranch(nextWave); return; }
@@ -2310,8 +2329,7 @@ export class WinterMountainScene extends Phaser.Scene {
     const huntress = this.makeWinterForkWord(this.huntressSprite, {
       scene: this,
       word: "save the huntress",
-      x: 590,
-      y: Math.max(510, this.narration.bottom() + 78),
+      ...this.winterForkChoiceWordPosition("huntress"),
       frame: "banner",
       fontSize: 32,
       onComplete: () => {
@@ -2322,8 +2340,7 @@ export class WinterMountainScene extends Phaser.Scene {
     const firefly = this.makeWinterForkWord(fireflies, {
       scene: this,
       word: "follow the fireflies",
-      x: 1450,
-      y: Math.max(510, this.narration.bottom() + 78),
+      ...this.winterForkChoiceWordPosition("firefly"),
       frame: "banner",
       fontSize: 32,
       onComplete: () => {
@@ -2824,8 +2841,7 @@ export class WinterMountainScene extends Phaser.Scene {
     const buryTarget = this.makeWinterForkWord(cairn, {
       scene: this,
       word: "bury the pack leader",
-      x: 590,
-      y: Math.max(510, this.narration.bottom() + 78),
+      ...this.winterForkChoiceWordPosition("cairn"),
       frame: "banner",
       fontSize: 30,
       onComplete: () => {
@@ -2836,8 +2852,7 @@ export class WinterMountainScene extends Phaser.Scene {
     const peltTarget = this.makeWinterForkWord(pelt, {
       scene: this,
       word: "take the pelt",
-      x: 1450,
-      y: Math.max(510, this.narration.bottom() + 78),
+      ...this.winterForkChoiceWordPosition("pelt"),
       frame: "banner",
       fontSize: 30,
       onComplete: () => {
@@ -3236,7 +3251,7 @@ export class WinterMountainScene extends Phaser.Scene {
    */
   private winterPassageOwnerBinding(owner: WinterPassageOwner): {
     body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined;
-    vfx: { kind: "snow" | "mote"; color: number; sourceOffsetY: number };
+    vfx: { kind: "snow" | "mote"; color: number; sourceOffsetX?: number; sourceOffsetY: number };
   } | null {
     if (owner === "huntress") {
       return {
@@ -3245,9 +3260,10 @@ export class WinterMountainScene extends Phaser.Scene {
       };
     }
     if (owner === "firefly") {
+      const hollow = !!this.fireflyCue?.getByName("winter-firefly-hollow");
       return {
         body: this.fireflyCue,
-        vfx: { kind: "mote", color: PALETTE_HEX.brass, sourceOffsetY: -34 },
+        vfx: { kind: "mote", color: PALETTE_HEX.brass, sourceOffsetX: hollow ? -80 : 0, sourceOffsetY: hollow ? -4 : -34 },
       };
     }
     if (owner === "cairn") {
@@ -3274,6 +3290,14 @@ export class WinterMountainScene extends Phaser.Scene {
     const width = this.scale.width;
     const height = this.scale.height;
     if (!body?.scene) return { x: width / 2, y: height / 2 };
+    if (body === this.huntressSprite) return this.winterForkChoiceWordPosition("huntress");
+    if (body === this.cairnCue) return this.winterForkChoiceWordPosition("cairn");
+    if (body === this.peltCue) return this.winterForkChoiceWordPosition("pelt");
+    if (body === this.fireflyCue) {
+      const position = this.winterForkChoiceWordPosition("firefly");
+      if (this.fireflyCue?.getByName("winter-firefly-hollow")) position.x -= 80;
+      return position;
+    }
 
     const long = opts.long ?? word.length > 16;
     const side =

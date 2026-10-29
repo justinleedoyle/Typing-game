@@ -513,6 +513,11 @@ export class SkyIslandScene extends Phaser.Scene {
     // tiles ("always on"); the offensive one-shots drop in as charge cards. This
     // replaces the floating top-right HUD and the centered one-shot stack.
     this.band = new ConsoleBand(this, {
+      activity: () => (
+        this.templeBeamsActive
+        || this.spirits.some(spirit => !spirit.defeated)
+        || this.activePhrases.some(phrase => !phrase.isResolved())
+        || (Boolean(this.bossContainer?.scene) && this.activeTargets.some(target => !target.isComplete()))) ? "combat" : "story",
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,
@@ -2649,10 +2654,10 @@ export class SkyIslandScene extends Phaser.Scene {
     if (this.fork2Choice === "answer-kindly") { this.startFork2KindEnding(); return; }
     if (this.fork2Choice === "cut-tether") { this.startFork2CutTether(); return; }
 
-    const kindPos = this.skyOwnedWordPosition(this.kindAnswerCue, -56, "answer kindly", {
+    const kindPos = this.skyOwnedWordPosition(this.fork2Scholar, -42, "answer kindly", {
       side: "left",
     });
-    const kindTarget = this.makeSkyForkWord(this.kindAnswerCue, {
+    const kindTarget = this.makeSkyForkWord(this.fork2Scholar, {
       scene: this,
       word: "answer kindly",
       x: kindPos.x,
@@ -2664,11 +2669,11 @@ export class SkyIslandScene extends Phaser.Scene {
         this.fork2Choice = "answer-kindly";
         this.startFork2KindEnding();
       },
-    }, -56);
-    const tetherPos = this.skyOwnedWordPosition(this.tetherThreadCue, -58, "cut the tether", {
+    }, -42);
+    const tetherPos = this.skyOwnedWordPosition(this.beaconFlameCue, -95, "cut the tether", {
       side: "right",
     });
-    const tetherTarget = this.makeSkyForkWord(this.tetherThreadCue, {
+    const tetherTarget = this.makeSkyForkWord(this.beaconFlameCue, {
       scene: this,
       word: "cut the tether",
       x: tetherPos.x,
@@ -2680,7 +2685,7 @@ export class SkyIslandScene extends Phaser.Scene {
         this.fork2Choice = "cut-tether";
         this.startFork2CutTether();
       },
-    }, -58);
+    }, -95);
     this.registerActiveTarget(kindTarget, tetherTarget);
   }
 
@@ -2705,11 +2710,11 @@ export class SkyIslandScene extends Phaser.Scene {
     const begin = (): void => {
       this.checkpoint("answer-kindly", { typing: true });
       this.band.setObjective("Type you kept the light to answer the spirit.");
-      const pos = this.skyOwnedWordPosition(this.kindAnswerCue, -56, "you kept the light", { side: "left" });
-      const target = this.makeSkyForkWord(this.kindAnswerCue, {
+      const pos = this.skyOwnedWordPosition(this.fork2Scholar, -42, "you kept the light", { side: "left" });
+      const target = this.makeSkyForkWord(this.fork2Scholar, {
         scene: this, word: "you kept the light", x: pos.x, y: pos.y, fontSize: 36,
         onComplete: () => { playChime(); this.clearActiveTargets(); response(); },
-      }, -56);
+      }, -42);
       this.registerActiveTarget(target);
     };
     if (resume.typing === true) begin(); else this.readThen(begin);
@@ -2737,7 +2742,7 @@ export class SkyIslandScene extends Phaser.Scene {
           this.startLanternMothGate();
         },
         {
-          body: this.tetherThreadCue, sourceOffsetY: -58, side: "right",
+          body: this.beaconFlameCue, sourceOffsetY: -95, side: "right",
           onPhraseComplete: (index) => {
             if (index === 1) this.releaseFork2Spirit(resume.reading === true && resume.index === 1);
           },
@@ -3486,6 +3491,11 @@ export class SkyIslandScene extends Phaser.Scene {
     const width = this.scale.width;
     const height = this.scale.height;
     if (!body?.scene) return { x: width / 2, y: height / 2 };
+    if (this.fork2Tether?.scene && (body === this.fork2Scholar || body === this.beaconFlameCue)) {
+      // The aftermath commands belong to the painted spirit and the thread's
+      // masonry endpoint, with a clear shared lane above Wren's hood.
+      return { x: body.x, y: 530 };
+    }
     const physicalSource = body.getData?.("sky-source-offset-y");
     if (typeof physicalSource === "number") sourceOffsetY = physicalSource;
 
@@ -4187,6 +4197,9 @@ export class SkyIslandScene extends Phaser.Scene {
         this.beaconFlameCue.setActive(false);
       }
     }
+    // In this aftermath the thread, rather than the earlier flame, is the
+    // physical source for claim lines and per-letter feedback.
+    this.beaconFlameCue.setData("sky-source-offset-y", -95);
     if (!this.fork2Tether?.scene) {
       const c = this.add.container(0, 0).setDepth(41).setAlpha(0);
       const from = new Phaser.Math.Vector2(this.fork2Scholar.x + 40, this.fork2Scholar.y);

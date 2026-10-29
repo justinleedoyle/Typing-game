@@ -2,7 +2,8 @@ import { assert, assertEqual, suite } from "./_assert";
 import { homecomingLines } from "../src/game/homecoming";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
-import { OPENING_STEPS, openingStep } from "../src/game/chapterFlow";
+import { OPENING_STEPS, openingStep, readingAction } from "../src/game/chapterFlow";
+import { makeSiblingDrawing } from "../src/game/siblingDrawing";
 
 await suite("Homecoming resolves the sibling promise actually made in the opening", () => {
   const boy = homecomingLines("boy").map(line => line.text).join(" ");
@@ -126,57 +127,181 @@ const openingCode = ts.transpileModule(`class Opening { ${openingMethods.map(nam
 const emptyHandsPng = readFileSync(new URL("../art/sibling/sibling-empty-hands.png", import.meta.url));
 const emptyHandsHeight = emptyHandsPng.readUInt32BE(20);
 
-await suite("Homecoming arrival: Saga waits without reclaiming the drawing already given to Wren", () => {
+function homecomingFixture(gender: "boy" | "girl" | null = "boy", reduced = false) {
   const path = new URL("../src/scenes/HomecomingScene.ts", import.meta.url);
   const source = ts.createSourceFile(path.pathname, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
   const owner = source.statements.find(ts.isClassDeclaration)!;
   const assets = Object.fromEntries(source.statements.filter(ts.isImportDeclaration)
     .filter(statement => (statement.moduleSpecifier as ts.StringLiteral).text.endsWith(".png"))
     .map(statement => [statement.importClause!.name!.text, (statement.moduleSpecifier as ts.StringLiteral).text]));
-  const code = ts.transpileModule(`class Arrival { ${["preload", "create", "actor"].map(name =>
-    owner.members.find(member => member.name?.getText(source) === name)!.getText(source)).join("\n")} }`, {
+  const code = ts.transpileModule(`class Arrival { ${owner.members.filter(member => !ts.isConstructorDeclaration(member))
+    .map(member => member.getText(source)).join("\n")} }`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  for (const gender of ["boy", "girl", null] as const) {
-    const loaded = new Map<string, string>(), images: any[] = [], containers: any[] = [];
-    let heldCards = 0;
-    const node = (x = 0, y = 0): any => ({ x, y, children: [],
-      setDepth() { return this; }, setOrigin(x: number, y: number) { this.origin = [x, y]; return this; },
-      setScale(value: number) { this.scale = value; return this; }, setText() { return this; },
-      add(child: unknown) { this.children.push(child); return this; },
-    });
-    const noop = () => {};
-    const Arrival = new Function(...Object.keys(assets), "preloadWren", "installChapterMenu", "addLocalGroundShadow",
-      "applySceneActorLighting", "addIdleBreath", "makeWrenSprite", "NarrationManager", "ChapterReading",
-      "homecomingLines", "reducedMotion", "SERIF", "UI_CSS", `${code}; return Arrival;`)(
-      ...Object.values(assets), noop, () => ({}), () => ({}), noop, noop, () => ({ ...node(), height: 1000 }),
-      class { sayRaw() {} }, class { show() { heldCards++; } }, homecomingLines, () => false, "serif", {},
-    );
-    const scene = new Arrival();
-    Object.assign(scene, {
-      store: { get: () => ({ wrenGender: gender }) }, load: { image: (key: string, path: string) => loaded.set(key, path) },
-      add: {
-        image(x: number, y: number, key: string) {
-          const png = readFileSync(new URL(loaded.get(key)!, path));
-          const image = { ...node(x, y), key, width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
-          images.push(image); return image;
-        },
-        container(x: number, y: number) { const container = node(x, y); containers.push(container); return container; },
-        rectangle: node, text: node,
+  const readingPath = new URL("../src/game/ui/chapterReading.ts", import.meta.url);
+  const readingSource = ts.createSourceFile(readingPath.pathname, readFileSync(readingPath, "utf8"), ts.ScriptTarget.Latest, true);
+  const readingCode = ts.transpileModule(readingSource.statements.find(ts.isClassDeclaration)!.getText(readingSource).replace(/^export /, ""), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const Reading = new Function("readingAction", "SERIF", "UI_CSS", "UI_HEX", "chapterPreferences", "PRESENTATION_CHANGED",
+    `${readingCode}; return ChapterReading;`)(readingAction, "serif", {}, {}, () => ({}), "presentation");
+  const loaded = new Map<string, string>(), images: any[] = [], containers: any[] = [], graphics: any[] = [];
+  const tweens: any[] = [], captions: string[] = [], starts: any[] = [], shutdown: Array<() => void> = [];
+  let onKey: ((event: any) => void) | undefined;
+  const noop = () => {};
+  const node = (x = 0, y = 0): any => ({ scene: true, x, y, width: 100, height: 30, scaleX: 1, scaleY: 1,
+    visible: true, children: [], parentContainer: null, commands: [],
+    setDepth(value: number) { this.depth = value; return this; },
+    setOrigin(x: number, y = x) { this.origin = [x, y]; return this; },
+    setPosition(x: number, y: number) { this.x = x; this.y = y; return this; },
+    setScale(x: number, y = x) { this.scale = this.scaleX = x; this.scaleY = y; return this; },
+    setAngle(value: number) { this.angle = value; return this; },
+    setAlpha(value: number) { this.alpha = value; return this; },
+    setVisible(value: boolean) { this.visible = value; return this; },
+    setText(value: string) { this.text = value; return this; },
+    setX(value: number) { this.x = value; return this; }, setY(value: number) { this.y = value; return this; },
+    setFontSize() { return this; },
+    add(child: any) {
+      if (Array.isArray(child)) { child.forEach(item => this.add(item)); return this; }
+      child.parentContainer?.remove(child); child.parentContainer = this; this.children.push(child); return this;
+    },
+    remove(child: any) { this.children = this.children.filter((item: any) => item !== child); child.parentContainer = null; return this; },
+    destroy() { this.scene = false; this.parentContainer?.remove(this); },
+    getWorldTransformMatrix() {
+      const parent = this.parentContainer?.getWorldTransformMatrix();
+      const at = parent ? parent.transformPoint(this.x, this.y) : { x: this.x, y: this.y };
+      return { transformPoint: (x: number, y: number) => ({ x: at.x + x * this.scaleX, y: at.y + y * this.scaleY }) };
+    },
+    clear() { this.commands = []; return this; },
+    ...Object.fromEntries(["fillStyle", "fillRoundedRect", "lineStyle", "strokeRoundedRect", "lineBetween", "strokeCircle"].map(name =>
+      [name, function(this: any, ...args: any[]) { this.commands.push([name, ...args]); return this; }])),
+  });
+  const Arrival = new Function(...Object.keys(assets), "preloadWren", "installChapterMenu", "addLocalGroundShadow",
+    "applySceneActorLighting", "addIdleBreath", "makeWrenSprite", "makeSiblingDrawing", "NarrationManager", "ChapterReading",
+    "homecomingLines", "reducedMotion", "SERIF", "UI_CSS", "UI_HEX", "cornerTicks", `${code}; return Arrival;`)(
+    ...Object.values(assets), noop, () => ({ handleKey: () => false, destroy: noop }), () => node(), noop, noop,
+    () => ({ ...node(), height: 1000 }), makeSiblingDrawing,
+    class { sayRaw(text: string) { captions.push(text); } clear() {} replay() {} }, Reading, homecomingLines,
+    () => reduced, "serif", {}, {}, () => node(),
+  );
+  const scene = new Arrival();
+  const store = { get: () => ({ wrenGender: gender }) };
+  Object.assign(scene, {
+    scale: { width: 1920 }, time: { now: 0 },
+    load: { image: (key: string, path: string) => loaded.set(key, path) },
+    add: {
+      image(x: number, y: number, key: string) {
+        const png = readFileSync(new URL(loaded.get(key)!, path));
+        const image = { ...node(x, y), key, width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
+        images.push(image); return image;
       },
-      input: { keyboard: { on: noop } }, events: { once: noop }, cameras: { main: { fadeIn: noop } },
-    });
-    scene.preload(); scene.create();
-    assertEqual(loaded.get("homecoming-saga"), "../../art/sibling/sibling-empty-hands.png", "arrival loads the approved post-gift painting");
-    const sibling = containers.find(container => container.x === 1430);
+      container(x: number, y: number) { const container = node(x, y); containers.push(container); return container; },
+      graphics() { const graphic = node(); graphics.push(graphic); return graphic; },
+      rectangle: node, text: node,
+    },
+    tweens: { add(tween: any) { tweens.push(tween); }, killTweensOf(target: any) { tweens.filter(t => t.targets === target).forEach(t => { t.cancelled = true; }); } },
+    input: { keyboard: { on(_name: string, callback: typeof onKey) { onKey = callback; }, off() { onKey = undefined; } } },
+    events: { on: noop, off: noop, emit: noop, once(_name: string, callback: () => void) { shutdown.push(callback); } },
+    cameras: { main: { fadeIn: noop } }, scene: { start: (...args: any[]) => starts.push(args) },
+  });
+  scene.init({ store }); scene.preload(); scene.create();
+  return { scene, loaded, containers, graphics, tweens, captions, starts, images, store,
+    key(key = "Enter", repeat = false) { scene.time.now += 200; onKey?.({ key, repeat, preventDefault: noop }); },
+    finish(tween: any) {
+      for (const field of ["x", "y", "scaleX", "scaleY", "angle"]) if (field in tween) tween.targets[field] = tween[field];
+      tween.onComplete?.();
+    },
+    shutdown() { shutdown.forEach(callback => callback()); },
+  };
+}
+
+await suite("Homecoming arrival: Saga waits without reclaiming the drawing already given to Wren", () => {
+  for (const gender of ["boy", "girl", null] as const) {
+    const f = homecomingFixture(gender);
+    assertEqual(f.loaded.get("homecoming-saga"), "../../art/sibling/sibling-empty-hands.png", "arrival loads the approved post-gift painting");
+    const sibling = f.containers.find(container => container.x === 1430);
     if (gender) {
       const portrait = sibling.children.find((child: any) => child.key);
       assertEqual([sibling.x, sibling.y, portrait.x, portrait.y, portrait.origin, portrait.height * portrait.scale],
         [1430, 950, 0, 0, [.5, 1], gender === "boy" ? 270 : 350], "the original waiting footprint and floor remain unchanged");
       assertEqual(portrait.key, gender === "boy" ? "homecoming-saga" : "homecoming-magnus", "Magnus retains his own original waiting pose");
     } else assert(!sibling, "legacy identity does not invent a sibling");
-    assertEqual(heldCards, 1, "the original first caption still waits on one Continue");
-    assert(!images.some(image => image.key.includes("embrace")), "the waiting pose does not prematurely begin the unchanged embrace");
+    assert(f.scene.reading.next, "the original first caption still waits on one Continue");
+    assert(!f.images.some(image => image.key.includes("embrace")), "the waiting pose does not prematurely begin the unchanged embrace");
+  }
+});
+
+await suite("Homecoming drawing: one carried opening sketch unfolds, rests beside the Almanac, then permits the original embrace", () => {
+  for (const reduced of [false, true]) {
+    const f = homecomingFixture("boy", reduced), s = f.scene;
+    const paper = s.returnedDrawing, wren = s.wrenActor, sibling = s.siblingActor;
+    assert(paper && paper.parentContainer === wren && !s.drawingOnDesk, "the boy arrives with the one drawing still in Wren's hands");
+    assertEqual(paper.commands.filter((c: any[]) => c[0] === "lineBetween"), [
+      ["lineBetween", -14, -5, -3, -14], ["lineBetween", -3, -14, 10, 3], ["lineBetween", -10, 6, 14, 6],
+    ], "the visible keepsake retains the exact three-stroke Opening drawing");
+    assertEqual(paper.getWorldTransformMatrix().transformPoint(0, 0), { x: 1020, y: 838 }, "the paper starts at Opening's accepted local hand anchor");
+    f.key();
+    assertEqual(f.captions.length, 2, "the unchanged Saga caption is readable during the return, without a new card");
+    assertEqual(f.captions[1], homecomingLines("boy")[1].text, "the authored emotional line is retained exactly");
+    if (!reduced) {
+      assert(!s.reading.next, "the consumed first card cannot skip the visible return");
+      f.key(); f.key(" ");
+      assertEqual([f.captions.length, f.tweens.length], [2, 1], "early Continue keys cannot duplicate or bypass the unfold");
+      assertEqual([wren.x, wren.y, sibling.x, sibling.y], [1000, 950, 1430, 950], "unfolding cannot move the accepted world foot anchors");
+      f.finish(f.tweens[0]);
+      assertEqual(paper.getWorldTransformMatrix().transformPoint(0, 0), { x: 1020, y: 838 }, "release from the hand has no world-position jump");
+      assertEqual(paper.parentContainer, null, "the same paper leaves the hand rather than spawning a second drawing");
+      f.finish(f.tweens[1]);
+      assert(!s.reading.next && !s.reunionActor.visible, "the paper reaches the desk before the existing embrace starts");
+      f.finish(f.tweens[2]); f.finish(f.tweens[3]);
+    } else assertEqual(f.tweens.length, 0, "reduced motion settles both return and embrace without travel tweens");
+    assertEqual(s.returnedDrawing, paper, "the same single keepsake persists through the hand-to-desk transition");
+    assertEqual([paper.x, paper.y, paper.scaleX, paper.scaleY, paper.angle], [786, 664, 1.3, .7, -7], "the returned paper lies flat on the painted desktop");
+    assert(s.drawingOnDesk && !paper.parentContainer && s.reunionActor.visible && s.reading.next, "only the settled embrace unlocks the original sibling Continue");
+    assertEqual([s.deskAlmanac.x, s.deskAlmanac.y], [708, 655], "the returned drawing rests beside the visible desk Almanac");
+    f.key("Enter", true);
+    assertEqual(f.captions.length, 2, "a held Continue key cannot skip the sibling response");
+    f.key();
+    assertEqual(f.captions, homecomingLines("boy").map(line => line.text), "there are still exactly the original three story cards");
+    assert(s.deskAlmanac.commands.some((c: any[]) => c[0] === "strokeCircle"), "Runa's original final card closes the visible Almanac");
+    f.key();
+    assert(s.reading.next && paper.scene, "the original credits gate retains the returned drawing on the desk");
+    f.key(); f.key();
+    assertEqual(f.starts.map(args => args[0]), ["PortalChamberScene"], "the fourth original Continue returns to the library exactly once");
+    assert(!paper.scene && !s.returnedDrawing && !s.deskAlmanac, "leaving clears both owned desk props");
+  }
+});
+
+await suite("Homecoming drawing: leaving, shutdown and scene reuse cannot revive a late return or reading gate", () => {
+  for (const phase of ["unfold", "place", "embrace"] as const) for (const exit of ["leave", "shutdown", "reuse"] as const) {
+    const f = homecomingFixture(), s = f.scene;
+    f.key();
+    if (phase !== "unfold") f.finish(f.tweens[0]);
+    if (phase === "embrace") f.finish(f.tweens[1]);
+    const paper = s.returnedDrawing, book = s.deskAlmanac, before = f.captions.length;
+    if (exit === "leave") s.returnToLibrary();
+    else if (exit === "shutdown") f.shutdown();
+    else s.init({ store: f.store });
+    for (const tween of [...f.tweens]) tween.onComplete?.();
+    assert(!paper.scene && !book.scene && !s.returnedDrawing && !s.deskAlmanac, `${phase}/${exit}: no carried or desk keepsake survives cleanup`);
+    assertEqual(f.captions.length, before, `${phase}/${exit}: late callbacks cannot replay a story card`);
+    assert(!s.reading.next, `${phase}/${exit}: late callbacks cannot reopen the consumed Continue`);
+  }
+  const held = homecomingFixture();
+  held.scene.returnToLibrary(); held.key(); held.key(" ");
+  assertEqual([held.captions.length, held.tweens.length, held.starts.length], [1, 0, 1], "queued keys after leaving a held card cannot start the drawing or another scene transition");
+});
+
+await suite("Homecoming drawing: Magnus and legacy returns retain their original cards without Saga's props", () => {
+  for (const gender of ["girl", null] as const) for (const reduced of [false, true]) {
+    const f = homecomingFixture(gender, reduced), s = f.scene;
+    assert(!s.returnedDrawing && !s.deskAlmanac, "the other identity and old saves cannot inherit Saga's drawing/book staging");
+    f.key();
+    if (gender && !reduced) f.tweens.forEach(f.finish);
+    assert(s.reading.next, "the original sibling/neutral card retains its one Continue");
+    assertEqual(f.captions, homecomingLines(gender).slice(0, 2).map(line => line.text), "the original narrative sequence remains unchanged");
+    f.key(); f.key(); f.key();
+    assertEqual(f.starts.map(args => args[0]), ["PortalChamberScene"], "the original three cards and credits still return to the library");
   }
 });
 

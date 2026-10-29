@@ -151,8 +151,13 @@ await suite("Wood choices: actual fork entries leave the new world art and Ghost
   const shrine = fixture();
   shrine.scene.startFork1();
   assertEqual(shrine.targets.map(target => [target.word, target.x, target.y]), [
-    ["leave an offering", 505, 500], ["take the bone-flute", 1415, 500],
+    ["leave an offering", 690, 612], ["take the bone-flute", 1230, 612],
   ], "both original native choices sit above the rooted paintings without changing their words or sides");
+  for (const target of shrine.targets) {
+    const halfWidth = target.word.length * 18 / 2 + 24;
+    assert(target.x + halfWidth < 890 || target.x - halfWidth > 1030, "each complete banner clears Wren horizontally while staying near its low prop");
+    assert(target.y - 44 > 360 && target.y + 44 < 690, "banners clear the caption lane and the top of the rooted silhouettes");
+  }
   const centerShrine = shrine.scene.shrineFigure;
   assert(centerShrine.children.some((child: any) => child.key === "wood-offering-shrine"), "the central shrine uses the same painted stone and roots as its offering support");
   shrine.scene.pulseShrine();

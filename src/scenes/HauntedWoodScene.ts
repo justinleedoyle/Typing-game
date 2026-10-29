@@ -422,6 +422,10 @@ export class HauntedWoodScene extends Phaser.Scene {
     // a vision overlay (not a bottom meter), so the satchel zone shows the passive
     // relic icon tiles; the offensive one-shots drop into the band's charge cards.
     this.band = new ConsoleBand(this, {
+      activity: () => (
+        this.wardPracticeActive
+        || this.ghosts.some(ghost => !ghost.isDefeated())
+        || (["capstone", "final1", "final2"].includes(this.checkpointStep) && this.activeTargets.some(target => !target.isComplete()))) ? "combat" : "story",
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,
@@ -2722,9 +2726,9 @@ export class HauntedWoodScene extends Phaser.Scene {
         scene: this,
         word: step.word,
         x: ownerWordPos?.x ?? this.scale.width / 2,
-        // Ground props sit beside Wren; their inward-facing words need their
-        // own lane above the hood, while higher king-owned words stay put.
-        y: Math.min(ownerWordPos?.y ?? this.scale.height - 340, WOOD_BRANCH_WORD_Y),
+        // A ground prop owns the phrase directly above its visible silhouette.
+        // Unowned passages keep the original high lane above Wren.
+        y: ownerWordPos?.y ?? WOOD_BRANCH_WORD_Y,
         fontSize: 36,
         onClaim: () => playWrenFocus(this.wrenSprite),
         onAdvance: (cursor, wordLength) => {
@@ -2775,7 +2779,9 @@ export class HauntedWoodScene extends Phaser.Scene {
       return { x: 520, y: WOOD_BRANCH_WORD_Y };
     }
     if (body === this.offeringCue || body === this.boneFluteCue) {
-      return { x, y: WOOD_BRANCH_WORD_Y };
+      // These low, rooted props flank Wren. Center the command over the
+      // bowl/hollow rather than displacing it toward an unrelated tree.
+      return { x: body.x, y: body.y - 200 };
     }
     const y = Math.max(330, Math.min(this.scale.height - 360, body.y + sourceOffsetY - 92));
     return { x, y };

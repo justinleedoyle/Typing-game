@@ -7,12 +7,21 @@ import { chapterPreferences, PRESENTATION_CHANGED } from "../presentation";
 /** One deliberate reading stop. Continuing or replaying never injects a game
  * character, and holding a key cannot skip several paragraphs. */
 export class ChapterReading {
+  /** Scene-scoped UI state; a reading card never changes gameplay activity. */
+  static readonly STATE_CHANGED = "chapter-reading-state-changed";
+  private static readonly readers = new WeakMap<Phaser.Scene, Set<ChapterReading>>();
+
+  static activeIn(scene: Phaser.Scene): boolean {
+    return (ChapterReading.readers.get(scene)?.size ?? 0) > 0;
+  }
+
   private next: (() => void) | null = null;
   private replay: (() => void) | null = null;
   private readonly hint: Phaser.GameObjects.Text;
   private readonly replayHint: Phaser.GameObjects.Text;
   private readonly plate: Phaser.GameObjects.Graphics;
   private openedAt = 0;
+  private readonly onShutdown = () => this.clear();
 
   constructor(private readonly scene: Phaser.Scene, private readonly position: number | (() => number)) {
     this.plate = scene.add.graphics().setDepth(1900).setVisible(false);
@@ -27,6 +36,7 @@ export class ChapterReading {
         stroke: "#0b0a0f", strokeThickness: 3,
       }).setOrigin(0, 0.5).setDepth(1901).setVisible(false);
     scene.events.on(PRESENTATION_CHANGED, this.redraw, this);
+    scene.events.once("shutdown", this.onShutdown);
   }
 
   private redraw(): void {
@@ -55,6 +65,7 @@ export class ChapterReading {
     this.hint.setVisible(true);
     this.redraw();
     this.plate.setVisible(true);
+    this.publishReading(true);
   }
 
   handleKey(event: KeyboardEvent): boolean {
@@ -79,10 +90,29 @@ export class ChapterReading {
     this.hint.setVisible(false);
     this.replayHint.setVisible(false);
     this.plate.setVisible(false);
+    this.publishReading(false);
+  }
+
+  private publishReading(active: boolean): void {
+    const wasActive = ChapterReading.activeIn(this.scene);
+    let readers = ChapterReading.readers.get(this.scene);
+    if (active) {
+      if (!readers) {
+        readers = new Set();
+        ChapterReading.readers.set(this.scene, readers);
+      }
+      readers.add(this);
+    } else {
+      readers?.delete(this);
+      if (readers?.size === 0) ChapterReading.readers.delete(this.scene);
+    }
+    const isActive = ChapterReading.activeIn(this.scene);
+    if (wasActive !== isActive) this.scene.events.emit(ChapterReading.STATE_CHANGED);
   }
 
   destroy(): void {
     this.scene.events.off(PRESENTATION_CHANGED, this.redraw, this);
+    this.scene.events.off("shutdown", this.onShutdown);
     this.clear();
     this.hint.destroy();
     this.replayHint.destroy();

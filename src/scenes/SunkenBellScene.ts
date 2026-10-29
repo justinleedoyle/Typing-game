@@ -444,6 +444,7 @@ export class SunkenBellScene extends Phaser.Scene {
     // Passive relics own the satchel lane; the breath meter uses the otherwise
     // empty right-side slot so late-game icon overflows never collide with it.
     this.band = new ConsoleBand(this, {
+      activity: () => (this.rhythmPracticeActive || this.breathActive || this.beatPhase !== "free") ? "combat" : "story",
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,

@@ -11,6 +11,7 @@ import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
+import { desktopBridge } from "../game/desktopBridge";
 import { RELICS } from "../game/relics";
 import type { Difficulty, SaveStore } from "../game/saveState";
 import {
@@ -1528,7 +1529,7 @@ export class PortalChamberScene extends Phaser.Scene {
     if (zoneAtRequest !== "account" || this.activeZone !== "account") return;
 
     const status = this.add
-      .text(ACCOUNT_PANEL.x, ACCOUNT_PANEL.statusY, name ? `signed in as ${name}` : "local save", {
+      .text(ACCOUNT_PANEL.x, ACCOUNT_PANEL.statusY, desktopBridge() ? "saved on this computer · offline edition" : name ? `signed in as ${name}` : "local save", {
         fontFamily: SERIF,
         fontSize: "15px",
         fontStyle: "italic",
@@ -1573,6 +1574,7 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private async addAccountAuthTarget(): Promise<void> {
+    if (desktopBridge()) return;
     const zoneAtRequest = this.activeZone;
     const name = await currentUserDisplayName();
     if (zoneAtRequest !== "account" || this.activeZone !== "account") return;

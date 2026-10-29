@@ -1,0 +1,134 @@
+// Explicit packaged-app QA mode. It is never selected by a game URL and can
+// only use a disposable profile and report location inside the OS temp folder.
+import type { BrowserWindow } from "electron";
+import { existsSync, lstatSync, realpathSync } from "node:fs";
+import { writeFile, rename } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { emptySave, type SaveBackend, type SaveState } from "../src/game/saveState";
+
+export type DesktopSmokePhase = "seed" | "verify" | "crash" | "recover";
+export interface DesktopSmokeOptions { phase: DesktopSmokePhase; profile: string; report: string }
+const phases: readonly string[] = ["seed", "verify", "crash", "recover"];
+
+function insideTemp(path: string): boolean {
+  const root = realpathSync(tmpdir());
+  const target = realpathSync(path);
+  const child = relative(root, target);
+  return child !== "" && child !== ".." && !child.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) && !isAbsolute(child);
+}
+
+export function parseDesktopSmokeArgs(argv: readonly string[]): DesktopSmokeOptions | null {
+  const values = (name: string) => argv.filter(value => value.startsWith(`${name}=`)).map(value => value.slice(name.length + 1));
+  const phase = values("--desktop-smoke"), profile = values("--desktop-profile"), report = values("--desktop-report");
+  if (!phase.length && !profile.length && !report.length) return null;
+  if (phase.length !== 1 || profile.length !== 1 || report.length !== 1 || !phases.includes(phase[0])) throw new Error("Invalid desktop smoke arguments");
+  if (!isAbsolute(profile[0]) || !isAbsolute(report[0]) || !existsSync(profile[0]) ||
+      !lstatSync(profile[0]).isDirectory() || lstatSync(profile[0]).isSymbolicLink() ||
+      !basename(profile[0]).startsWith("portalwrights-desktop-smoke-") ||
+      !basename(dirname(report[0])).startsWith("portalwrights-desktop-evidence-") ||
+      basename(report[0]) !== `${phase[0]}.json` || !insideTemp(profile[0]) || !insideTemp(dirname(report[0])) ||
+      (existsSync(report[0]) && lstatSync(report[0]).isSymbolicLink())) throw new Error("Desktop smoke paths must be isolated inside the OS temp folder");
+  return { phase: phase[0] as DesktopSmokePhase, profile: resolve(profile[0]), report: resolve(report[0]) };
+}
+
+/** The only seeded progress in this pass is an explicitly selected smoke
+ * profile. Normal desktop launches use the ordinary real game entry point. */
+export async function prepareDesktopSmoke(backend: SaveBackend, phase: DesktopSmokePhase): Promise<void> {
+  const existing = await backend.load();
+  if (phase === "seed") {
+    if (existing !== null) throw new Error("Smoke seed requires an empty isolated profile");
+    const state = emptySave("Synthetic Windows review");
+    state.wrenGender = "boy";
+    state.typewriterAwakened = true;
+    state.realms["winter-mountain"] = { cleared: false, choices: { fox: "spared" } };
+    state.checkpoint = { scene: "WinterMountainScene", step: "fork1", data: {
+      candles: 2, soul: 63, statsHits: "111111111111111100001111", statsSoul: 62.5,
+      statsCombo: 8, statsBestCombo: 20, foxDecided: true,
+    } };
+    state.almanacLore = ["the-wounded-foxs-name"];
+    await backend.save(state); await backend.flush?.();
+  } else {
+    if (!existing || existing.profileName !== "Synthetic Windows review" || existing.checkpoint?.scene !== "WinterMountainScene") throw new Error("Smoke continuation requires its existing synthetic Winter journey");
+    if (phase === "crash") {
+      existing.realms["winter-mountain"].choices.fork1 = "firefly";
+      existing.checkpoint = { scene: "WinterMountainScene", step: "firefly", data: { ...existing.checkpoint.data, index: 0, reading: true } };
+      existing.updatedAt = Math.max(Date.now(), existing.updatedAt + 1);
+      await backend.save(existing); await backend.flush?.();
+    }
+  }
+}
+
+const wait = (ms: number) => new Promise<void>(done => setTimeout(done, ms));
+async function waitForWindow(window: BrowserWindow, predicate: string, label: string, timeoutMs = 30_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (window.isDestroyed()) throw new Error(`Window closed before ${label}`);
+    if (await window.webContents.executeJavaScript(predicate, false)) return;
+    await wait(100);
+  }
+  throw new Error(`Timed out waiting for ${label}`);
+}
+function stableProgress(state: SaveState): string {
+  const { updatedAt: _time, ...progress } = state;
+  return JSON.stringify(progress);
+}
+async function settledSave(backend: SaveBackend): Promise<SaveState> {
+  // The renderer's actual SaveStore debounces for250ms. Let its checkpoint
+  // normalization reach the filesystem, then require600ms of stable content.
+  await wait(500);
+  const deadline = Date.now() + 5000;
+  let state = await backend.load(), fingerprint = state && stableProgress(state), stableSince = Date.now();
+  while (Date.now() < deadline) {
+    await wait(100);
+    const next = await backend.load(), value = next && stableProgress(next);
+    if (value !== fingerprint) { fingerprint = value; stableSince = Date.now(); }
+    state = next;
+    if (state && Date.now() - stableSince >= 600) return state;
+  }
+  throw new Error("Rendered checkpoint did not reach stable durable storage");
+}
+function key(window: BrowserWindow, value: string, modifiers: Array<"shift" | "alt"> = []): void {
+  window.webContents.sendInputEvent({ type: "keyDown", keyCode: value, modifiers });
+  window.webContents.sendInputEvent({ type: "keyUp", keyCode: value, modifiers });
+}
+
+export async function runDesktopSmoke(options: DesktopSmokeOptions & {
+  window: BrowserWindow;
+  backend: SaveBackend;
+  unexpectedRequests: readonly string[];
+}): Promise<void> {
+  const { window, backend, phase, profile, report, unexpectedRequests } = options;
+  const screenshot = join(dirname(report), `${phase}.png`);
+  try {
+    await waitForWindow(window, "Boolean(document.querySelector('[data-desktop-ready=\"true\"]'))", "actual desktop startup");
+    await waitForWindow(window, "Boolean(document.querySelector('[data-active-scene=\"TitleScene\"]'))", "actual Title creation");
+    key(window, "Enter");
+    await waitForWindow(window, "Boolean(document.querySelector('[data-active-scene=\"WinterMountainScene\"]'))", "saved Winter checkpoint");
+    // This dispatch checks Electron's own keyboard path. It is synthetic input,
+    // not evidence about a physical Windows keyboard/layout or human pacing.
+    key(window, "Escape");
+    await waitForWindow(window, "Boolean(document.querySelector('[data-active-scene=\"ChapterPauseMenu\"]'))", "ordinary pause menu");
+    await wait(220); // Original menu's180ms input guard remains unchanged.
+    key(window, "Escape");
+    await waitForWindow(window, "Boolean(document.querySelector('[data-active-scene=\"WinterMountainScene\"]'))", "ordinary pause resume");
+    key(window, "Shift"); key(window, "Alt");
+    const renderer = await window.webContents.executeJavaScript(`(() => {
+      const canvas = document.querySelector('canvas');
+      const fonts = Array.from(document.fonts).map(font => ({family:font.family,status:font.status,style:font.style,weight:font.weight}));
+      return {canvas:Boolean(canvas && canvas.width > 0 && canvas.height > 0),fontsReady:document.fonts.status==='loaded' && fonts.some(font=>font.status==='loaded'),fonts,activeScene:document.querySelector('[data-active-scene]')?.getAttribute('data-active-scene')};
+    })()`, false);
+    const save = await settledSave(backend);
+    await writeFile(screenshot, (await window.webContents.capturePage()).toPNG());
+    const result = { version: 1, phase, ok: true, profileIsolated: insideTemp(profile), offline: true,
+      unexpectedRequests: [...unexpectedRequests], renderer, keyboard: { source: "Electron synthetic input", pauseAndResume: true, shiftAndAltReleased: true },
+      durable: true, save };
+    const temporary = `${report}.tmp`;
+    await writeFile(temporary, JSON.stringify(result, null, 2)); await rename(temporary, report);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    try { if (!window.isDestroyed()) await writeFile(screenshot, (await window.webContents.capturePage()).toPNG()); } catch { /* Keep the first failure. */ }
+    await writeFile(report, JSON.stringify({ version: 1, phase, ok: false, error: message, unexpectedRequests: [...unexpectedRequests] }, null, 2));
+    throw error;
+  }
+}

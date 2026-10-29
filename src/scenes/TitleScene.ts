@@ -6,6 +6,7 @@ import { SceneRunGuard } from "../game/sceneRunGuard";
 import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
 import { downloadSaveRecovery, saveRecoveryPresentation } from "../game/saveRecovery";
 import { showRecoveryDialog, type RecoveryDialog } from "../game/ui/recoveryDialog";
+import { defaultSaveBackend } from "../game/desktopBackend";
 import { titleCheckpoint } from "../game/titleResume";
 import { saveChoiceFocus, saveChoicePresentation, saveJourneySummary } from "../game/saveChoice";
 import { SERIF } from "../game/palette";
@@ -19,7 +20,6 @@ import { cornerTicks, UI_CSS, UI_HEX } from "../game/ui/uiTheme";
 import {
   emptySave,
   SaveStore,
-  SyncedBackend,
   InvalidSaveError,
   UnsupportedSaveVersionError,
   CloudSaveError,
@@ -208,7 +208,7 @@ export class TitleScene extends Phaser.Scene {
     }
     const backend = this.backend ??
       (this.registry.get("saveBackend") as SaveBackend | undefined) ??
-      new SyncedBackend();
+      defaultSaveBackend();
     this.backend = backend;
     const token = this.run.token();
     const pending = SaveStore.load(backend);

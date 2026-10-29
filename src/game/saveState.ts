@@ -215,6 +215,8 @@ export interface SaveRecoverySnapshot {
   };
 }
 export interface SaveBackend {
+  /** Desktop close drains the current in-memory autosave before exiting. */
+  onStoreReady?(store: SaveStore): void;
   load(): Promise<SaveState | null>;
   save(state: SaveState): Promise<void>;
   /** Drain optional remote work after the durable local write. */
@@ -896,6 +898,7 @@ export class SaveStore {
   private lastError: Error | null = null;
   constructor(private readonly backend: SaveBackend, initial: SaveState, private readonly options: StoreOptions = {}) {
     this.state = migrate(initial);
+    backend.onStoreReady?.(this);
   }
   static async load(backend: SaveBackend, options: StoreOptions = {}): Promise<SaveStore> {
     const loaded = await backend.load();

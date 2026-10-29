@@ -31,10 +31,10 @@ function fixture(search: string, conflict?: SaveConflict) {
     getConflict: () => conflict ?? null,
     async resolveConflict() { return durable; },
   };
-  const Title = new Function("location", "parseDevTarget", "applyDevUnlock", "emptySave", "SaveStore", "SyncedBackend", "setAudioLevel", "titleCheckpoint", "Phaser", "InvalidSaveError", "UnsupportedSaveVersionError",
+  const Title = new Function("location", "parseDevTarget", "applyDevUnlock", "emptySave", "SaveStore", "defaultSaveBackend", "setAudioLevel", "titleCheckpoint", "Phaser", "InvalidSaveError", "UnsupportedSaveVersionError",
     `${code}; return Title;`)(
     { search }, parseDevTarget, applyDevUnlock, emptySave, SaveStore,
-    class { constructor() { throw new Error("unexpected default account backend"); } }, () => {}, titleCheckpoint,
+    () => { throw new Error("unexpected default account backend"); }, () => {}, titleCheckpoint,
     { Cameras: { Scene2D: { Events: { FADE_OUT_COMPLETE: "fade" } } } },
     InvalidSaveError, UnsupportedSaveVersionError,
   );

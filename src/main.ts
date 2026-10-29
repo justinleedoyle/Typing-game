@@ -12,6 +12,10 @@ import { SkyIslandScene } from "./scenes/SkyIslandScene";
 import { SunkenBellScene } from "./scenes/SunkenBellScene";
 import { TitleScene } from "./scenes/TitleScene";
 import { WinterMountainScene } from "./scenes/WinterMountainScene";
+import { ensureGameFonts } from "./game/fonts";
+import { desktopBridge } from "./game/desktopBridge";
+import { installDesktopLifecycle } from "./game/desktopBackend";
+import { showRecoveryDialog, type RecoveryDialog } from "./game/ui/recoveryDialog";
 
 const DESIGN_WIDTH = 1920;
 const DESIGN_HEIGHT = 1080;
@@ -64,9 +68,39 @@ window.addEventListener("unhandledrejection", (event) => {
   recordError("unhandledrejection", message, err?.stack);
 });
 
-installMobileKeyboardBridge();
+if (!desktopBridge()) installMobileKeyboardBridge();
 
-new Phaser.Game({
+let game: Phaser.Game | undefined;
+installDesktopLifecycle(() => {
+  const current = game;
+  const active = current?.scene.getScenes(true).map(scene => scene.scene.key) ?? [];
+  const inputEnabled = current?.input.enabled ?? true;
+  if (current) {
+    current.input.enabled = false;
+    active.forEach(key => current.scene.pause(key));
+  }
+  return () => {
+    if (current && game === current) {
+      current.input.enabled = inputEnabled;
+      active.forEach(key => current.scene.resume(key));
+    }
+  };
+});
+let bootDialog: RecoveryDialog | undefined;
+async function startGame(): Promise<void> {
+  if (game) return;
+  bootDialog?.destroy(); bootDialog = undefined;
+  try { await ensureGameFonts(); }
+  catch {
+    bootDialog = showRecoveryDialog({
+      title: "The lettering could not open",
+      message: "The game's lettering could not load. Your saved journey has not changed.",
+      detail: "Try again. If this continues, check that the game files are complete.",
+      actions: [{ label: "Try again · Enter", shortcut: "Enter", onSelect: () => { void startGame(); } }],
+    });
+    return;
+  }
+  game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: "app",
   backgroundColor: "#0b0a0f",
@@ -77,4 +111,16 @@ new Phaser.Game({
     height: DESIGN_HEIGHT,
   },
   scene: [TitleScene, OpeningScene, PortalChamberScene, WinterMountainScene, SunkenBellScene, ClockworkForgeScene, SkyIslandScene, HauntedWoodScene, GreatBattleScene, HomecomingScene, AlmanacScene, SettingsScene],
-});
+  });
+  if (desktopBridge()) {
+    const appElement = document.querySelector<HTMLElement>("#app")!;
+    appElement.dataset.desktopReady = "true";
+    // DOM status lets packaged smoke checks observe the same scene stack a
+    // player sees, including the ordinary pause overlay. No game-state API.
+    game.events.on(Phaser.Core.Events.POST_STEP, () => {
+      const scene = game?.scene.getScenes(true).at(-1)?.scene.key;
+      if (scene && appElement.dataset.activeScene !== scene) appElement.dataset.activeScene = scene;
+    });
+  }
+}
+void startGame();

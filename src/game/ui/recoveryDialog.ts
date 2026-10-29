@@ -75,8 +75,12 @@ export function showRecoveryDialog(options: {
   panel.append(controls);
   overlay.append(panel);
   document.body.append(overlay);
+  const isTop = () => {
+    const dialogs = document.querySelectorAll("[data-recovery-dialog]");
+    return dialogs.item(dialogs.length - 1) === overlay;
+  };
   const onKey = (event: KeyboardEvent) => {
-    if (destroyed || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (destroyed || !isTop() || event.ctrlKey || event.metaKey || event.altKey) return;
     // Even unrelated characters must not reach a canvas scene under this modal.
     event.stopImmediatePropagation();
     if (event.key === "Tab") {
@@ -100,10 +104,11 @@ export function showRecoveryDialog(options: {
   return {
     destroy() {
       if (destroyed) return;
+      const restoreFocus = isTop();
       destroyed = true;
       window.removeEventListener("keydown", onKey, true);
       overlay.remove();
-      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+      if (restoreFocus && previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
     },
     setMessage(text) { if (!destroyed) message.textContent = text; },
     setBusy(value) {
@@ -111,7 +116,7 @@ export function showRecoveryDialog(options: {
       busy = value;
       panel.setAttribute("aria-busy", String(value));
       buttons.forEach(button => { button.disabled = value; button.style.opacity = value ? "0.5" : "1"; });
-      if (!value) buttons[0]?.focus();
+      if (!value && isTop()) buttons[0]?.focus();
     },
   };
 }

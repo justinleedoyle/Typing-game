@@ -1051,7 +1051,7 @@ export class SettingsScene extends Phaser.Scene {
       this.saveConflict = error instanceof SaveConflictError;
       if (this.saveConflict) this.narrator.setInteractive({ useHandCursor: true });
       this.setNarrator(this.saveConflict
-        ? "Another device changed this journey. Press T or click here to choose a save at the title."
+        ? `${error instanceof Error ? error.message : "Saving needs attention."} Press T or click here to choose a save at the title.`
         : "Could not finish saving the reset. Type confirm to retry, or back to continue this fresh session.");
     }
   }
@@ -1075,7 +1075,7 @@ export class SettingsScene extends Phaser.Scene {
         this.saveConflict = error instanceof SaveConflictError;
         if (this.saveConflict) this.narrator.setInteractive({ useHandCursor: true });
         this.setNarrator(this.saveConflict
-          ? "Another device changed this journey. Press T or click here to choose a save at the title."
+          ? `${error instanceof Error ? error.message : "Saving needs attention."} Press T or click here to choose a save at the title.`
           : "Could not finish saving. Your changes are still here. Type back or press Esc to retry.");
         this.renderMenu();
         return;

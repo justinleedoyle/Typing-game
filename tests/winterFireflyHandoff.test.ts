@@ -22,7 +22,7 @@ const globals = {
   checkpointIndex, committedWinterChoices,
   PALETTE_HEX: { frost: 1, brass: 2 },
   Phaser: { Math: { Clamp: (value: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, value)) }, GameObjects: { Events: { DESTROY: "destroy" } } },
-  reducedMotion: () => true, satchelIconFor: (id: string) => ({ key: `almanac-icon-${id}` }),
+  reducedMotion: (scene: any) => scene.store.get().reducedMotion, satchelIconFor: (id: string) => ({ key: `almanac-icon-${id}` }),
   addLocalGroundShadow: () => display(), addContainerWake: noop, addIdleBreath: noop,
   decorativeTween: noop, applySceneActorLighting: (_scene: unknown, item: any) => { item.lit = true; },
   playWrenAction: noop, playWrenFocus: noop, playBodyImpact: noop,
@@ -63,7 +63,7 @@ function fixture(initial: SaveState = emptySave()) {
   let persisted: SaveState | null = null;
   const store = new SaveStore({ load: async () => initial, save: async state => { persisted = structuredClone(state); } }, initial, { saveDelayMs: 60_000 });
   stores.push(store);
-  const scene = new Winter(), images: any[] = [], tweens: any[] = [], timers: any[] = [], captions: string[] = [], waves: number[] = [];
+  const scene = new Winter(), images: any[] = [], tweens: any[] = [], timers: any[] = [], captions: string[] = [], objectives: string[] = [], waves: number[] = [];
   const stats = new SessionStats();
   let gate: (() => void) | null = null, target: any = null;
   Object.assign(scene, {
@@ -79,14 +79,14 @@ function fixture(initial: SaveState = emptySave()) {
     tweens: { add(options: any) { tweens.push(options); return options; },
       killTweensOf(body: any) { for (const tween of tweens) if (tween.targets === body) tween.cancelled = true; } },
     time: { delayedCall(ms: number, next: () => void) { timers.push({ ms, next }); } },
-    band: { setObjective: noop }, narration: { say: (text: string) => captions.push(text), bottom: () => store.get().textScale === "large" ? 430 : 300 }, setNarrator: (text: string) => captions.push(text),
+    band: { setObjective: (text: string) => objectives.push(text) }, narration: { say: (text: string) => captions.push(text), bottom: () => store.get().textScale === "large" ? 430 : 300 }, setNarrator: (text: string) => captions.push(text),
     readThen(next: () => void) { assert(!gate, "the original response retains one held Continue"); gate = next; },
     clearActiveTargets() { target = null; }, registerActiveTarget(value: any) { target = value; },
     makeWord: (options: any) => ({ ...options, getAnchorX: () => options.x, getAnchorY: () => options.y }),
     fadeOutHuntress: noop, clearHuntressHorn: noop, clearHeldPelt: noop,
     startWave: (index: number) => waves.push(index),
   });
-  return { scene, store, captions, images, tweens, timers, waves, target: () => target, gate: () => gate,
+  return { scene, store, captions, objectives, images, tweens, timers, waves, target: () => target, gate: () => gate,
     continue() { assert(gate, "the native Continue is held"); const next = gate!; gate = null; next(); },
     async reload() { await store.flush(); return fixture(persisted!); },
   };
@@ -151,6 +151,25 @@ await suite("Winter fireflies: taking and reloading carry the same lantern and l
   assertEqual(restored.store.get().satchel, [], "the original realm ending still owns the reward");
   f.scene.clearWinterForkCues();
   assert(!lantern.scene && !hollow.scene, "scene cleanup releases both held art and the planted tree");
+});
+
+await suite("Winter firefly task: each live phrase names the current action after normal or saved Continue", async () => {
+  for (const reducedMotion of [false, true]) {
+    const initial = emptySave(); initial.reducedMotion = reducedMotion;
+    const f = fixture(initial); f.scene.startFireflyBranch(2); f.continue();
+    assertEqual(f.objectives.at(-1), `Type ${f.target().word}.`, "the first live task names the visible follow phrase");
+    f.target().onComplete();
+    const restored = await f.reload(); restored.scene.startFireflyBranch(2);
+    assert(restored.gate() && !restored.target(), "restoring the earned response preserves its original reading gate");
+    for (const active of [f, restored]) {
+      active.continue();
+      assertEqual(active.target().word, "take the lantern", "the native next phrase is unchanged");
+      assertEqual(active.objectives.at(-1), `Type ${active.target().word}.`, "taking the lantern never retains the earlier following task");
+      assertEqual(active.store.get().satchel, [], "task updates cannot award the branch's keepsake");
+    }
+    const live = await restored.reload(); live.scene.startFireflyBranch(2);
+    assertEqual([live.target().word, live.objectives.at(-1)], ["take the lantern", "Type take the lantern."], "restoring the live second phrase restores its matching task without an extra Continue");
+  }
 });
 
 await Promise.all(stores.map(store => store.flush()));

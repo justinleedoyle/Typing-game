@@ -155,7 +155,7 @@ class ChapterPauseMenu extends Phaser.Scene {
       this.busy = false;
       this.canResolve = error instanceof SaveConflictError;
       this.message.setText(this.canResolve
-        ? "Another device changed this journey. Your local copy is kept.\nPress T or click here to choose a save at the title."
+        ? `${error instanceof Error ? error.message : "Saving needs attention."}\nPress T or click here to choose a save at the title.`
         : "Could not finish saving. Your session is still here.\nTry again, or press Esc to keep playing.");
       if (this.canResolve) this.message.setInteractive({ useHandCursor: true });
     }

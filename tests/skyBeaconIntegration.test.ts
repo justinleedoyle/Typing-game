@@ -47,7 +47,7 @@ const url = new URL("../src/scenes/SkyIslandScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
 const methods = ["createBeaconFlameCue", "fitBeaconPainting", "dimBeaconFlameVisual", "takeBeaconSparkVisual", "showHeldBeaconSpark", "clearHeldBeaconSpark", "clearSkyForkCues", "startFork1StealFlame", "runPassageChain", "skyOwnedWordPosition", "makeSkyForkWord", "fadeOutForkCue",
-  "showFork2Cues", "createKindAnswerCue", "createTetherThreadCue", "releaseFork2Spirit", "startFork2", "startFork2KindEnding", "startFork2CutTether", "startLanternMothGate", "onBossDefeated", "resumeSky"];
+  "showFork2Cues", "createKindAnswerCue", "createTetherThreadCue", "releaseFork2Spirit", "startFork2", "startFork2KindEnding", "startFork2CutTether", "startLanternMothGate", "onBossDefeated", "resumeSky", "drawAmbientLanterns", "setAmbientLanternFieldAlpha", "clearAmbientLanterns"];
 const constantNames = ["SCHOLAR_SPIRIT_HEIGHT", "SKY_WREN_STAGE_X", "SKY_WREN_STAGE_Y"];
 const constants = source.statements.filter(ts.isVariableStatement).flatMap(statement => statement.declarationList.declarations
   .filter(declaration => constantNames.includes(declaration.name.getText(source))).map(declaration => `const ${declaration.getText(source)};`)).join("\n");
@@ -72,6 +72,9 @@ function fixture(reduced = false) {
       add(child: any) { this.children.push(child); return this; }, getByName(name: string) { return this.children.find(child => child.name === name && child.scene) ?? null; },
       once(_event: string, callback: () => void) { destroyCallbacks.push(callback); return this; },
       lineStyle() { return this; }, points: [] as Array<{ x: number; y: number }>,
+      fills: [] as any[], fillColor: 0, fillAlpha: 0,
+      fillStyle(color: number, alpha: number) { this.fillColor = color; this.fillAlpha = alpha; return this; },
+      fillEllipse(x: number, y: number, width: number, height: number) { this.fills.push({ x, y, width, height, color: this.fillColor, alpha: this.fillAlpha }); return this; },
       strokePoints(points: Array<{ x: number; y: number }>) { this.points = points; return this; },
       destroy() { if (!this.scene) return; this.scene = false; for (const callback of destroyCallbacks) callback(); for (const child of this.children) child.destroy?.(); },
     };
@@ -104,11 +107,11 @@ function fixture(reduced = false) {
     checkpoint(step: string, data = {}) { checkpoints.push({ step, data }); },
     savedStageData(step: string) { return s.resumeCheckpoint?.step === step ? s.resumeCheckpoint.data : {}; },
     scale: { width: 1920, height: 1080 }, wrenContainer: prop(960, 826), wrenSprite: {},
-    heldBeaconSpark: null, forkChoiceWordAnchors: [], kindAnswerCue: null, tetherThreadCue: null, fork2Scholar: null, fork2Tether: null,
+    heldBeaconSpark: null, forkChoiceWordAnchors: [], kindAnswerCue: null, tetherThreadCue: null, fork2Scholar: null, fork2Tether: null, ambientLanterns: [],
     add: { container: prop, graphics: () => prop(0, 0), image(x: number, y: number, key: string) { const image = prop(x, y, key); images.push(image); return image; } },
-    tweens: { add(options: any) { tweens.push(options); return options; }, killTweensOf(body: any) { for (const tween of tweens) if (tween.targets === body) tween.killed = true; } },
+    tweens: { add(options: any) { tweens.push(options); return options; }, killTweensOf(body: any) { for (const tween of tweens) if (tween.targets === body || Array.isArray(tween.targets) && tween.targets.includes(body)) tween.killed = true; } },
     band: { setObjective: noop }, hideEtta: noop, commitFork: (_key: string, value: string) => value,
-    setTempleBeamsActive: noop, setAmbientLanternFieldAlpha: noop, narration: { say: noop }, spawnBossLanternBurst: noop,
+    setTempleBeamsActive: noop, narration: { say: noop }, spawnBossLanternBurst: noop,
     quietLordFiredInPhase2: true, time: { delayedCall(delay: number, callback: () => void) { timers.push({ delay, callback }); } },
     readThen(callback: () => void) { assert(!next, "an unread result cannot be overwritten"); next = callback; },
     setNarrator(text: string) {
@@ -124,9 +127,12 @@ function fixture(reduced = false) {
     store: { get: () => state, update(edit: (save: typeof state) => void) { edit(state); } }, startAct3() { acts++; },
     startTrueNamePassage() { moths++; },
   });
+  s.drawAmbientLanterns();
   s.beaconFlameCue = s.createBeaconFlameCue();
   const settle = (tween: any) => {
-    for (const key of ["x", "y", "alpha"]) if (typeof tween[key] === "number") tween.targets[key] = tween[key];
+    for (const target of Array.isArray(tween.targets) ? tween.targets : [tween.targets]) {
+      for (const key of ["x", "y", "alpha"]) if (typeof tween[key] === "number") target[key] = tween[key];
+    }
     tween.onComplete?.();
   };
   return { s, images, tweens, wakes, attentions, targets, anchors, captions, state, timers, checkpoints, acts: () => acts, moths: () => moths, settle, prop,
@@ -300,5 +306,74 @@ await suite("Sky final choice consequences: both earned branches and restored he
     late.forEach(f.settle);
     f.s.clearSkyForkCues();
     assert(f.images.every(i => !i.scene), "settled branch departure and cleanup leave no painted subjects behind");
+  }
+});
+
+await suite("Sky terrace light: the existing painting owns stationary soft blooms and its dim/restore states", () => {
+  for (const reduced of [false, true]) {
+    const f = fixture(reduced), lights = f.s.ambientLanterns;
+    const shapes = lights.map((light: any) => JSON.stringify(light.fills));
+    assert(lights.length > 0 && lights.every((light: any) => light.fills.length > 1), "each painted lantern has a feathered light layer rather than a second outlined body");
+    assert(lights.every((light: any) => light.fills.every((fill: any) => fill.x === light.fills[0].x && fill.y === light.fills[0].y)), "all bloom rings share one fixed painted source");
+    assert(!f.tweens.some(t => lights.includes(t.targets)), "ambient lights no longer drift away from the painting's hanging cords");
+    f.s.setAmbientLanternFieldAlpha(0.12, 520);
+    if (!reduced) f.settle(f.tweens.at(-1));
+    assert(lights.every((light: any) => light.alpha === 0.12), "the original arrival dim still applies to every light");
+    f.s.setAmbientLanternFieldAlpha(0.42, 760);
+    if (!reduced) f.settle(f.tweens.at(-1));
+    assert(lights.every((light: any) => light.alpha === 0.42), "the original traversal restore still reaches its resting light");
+    assertEqual(lights.map((light: any) => JSON.stringify(light.fills)), shapes, "brightness never moves, scales or redraws the physical sources");
+    const before = [...lights];
+    f.s.drawAmbientLanterns();
+    assert(before.every(light => !light.scene) && f.s.ambientLanterns.every((light: any) => light.alpha === 0.42), "rebuilding clears old lights and restores the original resting state");
+    f.s.clearAmbientLanterns();
+    assertEqual(f.s.ambientLanterns, [], "chapter shutdown releases the owned light layer");
+  }
+});
+
+await suite("Sky kind answer: original completion visibly brightens the existing lights without owning Continue", () => {
+  for (const reduced of [false, true]) {
+    const f = fork2Fixture(reduced); f.s.startFork2();
+    f.targets.find(t => t.word === "answer kindly").onComplete(); f.next();
+    assert(f.s.ambientLanterns.every((light: any) => light.alpha === 0.42), "choosing kindness alone cannot show its unearned light consequence");
+    const typing = reloadFork2(f, reduced);
+    assert(typing.s.ambientLanterns.every((light: any) => light.alpha === 0.42), "restoring the live phrase retains the pre-answer brightness");
+    f.targets.at(-1).onComplete();
+    const brightening = f.tweens.find(t => Array.isArray(t.targets) && t.alpha === 1);
+    if (reduced) {
+      assert(!brightening && f.s.ambientLanterns.every((light: any) => light.alpha === 1), "reduced motion reaches the distinct brighter state immediately");
+    } else {
+      assert(brightening && brightening.duration === 640, "normal motion decoratively brightens the existing light layer");
+    }
+    assert(f.captions.at(-1)!.includes("lanterns across the terrace brighten"), "the original outcome caption remains paired with the actual light change");
+    const held = reloadFork2(f, reduced);
+    assert(held.s.ambientLanterns.every((light: any) => light.alpha === 1), "the held-result checkpoint restores the completed brightness immediately");
+    assert(!held.tweens.some(t => Array.isArray(t.targets)), "restored consequences do not replay a decorative light transition");
+    f.next();
+    assertEqual(f.moths(), 1, "Continue advances immediately even before normal brightening settles");
+    assertEqual(f.state.satchel, [], "the light change cannot grant a new reward");
+    if (brightening) f.settle(brightening);
+    assert(f.s.ambientLanterns.every((light: any) => light.alpha === 1), "the completed answer is visibly brighter than the pre-answer state");
+    for (const stage of ["moth", "moth-answer", "true-name", "ending"]) {
+      const later = fork2Fixture(reduced);
+      Object.assign(later.s, { fork2Choice: "answer-kindly", resumeCheckpoint: { step: stage, data: {} }, showMothAnswer: noop, startEnding: noop });
+      later.s.resumeSky();
+      assert(later.s.ambientLanterns.every((light: any) => light.alpha === 1), `the earned light persists through a ${stage} reload`);
+    }
+    const cancel = fork2Fixture(reduced); cancel.s.setAmbientLanternFieldAlpha(1, 640);
+    const pending = cancel.tweens.find(t => Array.isArray(t.targets));
+    const owned = [...cancel.s.ambientLanterns]; cancel.s.clearAmbientLanterns();
+    assert(owned.every(light => !light.scene) && (!pending || pending.killed), "leaving cancels pending light changes before destroying their sources");
+  }
+});
+
+await suite("Sky cut tether: the opposite original outcome does not inherit kindness brightness", () => {
+  for (const reduced of [false, true]) {
+    const f = fork2Fixture(reduced); f.s.startFork2();
+    f.targets.find(t => t.word === "cut the tether").onComplete(); f.next();
+    f.targets.at(-1).onComplete(); f.next(); f.targets.at(-1).onComplete();
+    assert(f.s.ambientLanterns.every((light: any) => light.alpha === 0.42), "the two native cutting phrases preserve their original light state");
+    const held = reloadFork2(f, reduced);
+    assert(held.s.ambientLanterns.every((light: any) => light.alpha === 0.42), "restoring the opposite result cannot claim kindness's visible consequence");
   }
 });

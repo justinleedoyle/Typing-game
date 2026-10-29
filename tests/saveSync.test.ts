@@ -4,9 +4,10 @@ import { assert, assertEqual, suite } from "./_assert";
 import {
   emptySave, migrate, SaveStore, LocalStorageBackend, SyncedBackend,
   SupabaseBackend, InvalidSaveError, UnsupportedSaveVersionError,
-  SaveConflictError, CloudSaveError, CURRENT_SCHEMA_VERSION,
-  type SaveState, type SaveBackend, type StoragePort, type CloudSaveBackend,
+  SaveConflictError, LocalSaveConflictError, CloudSaveError, CURRENT_SCHEMA_VERSION,
+  type SaveState, type SaveBackend, type StoragePort, type CloudSaveBackend, type LocalSaveLock,
 } from "../src/game/saveState";
+import { resetSave } from "../src/game/resetSave";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
@@ -480,4 +481,174 @@ await suite("Supabase direct save: legacy adapter use cannot replace a newer jou
   assert(await rejects(backend.save({ ...state("Old device", 500), runId: "old-run" }), SaveConflictError),
     "direct SaveBackend usage also requires a save choice");
   assertEqual(db.get()?.profileName, "New journey", "existing cloud state preserved");
+});
+
+await suite("device saves: a stale guest window cannot erase a completed chapter or its backup", async () => {
+  const storage = new MemoryStorage(), cloud = new FakeCloud(); cloud.user = null;
+  const seed = new LocalStorageBackend(storage), initial = state("Shared guest", 100);
+  initial.typewriterAwakened = true; initial.realms["winter-mountain"] = { cleared: false, choices: {} };
+  await seed.save(initial);
+  const backendA = new SyncedBackend(new LocalStorageBackend(storage), cloud);
+  const backendB = new SyncedBackend(new LocalStorageBackend(storage), cloud);
+  const backendC = new SyncedBackend(new LocalStorageBackend(storage), cloud);
+  const a = await SaveStore.load(backendA), b = await SaveStore.load(backendB), c = await SaveStore.load(backendC);
+  a.update(s => { s.realms["winter-mountain"].cleared = true; s.realms["winter-mountain"].choices.fork1 = "huntress"; s.satchel.push("hunters-horn"); });
+  await a.flush();
+  const primary = storage.getItem(seed.storageKey), backup = storage.getItem(`${seed.storageKey}.lkg`);
+  b.recordKeystroke("x", true);
+  assert(await rejects(b.flush(), LocalSaveConflictError), "stale guest write becomes a recoverable device choice");
+  assert(b.getLastError() instanceof LocalSaveConflictError, "SaveStore exposes the real conflict to pause/error UI");
+  assertEqual([storage.getItem(seed.storageKey), storage.getItem(`${seed.storageKey}.lkg`)], [primary, backup], "neither primary nor last-known-good is touched by the first stale write");
+  const choice = backendB.getConflict()!;
+  assertEqual([choice.kind, choice.local.keyStats.x.hits, choice.cloud.realms["winter-mountain"].cleared, choice.cloud.satchel.includes("hunters-horn")], ["device", 1, true, true], "both the blocked session and earned durable chapter are recoverable");
+  b.recordKeystroke("x", true);
+  assert(await rejects(b.flush(), LocalSaveConflictError), "the stale window's second write is still blocked");
+  assertEqual(backendB.getConflict()!.local.keyStats.x.hits, 2, "the same conflicting window updates only its bounded incoming recovery snapshot");
+  assertEqual([storage.getItem(seed.storageKey), storage.getItem(`${seed.storageKey}.lkg`)], [primary, backup], "a second stale autosave cannot rotate away the earned chapter");
+  const pair = storage.getItem(`${seed.storageKey}.device-conflict.pending`);
+  c.update(s => { s.profileName = "Third window stays open"; });
+  assert(await rejects(c.flush(), Error), "a third writer is visibly blocked while another pair awaits a choice");
+  assert(!(c.getLastError() instanceof SaveConflictError), "third-window new progress is not falsely described as a durably preserved choice");
+  assertEqual(c.get().profileName, "Third window stays open", "the third writer retains its new in-memory progress");
+  assertEqual(storage.getItem(`${seed.storageKey}.device-conflict.pending`), pair, "the third writer cannot replace either existing recovery alternative");
+  assertEqual(storage.values.size, 3, "repeated blocked writes create one fixed pending slot rather than timestamped history");
+  assertEqual(cloud.writes, [], "guest conflict handling never calls cloud writes");
+});
+
+await suite("device saves: explicit recovery preserves both alternatives across reload and later autosaves", async () => {
+  for (const source of ["local", "cloud"] as const) {
+    const storage = new MemoryStorage(), a = new LocalStorageBackend(storage), b = new LocalStorageBackend(storage);
+    await a.save(state("Base", 100)); await b.load();
+    const current = { ...state("Earned on device", 200), satchel: ["hunters-horn"] };
+    const incoming = { ...state("Blocked window", 300), satchel: ["lantern"] };
+    await a.save(current);
+    assert(await rejects(b.save(incoming), LocalSaveConflictError), "independent stale writer requires a decision");
+    const titleBackend = new LocalStorageBackend(storage);
+    assert(await rejects(titleBackend.load(), LocalSaveConflictError), "a genuine reload exposes the preserved choice instead of silently choosing primary");
+    assertEqual(titleBackend.getConflict(), { kind: "device", local: incoming, cloud: current }, "incoming and device labels survive backend recreation");
+    const selected = await titleBackend.resolveConflict(source);
+    assertEqual(selected.profileName, source === "local" ? incoming.profileName : current.profileName, "only the explicitly selected journey becomes primary");
+    assert(selected.updatedAt > incoming.updatedAt && selected.updatedAt > current.updatedAt, "chosen snapshot has a fresh monotonic timestamp");
+    assertEqual(titleBackend.getLastDeviceRecovery(), { kind: "device", local: incoming, cloud: current }, "the nonselected alternative remains in a separate fixed recovery archive");
+    assertEqual(titleBackend.getConflict(), null, "resolved choice no longer blocks loading");
+    for (let i = 0; i < 3; i++) await titleBackend.save({ ...selected, profileName: `Continued ${i}`, updatedAt: selected.updatedAt + i + 1 });
+    assertEqual(titleBackend.getLastDeviceRecovery(), { kind: "device", local: incoming, cloud: current }, "ordinary successful autosaves cannot rotate away the nonselected journey");
+    assertEqual((await new LocalStorageBackend(storage).load())?.profileName, "Continued 2", "the selected journey remains normally loadable");
+    assertEqual(storage.values.size, 4, "local conflict retention has a fixed primary, backup, pending and previous footprint");
+  }
+});
+
+await suite("device saves: a changed primary refreshes recovery choices before any selected overwrite", async () => {
+  const storage = new MemoryStorage(), a = new LocalStorageBackend(storage), b = new LocalStorageBackend(storage);
+  await a.save(state("Base", 100)); await b.load(); await a.save(state("First device version", 200));
+  await rejects(b.save(state("Blocked incoming", 300)), LocalSaveConflictError);
+  const later = state("A later external write", 400);
+  storage.setItem(a.storageKey, JSON.stringify(later));
+  const backup = storage.getItem(`${a.storageKey}.lkg`);
+  assert(await rejects(b.resolveConflict("local"), LocalSaveConflictError), "a write made while the modal was open requires another informed choice");
+  assertEqual([storage.getItem(a.storageKey), storage.getItem(`${a.storageKey}.lkg`)], [JSON.stringify(later), backup], "the stale selection changes neither the new primary nor its backup");
+  assertEqual([b.getConflict()!.local.profileName, b.getConflict()!.cloud.profileName], ["Blocked incoming", later.profileName], "refreshed choices preserve the incoming journey and show current device progress");
+  assertEqual((await b.resolveConflict("cloud")).profileName, later.profileName, "a second explicit decision can safely keep the refreshed durable journey");
+  assertEqual(b.getLastDeviceRecovery()!.local.profileName, "Blocked incoming", "the original incoming journey remains recoverable after the refreshed choice");
+});
+
+await suite("device saves: cooperating asynchronous writers share a per-slot critical section", async () => {
+  const storage = new MemoryStorage(), tails = new Map<string, Promise<void>>();
+  let active = 0, maximum = 0;
+  const lock: LocalSaveLock = { run<T>(slot: string, work: () => T): Promise<T> {
+    const task = (tails.get(slot) ?? Promise.resolve()).then(async () => {
+      active++; maximum = Math.max(maximum, active);
+      await sleep(1);
+      try { return work(); } finally { active--; }
+    });
+    tails.set(slot, task.then(() => {}, () => {}));
+    return task;
+  } };
+  // Independent port objects model separate windows over the same bytes. The
+  // injected origin-wide lock models Web Locks, not a fake atomic setItem.
+  const port = (): StoragePort => ({ getItem: key => storage.getItem(key), setItem: (key, value) => storage.setItem(key, value) });
+  const a = new LocalStorageBackend(port(), null, lock), b = new LocalStorageBackend(port(), null, lock);
+  await a.save(state("Base", 100)); await Promise.all([a.load(), b.load()]);
+  const results = await Promise.allSettled([a.save(state("Writer A", 200)), b.save(state("Writer B", 300))]);
+  assertEqual(maximum, 1, "no two origin-wide critical sections overlap");
+  assertEqual(results.map(result => result.status), ["fulfilled", "rejected"], "the first writer succeeds and the second observes its changed revision");
+  assertEqual(JSON.parse(storage.getItem(a.storageKey)!).profileName, "Writer A", "the first committed write is not lost to async scheduling");
+  assertEqual(JSON.parse(storage.getItem(`${a.storageKey}.lkg`)!).profileName, "Base", "the rejected writer cannot replace the backup");
+  assertEqual(b.getConflict()!.local.profileName, "Writer B", "the blocked simultaneous writer has a reachable recovery alternative");
+});
+
+await suite("device saves: legitimate serial writes, legacy migration and own reset keep working", async () => {
+  const storage = new MemoryStorage(), backend = new LocalStorageBackend(storage);
+  storage.setItem(backend.storageKey, JSON.stringify({ profileName: "Legacy", typewriterAwakened: true, realms: {}, updatedAt: 100 }));
+  const own = await SaveStore.load(backend), stale = await SaveStore.load(new LocalStorageBackend(storage));
+  own.recordKeystroke("a", true); await own.flush(); own.recordKeystroke("a", true); await own.flush();
+  assertEqual((await backend.load())?.keyStats.a.hits, 2, "own successive writes do not conflict with themselves");
+  assertEqual(JSON.parse(storage.getItem(backend.storageKey)!).schemaVersion, CURRENT_SCHEMA_VERSION, "legacy raw bytes migrate safely on a guarded first write");
+  const oldRun = own.get().runId; resetSave(own); await own.flush();
+  const resetRaw = storage.getItem(backend.storageKey), resetBackup = storage.getItem(`${backend.storageKey}.lkg`);
+  assert(own.get().runId !== oldRun && !own.get().typewriterAwakened, "an intentional reset by the current writer establishes a fresh run");
+  stale.recordKeystroke("b", true);
+  assert(await rejects(stale.flush(), LocalSaveConflictError), "the old window cannot revive a pre-reset journey even with a later local timestamp");
+  assertEqual([storage.getItem(backend.storageKey), storage.getItem(`${backend.storageKey}.lkg`)], [resetRaw, resetBackup], "both reset primary and backup survive the stale old run");
+});
+
+await suite("device saves: account isolation and selected recovery cannot upload an unselected queued branch", async () => {
+  const storage = new MemoryStorage(), cloud = new FakeCloud(), root = new LocalStorageBackend(storage);
+  const original = state("Account base", 100); await root.forUser("account-a").save(original); cloud.rows.set("account-a", original);
+  await root.save(state("Unrelated guest", 90)); await root.forUser("account-b").save(state("Unrelated B", 80));
+  const a = new SyncedBackend(new LocalStorageBackend(storage), cloud, { cloudDelayMs: 60_000 });
+  const b = new SyncedBackend(new LocalStorageBackend(storage), cloud, { cloudDelayMs: 60_000 });
+  await a.load(); await b.load();
+  const current = state("Queued nonselected A", 200), incoming = state("Chosen incoming B", 300);
+  await a.save(current);
+  assert(await rejects(b.save(incoming), LocalSaveConflictError), "signed-in same-device writers get the same local protection");
+  const account = root.forUser("account-a"), primary = storage.getItem(account.storageKey), pending = storage.getItem(`${account.storageKey}.device-conflict.pending`);
+  cloud.user = "account-b";
+  assert(await rejects(b.resolveConflict("local"), CloudSaveError), "account change prevents resolving into an earlier account's slot");
+  assertEqual([storage.getItem(account.storageKey), storage.getItem(`${account.storageKey}.device-conflict.pending`)], [primary, pending], "changed-account attempts alter neither the old primary nor recovery record");
+  cloud.user = "account-a";
+  assertEqual((await b.resolveConflict("local")).profileName, incoming.profileName, "verified same-account choice selects only the requested local journey");
+  await b.flush();
+  assertEqual(cloud.writes, [], "resolving the device modal does not silently authorize a cloud overwrite");
+  assert(await rejects(a.flush(), Error), "the other window's previously queued nonselected branch cannot upload after resolution");
+  assertEqual(cloud.writes, [], "stale queued cloud work remains blocked after the device choice");
+  assertEqual((await root.load())?.profileName, "Unrelated guest", "guest primary remains isolated");
+  assertEqual((await root.forUser("account-b").load())?.profileName, "Unrelated B", "the other account's primary remains isolated");
+  assertEqual(JSON.parse(storage.getItem(account.storageKey)!).profileName, incoming.profileName, "selected account journey stays primary");
+});
+
+await suite("device saves: failed recovery storage cannot claim a dirty session is safe to leave", async () => {
+  const storage = new MemoryStorage(), a = new LocalStorageBackend(storage), b = new LocalStorageBackend(storage);
+  await a.save(state("Base", 100)); await b.load(); await a.save(state("Durable A", 200));
+  const primary = storage.getItem(a.storageKey), backup = storage.getItem(`${a.storageKey}.lkg`);
+  const original = storage.setItem.bind(storage);
+  storage.setItem = (key, value) => { if (key.endsWith(".device-conflict.pending")) throw new Error("Simulated full storage"); original(key, value); };
+  let error: unknown;
+  try { await b.save(state("Still in memory", 300)); } catch (caught) { error = caught; }
+  assert(error instanceof Error && !(error instanceof SaveConflictError), "failed durable recovery produces an honest storage failure, not a false recovery-safe conflict");
+  assertEqual([storage.getItem(a.storageKey), storage.getItem(`${a.storageKey}.lkg`)], [primary, backup], "primary and backup stay untouched when conflict preservation fails");
+});
+
+await suite("device saves: guest recovery remains usable when authentication is offline", async () => {
+  const storage = new MemoryStorage(), a = new LocalStorageBackend(storage), b = new LocalStorageBackend(storage);
+  await a.save(state("Base guest", 100)); await b.load(); await a.save(state("Current guest", 200));
+  await rejects(b.save(state("Blocked guest", 300)), LocalSaveConflictError);
+  const cloud = new FakeCloud(); let identityChecks = 0;
+  cloud.currentUserId = async () => { identityChecks++; throw new CloudSaveError(); };
+  const reopened = new SyncedBackend(new LocalStorageBackend(storage), cloud);
+  assert(await rejects(reopened.load(), LocalSaveConflictError), "an auth failure still exposes the safe guest-slot recovery choice");
+  assertEqual((await reopened.resolveConflict("local")).profileName, "Blocked guest", "choosing guest progress works without a network-dependent account check");
+  await reopened.flush();
+  assertEqual([identityChecks, cloud.writes.length], [1, 0], "offline guest recovery neither rechecks auth nor queues an account upload");
+});
+
+await suite("device saves: damaged recovery metadata preserves progress without breaking the title error probe", async () => {
+  const storage = new MemoryStorage(), backend = new LocalStorageBackend(storage);
+  await backend.save(state("Current good journey", 100));
+  const raw = storage.getItem(backend.storageKey);
+  storage.setItem(`${backend.storageKey}.device-conflict.pending`, "broken recovery bytes");
+  assert(await rejects(backend.load(), InvalidSaveError), "damaged recovery metadata refuses loading instead of silently discarding it");
+  assertEqual(backend.getConflict(), null, "the title can safely ask whether its failed load has a renderable choice");
+  assert(await rejects(backend.save(state("Must not replace", 200)), InvalidSaveError), "damaged recovery metadata also prevents blind writes");
+  assertEqual(storage.getItem(backend.storageKey), raw, "valid primary progress remains untouched while recovery metadata needs attention");
 });

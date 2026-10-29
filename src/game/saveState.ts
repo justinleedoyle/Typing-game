@@ -73,6 +73,11 @@ export class SaveConflictError extends Error {
     super(message); this.name = "SaveConflictError";
   }
 }
+export class LocalSaveConflictError extends SaveConflictError {
+  constructor(message = "Another window changed this device's save. Both journeys are preserved; choose one before continuing.") {
+    super(message); this.name = "LocalSaveConflictError";
+  }
+}
 export class CloudSaveError extends Error {
   constructor(message = "Cloud saving is unavailable. Your progress is still saved on this device.") {
     super(message); this.name = "CloudSaveError";
@@ -186,6 +191,9 @@ export function migrate(raw: unknown): SaveState {
 export interface SaveConflict {
   local: SaveState;
   cloud: SaveState;
+  /** For device conflicts, local is the blocked window and cloud is the
+   * durable device copy. The historical field names keep existing callers. */
+  kind?: "cloud" | "device";
 }
 export type SaveSource = "local" | "cloud";
 export interface SaveBackend {
@@ -200,6 +208,34 @@ export interface SaveBackend {
 export interface StoragePort {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
+}
+export interface LocalSaveLock {
+  run<T>(slot: string, work: () => T): Promise<T>;
+}
+const localWriteQueues = new Map<string, Promise<void>>();
+const defaultLocalLock: LocalSaveLock = {
+  run<T>(slot: string, work: () => T): Promise<T> {
+    // Web Locks serialize cooperating documents, not merely promises in one
+    // tab. The fallback is deliberately limited to this JavaScript process;
+    // injected test ports and legacy browsers still get optimistic checks.
+    if (typeof navigator !== "undefined" && navigator.locks?.request) {
+      return navigator.locks.request(`portalwrights-save:${slot}`, work);
+    }
+    const previous = localWriteQueues.get(slot) ?? Promise.resolve();
+    const task = previous.then(work);
+    const tail = task.then(() => {}, () => {});
+    localWriteQueues.set(slot, tail);
+    void tail.then(() => { if (localWriteQueues.get(slot) === tail) localWriteQueues.delete(slot); });
+    return task;
+  },
+};
+let localWriterSequence = 0;
+interface DeviceConflictRecord {
+  version: 1;
+  writer: string;
+  currentRaw: string | null;
+  local: SaveState;
+  cloud: SaveState;
 }
 const STORAGE_KEY = "portalwrights-almanac.save.v1";
 function browserStorage(): StoragePort {
@@ -225,16 +261,46 @@ export function loadLastKnownGood(storage: StoragePort = browserStorage(), key =
 }
 
 export class LocalStorageBackend implements SaveBackend {
-  constructor(private readonly storage: StoragePort = browserStorage(), readonly userId: string | null = null) {}
+  private observedRaw: string | null | undefined;
+  private readonly writer = `${Date.now()}-${++localWriterSequence}-${Math.random().toString(36).slice(2)}`;
+  constructor(private readonly storage: StoragePort = browserStorage(), readonly userId: string | null = null, private readonly lock: LocalSaveLock = defaultLocalLock) {}
   get storageKey(): string { return this.userId === null ? STORAGE_KEY : `${STORAGE_KEY}.user.${encodeURIComponent(this.userId)}`; }
-  forUser(userId: string | null): LocalStorageBackend { return new LocalStorageBackend(this.storage, userId); }
-  preserveConflict(source: SaveSource, state: SaveState): void {
-    // Kept separately from the rotating last-known-good slot: choosing one
-    // branch must not make the unchosen branch disappear on the next autosave.
-    this.storage.setItem(`${this.storageKey}.conflict.${source}.${Date.now()}.${state.updatedAt}`, JSON.stringify(migrate(state)));
+  forUser(userId: string | null): LocalStorageBackend { return new LocalStorageBackend(this.storage, userId, this.lock); }
+  private get pendingKey(): string { return `${this.storageKey}.device-conflict.pending`; }
+  private get recoveryKey(): string { return `${this.storageKey}.device-conflict.previous`; }
+  private readDeviceRecord(key: string): DeviceConflictRecord | null {
+    const raw = this.storage.getItem(key);
+    if (raw === null || raw === "null") return null;
+    let value: unknown;
+    try { value = JSON.parse(raw); } catch { throw new InvalidSaveError("Device save recovery data could not load. It has been preserved."); }
+    if (!record(value) || value.version !== 1 || typeof value.writer !== "string" ||
+        !(value.currentRaw === null || typeof value.currentRaw === "string")) return invalid("device conflict");
+    return { version: 1, writer: value.writer, currentRaw: value.currentRaw, local: migrate(value.local), cloud: migrate(value.cloud) };
   }
-  async load(): Promise<SaveState | null> {
-    const raw = this.storage.getItem(this.storageKey);
+  private deviceChoice(value: DeviceConflictRecord): SaveConflict {
+    return { kind: "device", local: migrate(value.local), cloud: migrate(value.cloud) };
+  }
+  getConflict(): SaveConflict | null {
+    // Loading/writing reports damaged recovery bytes. This UI probe must not
+    // throw a second error while the title is already handling that failure.
+    try {
+      const pending = this.readDeviceRecord(this.pendingKey);
+      return pending ? this.deviceChoice(pending) : null;
+    } catch { return null; }
+  }
+  /** One bounded archive remains after an explicit choice; subsequent ordinary
+   * autosaves never rotate away the nonselected journey. */
+  getLastDeviceRecovery(): SaveConflict | null {
+    const previous = this.readDeviceRecord(this.recoveryKey);
+    return previous ? this.deviceChoice(previous) : null;
+  }
+  /** An older window must not upload its queued branch after another window
+   * explicitly chose a different device journey. */
+  async isCurrentWriter(): Promise<boolean> {
+    return this.lock.run(this.storageKey, () => this.observedRaw !== undefined &&
+      this.storage.getItem(this.storageKey) === this.observedRaw && !this.readDeviceRecord(this.pendingKey));
+  }
+  private currentState(raw: string | null): SaveState | null {
     if (raw !== null) {
       try { return parseSave(raw); }
       catch (error) {
@@ -246,17 +312,82 @@ export class LocalStorageBackend implements SaveBackend {
     }
     return loadLastKnownGood(this.storage, this.storageKey);
   }
+  private keepDeviceConflict(state: SaveState, raw: string | null): never {
+    const current = this.currentState(raw) ?? emptySave();
+    const pending: DeviceConflictRecord = { version: 1, writer: this.writer, currentRaw: raw, local: migrate(state), cloud: current };
+    // If this bounded recovery write fails, propagate the storage error instead
+    // of claiming that the in-memory journey is safe to leave behind.
+    this.storage.setItem(this.pendingKey, JSON.stringify(pending));
+    throw new LocalSaveConflictError();
+  }
+  preserveConflict(source: SaveSource, state: SaveState): void {
+    // Kept separately from the rotating last-known-good slot: choosing one
+    // branch must not make the unchosen branch disappear on the next autosave.
+    this.storage.setItem(`${this.storageKey}.conflict.${source}.${Date.now()}.${state.updatedAt}`, JSON.stringify(migrate(state)));
+  }
+  async load(): Promise<SaveState | null> {
+    return this.lock.run(this.storageKey, () => {
+      const raw = this.storage.getItem(this.storageKey);
+      const current = this.currentState(raw);
+      this.observedRaw = raw;
+      const pending = this.readDeviceRecord(this.pendingKey);
+      if (pending) {
+        if (pending.currentRaw !== raw) {
+          pending.currentRaw = raw; pending.cloud = current ?? emptySave();
+          this.storage.setItem(this.pendingKey, JSON.stringify(pending));
+        }
+        throw new LocalSaveConflictError();
+      }
+      return current;
+    });
+  }
   async save(state: SaveState): Promise<void> {
     const valid = migrate(state);
-    const previous = this.storage.getItem(this.storageKey);
-    // An old game build must never overwrite progress from a newer one, even
-    // if a caller skipped load(). Corrupt bytes do not replace the backup.
-    if (previous !== null) {
-      try { parseSave(previous); }
-      catch (error) { if (error instanceof UnsupportedSaveVersionError) throw error; }
-    }
+    return this.lock.run(this.storageKey, () => {
+      const raw = this.storage.getItem(this.storageKey);
+      if (raw !== null) {
+        try { parseSave(raw); }
+        catch (error) { if (error instanceof UnsupportedSaveVersionError) throw error; }
+      }
+      const pending = this.readDeviceRecord(this.pendingKey);
+      if (pending) {
+        if (pending.writer === this.writer) this.keepDeviceConflict(valid, raw);
+        throw new Error("Another window has an unresolved device-save choice. This window's new progress is still in this session; keep it open until that choice is resolved.");
+      }
+      if (raw !== this.observedRaw && !(this.observedRaw === undefined && raw === null)) {
+        // An identical retry can simply adopt the current revision. Otherwise
+        // even a new adapter must load first, not overwrite an existing slot.
+        if (raw !== null && sameSave(valid, parseSave(raw))) { this.observedRaw = raw; return; }
+        this.keepDeviceConflict(valid, raw);
+      }
+      this.writeValid(valid);
+    });
+  }
+  private writeValid(valid: SaveState): void {
     snapshotLastKnownGood(this.storage, this.storageKey);
-    this.storage.setItem(this.storageKey, JSON.stringify(valid));
+    const raw = JSON.stringify(valid);
+    this.storage.setItem(this.storageKey, raw);
+    this.observedRaw = raw;
+  }
+  async resolveConflict(source: SaveSource): Promise<SaveState> {
+    return this.lock.run(this.storageKey, () => {
+      const pending = this.readDeviceRecord(this.pendingKey);
+      if (!pending) throw new LocalSaveConflictError("There is no pending device-save choice.");
+      const raw = this.storage.getItem(this.storageKey);
+      const current = this.currentState(raw);
+      if (pending.currentRaw !== raw) {
+        pending.currentRaw = raw; pending.cloud = current ?? emptySave();
+        this.storage.setItem(this.pendingKey, JSON.stringify(pending));
+        throw new LocalSaveConflictError("The device save changed while this choice was open. Review the refreshed journeys before continuing.");
+      }
+      // Preserve both alternatives before changing either the primary or its
+      // rotating backup. Exactly one previous conflict is retained per slot.
+      this.storage.setItem(this.recoveryKey, JSON.stringify(pending));
+      const selected = migrate({ ...pending[source], updatedAt: Math.max(Date.now(), pending.local.updatedAt + 1, pending.cloud.updatedAt + 1) });
+      this.writeValid(selected);
+      this.storage.setItem(this.pendingKey, "null");
+      return selected;
+    });
   }
 }
 
@@ -419,6 +550,8 @@ export class SyncedBackend implements SaveBackend {
   }
   getLastError(): Error | null { return this.cloudError; }
   getConflict(): SaveConflict | null {
+    const device = this.scoped.getConflict();
+    if (device) return device;
     return this.conflict ? { local: migrate(this.conflict.local), cloud: migrate(this.conflict.cloud) } : null;
   }
   private checkCompatibility(local: SaveState, cloud: SaveState): void {
@@ -483,6 +616,7 @@ export class SyncedBackend implements SaveBackend {
     const owner = this.owner;
     this.pendingCloud = null;
     const write = this.cloudChain.then(async () => {
+      if (!await this.scoped.isCurrentWriter()) throw new Error("The device save changed in another window. Reopen or resolve its device-save choice before syncing; pending cloud work has been retained.");
       const remote = await this.cloud.load(owner);
       const current = remote === null ? null : migrate(remote);
       if (this.observedCloud !== undefined) {
@@ -501,6 +635,7 @@ export class SyncedBackend implements SaveBackend {
         if (current.updatedAt > snapshot.updatedAt) this.cloudChanged(snapshot, current);
       }
       this.observedCloud = current;
+      if (!await this.scoped.isCurrentWriter()) throw new Error("The device save changed in another window. Reopen or resolve its device-save choice before syncing; pending cloud work has been retained.");
       if (!this.cloud.saveIfUnchanged) throw new CloudSaveError("This cloud adapter cannot protect simultaneous saves. Your device progress is preserved.");
       if (!await this.cloud.saveIfUnchanged(snapshot, current, owner)) {
         const latest = await this.cloud.load(owner);
@@ -535,6 +670,19 @@ export class SyncedBackend implements SaveBackend {
     if (this.cloudError) throw this.cloudError;
   }
   async resolveConflict(source: SaveSource): Promise<SaveState> {
+    if (this.scoped.getConflict()?.kind === "device") {
+      // Guest recovery touches only the guest slot and needs no network or
+      // verified account. Account-scoped recovery must still verify its owner.
+      if (this.owner !== null && await this.cloud.currentUserId() !== this.owner) throw new CloudSaveError("The signed-in account changed. Reopen the game before choosing a device save.");
+      // This choice only authorizes replacing the device slot. Do not replay a
+      // previously queued, potentially nonselected branch to an account.
+      if (this.cloudTimer !== null) { clearTimeout(this.cloudTimer); this.cloudTimer = null; }
+      this.pendingCloud = null; this.cloudSequence++;
+      await this.cloudChain;
+      const selected = await this.scoped.resolveConflict(source);
+      this.observedCloud = undefined; this.cloudError = null; this.conflict = null;
+      return selected;
+    }
     const conflict = this.getConflict();
     if (!conflict || this.owner === null) throw new SaveConflictError("There is no pending account-save choice.");
     if (await this.cloud.currentUserId() !== this.owner) throw new CloudSaveError("The signed-in account changed. Reopen the game before choosing a save.");

@@ -527,8 +527,8 @@ const WINTER_LINES: readonly RunaLine[] = [
   {
     id: "winter_firefly_intro",
     scene: "winter",
-    trigger: "WinterMountainScene.startFireflyBranch() — fireflies dart up",
-    text: "Three fireflies hover at eye level, then dart up the slope.",
+    trigger: "WinterMountainScene.startFireflyBranch() — fireflies glow above the snow",
+    text: "A drift of fireflies glows just above the snow.",
     tone: "wonder",
   },
   {

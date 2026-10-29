@@ -4,7 +4,7 @@ import { setAudioLevel } from "../audio/context";
 import { applyDevUnlock, parseDevTarget } from "../game/devUnlock";
 import { SceneRunGuard } from "../game/sceneRunGuard";
 import { titleCheckpoint } from "../game/titleResume";
-import { saveChoiceFocus, saveJourneySummary } from "../game/saveChoice";
+import { saveChoiceFocus, saveChoicePresentation, saveJourneySummary } from "../game/saveChoice";
 import { SERIF } from "../game/palette";
 import {
   addAmbientDrift,
@@ -180,6 +180,15 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private loadStore(): Promise<SaveStore> {
+    const dev = parseDevTarget(typeof location !== "undefined" ? location.search : "");
+    if (dev.unlock) {
+      // Every review shortcut is a fresh, temporary journey. Never even open
+      // the player's durable backend for a URL that can unlock progression.
+      const satchel = dev.loadout === "bare" ? [] : dev.satchelOverride;
+      const store = this.createTemporaryDevStore(undefined, satchel);
+      this.storePromise = Promise.resolve(store);
+      return this.storePromise;
+    }
     const backend = this.backend ??
       (this.registry.get("saveBackend") as SaveBackend | undefined) ??
       new SyncedBackend();
@@ -475,41 +484,24 @@ export class TitleScene extends Phaser.Scene {
     const dev = parseDevTarget(
       typeof location !== "undefined" ? location.search : "",
     );
-    // Dev unlock (opt-in via ?dev) — unlock every realm + fill the satchel, and
-    // with ?dev=<target> jump straight into a realm or the finale. For art +
-    // feel-tuning; a no-op in normal play. The standard unlock persists to the
-    // cloud save; temporary loadouts (`loadout=bare` or `satchel=id,id`) use an
-    // in-memory store so they cannot wipe the player's real saved satchel.
-    const temporarySatchel = dev.loadout === "bare" ? [] : dev.satchelOverride;
-    const immediateTemporaryDevJump =
-      dev.unlock && temporarySatchel !== undefined && !!dev.realmSceneKey;
-    if (immediateTemporaryDevJump) {
-      this.store = this.createTemporaryDevStore(undefined, temporarySatchel);
-    } else {
-      try {
-        const loaded = await (this.storePromise ?? this.loadStore());
-        if (!this.run.isCurrent(token)) return;
-        this.store = loaded;
-      } catch {
-        if (!this.run.isCurrent(token)) return;
-        this.storePromise = undefined;
-        this.run.release("transition");
-        const conflict = this.backend?.getConflict?.();
-        if (conflict && this.backend?.resolveConflict) {
-          this.showSaveChoice(conflict);
-          return;
-        }
-        this.prompt.setText("Saved progress could not load.\nPress any key to retry.");
-        this.redrawPromptPlate();
+    // loadStore isolates every ?dev variant, including bare/unknown values.
+    // Normal play continues through the actual durable save and conflict UI.
+    try {
+      const loaded = await (this.storePromise ?? this.loadStore());
+      if (!this.run.isCurrent(token)) return;
+      this.store = loaded;
+    } catch {
+      if (!this.run.isCurrent(token)) return;
+      this.storePromise = undefined;
+      this.run.release("transition");
+      const conflict = this.backend?.getConflict?.();
+      if (conflict && this.backend?.resolveConflict) {
+        this.showSaveChoice(conflict);
         return;
       }
-    }
-    if (dev.unlock && this.store && !immediateTemporaryDevJump) {
-      if (temporarySatchel !== undefined) {
-        this.store = this.createTemporaryDevStore(this.store, temporarySatchel);
-      } else {
-        this.store.update(applyDevUnlock);
-      }
+      this.prompt.setText("Saved progress could not load.\nPress any key to retry.");
+      this.redrawPromptPlate();
+      return;
     }
     this.playTitleDepartureWake();
     this.time.delayedCall(240, () => {
@@ -541,6 +533,7 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private showSaveChoice(conflict: SaveConflict, message?: string): void {
+    const copy = saveChoicePresentation(conflict);
     this.saveChoicePanel?.destroy();
     this.selectedSave = null;
     this.resolvingSave = false;
@@ -555,7 +548,7 @@ export class TitleScene extends Phaser.Scene {
       fontFamily: SERIF, fontSize: "40px", color: UI_CSS.parchment, align: "center",
     }).setOrigin(0.5);
     const explanation = this.add.text(0, -222,
-      "This device and the cloud have different progress. Both versions will be kept.", {
+      copy.explanation, {
         fontFamily: SERIF, fontSize: "24px", color: UI_CSS.cream, align: "center",
       }).setOrigin(0.5);
     panel.add([shade, plate, title, explanation]);
@@ -573,7 +566,7 @@ export class TitleScene extends Phaser.Scene {
         this.focusSaveChoice(source);
         void this.resolveSaveChoice(source);
       });
-      const label = this.add.text(x, -126, source === "local" ? "This device  ·  L" : "Cloud save  ·  C", {
+      const label = this.add.text(x, -126, copy.labels[source], {
         fontFamily: SERIF, fontSize: "31px", color: UI_CSS.brass, align: "center",
       }).setOrigin(0.5);
       const summary = this.add.text(x, -38, saveJourneySummary(state), {
@@ -583,10 +576,10 @@ export class TitleScene extends Phaser.Scene {
       const date = new Date(state.updatedAt).toLocaleString(undefined, {
         dateStyle: "medium", timeStyle: "short",
       });
-      const saved = this.add.text(x, 62, `Saved ${date}`, {
+      const saved = this.add.text(x, 62, `${conflict.kind === "device" && source === "local" ? "Updated" : "Saved"} ${date}`, {
         fontFamily: SERIF, fontSize: "21px", color: UI_CSS.cream, align: "center",
       }).setOrigin(0.5);
-      const action = this.add.text(x, 122, source === "local" ? "Use this device's save" : "Use the cloud save", {
+      const action = this.add.text(x, 122, copy.actions[source], {
         fontFamily: SERIF, fontSize: "27px", color: UI_CSS.brass, align: "center",
       }).setOrigin(0.5);
       panel.add([box, label, summary, saved, action]);
@@ -640,29 +633,26 @@ export class TitleScene extends Phaser.Scene {
       if (!this.run.isCurrent(token)) return;
       const refreshed = this.backend.getConflict?.();
       if (refreshed) {
-        this.showSaveChoice(refreshed,
-          "The choice could not finish saving. Review these versions, then choose again when connected.");
+        this.showSaveChoice(refreshed, saveChoicePresentation(refreshed).retry);
       } else {
         this.resolvingSave = false;
-        this.saveChoiceMessage?.setText("The choice could not finish saving. Your versions are preserved.\nSelect a save to retry when connected.");
+        this.saveChoiceMessage?.setText("The choice could not finish saving. Your versions are preserved.\nSelect a save to retry.");
       }
     }
   }
 
   private createTemporaryDevStore(
     source: SaveStore | undefined,
-    satchel: readonly string[],
+    satchel?: readonly string[],
   ): SaveStore {
     const state = source
       ? (JSON.parse(JSON.stringify(source.get())) as SaveState)
       : emptySave();
-    applyDevUnlock(state, { satchel });
+    applyDevUnlock(state, satchel === undefined ? {} : { satchel });
     const backend: SaveBackend = {
       load: async () => state,
       save: async () => {
-        // Intentionally transient: this route is for visual/feel-tuning passes
-        // where the full satchel would obscure UI or auto-clear waves before
-        // inspection.
+        // Review actions, rewards and resets never reach the player's save.
       },
     };
     return new SaveStore(backend, state);

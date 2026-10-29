@@ -637,7 +637,12 @@ export class SkyIslandScene extends Phaser.Scene {
     // The fresh scene's entrance tween must not move a reconstructed pose later.
     this.tweens.killTweensOf(this.wrenContainer);
     this.wrenContainer.setPosition(SKY_WREN_STAGE_X, SKY_WREN_STAGE_Y).setAlpha(1).setScale(1);
-    this.setAmbientLanternFieldAlpha(0.42, 0);
+    const kindnessSettled = this.fork2Choice === "answer-kindly" && (
+      (saved.step === "answer-kindly" && data.reading === true)
+      || saved.step === "moth" || saved.step === "moth-answer"
+      || saved.step === "true-name" || saved.step === "ending"
+    );
+    this.setAmbientLanternFieldAlpha(kindnessSettled ? 1 : 0.42, 0);
     if (this.companionChoice === "take" && (saved.step === "true-name" || saved.step === "ending")) this.restoreMothPerch();
     switch (saved.step) {
       case "path": this.resumePath(Math.max(0, Math.min(PATH_BEATS.length - 1, index)), data.reading === true); break;
@@ -2701,6 +2706,7 @@ export class SkyIslandScene extends Phaser.Scene {
     const response = (): void => {
       this.checkpoint("answer-kindly", { reading: true });
       this.releaseFork2Spirit(resume.reading === true);
+      this.setAmbientLanternFieldAlpha(1, resume.reading === true ? 0 : 640);
       this.setNarrator("The lanterns across the terrace brighten. The island breathes.");
       this.band.setObjective("The spirit heard you. Press Enter or Space to continue.");
       this.fadeOutForkCue(this.kindAnswerCue); this.kindAnswerCue = null;
@@ -4643,51 +4649,40 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private drawAmbientLanterns(): void {
     this.clearAmbientLanterns();
-    // Decorative background lanterns hanging at various heights. These stay
-    // behind the active path cue so the opener does not read as scattered UI.
+    // Warm blooms belong to the lanterns already painted into the fixed vista.
+    // Coordinates use that painting's 1672×941 frame, so its cords and solid
+    // lanterns remain untouched while their light can answer the story.
     const lanternPositions = [
-      { x: 240, y: 420 },
-      { x: 480, y: 360 },
-      { x: 720, y: 440 },
-      { x: 960, y: 320 },
-      { x: 1200, y: 400 },
-      { x: 1440, y: 360 },
-      { x: 1680, y: 440 },
-      { x: 380, y: 540 },
-      { x: 840, y: 500 },
-      { x: 1100, y: 520 },
-      { x: 1540, y: 480 },
+      { x: 460, y: 267, width: 26, height: 44 },
+      { x: 528, y: 336, width: 20, height: 30 },
+      { x: 593, y: 341, width: 14, height: 25 },
+      { x: 717, y: 344, width: 14, height: 25 },
+      { x: 766, y: 337, width: 18, height: 30 },
+      { x: 817, y: 316, width: 14, height: 25 },
+      { x: 904, y: 329, width: 20, height: 34 },
+      { x: 947, y: 328, width: 14, height: 26 },
+      { x: 992, y: 335, width: 18, height: 32 },
+      { x: 1023, y: 330, width: 14, height: 25 },
+      { x: 1130, y: 321, width: 18, height: 32 },
+      { x: 1190, y: 316, width: 28, height: 44 },
+      { x: 1314, y: 309, width: 24, height: 40 },
+      { x: 1424, y: 233, width: 48, height: 78 },
+      { x: 1438, y: 331, width: 28, height: 42 },
     ];
 
-    lanternPositions.forEach(({ x, y }) => {
+    const scaleX = this.scale.width / 1672;
+    const scaleY = this.scale.height / 941;
+    lanternPositions.forEach(({ x, y, width, height }) => {
       const g = this.add.graphics().setDepth(-4).setAlpha(0.42);
-      // Hanging string
-      g.lineStyle(1, 0x8a7060, 0.34);
-      g.beginPath();
-      g.moveTo(x, y - 36);
-      g.lineTo(x, y - 10);
-      g.strokePath();
-      // Glow halo
-      g.fillStyle(0xf5c842, 0.045);
-      g.fillEllipse(x, y, 56, 58);
-      // Lantern body
-      g.fillStyle(0xd49020, 0.3);
-      g.fillRoundedRect(x - 10, y - 15, 20, 30, 9);
-      g.lineStyle(1.4, 0xfdedb0, 0.24);
-      g.strokeRoundedRect(x - 10, y - 15, 20, 30, 9);
-      g.fillStyle(0xfdedb0, 0.42);
-      g.fillEllipse(x, y, 8, 13);
-
-      // Gentle idle drift
-      this.tweens.add({
-        targets: g,
-        y: { from: 0, to: -6 },
-        duration: 1400 + Math.random() * 600,
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.easeInOut",
-        delay: Math.random() * 1000,
-      });
+      for (const bloom of [
+        { size: 3, alpha: 0.035, color: 0xffc65a },
+        { size: 2, alpha: 0.07, color: 0xffd378 },
+        { size: 1.2, alpha: 0.13, color: 0xffe9a3 },
+        { size: 0.65, alpha: 0.22, color: 0xfff4c3 },
+      ]) {
+        g.fillStyle(bloom.color, bloom.alpha);
+        g.fillEllipse(x * scaleX, y * scaleY, width * scaleX * bloom.size, height * scaleY * bloom.size);
+      }
       this.ambientLanterns.push(g);
     });
   }
@@ -4695,6 +4690,11 @@ export class SkyIslandScene extends Phaser.Scene {
   private setAmbientLanternFieldAlpha(alpha: number, durationMs: number): void {
     const lanterns = this.ambientLanterns.filter((g) => g.scene);
     if (lanterns.length === 0) return;
+    for (const lantern of lanterns) this.tweens.killTweensOf(lantern);
+    if (durationMs <= 0 || reducedMotion(this)) {
+      for (const lantern of lanterns) lantern.setAlpha(alpha);
+      return;
+    }
     this.tweens.add({
       targets: lanterns,
       alpha,

@@ -65,6 +65,7 @@ await import("./chamberNavigation.test.ts");
 await import("./hubSceneIntegration.test.ts");
 await import("./resetSave.test.ts");
 await import("./saveChoice.test.ts");
+await import("./titleSaveSafety.test.ts");
 await import("./realmLore.test.ts");
 await import("./realmChoices.test.ts");
 await import("./revisitStory.test.ts");

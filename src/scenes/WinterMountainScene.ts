@@ -3351,6 +3351,7 @@ export class WinterMountainScene extends Phaser.Scene {
       };
       const word = passages[step];
       if (!word) return;
+      if (owner === "firefly") this.band.setObjective(`Type ${word}.`);
       const ownerBinding = trueNameSeal ? null : this.winterPassageOwnerBinding(owner);
       const pos = trueNameSeal
         ? { x: trueNameSeal.x, y: trueNameSeal.y - 118 }

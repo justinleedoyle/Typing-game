@@ -15,7 +15,7 @@ const owner = source.statements.find(ts.isClassDeclaration)!;
 const methods = ["init", "checkpoint", "savedStageData", "resumeSky", "settleResumedActor", "resumePath", "resumeBoss", "restoreEttaBookPose", "resumeEttaBook", "finishRestoredEttaBook",
   "runPathBeats", "startLanternLighter", "onLighterConvoComplete", "startFirstSpiritEncounter", "beginFirstSpiritEncounter", "startFirstSpiritEncounterFixed", "defeatSpirit", "onFirstEncounterCleared",
   "startAct2", "startTemple", "quietLordIntrusionAnchor", "onTempleCleared", "startSealedScrollTemple", "startEttaEncounter", "startEttaHelp", "moveEttaBook", "startFork1", "startFork1HelpEtta", "startFork1StealFlame", "startAct3",
-  "startBossPhase1", "startBossPhase2", "startBossPhase3", "onBossDefeated", "startFork2", "startFork2KindEnding", "startFork2CutTether", "startLanternMothGate", "showMothAnswer", "restoreMothPerch",
+  "startBossPhase1", "startBossPhase2", "startBossPhase3", "onBossDefeated", "startFork2", "startFork2KindEnding", "startFork2CutTether", "releaseFork2Spirit", "startLanternMothGate", "showMothAnswer", "restoreMothPerch",
   "startTrueNamePassage", "startEnding", "commitFork", "runPassageChain", "applyOneShot"];
 const constants = source.statements.filter(ts.isVariableStatement).map(statement => statement.getText(source)).join("\n");
 const helpers = source.statements.filter(ts.isFunctionDeclaration).map(statement => statement.getText(source)).join("\n");

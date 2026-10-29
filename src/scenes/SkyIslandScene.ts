@@ -267,6 +267,8 @@ export class SkyIslandScene extends Phaser.Scene {
   private heldBeaconSpark: Phaser.GameObjects.Image | null = null;
   private kindAnswerCue: Phaser.GameObjects.Container | null = null;
   private tetherThreadCue: Phaser.GameObjects.Container | null = null;
+  private fork2Scholar: Phaser.GameObjects.Container | null = null;
+  private fork2Tether: Phaser.GameObjects.Container | null = null;
   private companionChoice: "take" | "let-go" | null = null;
   private lanternMothCompanion: Phaser.GameObjects.Container | null = null;
   private lanternMothWordAnchors: WordBodyAnchorHandle[] = [];
@@ -355,6 +357,8 @@ export class SkyIslandScene extends Phaser.Scene {
     this.heldBeaconSpark = null;
     this.kindAnswerCue = null;
     this.tetherThreadCue = null;
+    this.fork2Scholar = null;
+    this.fork2Tether = null;
     const companion = resolveCompanionDecision("sky-island", this.store.get().realms["sky-island"], this.store.get().satchel);
     this.companionChoice = companion === "accepted" ? "take" : companion === "declined" ? "let-go" : null;
     this.lanternMothCompanion = null;
@@ -2691,6 +2695,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.setNarrator("You speak to what remains of the spirit.");
     const response = (): void => {
       this.checkpoint("answer-kindly", { reading: true });
+      this.releaseFork2Spirit(resume.reading === true);
       this.setNarrator("The lanterns across the terrace brighten. The island breathes.");
       this.band.setObjective("The spirit heard you. Press Enter or Space to continue.");
       this.fadeOutForkCue(this.kindAnswerCue); this.kindAnswerCue = null;
@@ -2731,7 +2736,12 @@ export class SkyIslandScene extends Phaser.Scene {
           this.tetherThreadCue = null;
           this.startLanternMothGate();
         },
-        { body: this.tetherThreadCue, sourceOffsetY: -58, side: "right" }, "cut-tether",
+        {
+          body: this.tetherThreadCue, sourceOffsetY: -58, side: "right",
+          onPhraseComplete: (index) => {
+            if (index === 1) this.releaseFork2Spirit(resume.reading === true && resume.index === 1);
+          },
+        }, "cut-tether",
       );
     };
     if (typeof resume.index === "number") begin(); else this.readThen(begin);
@@ -2741,6 +2751,8 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private startLanternMothGate(): void {
     this.checkpoint("moth");
+    this.fadeOutForkCue(this.beaconFlameCue);
+    this.beaconFlameCue = null;
     if (resolveCompanionDecision("sky-island", this.store.get().realms["sky-island"], this.store.get().satchel)) {
       this.startTrueNamePassage(); return;
     }
@@ -4156,6 +4168,49 @@ export class SkyIslandScene extends Phaser.Scene {
     if (!this.tetherThreadCue?.scene) {
       this.tetherThreadCue = this.createTetherThreadCue();
     }
+    // These story props outlive either choice marker and the old boss fade.
+    if (!this.fork2Scholar?.scene) {
+      const c = this.add.container(776, 710).setDepth(42).setAlpha(0);
+      c.add(addLocalGroundShadow(this, 116, 14, { y: 86, alpha: 0.08 }));
+      const spirit = this.add.image(0, 0, "scholar-spirit").setName("fading-scholar");
+      spirit.setScale(SCHOLAR_SPIRIT_HEIGHT / spirit.height);
+      c.add(spirit);
+      this.fork2Scholar = c;
+      this.tweens.add({ targets: c, alpha: 0.68, duration: 640, ease: "Sine.easeOut" });
+    }
+    if (!this.beaconFlameCue?.scene) {
+      this.beaconFlameCue = this.createBeaconFlameCue().setPosition(1140, 792);
+      if (this.fork1Choice === "steal-flame") {
+        this.beaconFlameCue.getByName("beacon-spark")?.destroy();
+        const light = this.beaconFlameCue.getByName("beacon-light");
+        if (light?.scene) { this.tweens.killTweensOf(light); light.destroy(); }
+        this.beaconFlameCue.setActive(false);
+      }
+    }
+    if (!this.fork2Tether?.scene) {
+      const c = this.add.container(0, 0).setDepth(41).setAlpha(0);
+      const from = new Phaser.Math.Vector2(this.fork2Scholar.x + 40, this.fork2Scholar.y);
+      const to = new Phaser.Math.Vector2(this.beaconFlameCue.x, this.beaconFlameCue.y - 95);
+      const curve = new Phaser.Curves.CubicBezier(from,
+        new Phaser.Math.Vector2(from.x + 54, 450), new Phaser.Math.Vector2(to.x - 90, 450), to);
+      const thread = this.add.graphics();
+      thread.lineStyle(2.5, 0xffe4a8, 0.84);
+      thread.strokePoints(curve.getPoints(40));
+      c.add(thread);
+      this.fork2Tether = c;
+      this.tweens.add({ targets: c, alpha: 0.72, duration: 640, ease: "Sine.easeOut" });
+    }
+  }
+
+  private releaseFork2Spirit(immediate = false): void {
+    const props = [this.fork2Scholar, this.fork2Tether];
+    this.fork2Scholar = null;
+    this.fork2Tether = null;
+    for (const prop of props) {
+      if (!prop?.scene) continue;
+      if (immediate) { this.tweens.killTweensOf(prop); prop.destroy(); }
+      else this.fadeOutForkCue(prop);
+    }
   }
 
   private createBeaconFlameCue(): Phaser.GameObjects.Container {
@@ -4241,32 +4296,6 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private createKindAnswerCue(): Phaser.GameObjects.Container {
     const c = this.add.container(700, 798).setDepth(42).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 134, 18, { y: 14, alpha: 0.18 }));
-    const g = this.add.graphics();
-    g.fillStyle(0x2c241b, 0.76);
-    g.fillRoundedRect(-54, -46, 108, 54, 14);
-    g.lineStyle(2, PALETTE_HEX.brass, 0.38);
-    g.strokeRoundedRect(-54, -46, 108, 54, 14);
-    g.lineStyle(2, 0xffe2a0, 0.42);
-    g.lineBetween(-30, -21, 30, -21);
-    g.lineBetween(-24, -6, 24, -6);
-    g.fillStyle(0xffd989, 0.58);
-    g.fillCircle(0, -80, 16);
-    g.lineStyle(2, 0xffd989, 0.28);
-    g.strokeCircle(0, -80, 32);
-    c.add(g);
-    addContainerWake(this, c, {
-      kind: "mote",
-      intervalMs: 480,
-      spreadX: 34,
-      spreadY: 16,
-      offsetY: -54,
-      alpha: 0.22,
-      size: 3.5,
-      depth: 41,
-      driftY: -44,
-      durationMs: 1250,
-    });
     this.tweens.add({
       targets: c,
       y: 778,
@@ -4283,36 +4312,6 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private createTetherThreadCue(): Phaser.GameObjects.Container {
     const c = this.add.container(1220, 798).setDepth(42).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 132, 18, { y: 14, alpha: 0.18 }));
-    const g = this.add.graphics();
-    g.lineStyle(3, PALETTE_HEX.brass, 0.42);
-    g.beginPath();
-    g.moveTo(-52, -28);
-    g.lineTo(-16, -72);
-    g.lineTo(18, -38);
-    g.lineTo(54, -92);
-    g.strokePath();
-    g.fillStyle(0x3f3120, 0.86);
-    g.fillCircle(-52, -28, 9);
-    g.fillCircle(54, -92, 10);
-    g.fillStyle(0xffe4a8, 0.62);
-    g.fillCircle(-16, -72, 6);
-    g.fillCircle(18, -38, 6);
-    g.lineStyle(1, 0xffe4a8, 0.24);
-    g.strokeEllipse(0, -58, 130, 78);
-    c.add(g);
-    addContainerWake(this, c, {
-      kind: "mote",
-      intervalMs: 500,
-      spreadX: 38,
-      spreadY: 20,
-      offsetY: -50,
-      alpha: 0.24,
-      size: 3.5,
-      depth: 41,
-      driftY: -42,
-      durationMs: 1250,
-    });
     this.tweens.add({
       targets: c,
       y: 778,
@@ -4348,7 +4347,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private clearSkyForkCues(): void {
     this.clearForkChoiceWordAnchors();
     this.clearHeldBeaconSpark();
-    for (const cue of [this.beaconFlameCue, this.kindAnswerCue, this.tetherThreadCue]) {
+    for (const cue of [this.beaconFlameCue, this.kindAnswerCue, this.tetherThreadCue, this.fork2Scholar, this.fork2Tether]) {
       if (!cue?.scene) continue;
       this.tweens.killTweensOf(cue);
       cue.destroy();
@@ -4356,6 +4355,8 @@ export class SkyIslandScene extends Phaser.Scene {
     this.beaconFlameCue = null;
     this.kindAnswerCue = null;
     this.tetherThreadCue = null;
+    this.fork2Scholar = null;
+    this.fork2Tether = null;
   }
 
   private makeLanternMothWord(opts: TextWordTargetOptions): TextWordTarget {

@@ -1299,6 +1299,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.stageIngaAtTreeLine();
     this.startWoodMist();
     this.setNarrator("The crossroads. Shapes drift between the trees.");
+    this.band.setObjective("Press Enter or Space to learn the ward marks.");
     this.readThen(() => this.startCrossroads1());
   }
 

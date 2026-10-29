@@ -31,13 +31,20 @@ jobs:
         run: npm run desktop:pack -- --win --x64
       - name: Test the packaged executable offline and across forced termination
         run: node scripts/desktop-smoke.mjs --executable "release/win-unpacked/Portalwrights Almanac.exe" --output artifacts/desktop-smoke
-      - name: Preserve executable and smoke evidence
+      - name: Preserve packaged executable
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: windows-x64-${{ github.sha }}
           path: |
             release/win-unpacked/**
-            artifacts/desktop-smoke/**
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Preserve separate smoke reports and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-smoke-${{ github.sha }}
+          path: artifacts/desktop-smoke/**
           if-no-files-found: warn
           retention-days: 14

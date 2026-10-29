@@ -73,6 +73,10 @@ function stableProgress(state: SaveState): string {
   const { updatedAt: _time, ...progress } = state;
   return JSON.stringify(progress);
 }
+function progressWithoutTyping(state: SaveState): string {
+  const { updatedAt: _time, keyStats: _keys, ...progress } = state;
+  return JSON.stringify(progress);
+}
 async function settledSave(backend: SaveBackend): Promise<SaveState> {
   // The renderer's actual SaveStore debounces for250ms. Let its checkpoint
   // normalization reach the filesystem, then require600ms of stable content.
@@ -105,6 +109,17 @@ export async function runDesktopSmoke(options: DesktopSmokeOptions & {
     await waitForWindow(window, "Boolean(document.querySelector('[data-active-scene=\"TitleScene\"]'))", "actual Title creation");
     key(window, "Enter");
     await waitForWindow(window, "Boolean(document.querySelector('[data-active-scene=\"WinterMountainScene\"]'))", "saved Winter checkpoint");
+    let beforeTyping: SaveState | undefined;
+    if (phase === "seed") {
+      beforeTyping = await settledSave(backend);
+      // Claim only a safe prefix of "save the huntress". The uppercase event
+      // must reach the case-insensitive target; Backspace reverses its final
+      // character and the first Escape releases it without choosing a branch.
+      key(window, "S", ["shift"]);
+      key(window, "A");
+      key(window, "Backspace");
+      key(window, "Escape");
+    }
     // This dispatch checks Electron's own keyboard path. It is synthetic input,
     // not evidence about a physical Windows keyboard/layout or human pacing.
     key(window, "Escape");
@@ -119,9 +134,20 @@ export async function runDesktopSmoke(options: DesktopSmokeOptions & {
       return {canvas:Boolean(canvas && canvas.width > 0 && canvas.height > 0),fontsReady:document.fonts.status==='loaded' && fonts.some(font=>font.status==='loaded'),fonts,activeScene:document.querySelector('[data-active-scene]')?.getAttribute('data-active-scene')};
     })()`, false);
     const save = await settledSave(backend);
+    if (beforeTyping) {
+      if (save.keyStats.s?.hits !== 1 || save.keyStats.s?.misses !== 0 ||
+          save.keyStats.a?.hits !== 1 || save.keyStats.a?.misses !== 0 ||
+          Object.keys(save.keyStats).length !== 2 ||
+          progressWithoutTyping(save) !== progressWithoutTyping(beforeTyping)) {
+        throw new Error("Synthetic uppercase/prefix-release input did not preserve checkpoint resources and story progress");
+      }
+    }
     await writeFile(screenshot, (await window.webContents.capturePage()).toPNG());
     const result = { version: 1, phase, ok: true, profileIsolated: insideTemp(profile), offline: true,
-      unexpectedRequests: [...unexpectedRequests], renderer, keyboard: { source: "Electron synthetic input", pauseAndResume: true, shiftAndAltReleased: true },
+      unexpectedRequests: [...unexpectedRequests], renderer, keyboard: { source: "Electron synthetic input", pauseAndResume: true, shiftAndAltReleased: true,
+        ...(beforeTyping ? { uppercaseAndRelease: true, backspaceDispatched: true,
+          evidence: "Uppercase S and plain A each recorded one correct hit; Backspace dispatched; Escape released the partial claim before ordinary pause. Checkpoint/resources/choices stayed unchanged. Cursor reversal is separately covered by the controller unit test." } : {}),
+      },
       durable: true, save };
     const temporary = `${report}.tmp`;
     await writeFile(temporary, JSON.stringify(result, null, 2)); await rename(temporary, report);

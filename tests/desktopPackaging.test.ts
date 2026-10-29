@@ -10,8 +10,10 @@ function rejects(work: () => unknown): boolean { try { work(); return false; } c
 function report(phase: string, state?: SaveState): any {
   const save = state ?? emptySave("Synthetic Windows review");
   if (!state) save.checkpoint = { scene: "WinterMountainScene", step: phase === "seed" || phase === "verify" ? "fork1" : "firefly", data: { candles: 2, statsSoul: 62.5, statsCombo: 8 } };
+  if (!state) save.keyStats = { s: { hits: 1, misses: 0 }, a: { hits: 1, misses: 0 } };
   return { version: 1, phase, ok: true, profileIsolated: true, offline: true, unexpectedRequests: [],
-    renderer: { canvas: true, fontsReady: true, activeScene: "WinterMountainScene" }, keyboard: { pauseAndResume: true }, durable: true, save,
+    renderer: { canvas: true, fontsReady: true, activeScene: "WinterMountainScene" }, keyboard: { pauseAndResume: true,
+      ...(phase === "seed" ? { uppercaseAndRelease: true, backspaceDispatched: true } : {}) }, durable: true, save,
     ...(phase === "crash" ? { forcedTermination: true } : { normalExit: true, exitCode: 0 }) };
 }
 
@@ -76,4 +78,10 @@ await suite("Desktop packaged evidence: failures and lost restart progress canno
   assert(rejects(() => validateSmokeSequence(failedClose)), "a report written before normal process exit cannot claim a completed close handshake");
   const notKilled = structuredClone(reports); notKilled.crash.forcedTermination = false;
   assert(rejects(() => validateSmokeSequence(notKilled)), "a self-exiting app cannot masquerade as the externally forced crash phase");
+  const noUppercase = structuredClone(seed); delete noUppercase.keyboard.uppercaseAndRelease;
+  assert(rejects(() => validateSmokeReport(noUppercase, "seed")), "a pause-only seed cannot claim uppercase/release evidence");
+  const lostHit = structuredClone(reports); lostHit.recover.save.keyStats.s.hits = 0;
+  assert(rejects(() => validateSmokeSequence(lostHit)), "crash recovery must retain the actual normalized uppercase hit");
+  const repeatedTyping = structuredClone(reports); repeatedTyping.verify.save.keyStats.a.hits = 2;
+  assert(rejects(() => validateSmokeSequence(repeatedTyping)), "later phases cannot repeat printable smoke input and alter progress");
 });

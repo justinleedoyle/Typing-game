@@ -3,7 +3,7 @@ name: Check Windows desktop
 on:
   pull_request:
   push:
-    branches: [main, codex/steam-first-chapter]
+    branches: [main]
   workflow_dispatch:
 
 permissions:

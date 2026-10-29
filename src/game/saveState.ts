@@ -237,10 +237,11 @@ export interface LocalSaveLock {
 const localWriteQueues = new Map<string, Promise<void>>();
 const defaultLocalLock: LocalSaveLock = {
   run<T>(slot: string, work: () => T): Promise<T> {
-    // Web Locks serialize cooperating documents, not merely promises in one
-    // tab. The fallback is deliberately limited to this JavaScript process;
-    // injected test ports and legacy browsers still get optimistic checks.
-    if (typeof navigator !== "undefined" && navigator.locks?.request) {
+    // Web Locks serialize cooperating browser documents. Node24 also exposes
+    // navigator.locks, but its pending locks do not keep a main/test process
+    // alive. Electron's single-instance main process uses the local queue;
+    // injected ports and legacy browsers still get optimistic checks too.
+    if (typeof window !== "undefined" && typeof navigator !== "undefined" && navigator.locks?.request) {
       return navigator.locks.request(`portalwrights-save:${slot}`, work);
     }
     const previous = localWriteQueues.get(slot) ?? Promise.resolve();

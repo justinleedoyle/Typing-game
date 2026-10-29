@@ -159,6 +159,38 @@ await suite("Desktop disk storage: a post-rename flush error reports uncertain d
   });
 });
 
+await suite("Desktop disk storage: Node navigator locks cannot strand save work while browsers retain Web Locks", async () => {
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
+  let lockCalls = 0;
+  try {
+    delete (globalThis as { window?: unknown }).window;
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: {
+      locks: { request() { lockCalls++; return new Promise(() => {}); } },
+    } });
+    await temporary(async (_directory, storage) => {
+      const backend = new LocalStorageBackend(storage);
+      assertEqual(await backend.load(), null, "non-window loading completes without Node's non-keeping LockManager");
+      const state = emptySave("Node queue Wren");
+      await backend.save(state);
+      assertEqual((await new LocalStorageBackend(storage).load())?.profileName, state.profileName, "main-process save and reopen complete through the local queue");
+      assertEqual(lockCalls, 0, "the presence of navigator.locks alone cannot select browser locking");
+    });
+    Object.defineProperty(globalThis, "window", { configurable: true, value: {} });
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: {
+      locks: { request(_name: string, work: () => unknown) { lockCalls++; return Promise.resolve().then(work); } },
+    } });
+    await temporary(async (_directory, storage) => {
+      const backend = new LocalStorageBackend(storage);
+      await backend.load(); await backend.save(emptySave("Browser lock Wren"));
+      assertEqual(lockCalls, 2, "a browser document still uses Web Locks for both load and save");
+    });
+  } finally {
+    if (navigatorDescriptor) Object.defineProperty(globalThis, "navigator", navigatorDescriptor); else delete (globalThis as { navigator?: unknown }).navigator;
+    if (windowDescriptor) Object.defineProperty(globalThis, "window", windowDescriptor); else delete (globalThis as { window?: unknown }).window;
+  }
+});
+
 await suite("Desktop disk storage: validated game checkpoints, last-good fallback and damaged recovery use real files", async () => {
   await temporary(async (directory, storage) => {
     const first = new LocalStorageBackend(storage); await first.load();

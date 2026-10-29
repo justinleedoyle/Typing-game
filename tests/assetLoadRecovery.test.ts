@@ -146,8 +146,8 @@ await suite("Asset recovery: every production scene gates its artwork before gam
   const paths = fs.readdirSync("src/scenes").filter(name => name.endsWith("Scene.ts"));
   for (const name of paths) {
     const code = fs.readFileSync(`src/scenes/${name}`, "utf8");
-    const preload = code.match(/preload\(\): void \{\s*([^\n]+)/)?.[1];
-    const create = code.match(/create\(\): void \{\s*([^\n]+)/)?.[1];
+    const preload = code.match(/preload\(\): void \{\s*([^\n]+)/)?.[1].trim();
+    const create = code.match(/create\(\): void \{\s*([^\n]+)/)?.[1].trim();
     assertEqual(preload, "beginAssetLoad(this);", `${name} captures shared and direct loaders before artwork queues`);
     assertEqual(create, "if (assetLoadBlocked(this)) return;", `${name} blocks scene setup, input, timers and writes before missing artwork is used`);
   }

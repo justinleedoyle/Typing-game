@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { woodStep, woodIndex } from "../src/game/woodCheckpoint";
 import { assert, assertClose, assertEqual, suite } from "./_assert";
 
 const url = new URL("../src/scenes/HauntedWoodScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const sceneClass = source.statements.find(ts.isClassDeclaration)!;
-const methods = ["init", "preload", "createRootedWoodProp", "addRootedWoodPainting", "createOfferingCue", "createBoneFluteCue", "createGroveLightCue", "showFork1Cues", "showFork2Cues", "startFork1", "startFork2", "makeWoodForkWord", "fadeOutForkCue", "drawShrine", "pulseShrine", "settleBoneFluteInHand", "showGatheredAshVial", "clearHeldWoodRelic", "clearWoodForkCues", "startFork1BoneFlute", "startFork2Force", "runPassageChain", "ownerPassageWordPosition", "drawGhostKingRootThrone", "drawGhostKing", "fadeGhostKingBody", "onKeyDown"];
+const methods = ["finishFlute","init", "preload", "createRootedWoodProp", "addRootedWoodPainting", "createOfferingCue", "createBoneFluteCue", "createGroveLightCue", "showFork1Cues", "showFork2Cues", "startFork1", "startFork2", "makeWoodForkWord", "fadeOutForkCue", "drawShrine", "pulseShrine", "settleBoneFluteInHand", "showGatheredAshVial", "clearHeldWoodRelic", "clearWoodForkCues", "startFork1BoneFlute", "startFork2Force", "runPassageChain", "ownerPassageWordPosition", "drawGhostKingRootThrone", "drawGhostKing", "fadeGhostKingBody", "onKeyDown"];
 const constants = source.statements.filter(ts.isVariableStatement).flatMap(statement =>
   statement.declarationList.declarations.filter(declaration => ["WOOD_BRANCH_WORD_Y", "GHOST_KING_SPRITE_HEIGHT"].includes(declaration.name.getText(source)))
     .map(declaration => `const ${declaration.getText(source)};`)).join("\n");
@@ -34,8 +35,8 @@ function fixture(reduced = false) {
   let gate: (() => void) | undefined;
   let target: any;
   const assets = ["hauntedWoodBackdrop", "woodGhostSprite", "ghostKingSprite", "rootThroneSprite", "wispCatSprite", "snowFoxSprite", "groveFireSprite", "runaPortrait", "boneFluteSprite", "ashVialSprite", "offeringShrineSprite", "fluteHollowSprite"];
-  const Wood = new Function(...assets, "preloadSatchelIcons", "preloadWren", "reducedMotion", "addLocalGroundShadow", "addContainerWake", "addIdleBreath", "playChime", "playWrenAction", "playWrenFocus", "playBodyImpact", "PALETTE_HEX", "isPuristToggleKey", "togglePuristMode", "playClack", "resolveRealmFork", "resolveCompanionDecision", "applySceneActorLighting", "attachWordBodyAnchor", "playClaimLine", "playActorAttention", "playBodyTypePulse", "Phaser", code + ";return Wood;")(
-    ...assets, noop, noop, () => reduced, () => ({}), noop, (_scene: unknown, body: any) => breaths.push(body), noop, noop, noop, noop, { moss: 0 }, () => false, noop, noop, () => null, () => null,
+  const Wood = new Function("woodStep", "woodIndex", ...assets, "preloadSatchelIcons", "preloadWren", "reducedMotion", "addLocalGroundShadow", "addContainerWake", "addIdleBreath", "playChime", "playWrenAction", "playWrenFocus", "playBodyImpact", "PALETTE_HEX", "isPuristToggleKey", "togglePuristMode", "playClack", "resolveRealmFork", "resolveCompanionDecision", "applySceneActorLighting", "attachWordBodyAnchor", "playClaimLine", "playActorAttention", "playBodyTypePulse", "Phaser", code + ";return Wood;")(
+    woodStep, woodIndex, ...assets, noop, noop, () => reduced, () => ({}), noop, (_scene: unknown, body: any) => breaths.push(body), noop, noop, noop, noop, { moss: 0 }, () => false, noop, noop, () => null, () => null,
     (_scene: unknown, image: any) => { image.lit = true; }, () => ({ destroy: noop }), noop,
     (_scene: unknown, body: any) => attentions.push(body), noop, { GameObjects: { Events: { DESTROY: "destroy" } } },
   );
@@ -53,6 +54,7 @@ function fixture(reduced = false) {
     destroy() { this.scene = false; for (const child of this.children) child.destroy?.(); this.children = []; for (const listener of this.listeners.splice(0)) listener(); },
   });
   Object.assign(scene, {
+    checkpoint() {},
     scale: { width: 1920, height: 1080 },
     wrenContainer: { x: 960, y: 826 }, wrenSprite: {},
     heldWoodRelic: null, boneFluteProp: null, fluteHandoffPending: false, offeringCue: null, groveLightCue: null, forkChoiceWordAnchors: [],

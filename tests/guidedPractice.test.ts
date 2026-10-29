@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { woodIndex } from "../src/game/woodCheckpoint";
 import { TypingInputController, type WordTarget } from "../src/game/typingInput";
 import { decideBeatGate } from "../src/game/beatGate";
 import { woodWardWord } from "../src/game/wordBank";
@@ -37,7 +38,7 @@ const key = (value: string) => ({ key: value, repeat: false, ctrlKey: false, met
   altKey: false, preventDefault() {} } as KeyboardEvent);
 
 await suite("guided Bell: real rhythm starts are safe, remaining letters flow, and combat waits for Continue", () => {
-  const Bell = methods("SunkenBellScene", ["startRhythmPractice", "clearRhythmPractice", "beginRhythmEncounters", "onKeyDown"], {
+  const Bell = methods("SunkenBellScene", ["startRhythmPractice", "showRhythmPracticeComplete", "clearRhythmPractice", "beginRhythmEncounters", "onKeyDown"], {
     SERIF: "serif", PALETTE: { frost: "white" }, decideBeatGate,
     playClack() {}, isPuristToggleKey: () => false,
   });
@@ -48,6 +49,7 @@ await suite("guided Bell: real rhythm starts are safe, remaining letters flow, a
   const timers: Array<{ ms: number; run: () => void }> = [];
   let windowOpen = false, stumbles = 0, encounters = 0, stopped = 0;
   Object.assign(bell, {
+    checkpoint() {}, drawOlin() {},
     typingInput: input, activeTargets: [] as Target[], rhythmPracticeActive: false,
     rhythmPracticeCoach: null, rhythmPracticeTarget: null,
     reading: { handleKey: () => false }, scale: { width: 1920 },
@@ -128,7 +130,7 @@ await suite("guided Wood: four real masked examples precede original combat with
   let reduced = false;
   const Wood = methods("HauntedWoodScene", ["startWardPractice", "clearWardPracticeVisual", "finishWardPractice",
     "beginCrossroads1", "triggerMistRoll", "onKeyDown"], {
-    woodWardWord, reducedMotion: () => reduced, playChime() {}, playClack() {}, playWaveSting() {},
+    woodWardWord, woodIndex, reducedMotion: () => reduced, playChime() {}, playClack() {}, playWaveSting() {},
     isPuristToggleKey: () => false, WARD_INPUT_HINT: "original guide",
   });
   const wood = new Wood();
@@ -140,6 +142,7 @@ await suite("guided Wood: four real masked examples precede original combat with
   const waves: unknown[] = [];
   let mistGraphics = 0, caption = "";
   Object.assign(wood, {
+    checkpoint() {},
     typingInput: input, activeTargets: [] as Target[], ghosts: [], wardPracticeGeneration: 0,
     wardPracticeBody: null, wardPracticeTarget: null, wardPracticeActive: false,
     mistTimer: { paused: false }, narration: { bottom: () => 200 },

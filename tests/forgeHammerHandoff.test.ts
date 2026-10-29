@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { assert, assertClose, assertEqual, suite } from "./_assert";
+import { forgePassageIndex } from "../src/game/forgeCheckpoint";
 
 // Execute the production passage/reward/transfer and lifecycle methods. Only
 // drawing, word presentation and the decorative tween clock are inert.
@@ -31,9 +32,9 @@ function fixture(reduced = false) {
   const images: any[] = [], tweens: any[] = [], targets: any[] = [], captions: string[] = [];
   const save = { satchel: [] as string[], almanacLore: [] as string[], realms: {} as Record<string, any> };
   let gate: (() => void) | undefined, word: any, boss = 0;
-  const Forge = new Function("reducedMotion", "satchelIconFor", "applySceneActorLighting", "playWrenAction", "playWrenFocus", "playBodyImpact", "playActorAttention", "PALETTE_HEX", "resolveRealmFork", "resolveCompanionDecision", code + "; return Forge;")(
+  const Forge = new Function("reducedMotion", "satchelIconFor", "applySceneActorLighting", "playWrenAction", "playWrenFocus", "playBodyImpact", "playActorAttention", "PALETTE_HEX", "resolveRealmFork", "resolveCompanionDecision", "forgePassageIndex", code + "; return Forge;")(
     () => reduced, (id: string) => ({ key: `almanac-icon-${id}` }), (_scene: unknown, image: any) => { image.lit = true; },
-    noop, noop, noop, noop, { ember: 0xcd7445 }, () => null, () => null,
+    noop, noop, noop, noop, { ember: 0xcd7445 }, () => null, () => null, forgePassageIndex,
   );
   const scene = new Forge();
   const makeWord = (options: any) => { word = options; targets.push(options); return options; };
@@ -50,6 +51,7 @@ function fixture(reduced = false) {
     } },
     tweens: { add(options: any) { tweens.push(options); return options; }, killTweensOf(item: any) { for (const tween of tweens) if (tween.targets === item) tween.cancelled = true; } },
     commitFork: (_fork: string, choice: string) => choice,
+    checkpoint: noop, savedStageData: () => ({}), hasSavedPassage: () => false,
     clearActiveTargets: noop, dismissForgeChoiceCue: noop, dismissBellowsWorkstation: noop, pulseForgeChoiceCue: noop,
     showApprenticeSprite: noop, hideApprenticeSprite: noop, hideFornSprite: noop, approachForgeWork: noop,
     band: { setObjective: noop }, setNarrator: (text: string) => captions.push(text),

@@ -32,6 +32,7 @@ function fixture(reduced = false) {
   const save = { realms: {} as Record<string, any>, almanacLore: [] as string[] };
   let task = "", hides = 0;
   Object.assign(s, {
+    checkpoint() {}, savedStageData() { return {}; },
     reduced, ettaBookCue: null, ettaBookShelf: null, ettaBookGroundShadow: null, ettaBookMoving: false,
     wrenContainer: { x: 960, y: 826 }, ettaSprite: prop(), ettaDone: false,
     add: { container: (x: number, y: number) => prop(x, y), image: (x: number, y: number, key: string) => prop(x, y, key) },

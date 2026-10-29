@@ -6,7 +6,7 @@ const url = new URL("../src/scenes/SkyIslandScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const sceneClass = source.statements.find(ts.isClassDeclaration)!;
 const names = ["skyOwnedWordPosition", "startEttaEncounter", "startEttaHelp", "startFork1", "startSealedScrollTemple", "onFirstEncounterCleared"];
-const constantNames = ["ETTA_SPRITE_HEIGHT", "ETTA_CHOICE_WORD_LIFT", "ETTA_BOOK_WORD_Y", "SEALED_SCROLL_Y", "ETTA_HELP_TRIGGER", "ETTA_CHAIN_1", "ETTA_CHAIN_2", "ETTA_LINE", "SEALED_SCROLL_PHRASE"];
+const constantNames = ["ETTA_SPRITE_HEIGHT", "ETTA_CHOICE_WORD_LIFT", "ETTA_BOOK_WORD_Y", "SEALED_SCROLL_Y", "ETTA_HELP_TRIGGER", "ETTA_CHAIN_1", "ETTA_CHAIN_2", "ETTA_LINE", "SEALED_SCROLL_PHRASE", "SEALED_SCROLL_TEMPLE_IDX"];
 const constants = source.statements.filter(ts.isVariableStatement).flatMap(statement =>
   statement.declarationList.declarations.filter(declaration => constantNames.includes(declaration.name.getText(source)))
     .map(declaration => `const ${declaration.getText(source)};`)).join("\n");
@@ -27,6 +27,7 @@ function fixture() {
   const entered: number[] = [];
   const book = { scene: true, x: 760, y: 806 };
   Object.assign(s, {
+    checkpoint() {}, savedStageData() { return {}; },
     scale: { width: 1920, height: 1080 },
     ettaSprite: { scene: true, x: 520, y: 760 },
     beaconFlameCue: { scene: true, x: 1320, y: 792 },

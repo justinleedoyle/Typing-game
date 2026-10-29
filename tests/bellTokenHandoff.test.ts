@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { bellIndex } from "../src/game/bellCheckpoint";
 import { assert, assertEqual, suite } from "./_assert";
 
 // Run the production branch, passage callbacks, handoff and shutdown cleanup.
@@ -7,7 +8,7 @@ import { assert, assertEqual, suite } from "./_assert";
 const url = new URL("../src/scenes/SunkenBellScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
-const names = ["init", "preload", "startFork2FreeAurland", "runFreePassageChain", "readThen",
+const names = ["init", "preload", "startFork2FreeAurland", "showFork2Reward", "takeStageData", "runFreePassageChain", "readThen",
   "showAurlandToken", "clearAurlandToken", "hideAurland", "onKeyDown", "clearActiveTargets", "clearBellKeeperLectern"];
 let shutdown: ts.ArrowFunction | undefined;
 const create = owner.members.find(member => member.name?.getText(source) === "create")!;
@@ -48,7 +49,7 @@ function fixture(reduced = false) {
     };
   }
   const globals: Record<string, unknown> = {
-    reducedMotion: () => reduced, resolveRealmFork: () => null,
+    bellIndex, reducedMotion: () => reduced, resolveRealmFork: () => null,
     isPuristToggleKey: () => false, togglePuristMode: noop,
     playClack: () => events.push("clack"),
     playChime: noop, playWrenFocus: noop, playWrenAction: noop,
@@ -70,6 +71,7 @@ function fixture(reduced = false) {
     },
   };
   Object.assign(scene, {
+    checkpoint() {},
     store: { get: () => state, update: (edit: (save: typeof state) => void) => edit(state) },
     commitFork: (_fork: string, requested: string) => requested,
     load: { image: (key: string, value: string) => loaded.push([key, value]) },

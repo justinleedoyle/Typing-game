@@ -1,4 +1,4 @@
-import type { SaveCheckpoint, SaveState } from "./saveState";
+import { CHECKPOINT_REALMS, type SaveCheckpoint, type SaveState } from "./saveState";
 
 /** Completed/reset progress always takes precedence over a chapter marker. */
 export function titleCheckpoint(
@@ -9,8 +9,8 @@ export function titleCheckpoint(
   if (checkpoint.scene === "OpeningScene" && !state.typewriterAwakened) {
     return checkpoint;
   }
-  if (checkpoint.scene === "WinterMountainScene" && state.typewriterAwakened &&
-    !state.realms["winter-mountain"]?.cleared) {
+  if (checkpoint.scene !== "OpeningScene" && state.typewriterAwakened &&
+    !state.realms[CHECKPOINT_REALMS[checkpoint.scene]]?.cleared) {
     return checkpoint;
   }
   return null;

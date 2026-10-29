@@ -43,6 +43,8 @@ export interface OneShotInvokerConfig<E> {
   /** The offensive one-shots owned for THIS realm (loadout.oneShots filtered to
    *  the offensive subset). Empty ⇒ the invoker is inert (no widgets, no polling). */
   available: readonly OffensiveOneShot[];
+  /** Uses already spent at the saved encounter boundary; keep their cards visible. */
+  initialSpent?: readonly OffensiveOneShot[];
   /** Soul needed to charge + spent on fire (ONESHOT_SOUL_COST). */
   cost: number;
   getSoul: () => number;
@@ -125,7 +127,9 @@ export class OneShotInvoker<E> {
       const slot = config.slots?.[i];
       const wx = slot?.x ?? cx;
       const wy = slot?.y ?? baseY - i * WIDGET_GAP;
-      this.widgets.push(this.buildWidget(effect, wx, wy));
+      const widget = this.buildWidget(effect, wx, wy);
+      this.widgets.push(widget);
+      if (config.initialSpent?.includes(effect)) this.markSpent(widget, true);
     });
 
     this.timer = scene.time.addEvent({
@@ -135,6 +139,10 @@ export class OneShotInvoker<E> {
       callbackScope: this,
     });
     this.poll();
+  }
+
+  getSpent(): OffensiveOneShot[] {
+    return this.widgets.filter(widget => widget.state === "spent").map(widget => widget.effect);
   }
 
   /** Tear down widgets, the live word, and the poll. Call on scene shutdown. */
@@ -472,7 +480,7 @@ export class OneShotInvoker<E> {
     this.markSpent(w);
   }
 
-  private markSpent(w: Widget): void {
+  private markSpent(w: Widget, restoring = false): void {
     w.state = "spent";
     w.pulse?.stop();
     w.pulse = null;
@@ -487,7 +495,9 @@ export class OneShotInvoker<E> {
     w.titleText.setColor(PALETTE.dim).setAlpha(0.7);
     w.barFill.clear();
     w.barBg.clear();
-    this.pulseCard(w, "spent");
-    this.cfg.announce?.(inv.spentCue);
+    if (!restoring) {
+      this.pulseCard(w, "spent");
+      this.cfg.announce?.(inv.spentCue);
+    }
   }
 }

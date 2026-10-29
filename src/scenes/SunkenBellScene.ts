@@ -27,7 +27,8 @@ import {
 } from "../game/relicEffects";
 import { tripMostAdvancedFoe } from "../game/companionTrip";
 import { isPuristToggleKey, togglePuristMode } from "../game/purist";
-import type { SaveStore } from "../game/saveState";
+import type { SaveCheckpoint, SaveStore } from "../game/saveState";
+import { bellIndex, bellStep, type BellStep } from "../game/bellCheckpoint";
 import { TypingInputController } from "../game/typingInput";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import {
@@ -245,6 +246,8 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private ambientHandle?: AmbientHandle;
   private revisit = false;
+  private resumeCheckpoint: SaveCheckpoint | null = null;
+  private combatSatchel: string[] = [];
 
   constructor() {
     super("SunkenBellScene");
@@ -254,6 +257,9 @@ export class SunkenBellScene extends Phaser.Scene {
     this.clearBellKeeperLectern();
     this.revisit = data.revisit === true;
     this.store = data.store;
+    const saved = this.store.get().checkpoint;
+    this.resumeCheckpoint = !this.revisit && !this.store.get().realms["sunken-bell"]?.cleared
+      && saved?.scene === "SunkenBellScene" ? saved : null;
     this.ghosts = [];
     this.activeTargets = [];
     this.bossWordAnchors = [];
@@ -315,7 +321,9 @@ export class SunkenBellScene extends Phaser.Scene {
       store: this.store,
       hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),
       onLeave: () => this.scene.start("PortalChamberScene", { store: this.store }),
-      leaveHint: "Returning to the chamber starts this realm again. Your completed journeys and collected keepsakes stay saved.",
+      leaveHint: this.revisit
+        ? "Return to the chamber whenever you like. Your completed journey stays saved."
+        : "Your place is saved at story and encounter boundaries. Returning resumes there; an unfinished encounter starts again.",
     });
     this.cameras.main.fadeIn(600, 8, 24, 32);
     this.add
@@ -412,15 +420,22 @@ export class SunkenBellScene extends Phaser.Scene {
     });
 
     this.typingInput = new TypingInputController(this.store);
+    this.typingInput.getStats().restoreCheckpoint(this.resumeCheckpoint?.data ?? {});
 
     // Tier 4 — resolve the in-realm relic loadout. A revisit is a free-passage
     // replay (no combat), so it gets the neutral (empty-satchel) loadout.
     // Resolved before the band so its passive relics can show as icon tiles.
-    this.combat = resolveCombatLoadout(
-      this.revisit ? [] : this.store.get().satchel,
-      "sunken-bell",
-    );
+    const savedCombatSatchel = this.resumeCheckpoint?.data.combatSatchel;
+    this.combatSatchel = this.revisit ? [] : typeof savedCombatSatchel === "string"
+      ? savedCombatSatchel.split(",").filter(Boolean) : [...this.store.get().satchel];
+    this.combat = resolveCombatLoadout(this.combatSatchel, "sunken-bell");
     this.graceSaves = this.combat.gracePool;
+    const grace = this.resumeCheckpoint?.data.graceSaves;
+    if (typeof grace === "number" && Number.isInteger(grace)) {
+      this.graceSaves = Math.max(0, Math.min(this.graceSaves, grace));
+    }
+    const air = this.resumeCheckpoint?.data.air;
+    if (typeof air === "number") this.breath.restore(air);
 
     // UI cohesion — the console band houses the meters + the Bell's "air" stake.
     // Passive relics own the satchel lane; the breath meter uses the otherwise
@@ -544,7 +559,106 @@ export class SunkenBellScene extends Phaser.Scene {
       this.startRevisit();
       return;
     }
-    this.startArrival();
+    this.resumeBell();
+  }
+
+  /** Save only stable entry resources, never transient combat actors or timers. */
+  private checkpoint(step: BellStep, data: SaveCheckpoint["data"] = {}): void {
+    if (this.revisit || this.store.get().realms["sunken-bell"]?.cleared) return;
+    if (!this.store.get().realms["sunken-bell"]) {
+      this.store.update(s => { s.realms["sunken-bell"] = { cleared: false, choices: {} }; });
+    }
+    this.store.setCheckpoint({ scene: "SunkenBellScene", step, data: {
+      ...this.typingInput.getStats().captureCheckpoint(), air: this.breath.getAir(),
+      graceSaves: this.graceSaves, combatSatchel: this.combatSatchel.join(","), ...data,
+    } });
+  }
+
+  private takeStageData(step: BellStep): SaveCheckpoint["data"] {
+    if (this.resumeCheckpoint?.step !== step) return {};
+    const data = this.resumeCheckpoint.data;
+    this.resumeCheckpoint = null;
+    return data;
+  }
+
+  private resumeBell(): void {
+    const saved = this.resumeCheckpoint;
+    const step = bellStep(saved?.step);
+    // BeatClock is deliberately stopped for all story phases. Combat methods
+    // below restore their own tempo; completed fights are never reconstructed.
+    if (["olin", "olin-taught", "practice", "practice-done"].includes(step)) this.drawOlin();
+    if (["chant", "force", "force-break", "fork1-reward", "corridor"].includes(step)) this.showDoorCues();
+    if (["free-aurland", "claim-tongue", "fork2-reward"].includes(step)) this.showFateCues();
+    switch (step) {
+      case "descent": this.showDescentLanterns(); this.startDescent(); break;
+      case "olin": this.startOlinNPC(); break;
+      case "olin-taught": this.onOlinTeachComplete(); break;
+      case "practice": this.startRhythmPractice(); break;
+      case "practice-done": this.showRhythmPracticeComplete(); break;
+      case "choir": {
+        this.breathActive = true;
+        this.drawBreathBar();
+        this.rhythmLabel.setAlpha(0.9);
+        this.beatClock.setTempo(2000);
+        this.beatClock.start();
+        const index = bellIndex(saved?.data.index, 3);
+        if (index === 0) this.beginFirstGhostEncounter();
+        else if (index === 1) this.startWave1();
+        else if (index === 2) this.startAntiphon();
+        else this.startWave2();
+        break;
+      }
+      case "choir-cleared":
+        this.breathActive = true;
+        this.drawBreathBar();
+        this.beatClock.setTempo(2000);
+        this.beatClock.start();
+        this.showChoirCleared(bellIndex(saved?.data.index, 3)); break;
+      case "chamber": this.startBellKeepersChamber(); break;
+      case "chamber-read": this.startBellKeepersChamber(true); break;
+      case "fork1": this.startFork1(); break;
+      case "chant": this.startFork1Chant(); break;
+      case "force": this.startFork1Force(); break;
+      case "force-break": this.startFork1ForceBreak(); break;
+      case "fork1-reward": this.showFork1Reward(); break;
+      case "corridor": this.startAct3Corridor(); break;
+      case "warden": this.resumeWardenClock(2000); this.startAct3(); break;
+      case "warden1-cleared": this.resumeWardenClock(2000); this.showWardenPhase1Cleared(this.drawWarden()); break;
+      case "warden2": {
+        this.resumeWardenClock(2000);
+        const warden = this.drawWarden();
+        this.flashWardenAwake(warden, false);
+        this.startWardenPhase2(warden); break;
+      }
+      case "warden3": {
+        this.resumeWardenClock(1000);
+        const warden = this.drawWarden();
+        this.flashWardenAwake(warden, true);
+        this.startWardenPhase3(warden); break;
+      }
+      case "warden-defeated": {
+        const warden = this.drawWarden();
+        this.flashWardenAwake(warden, true);
+        this.onWardenDefeated(warden); break;
+      }
+      case "fork2": this.startFork2(); break;
+      case "free-aurland": this.startFork2FreeAurland(); break;
+      case "claim-tongue": this.startFork2ClaimTongue(); break;
+      case "fork2-reward": this.showFork2Reward(); break;
+      case "fish": this.startGlassFishGate(); break;
+      case "companion-answer": this.showCompanionAnswer(saved?.data.accepted === true); break;
+      case "true-name": this.startTrueNamePassage(); break;
+      case "ending":
+        if (resolveCompanionDecision("sunken-bell", this.store.get().realms["sunken-bell"], this.store.get().satchel) === "accepted") this.showGlassFishCompanion();
+        this.startEnding(); break;
+      default: this.startArrival();
+    }
+  }
+
+  private resumeWardenClock(tempo: number): void {
+    this.beatClock.setTempo(tempo);
+    this.beatClock.start();
+    this.rhythmLabel.setAlpha(0.9);
   }
 
   // ─── Revisit mode ────────────────────────────────────────────────────────
@@ -1307,6 +1421,7 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Act 1: Arrival ───────────────────────────────────────────────────────
 
   private startArrival(): void {
+    this.checkpoint("arrival");
     // Act 1 pre-beat: input flows freely until Olin teaches the bell's rhythm.
     // BeatClock stays not-running here; gating engages only once start() is
     // called at the end of Olin's exchange.
@@ -1324,9 +1439,14 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startDescent(): void {
     this.setStoryObjective("Light the descent lanterns. Type the words shown freely.");
-    let index = 0;
+    let index = bellIndex(this.takeStageData("descent").index, DESCENT_LANTERN_WORDS.length);
+    for (let lit = 0; lit < index; lit++) {
+      const lantern = this.showDescentLantern(lit);
+      if (lantern) this.lightDescentLantern(lantern);
+    }
 
     const advance = (): void => {
+      this.checkpoint("descent", { index });
       if (index >= DESCENT_LANTERN_WORDS.length) {
         this.time.delayedCall(320, () => {
           this.swimWrenToX(WREN_X, () => {
@@ -1372,6 +1492,7 @@ export class SunkenBellScene extends Phaser.Scene {
           this.lightDescentLantern(lantern);
           this.clearActiveTargets();
           index += 1;
+          this.checkpoint("descent", { index });
           this.time.delayedCall(520, advance);
         },
       });
@@ -1703,55 +1824,48 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Act 1: Old Olin NPC ──────────────────────────────────────────────────
 
   private startOlinNPC(): void {
+    const index = bellIndex(this.takeStageData("olin").index, 3);
     this.clearActiveTargets();
     this.dismissDescentLanterns();
     this.setStoryObjective("Answer Old Olin. Type the words shown freely.");
-    // Draw Olin — hunched silhouette on a pew
     this.drawOlin();
+    if (index === 3) this.setNarrator("i taught the bell its name. i can teach you if you let me.", "Old Olin");
+    this.showOlinExchange(index);
+  }
 
-    this.setNarrator("tell me your name, child.", "Old Olin");
-    this.readThen(() => {
-      const namePos = this.olinPassageWordPosition();
-      const nameTarget = this.makeOlinWord({
-        scene: this,
-        word: "wren",
-        x: namePos.x,
-        y: namePos.y,
-        fontSize: 40,
+  private showOlinExchange(index: number): void {
+    this.checkpoint("olin", { index });
+    if (index === 1) {
+      this.setNarrator("when the blue ring opens, begin a word. its first letter follows the toll; the rest flows freely.", "Old Olin");
+      this.readThen(() => this.showOlinExchange(2));
+      return;
+    }
+    if (index === 2) {
+      this.setNarrator("i taught the bell its name. i can teach you if you let me.", "Old Olin");
+      this.readThen(() => this.showOlinExchange(3));
+      return;
+    }
+    const prompt = () => {
+      const position = this.olinPassageWordPosition();
+      const target = this.makeOlinWord({
+        scene: this, word: index === 3 ? "teach me" : "wren",
+        x: position.x, y: position.y, fontSize: 40,
         onComplete: () => {
           this.clearActiveTargets();
-          this.setNarrator(
-            "when the blue ring opens, begin a word. its first letter follows the toll; the rest flows freely.",
-            "Old Olin",
-          );
-          this.readThen(() => {
-            this.setNarrator(
-              "i taught the bell its name. i can teach you if you let me.",
-              "Old Olin",
-            );
-            this.readThen(() => {
-              const teachPos = this.olinPassageWordPosition();
-              const teachTarget = this.makeOlinWord({
-                scene: this,
-                word: "teach me",
-                x: teachPos.x,
-                y: teachPos.y,
-                fontSize: 40,
-                onComplete: () => {
-                  this.clearActiveTargets();
-                  this.onOlinTeachComplete();
-                },
-              });
-              this.registerActiveTarget(teachTarget);
-            });
-          });
+          if (index === 3) this.onOlinTeachComplete();
+          else this.showOlinExchange(1);
         },
       });
-      this.registerActiveTarget(nameTarget);
-    });
+      this.registerActiveTarget(target);
+    };
+    if (index === 0) {
+      this.setNarrator("tell me your name, child.", "Old Olin");
+      this.readThen(prompt);
+    } else prompt();
   }
 
   private onOlinTeachComplete(): void {
+    this.checkpoint("olin-taught");
     playChime();
     playActorAttention(this, this.olinImage, {
       tint: BELL_BURST_COLOR,
@@ -1773,6 +1887,8 @@ export class SunkenBellScene extends Phaser.Scene {
 
   /** One real first-letter rhythm gate, with no advancing foe or air stake. */
   private startRhythmPractice(): void {
+    this.checkpoint("practice");
+    this.drawOlin();
     this.clearRhythmPractice();
     this.clearActiveTargets();
     this.rhythmPracticeActive = true;
@@ -1794,9 +1910,7 @@ export class SunkenBellScene extends Phaser.Scene {
         this.clearRhythmPractice();
         this.clearActiveTargets();
         this.beatClock.stop();
-        this.setStoryObjective("Practice complete. Press Enter or Space to meet the tide-ghosts.");
-        this.setNarrator("There. Your first letter followed the toll, and the rest found its own way. Now listen for it among the ghosts.", "Old Olin");
-        this.readThen(() => this.beginRhythmEncounters());
+        this.showRhythmPracticeComplete();
       },
     });
     this.rhythmPracticeTarget = target;
@@ -1804,6 +1918,13 @@ export class SunkenBellScene extends Phaser.Scene {
     this.rhythmLabel.setAlpha(0.9);
     this.beatClock.setTempo(2000);
     this.beatClock.start();
+  }
+
+  private showRhythmPracticeComplete(): void {
+    this.checkpoint("practice-done");
+    this.setStoryObjective("Practice complete. Press Enter or Space to meet the tide-ghosts.");
+    this.setNarrator("There. Your first letter followed the toll, and the rest found its own way. Now listen for it among the ghosts.", "Old Olin");
+    this.readThen(() => this.beginRhythmEncounters());
   }
 
   private clearRhythmPractice(): void {
@@ -1851,7 +1972,8 @@ export class SunkenBellScene extends Phaser.Scene {
     this.setNarrator("The tide-ghosts draw close. Start each word as the blue rhythm ring opens, then finish its letters freely.");
     this.band.setObjective("First letter on the blue pulse, then finish freely. Drive back ghosts; watch air.");
     // Combat begins — the air stake goes live for the choir waves.
-    this.setBreathActive(true);
+    if (!this.breathActive) this.setBreathActive(true);
+    this.checkpoint("choir", { index: 0 });
     this.onWaveCleared = () => this.onFirstEncounterCleared();
     const words = ["tide", "salt", "still"];
     const positions = [
@@ -1869,8 +1991,24 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private onFirstEncounterCleared(): void {
-    this.setStoryObjective("The tide-ghosts recede. The nave opens ahead.");
-    this.time.delayedCall(1200, () => this.startAct2());
+    this.showChoirCleared(0);
+  }
+
+  private showChoirCleared(index: number): void {
+    this.checkpoint("choir-cleared", { index });
+    const captions = [
+      "The tide-ghosts recede. The nave opens ahead.",
+      "The choir falls quiet. Another answer gathers between the tolls.",
+      "The choir's answer fades. More shapes gather in the nave.",
+      "The choir recedes. A room opens off the nave.",
+    ];
+    this.setStoryObjective(captions[index]!);
+    this.time.delayedCall(1200, () => {
+      if (index === 0) this.startAct2();
+      else if (index === 1) this.startAntiphon();
+      else if (index === 2) this.startWave2();
+      else this.startBellKeepersChamber();
+    });
   }
 
   // ─── Act 2: Through the Cathedral ────────────────────────────────────────
@@ -1881,6 +2019,7 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private startWave1(): void {
+    this.checkpoint("choir", { index: 1 });
     this.beatPhase = "on";
     playWaveSting();
     if (!reducedMotion(this)) this.cameras.main.shake(140, 0.003);
@@ -1908,14 +2047,13 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private onWave1Cleared(): void {
-    this.setStoryObjective("The choir falls quiet. Another answer gathers between the tolls.");
-    // §5.5.7 / Tier 1 — the choir answers off the beat before the splitter wave.
-    this.time.delayedCall(1200, () => this.startAntiphon());
+    this.showChoirCleared(1);
   }
 
   // ─── Act 2: The Antiphon (off-beat call-and-response) ────────────────────
 
   private startAntiphon(): void {
+    this.checkpoint("choir", { index: 2 });
     playWaveSting();
     if (!reducedMotion(this)) this.cameras.main.shake(140, 0.003);
     this.pulseBellWave();
@@ -1946,11 +2084,11 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private onAntiphonCleared(): void {
-    this.setStoryObjective("The choir's answer fades. More shapes gather in the nave.");
-    this.time.delayedCall(1200, () => this.startWave2());
+    this.showChoirCleared(2);
   }
 
   private startWave2(): void {
+    this.checkpoint("choir", { index: 3 });
     this.beatPhase = "on";
     playWaveSting();
     if (!reducedMotion(this)) this.cameras.main.shake(140, 0.003);
@@ -2019,13 +2157,13 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private onWave2Cleared(): void {
-    this.setStoryObjective("The choir recedes. A room opens off the nave.");
-    this.time.delayedCall(1200, () => this.startBellKeepersChamber());
+    this.showChoirCleared(3);
   }
 
   // ─── Act 2: Bell-Keeper's Chamber ────────────────────────────────────────
 
-  private startBellKeepersChamber(): void {
+  private startBellKeepersChamber(resumeRead = false): void {
+    this.checkpoint(resumeRead ? "chamber-read" : "chamber");
     this.clearBellKeeperLectern();
     // Choir combat is over — retire the air gauge until the boss/fork section
     // (which has its own tempo + de-sync stakes, not the breath economy).
@@ -2059,6 +2197,7 @@ export class SunkenBellScene extends Phaser.Scene {
       cueAnchor?.destroy();
       cueAnchor = null;
     };
+    if (resumeRead) { this.showBellKeeperRead(cue); return; }
     let read = false;
     const target = this.makeWord({
       scene: this,
@@ -2099,19 +2238,7 @@ export class SunkenBellScene extends Phaser.Scene {
           count: 10,
         });
         this.clearActiveTargets();
-        this.store.update((s) => {
-          if (!s.almanacLore.includes("old-olins-memory")) {
-            s.almanacLore.push("old-olins-memory");
-          }
-        });
-        playChime();
-        this.setNarrator("“The bell's name is not mine to teach. Only to remember.” Olin's words settle onto a new Almanac page.");
-        this.setStoryObjective("Old Olin's Memory is recorded. Continue when you are ready for the nave doors.");
-        this.readThen(() => {
-          if (this.bellKeeperLectern !== cue) return;
-          this.clearBellKeeperLectern();
-          this.startFork1();
-        });
+        this.showBellKeeperRead(cue);
       },
     });
     cueAnchor = attachWordBodyAnchor(
@@ -2130,9 +2257,27 @@ export class SunkenBellScene extends Phaser.Scene {
     this.registerActiveTarget(target);
   }
 
+  private showBellKeeperRead(cue: Phaser.GameObjects.Container): void {
+    this.checkpoint("chamber-read");
+    this.store.update((s) => {
+      if (!s.almanacLore.includes("old-olins-memory")) {
+        s.almanacLore.push("old-olins-memory");
+      }
+    });
+    playChime();
+    this.setNarrator("“The bell's name is not mine to teach. Only to remember.” Olin's words settle onto a new Almanac page.");
+    this.setStoryObjective("Old Olin's Memory is recorded. Continue when you are ready for the nave doors.");
+    this.readThen(() => {
+      if (this.bellKeeperLectern !== cue) return;
+      this.clearBellKeeperLectern();
+      this.startFork1();
+    });
+  }
+
   // ─── Act 2: Fork 1 — The Cathedral Doors ──────────────────────────────────
 
   private startFork1(): void {
+    this.checkpoint("fork1");
     this.setStoryObjective("Choose how to open the nave doors. Type either choice freely.");
     this.showDoorCues();
     if (this.fork1Choice === "chant") {
@@ -2195,19 +2340,17 @@ export class SunkenBellScene extends Phaser.Scene {
         beforeResponse: () => this.openCathedralDoor("chant", true) },
     ];
     this.runBeatLockedChain(phrases, () => {
-      // §5.5.5 Fork 1A — side with Old Olin → award Quiet Chant relic
       this.store.update((s) => {
         if (!s.satchel.includes("quiet-chant")) s.satchel.push("quiet-chant");
       });
-      this.setNarrator("The doors part. The quiet chant stays with you, a rhythm you can carry beyond this place.");
-      this.setStoryObjective("Quiet Chant is yours. Continue through the open doors.");
-      this.readThen(() => this.startAct3Corridor());
+      this.showFork1Reward();
     });
   }
 
   private startFork1Force(): void {
     this.fork1Choice = this.commitFork("fork1", "force") as typeof this.fork1Choice;
     if (this.fork1Choice !== "force") { this.startFork1Chant(); return; }
+    this.checkpoint("force");
     this.fadeOutForkCue(this.doorChantCue);
     this.doorChantCue = null;
     // §5.5.5 Fork 1B — force the doors open → award Lock-Bar relic
@@ -2246,16 +2389,15 @@ export class SunkenBellScene extends Phaser.Scene {
     this.setNarrator("The crossbar strains. Type the breaking words to split it.");
     this.setStoryObjective("Type the breaking words as shown. No rhythm needed.");
     const forcePhrases = ["crash", "crack", "clear", "we pass"];
-    let step = 0;
+    let step = bellIndex(this.takeStageData("force-break").index, forcePhrases.length);
     const advance = (): void => {
+      this.checkpoint("force-break", { index: step });
       if (step >= forcePhrases.length) {
         // The matched final character already began the opening during the
         // word's 320ms exit. Settle it before the held acknowledgment, retaining
         // the open masonry until the existing Continue/corridor cleanup.
         this.openForceDoorCue(true);
-        this.setNarrator("The doors burst wide. Their lock-bar rests in your hands.");
-        this.setStoryObjective("Lock-Bar is yours. Continue through the open doors.");
-        this.readThen(() => this.startAct3Corridor());
+        this.showFork1Reward();
         return;
       }
       const word = forcePhrases[step];
@@ -2274,17 +2416,37 @@ export class SunkenBellScene extends Phaser.Scene {
         },
         onComplete: () => {
           step += 1;
+          this.checkpoint("force-break", { index: step });
           this.clearActiveTargets();
           advance();
         },
       }, -48);
       this.registerActiveTarget(target);
     };
+    this.checkpoint("force-break", { index: step });
     this.time.delayedCall(400, advance);
+  }
+
+  private showFork1Reward(): void {
+    this.checkpoint("fork1-reward");
+    this.openCathedralDoor(this.fork1Choice === "force" ? "force" : "chant", true);
+    if (this.fork1Choice === "force") {
+      this.setNarrator("The doors burst wide. Their lock-bar rests in your hands.");
+      this.setStoryObjective("Lock-Bar is yours. Continue through the open doors.");
+    } else {
+      this.setNarrator("The doors part. The quiet chant stays with you, a rhythm you can carry beyond this place.");
+      this.setStoryObjective("Quiet Chant is yours. Continue through the open doors.");
+    }
+    this.readThen(() => this.startAct3Corridor());
   }
 
   private startAct3Corridor(): void {
     if (this.doorwayPassagePending) return;
+    this.checkpoint("corridor");
+    if (this.resumeCheckpoint?.step === "corridor") {
+      this.openCathedralDoor(this.fork1Choice === "force" ? "force" : "chant", true);
+      this.resumeCheckpoint = null;
+    }
     this.clearActiveTargets();
     const enterCorridor = () => {
       this.clearBellForkCues();
@@ -2392,6 +2554,7 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private startAct3(): void {
+    this.checkpoint("warden");
     playWaveSting();
     if (!reducedMotion(this)) this.cameras.main.shake(140, 0.003);
     this.pulseBellWave({ y: 640, ringWidth: 900, ringHeight: 180, count: 14 });
@@ -2424,18 +2587,20 @@ export class SunkenBellScene extends Phaser.Scene {
           remaining -= 1;
           if (remaining === 0) {
             this.clearActiveTargets();
-            this.time.delayedCall(800, () => {
-              this.setNarrator("Its eyes open.");
-              this.flashWardenAwake(wardenSprite, false);
-              this.readThen(() =>
-                this.startWardenPhase2(wardenSprite),
-              );
-            });
+            this.checkpoint("warden1-cleared");
+            this.time.delayedCall(800, () => this.showWardenPhase1Cleared(wardenSprite));
           }
         },
       });
       this.registerActiveTarget(target);
     });
+  }
+
+  private showWardenPhase1Cleared(wardenSprite: Phaser.GameObjects.Image): void {
+    this.checkpoint("warden1-cleared");
+    this.setNarrator("Its eyes open.");
+    this.flashWardenAwake(wardenSprite, false);
+    this.readThen(() => this.startWardenPhase2(wardenSprite));
   }
 
   /** The Warden wakes — its eyes open. Replaces the old phase-2 graphics redraw
@@ -2450,6 +2615,7 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private startWardenPhase2(wardenSprite: Phaser.GameObjects.Image): void {
+    this.checkpoint("warden2");
     this.beatPhase = "on";
     // Double tempo — the tide rises and the world speeds up. The window
     // tightens with it (tempo-scaled: ~175ms now).
@@ -2479,6 +2645,7 @@ export class SunkenBellScene extends Phaser.Scene {
             remaining -= 1;
             if (remaining === 0) {
               this.clearActiveTargets();
+              this.checkpoint("warden3");
               // Phase 3's passage flows freely mid-word again — de-sync off.
               this.beatLocked = false;
               // Brighten the warden's eyes
@@ -2512,6 +2679,7 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private startWardenPhase3(wardenSprite: Phaser.GameObjects.Image): void {
+    this.checkpoint("warden3");
     const passage = "i am the bell. i drink the sea.";
     const words = passage.split(" ");
     this.setNarrator(`The Warden's verse: ${passage}\n\nEight words, one per toll. Start each on the blue pulse and finish before the next toll. Include punctuation; do not type spaces between prompts. A missed word restarts its sentence after one rest toll.`);
@@ -2638,6 +2806,7 @@ export class SunkenBellScene extends Phaser.Scene {
   }
 
   private onWardenDefeated(wardenSprite: Phaser.GameObjects.Image): void {
+    this.checkpoint("warden-defeated");
     playChime();
     this.beatClock.stop();
     this.rhythmLabel.setAlpha(0);
@@ -2665,6 +2834,7 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Fork 2 — Beneath the Bell ────────────────────────────────────────────
 
   private startFork2(): void {
+    this.checkpoint("fork2");
     this.setStoryObjective("Read the two paths beneath the silent bell, then continue to choose.");
     this.showFateCues();
     if (this.fork2Choice === "free-aurland") { this.startFork2FreeAurland(); return; }
@@ -2729,7 +2899,7 @@ export class SunkenBellScene extends Phaser.Scene {
       { word: "you are remembered", narrator: "Swim free, king." },
       { word: "swim free king", narrator: "" },
     ];
-    this.readThen(() => this.runFreePassageChain(chain, () => {
+    const continuePassage = () => this.runFreePassageChain(chain, () => {
       this.store.update((s) => {
         if (!s.satchel.includes("king-aurland")) s.satchel.push("king-aurland");
         if (!s.satchel.includes("trident-token")) s.satchel.push("trident-token");
@@ -2737,18 +2907,14 @@ export class SunkenBellScene extends Phaser.Scene {
           s.almanacLore.push("king-auriands-promise");
         }
       });
-      playChime();
-      this.fadeOutForkCue(this.aurlandFateCue);
-      this.aurlandFateCue = null;
-      this.showAurlandToken();
-      this.setNarrator("Aurland swims free. He presses a trident token into your hand before he goes.");
-      this.setStoryObjective("Aurland's trident token is yours. Continue toward the surface.");
-      this.readThen(() => {
-        this.clearAurlandToken();
-        this.hideAurland();
-        this.startGlassFishGate();
-      });
-    }));
+      this.showFork2Reward();
+    });
+    if (this.resumeCheckpoint?.step === "free-aurland" && typeof this.resumeCheckpoint.data.index === "number") {
+      continuePassage();
+    } else {
+      this.checkpoint("free-aurland", { intro: true });
+      this.readThen(continuePassage);
+    }
   }
 
   /** The reward caption owns one visible handoff; Continue never waits on it. */
@@ -2873,23 +3039,55 @@ export class SunkenBellScene extends Phaser.Scene {
         },
       },
     ];
-    this.readThen(() => this.runFreePassageChain(chain, () => {
+    const continuePassage = () => this.runFreePassageChain(chain, () => {
       this.store.update((s) => {
         if (!s.satchel.includes("bells-tongue")) s.satchel.push("bells-tongue");
         if (!s.almanacLore.includes("the-bells-tongue-song")) {
           s.almanacLore.push("the-bells-tongue-song");
         }
       });
-      playChime();
+      this.showFork2Reward();
+    });
+    if (this.resumeCheckpoint?.step === "claim-tongue" && typeof this.resumeCheckpoint.data.index === "number") {
+      continuePassage();
+    } else {
+      this.checkpoint("claim-tongue", { intro: true });
+      this.readThen(continuePassage);
+    }
+  }
+
+  private showFork2Reward(): void {
+    this.checkpoint("fork2-reward");
+    playChime();
+    if (this.fork2Choice === "free-aurland") {
+      this.fadeOutForkCue(this.aurlandFateCue);
+      this.aurlandFateCue = null;
+      this.fadeOutForkCue(this.bellTongueCue);
+      this.bellTongueCue = null;
+      if (!this.aurlandImage?.scene) this.showAurland();
+      this.showAurlandToken();
+      this.setNarrator("Aurland swims free. He presses a trident token into your hand before he goes.");
+      this.setStoryObjective("Aurland's trident token is yours. Continue toward the surface.");
+      this.readThen(() => {
+        this.clearAurlandToken();
+        this.hideAurland();
+        this.startGlassFishGate();
+      });
+    } else {
+      this.fadeOutForkCue(this.aurlandFateCue);
+      this.aurlandFateCue = null;
+      this.fadeOutForkCue(this.bellTongueCue);
+      this.bellTongueCue = null;
       this.setNarrator("The Bell's Tongue settles in your satchel, still warm from the deep.");
       this.setStoryObjective("Bell's Tongue is yours. Continue toward the surface.");
       this.readThen(() => this.startGlassFishGate());
-    }));
+    }
   }
 
   // ─── Glass-fish gate ─────────────────────────────────────────────────────
 
   private startGlassFishGate(): void {
+    this.checkpoint("fish");
     this.clearActiveTargets();
     if (resolveCompanionDecision("sunken-bell", this.store.get().realms["sunken-bell"], this.store.get().satchel)) {
       this.startTrueNamePassage(); return;
@@ -2919,9 +3117,7 @@ export class SunkenBellScene extends Phaser.Scene {
               if (accepted && !s.satchel.includes("glass-fish")) s.satchel.push("glass-fish");
             });
             if (!accepted) { this.startTrueNamePassage(); return; }
-            this.setNarrator("The glass-fish follows Wren toward the portal. Her light will travel with you.");
-            this.setStoryObjective("The Glass-Fish joins Wren. Continue when you are ready to name the realm.");
-            this.readThen(() => this.startTrueNamePassage());
+            this.showCompanionAnswer(true);
           },
         });
         const letGoPos = this.bellPassageWordPosition(
@@ -2939,10 +3135,7 @@ export class SunkenBellScene extends Phaser.Scene {
           onComplete: () => {
             this.clearActiveTargets();
             this.store.update(s => { rememberCompanionDecision(s, "sunken-bell", "declined"); });
-            this.dismissGlassFishCompanion(1320, 640);
-            this.setNarrator("You let the glass-fish go. Her light drifts back into the water.");
-            this.setStoryObjective("The glass-fish stays in the deep. Continue when you are ready to name the realm.");
-            this.readThen(() => this.startTrueNamePassage());
+            this.showCompanionAnswer(false);
           },
         });
         this.registerActiveTarget(takeTarget, letGoTarget);
@@ -2950,6 +3143,22 @@ export class SunkenBellScene extends Phaser.Scene {
     } else {
       this.startTrueNamePassage();
     }
+  }
+
+  private showCompanionAnswer(accepted: boolean): void {
+    const decision = resolveCompanionDecision("sunken-bell", this.store.get().realms["sunken-bell"], this.store.get().satchel);
+    accepted = decision ? decision === "accepted" : accepted;
+    this.checkpoint("companion-answer", { accepted });
+    if (accepted) {
+      this.showGlassFishCompanion();
+      this.setNarrator("The glass-fish follows Wren toward the portal. Her light will travel with you.");
+      this.setStoryObjective("The Glass-Fish joins Wren. Continue when you are ready to name the realm.");
+    } else {
+      this.dismissGlassFishCompanion(1320, 640);
+      this.setNarrator("You let the glass-fish go. Her light drifts back into the water.");
+      this.setStoryObjective("The glass-fish stays in the deep. Continue when you are ready to name the realm.");
+    }
+    this.readThen(() => this.startTrueNamePassage());
   }
 
   private showGlassFishCompanion(): void {
@@ -2997,6 +3206,8 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── True-name passage ───────────────────────────────────────────────────
 
   private startTrueNamePassage(): void {
+    this.checkpoint("true-name");
+    if (resolveCompanionDecision("sunken-bell", this.store.get().realms["sunken-bell"], this.store.get().satchel) === "accepted") this.showGlassFishCompanion();
     this.clearActiveTargets();
     this.narration.say("sunken_truename_intro");
     this.setStoryObjective("Type the bell's true name, including spaces and punctuation. No rhythm needed.");
@@ -3058,6 +3269,7 @@ export class SunkenBellScene extends Phaser.Scene {
           dismissTrueNameSeal(this, seal);
           this.clearActiveTargets();
           playChime();
+          this.checkpoint("ending");
           this.time.delayedCall(600, () => this.startEnding());
         },
       });
@@ -3082,12 +3294,13 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private startEnding(): void {
     this.setStoryObjective("The Sunken Bell is restored. The Almanac records the journey.");
-    this.store.update((s) => {
+    if (!this.revisit) this.store.update((s) => {
       if (this.fork1Choice) rememberRealmFork(s, "sunken-bell", "fork1", this.fork1Choice);
       if (this.fork2Choice) rememberRealmFork(s, "sunken-bell", "fork2", this.fork2Choice);
       const realm = s.realms["sunken-bell"] ?? { cleared: false, choices: {} };
       realm.cleared = true;
       s.realms["sunken-bell"] = realm;
+      if (s.checkpoint?.scene === "SunkenBellScene") s.checkpoint = null;
     });
 
     this.showAlmanacStamp(() => {
@@ -4148,13 +4361,29 @@ export class SunkenBellScene extends Phaser.Scene {
     steps: Array<{ word: string; narrator: string; onFinalCharacter?: () => void; beforeResponse?: () => void }>,
     onDone: () => void,
   ): void {
-    let idx = 0;
+    const saved = this.takeStageData("chant");
+    let idx = bellIndex(saved.index, steps.length);
+    let reading = saved.reading === true && idx > 0;
+    if (typeof saved.index === "number" && !reading) {
+      if (idx > 0) this.setNarrator(steps[idx - 1]!.narrator);
+      else this.narration.say("sunken_fork1_intro");
+    }
 
     const advance = (): void => {
+      if (reading) {
+        reading = false;
+        const previous = steps[idx - 1]!;
+        previous.beforeResponse?.();
+        this.checkpoint("chant", { index: idx, reading: true });
+        this.setNarrator(previous.narrator);
+        this.readThen(advance);
+        return;
+      }
       if (idx >= steps.length) {
         onDone();
         return;
       }
+      this.checkpoint("chant", { index: idx, reading: false });
       const step = steps[idx];
       if (!step) return;
       const pos = this.bellPassageWordPosition(this.doorChantCue, -62, {
@@ -4183,6 +4412,7 @@ export class SunkenBellScene extends Phaser.Scene {
           this.clearActiveTargets();
           step.beforeResponse?.();
           if (step.narrator) {
+            this.checkpoint("chant", { index: idx, reading: true });
             this.setNarrator(step.narrator);
             this.readThen(advance);
           } else {
@@ -4204,12 +4434,30 @@ export class SunkenBellScene extends Phaser.Scene {
     // Free-passage chains run after the boss falls — the BeatClock has
     // already been stopped, so isInWindow() returns true and input flows.
 
-    let idx = 0;
+    const checkpointStep = this.fork2Choice === "free-aurland" ? "free-aurland" : "claim-tongue";
+    const saved = this.takeStageData(checkpointStep);
+    let idx = bellIndex(saved.index, steps.length);
+    let reading = saved.reading === true && idx > 0;
+    if (typeof saved.index === "number" && !reading && idx > 0) {
+      this.setNarrator(steps[idx - 1]!.narrator);
+    }
     const advance = (): void => {
+      if (reading) {
+        reading = false;
+        const previous = steps[idx - 1]!;
+        // These hooks settle only the already-completed visible prop. Rewards
+        // still belong exclusively to the original onDone handoff.
+        previous.onComplete?.();
+        this.checkpoint(checkpointStep, { index: idx, reading: true });
+        this.setNarrator(previous.narrator);
+        this.readThen(advance);
+        return;
+      }
       if (idx >= steps.length) {
         onDone();
         return;
       }
+      this.checkpoint(checkpointStep, { index: idx, reading: false });
       const step = steps[idx];
       if (!step) return;
       const freeingAurland = this.fork2Choice === "free-aurland";
@@ -4256,6 +4504,7 @@ export class SunkenBellScene extends Phaser.Scene {
           this.clearActiveTargets(this.aurlandBindingPending);
           step.onComplete?.();
           if (step.narrator) {
+            this.checkpoint(checkpointStep, { index: idx, reading: true });
             this.setNarrator(step.narrator);
             this.readThen(advance);
           } else {

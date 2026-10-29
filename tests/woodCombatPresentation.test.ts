@@ -48,6 +48,7 @@ await suite("Wood live wards: held story yields the top lane before every ghost 
     const ghosts: Array<{ direction: string; word: string; delay: number }> = [];
     const save = { realms: { "haunted-wood": { quietLordIntruded: false } }, keyStats: {} };
     Object.assign(s, {
+      checkpoint() {},
       ghosts: [], activeTargets: [], fork2Choice: "bargain", scale: { width: 1920, height: 1080 },
       narration: { say: (line: string) => { caption = line; }, clear: () => { caption = ""; clears += 1; } },
       setNarrator: (line: string) => { caption = line; },

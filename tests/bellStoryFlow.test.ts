@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { bellIndex } from "../src/game/bellCheckpoint";
 import { assert, assertEqual, suite } from "./_assert";
 
 // Exercise the actual story entry and callbacks with inert rendering. Neither
@@ -7,17 +8,17 @@ import { assert, assertEqual, suite } from "./_assert";
 const path = new URL("../src/scenes/SunkenBellScene.ts", import.meta.url);
 const source = ts.createSourceFile(path.pathname, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
-const methods = ["startBellKeepersChamber", "clearBellKeeperLectern", "onWardenDefeated", "startFork2", "startFork2FreeAurland", "startFork2ClaimTongue", "runFreePassageChain", "setStoryObjective"].map(name =>
+const methods = ["startBellKeepersChamber", "showBellKeeperRead", "showFork2Reward", "takeStageData", "clearBellKeeperLectern", "onWardenDefeated", "startFork2", "startFork2FreeAurland", "startFork2ClaimTongue", "runFreePassageChain", "setStoryObjective"].map(name =>
   owner.members.find(value => value.name?.getText(source) === name)!.getText(source));
 const code = ts.transpileModule(`class Harness { ${methods.join("\n")} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;
 const noop = () => {};
-const Harness = new Function("Phaser", "BELL_BURST_COLOR", "PALETTE_HEX", "addLocalGroundShadow",
+const Harness = new Function("bellIndex", "Phaser", "BELL_BURST_COLOR", "PALETTE_HEX", "addLocalGroundShadow",
   "addContainerWake", "addIdleBreath", "attachWordBodyAnchor", "playBodyImpact", "dismissStagedCue", "playChime", "fadeOutStagedSprite",
   "playWrenFocus", "playWrenAction", "playActorAttention", "reducedMotion",
   `${code}; return Harness;`)(
-  { GameObjects: { Events: { DESTROY: "destroy" } } }, 0x4ab8d6, { brass: 0xbaa463 },
+  bellIndex, { GameObjects: { Events: { DESTROY: "destroy" } } }, 0x4ab8d6, { brass: 0xbaa463 },
   () => ({}), noop, noop, () => ({ destroy() {} }), noop, noop, noop,
   (scene: { departures: unknown[] }, sprite: unknown) => scene.departures.push(sprite),
   noop, noop, noop, () => false,
@@ -31,6 +32,7 @@ function story() {
   const tasks: string[] = [];
   const rings = [1, 1, 1].map(alpha => ({ alpha, setAlpha(value: number) { this.alpha = value; return this; } }));
   Object.assign(h, {
+    checkpoint() {},
     beatPhase: "off", beatLocked: true, beatRing: rings[0], offbeatRing: rings[1], rhythmLabel: rings[2],
     scale: { width: 1920, height: 1080 },
     band: { setObjective: (text: string) => tasks.push(text) },

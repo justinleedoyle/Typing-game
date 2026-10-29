@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { woodIndex } from "../src/game/woodCheckpoint";
 import { assert, assertEqual, suite } from "./_assert";
 
 const url = new URL("../src/scenes/HauntedWoodScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const sceneClass = source.statements.find(ts.isClassDeclaration)!;
-const names = ["startFork1Offering", "startFork1BoneFlute", "startFork2Bargain", "startFork2Force", "runPassageChain", "ownerPassageWordPosition"];
+const names = ["finishOffering", "finishFlute", "finishBargain","startFork1Offering", "startFork1BoneFlute", "startFork2Bargain", "startFork2Force", "runPassageChain", "ownerPassageWordPosition"];
 const lane = source.statements.filter(ts.isVariableStatement).flatMap(statement =>
   statement.declarationList.declarations.filter(declaration => declaration.name.getText(source) === "WOOD_BRANCH_WORD_Y")
     .map(declaration => `const ${declaration.getText(source)};`)).join("\n");
@@ -13,8 +14,8 @@ const code = ts.transpileModule(`${lane}\nclass Wood {
   ${names.map(name => sceneClass.members.find(member => member.name?.getText(source) === name)!.getText(source)).join("\n")}
 }`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 const noop = () => {};
-const Wood = new Function("playChime", "playWrenAction", "playWrenFocus", "playBodyImpact", "reducedFlashes", "PALETTE_HEX", code + "; return Wood;")(
-  noop, noop, noop, noop, () => true, { moss: 0 },
+const Wood = new Function("woodIndex", "playChime", "playWrenAction", "playWrenFocus", "playBodyImpact", "reducedFlashes", "PALETTE_HEX", code + "; return Wood;")(
+  woodIndex, noop, noop, noop, noop, () => true, { moss: 0 },
 );
 
 function fixture(dy = 0) {
@@ -25,6 +26,7 @@ function fixture(dy = 0) {
   let gate: (() => void) | undefined;
   let ignited = 0;
   Object.assign(scene, {
+    checkpoint() {},
     scale: { width: 1920, height: 1080 },
     offeringCue: { scene: true, x: 690, y: 792 + dy },
     boneFluteCue: { scene: true, x: 1230, y: 790 + dy },

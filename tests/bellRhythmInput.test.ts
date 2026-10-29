@@ -124,6 +124,7 @@ await suite("Bell wave staging: every authored ghost starts in a clear approach 
   const wave = new Waves();
   const spawns: Array<{ word: string; startX: number; restX: number; advanceMs: number }> = [];
   Object.assign(wave, {
+    checkpoint() {},
     scale: { width: 1920 }, quietLordIntruded: true,
     store: { get: () => ({ keyStats: {} }) }, narration: { say() {} }, band: { setObjective() {} },
     pulseBellWave() {}, dismissOlin() {}, setBandSpeaker() {}, setBreathActive() {}, beginCombatWave() {}, setNarrator() {},

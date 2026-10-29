@@ -5,7 +5,7 @@ import { assert, assertEqual, suite } from "./_assert";
 const url = new URL("../src/scenes/ClockworkForgeScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const sceneClass = source.statements.find(ts.isClassDeclaration)!;
-const methods = ["showPeacefulGuards", "clearPeacefulGuards", "drawGolemInto", "startFork2PeacefulBranch", "afterFork2", "staticGolemWordPosition", "gregorTutorialMove", "gregorTutorialCommand", "catwalkCueX", "catwalkWrenX", "dismissBellowsWorkstation", "clearForgeKeepsake"];
+const methods = ["showPeacefulGuards", "clearPeacefulGuards", "drawGolemInto", "startFork2PeacefulBranch", "showPeacefulOrderAnswer", "afterFork2", "staticGolemWordPosition", "gregorTutorialMove", "gregorTutorialCommand", "showTutorialMoveAnswer", "showTutorialCommandAnswer", "catwalkCueX", "catwalkWrenX", "dismissBellowsWorkstation", "clearForgeKeepsake"];
 const constants = source.statements.filter(ts.isVariableStatement).flatMap(statement =>
   statement.declarationList.declarations.filter(declaration =>
     ["CATWALK_Y", "FLOOR_Y", "GOLEM_SPRITE_HEIGHT", "FOUNDRY_GROUND_Y", "CATWALK_SURFACE_Y", "TUTORIAL_GOLEM_GROUND_Y", "TUTORIAL_GOLEM_Y"].includes(declaration.name.getText(source)))
@@ -62,6 +62,7 @@ function fixture(reduced = false) {
     tweens: { killTweensOf(body: any) { assert(body.alive, "guard cleanup cancels its tweens before destroying it"); } },
     makeGolemFoundryBase: () => ({}),
     commitFork: () => "peaceful",
+    checkpoint() {},
     clearActiveTargets() {}, dismissForgeChoiceCue() {}, pulseForgeChoiceCue() {}, clearForgeChoiceCues() {},
     forgeChoiceWordPosition: () => ({ x: 850, y: 620 }),
     makeForgeChoiceWord: (_cue: unknown, options: any) => { target = options; return options; },
@@ -227,6 +228,7 @@ function workshopFixture(reduced = false) {
     },
     showApprenticeSprite() {}, hideApprenticeSprite() {}, hideFornSprite() {}, clearActiveTargets() {},
     commitFork: (_fork: string, choice: string) => choice,
+    checkpoint() {}, savedStageData: () => ({}), hasSavedPassage: () => false,
     approachForgeWork() {},
     band: { setObjective() {} }, setNarrator() {},
     readThen(fn: () => void) { held = fn; },

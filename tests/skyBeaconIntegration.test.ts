@@ -83,6 +83,7 @@ function fixture(reduced = false) {
   const Sky = new Function(...Object.keys(globals), code + "; return Sky;")(...Object.values(globals));
   const s = new Sky();
   Object.assign(s, {
+    checkpoint() {}, savedStageData() { return {}; },
     scale: { width: 1920, height: 1080 }, wrenContainer: { scene: true, x: 960, y: 826 }, wrenSprite: {},
     heldBeaconSpark: null, forkChoiceWordAnchors: [], kindAnswerCue: null, tetherThreadCue: null,
     add: { container: prop, image(x: number, y: number, key: string) { const image = prop(x, y, key); images.push(image); return image; } },

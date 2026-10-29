@@ -41,6 +41,7 @@ function encounter(holdIntro = false) {
   let continueIntro: (() => void) | undefined;
   let defeats = 0;
   Object.assign(harness, {
+    checkpoint() {},
     activeTargets: [] as FakeTarget[], typingInput: { register() {} },
     setNarrator: (text: string) => captions.push(text), playWardenStagePulse() {},
     band: { setObjective: (text: string) => tasks.push(text) },

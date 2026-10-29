@@ -44,7 +44,7 @@ const art = painting("../art/bell/reading-lectern.png");
 const url = new URL("../src/scenes/SunkenBellScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
-const names = ["init", "preload", "startBellKeepersChamber", "drawBellKeeperLectern", "clearBellKeeperLectern", "setStoryObjective"];
+const names = ["init", "preload", "startBellKeepersChamber", "showBellKeeperRead", "drawBellKeeperLectern", "clearBellKeeperLectern", "setStoryObjective"];
 const create = owner.members.find(member => member.name?.getText(source) === "create")!;
 let shutdown: ts.ArrowFunction | undefined;
 function findShutdown(node: ts.Node): void {
@@ -95,6 +95,7 @@ function fixture(reduced = false) {
   const Bell = new Function(...Object.keys(globals), `${code}; return Bell;`)(...Object.values(globals));
   const scene = new Bell();
   Object.assign(scene, {
+    checkpoint() {},
     store: { get: () => save, update: (edit: (state: typeof save) => void) => edit(save) },
     scale: { width: 1920, height: 1080 }, breath: { reset: noop },
     beatRing: prop(0, 0), offbeatRing: prop(0, 0), rhythmLabel: prop(0, 0),

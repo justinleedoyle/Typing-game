@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { assert, assertEqual, suite } from "./_assert";
+import { bellIndex } from "../src/game/bellCheckpoint";
 import { isOffBeat, isOnBeat } from "../src/game/beatGate";
 
 // Exercise the actual scene cue methods against the real acceptance policy.
@@ -10,7 +11,7 @@ const source = ts.createSourceFile(path.pathname, readFileSync(path, "utf8"),
   ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 const sceneClass = source.statements.find(ts.isClassDeclaration)!;
 const methods = ["createEchoDim", "onBeatTick", "pulseBeatRing", "pulseOffbeatRing",
-  "spawnSplitGhost", "bellPassageWordPosition", "startFork1ForceBreak", "openForceDoorCue",
+  "spawnSplitGhost", "bellPassageWordPosition", "startFork1ForceBreak", "showFork1Reward", "takeStageData", "openForceDoorCue",
   "clearBellForkCues", "drawCathedralDoor", "showDoorCues", "createDoorCue", "openCathedralDoor",
   "clearDoorwayStage", "runBeatLockedChain", "startFork1Chant", "startFork1Force", "startFork1", "startAct3Corridor", "onKeyDown"].map(name =>
   sceneClass.members.find(member => member.name?.getText(source) === name)!.getText(source));
@@ -21,11 +22,11 @@ const code = ts.transpileModule(`${constants}\nclass Harness { static nave = NAV
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;
 const noop = () => {};
-const Harness = new Function("reducedFlashes", "reducedMotion", "PALETTE_HEX", "Phaser",
+const Harness = new Function("bellIndex", "reducedFlashes", "reducedMotion", "PALETTE_HEX", "Phaser",
   "applySceneActorLighting", "playWrenFocus", "playWrenAction", "playBodyImpact", "playDamageThud", "BELL_BURST_COLOR",
   "setWrenPose", "isPuristToggleKey", "playClack",
   `${code}; return Harness;`)(
-  (scene: { reducedFlashes: boolean }) => scene.reducedFlashes,
+  bellIndex, (scene: { reducedFlashes: boolean }) => scene.reducedFlashes,
   (scene: { reducedMotion: boolean }) => scene.reducedMotion,
   { frost: 0xabcdef, ember: 0xfedcba },
   { Math: { Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(value, max)) } },
@@ -193,6 +194,7 @@ function doorFixture(reducedMotion = false) {
   const wren = new DoorPart(960, 820);
   const wrenSprite = new DoorPart();
   Object.assign(bell, {
+    checkpoint() {},
     reducedMotion, scale: { width: 1920, height: 1080 }, wrenContainer: wren, wrenSprite, fork1Choice: null,
     doorChantCue: null, doorForceCue: null, doorwayStage: null, doorwayPassagePending: false, doorwayPassageToken: 0,
     add: {

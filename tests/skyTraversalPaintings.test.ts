@@ -109,6 +109,7 @@ function fixture(reduced = false) {
   const Sky = new Function(...Object.keys(globals), `${code};return Sky;`)(...Object.values(globals));
   const scene = new Sky();
   Object.assign(scene, {
+    checkpoint() {}, savedStageData() { return {}; },
     scale: { width: 1920, height: 1080 }, pathWordAnchors: [], activeTargets: [], templeLanterns: [],
     store: { get: () => save }, events: new EventEmitter(), data: { get: () => scene.store },
     load: { image: (key: string) => loaded.push(key) },

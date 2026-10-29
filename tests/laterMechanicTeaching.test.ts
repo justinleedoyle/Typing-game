@@ -4,6 +4,8 @@ import { assert, assertEqual, suite } from "./_assert";
 import { getRunaLine } from "../src/audio/runaLines";
 import { WOOD_DIRECTION_PUNCTUATION, woodWardWord, type WoodDirection } from "../src/game/wordBank";
 import { selectFinalPhrase, FORCE_RELICS, KINDNESS_RELICS } from "../src/game/relicAlignment";
+import { forgePassageIndex } from "../src/game/forgeCheckpoint";
+import { woodIndex } from "../src/game/woodCheckpoint";
 
 function sceneSource(name: string) {
   const path = new URL(`../src/scenes/${name}.ts`, import.meta.url);
@@ -35,10 +37,11 @@ function stringArray(source: ts.SourceFile, name: string): string[] {
 function actualMethod(source: ts.SourceFile, method: string, globals: Record<string, unknown> = {}) {
   const sceneClass = source.statements.find(ts.isClassDeclaration)!;
   const member = sceneClass.members.find(value => value.name?.getText(source) === method)!;
-  const code = ts.transpileModule(`class Harness { ${member.getText(source)} }`, {
+  const code = ts.transpileModule(`class Harness { checkpoint() {} savedStageData() { return {}; } ${member.getText(source)} }`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  return new Function(...Object.keys(globals), `${code}; return Harness;`)(...Object.values(globals));
+  const context = { woodIndex, ...globals };
+  return new Function(...Object.keys(context), `${code}; return Harness;`)(...Object.values(context));
 }
 
 const wood = sceneSource("HauntedWoodScene");
@@ -252,7 +255,7 @@ await suite("Forge apprentice: distinct actor and portrait share one asset and l
 await suite("Forge true-name passage: every authored phrase clears Wren's hood", () => {
   const noop = () => {};
   const Scene = actualMethod(forge, "runPassageChain", {
-    PALETTE_HEX: { ember: 0 },
+    PALETTE_HEX: { ember: 0 }, forgePassageIndex,
   });
   for (const height of [1080, 1000]) {
     const s = new Scene();
@@ -354,6 +357,7 @@ await suite("Later realm arrivals: the held introduction always has a visible ne
       band: { setObjective: (text: string) => { objective = text; } },
       narration: { say: () => { assert(objective.length > 0, `${method} sets a task before displaying its arrival`); } },
       readThen: () => { held += 1; }, time: { now: 0, delayedCall() {} },
+      checkpoint() {},
       showCatwalkCue() {}, catwalkCueX: () => 0, showPathCue() {},
       setAmbientLanternFieldAlpha() {}, setAmbientMistFieldAlpha() {},
     });
@@ -365,6 +369,9 @@ await suite("Later realm arrivals: the held introduction always has a visible ne
 
 await suite("Later realm traversal: instructions precede actions and success waits for completion", () => {
   const noop = () => {};
+  const CatwalkAnswer = actualMethod(forge, "showCatwalkAnswer", {
+    CATWALK_RESPONSES: stringArray(forge, "CATWALK_RESPONSES"),
+  });
   const cases = [
     {
       source: forge, method: "startCatwalkBeats", words: ["step", "duck", "grip"],
@@ -394,6 +401,7 @@ await suite("Later realm traversal: instructions precede actions and success wai
       band: { setObjective: (text: string) => { objective = text; } },
       readThen: (next: () => void) => gates.push(next), makeWord, makePathWord: makeWord,
       registerActiveTarget: noop, clearActiveTargets: noop,
+      checkpoint: noop, showCatwalkAnswer: CatwalkAnswer.prototype.showCatwalkAnswer,
       catwalkCueX: () => 0, catwalkWordPosition: point, catwalkWrenX: () => 0,
       showCatwalkCue: noop, walkWrenAlongCatwalk: noop, pulseCatwalkCue: noop,
       releaseCatwalkCueWordAnchor: noop, attachCatwalkCueWordAnchor: noop,
@@ -425,6 +433,7 @@ await suite("Later realm passages: the task follows each phrase and held respons
     const Scene = actualMethod(source, "runPassageChain", {
       playWrenAction: noop, playWrenFocus: noop, playChime: noop,
       FORN_PASSAGES: stringArray(forge, "FORN_PASSAGES"),
+      forgePassageIndex,
       WOOD_BRANCH_WORD_Y: 500,
       playBodyImpact: noop, playActorAttention: noop, PALETTE_HEX: { ember: 0, brass: 0, moss: 0 },
     });
@@ -481,6 +490,7 @@ await suite("Forge rewards: the collected keepsake is readable before the next c
       band: { setObjective: (text: string) => { objective = text; } },
       setNarrator: (text: string) => { caption = text; },
       readThen: (fn: () => void) => { next = fn; },
+      checkpoint() {},
       hideFornSprite() {}, hideApprenticeSprite() {}, dismissForgeChoiceCue() {}, dismissBellowsWorkstation() {}, clearForgeChoiceCues() {}, clearPeacefulGuards() {}, showForgeKeepsake() {},
       [followup]: () => { challenges += 1; },
     });

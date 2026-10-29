@@ -14,7 +14,7 @@ export type Difficulty = "forgiving" | "standard" | "purist";
 export type AudioLevel = "loud" | "medium" | "quiet" | "off";
 export type CheckpointValue = string | number | boolean | null;
 export interface SaveCheckpoint {
-  scene: "OpeningScene" | "WinterMountainScene";
+  scene: "OpeningScene" | keyof typeof CHECKPOINT_REALMS;
   step: string;
   data: Record<string, CheckpointValue>;
 }
@@ -38,8 +38,15 @@ export interface SaveState {
   updatedAt: number;
 }
 
-// v0: unversioned; v1: difficulty migration; v2: checkpoints/presentation.
-export const CURRENT_SCHEMA_VERSION = 2;
+// v0: unversioned; v1: difficulty; v2: first-chapter/presentation; v3: all realms.
+export const CURRENT_SCHEMA_VERSION = 3;
+export const CHECKPOINT_REALMS = {
+  WinterMountainScene: "winter-mountain",
+  SunkenBellScene: "sunken-bell",
+  ClockworkForgeScene: "clockwork-forge",
+  SkyIslandScene: "sky-island",
+  HauntedWoodScene: "haunted-wood",
+} as const;
 export function emptySave(profileName = "Wren"): SaveState {
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION, runId: globalThis.crypto?.randomUUID?.() ?? `run-${Date.now()}-${Math.random().toString(36).slice(2)}`, profileName,
@@ -102,7 +109,8 @@ function strings(value: unknown, field: string): string[] {
 }
 export function validateCheckpoint(value: unknown): SaveCheckpoint | null {
   if (value === undefined || value === null) return null;
-  if (!record(value) || (value.scene !== "OpeningScene" && value.scene !== "WinterMountainScene") ||
+  if (!record(value) || (value.scene !== "OpeningScene" &&
+      !(typeof value.scene === "string" && Object.hasOwn(CHECKPOINT_REALMS, value.scene))) ||
       typeof value.step !== "string" || !value.step.trim() || value.step.length > 100 || !record(value.data)) {
     return invalid("checkpoint");
   }
@@ -112,7 +120,7 @@ export function validateCheckpoint(value: unknown): SaveCheckpoint | null {
       (typeof v === "number" && Number.isFinite(v)))) return invalid("checkpoint.data");
     data[key] = v;
   }
-  return { scene: value.scene, step: value.step, data };
+  return { scene: value.scene as SaveCheckpoint["scene"], step: value.step, data };
 }
 
 /** Validate before migration. Missing historical fields get defaults; malformed
@@ -171,7 +179,7 @@ export function migrate(raw: unknown): SaveState {
   };
   const cp = state.checkpoint;
   if (cp && ((cp.scene === "OpeningScene" && state.typewriterAwakened) ||
-      (cp.scene === "WinterMountainScene" && (!state.typewriterAwakened || state.realms["winter-mountain"]?.cleared)))) state.checkpoint = null;
+      (cp.scene !== "OpeningScene" && (!state.typewriterAwakened || state.realms[CHECKPOINT_REALMS[cp.scene]]?.cleared)))) state.checkpoint = null;
   return state;
 }
 

@@ -340,6 +340,7 @@ await suite("Sky expiry: actual last scroll misses hand fresh input to the libra
     TEMPLE_PHRASE_CONFIGS: Array.from({ length: 5 }, () => ({})) });
   const input = new TypingInputController();
   const callbacks: Array<() => void> = [];
+  const checkpoints: Array<{ step: string; data: Record<string, unknown> }> = [];
   const choices: WordTarget[] = [];
   let selected = 0;
   let misses = 0;
@@ -357,6 +358,7 @@ await suite("Sky expiry: actual last scroll misses hand fresh input to the libra
   const makeChoice = (opts: { word: string; onComplete: () => void }) =>
     phraseTarget(opts.word, opts.onComplete);
   Object.assign(sky, {
+    checkpoint(step: string, data: Record<string, unknown> = {}) { checkpoints.push({ step, data }); },
     templeIndex: 4, templePhrasesRemaining: 2, activePhrases: [],
     typingInput: input, wrenSprite: {}, fork1Choice: null,
     narration: { say() {} }, band: { setObjective() {} },
@@ -394,6 +396,8 @@ await suite("Sky expiry: actual last scroll misses hand fresh input to the libra
   assertEqual(callbacks.length, 1, "actual final temple schedules exactly one fork");
   callbacks.shift()!();
   assertEqual(choices.length, 2, "actual fork registers both help and steal choices");
+  assertEqual(checkpoints, [{ step: "temple-cleared", data: { index: 4 } }, { step: "fork1", data: {} }],
+    "the real expiry-to-choice handoff records only the completed temple and pending fork");
   for (const char of "steal the flame") assert(input.handleChar(char), `fresh fork consumes ${char}`);
   assertEqual([selected, sky.fork1Choice], [1, "steal-flame"], "the first full choice works without an Escape repair");
   assert(state.almanacLore.includes("the-five-temple-riddles"), "actual final-temple record remains intact");

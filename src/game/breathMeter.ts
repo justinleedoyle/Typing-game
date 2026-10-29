@@ -57,6 +57,11 @@ export class BreathMeter {
     return this.air === 0;
   }
 
+  /** Restore a stable encounter entry without granting a fresh breath. */
+  restore(air: number): void {
+    if (Number.isFinite(air)) this.air = Math.max(0, Math.min(MAX_AIR, air));
+  }
+
   reset(): void {
     this.air = MAX_AIR;
   }

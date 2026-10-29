@@ -2,6 +2,7 @@ import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import type Phaser from "phaser";
+import { woodIndex } from "../src/game/woodCheckpoint";
 import { checkpointIndex, committedWinterChoices, openingStep, readingAction, winterStep } from "../src/game/chapterFlow";
 import { ChapterReading } from "../src/game/ui/chapterReading";
 
@@ -230,10 +231,11 @@ const woodMethods = ["startFork1Offering", "runPassageChain", "ownerPassageWordP
 const woodCode = ts.transpileModule(`class Harness { ${woodMethods.join("\n")} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;
-const OfferingLayout = new Function("WOOD_BRANCH_WORD_Y", `${woodCode}; return Harness;`)(500);
+const OfferingLayout = new Function("WOOD_BRANCH_WORD_Y", "woodIndex", `${woodCode}; return Harness;`)(500, woodIndex);
 const offeringScene = new OfferingLayout();
 let offeringWord: { word: string; x: number; y: number } | null = null;
 Object.assign(offeringScene, {
+  checkpoint() {},
   scale: { width: 1920, height: 1080 },
   offeringCue: { scene: true, x: 690, y: 792 },
   commitFork: (_fork: string, requested: string) => requested,

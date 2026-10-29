@@ -57,26 +57,47 @@ export function validateSmokeSequence(reports) {
 }
 
 const stopping = new WeakSet();
+async function waitForExit(child, timeoutMs) {
+  if (child.exitCode !== null || child.signalCode !== null) return true;
+  return new Promise(done => {
+    const onExit = () => { clearTimeout(timer); done(true); };
+    const timer = setTimeout(() => { child.off("exit", onExit); done(false); }, timeoutMs);
+    child.once("exit", onExit);
+    // Observe an exit which raced the initial check/listener registration.
+    if (child.exitCode !== null || child.signalCode !== null) { child.off("exit", onExit); clearTimeout(timer); done(true); }
+  });
+}
 async function forceStop(child) {
-  if (child.exitCode !== null || child.signalCode !== null || stopping.has(child)) return;
+  if (!Number.isInteger(child.pid) || child.exitCode !== null || child.signalCode !== null || stopping.has(child)) return false;
   stopping.add(child);
   if (process.platform === "win32") {
-    await new Promise((done, reject) => {
+    const code = await new Promise((done, reject) => {
       const kill = spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
       kill.once("error", reject);
-      kill.once("exit", code => code === 0 ? done() : reject(new Error(`taskkill exited ${code}`)));
+      kill.once("exit", done);
     });
+    if (code !== 0) {
+      // The failing app may exit on its own between reading its failure report
+      // and cleanup. That benign race must not replace the original diagnosis.
+      if (await waitForExit(child, 1000)) return false;
+      throw new Error(`taskkill exited ${code} while the packaged app was still running`);
+    }
   } else {
     try { process.kill(-child.pid, "SIGKILL"); }
-    catch (error) { if (error?.code !== "ESRCH") throw error; }
+    catch (error) { if (error?.code === "ESRCH") { await waitForExit(child, 1000); return false; } throw error; }
   }
-  if (child.exitCode === null && child.signalCode === null) {
-    await new Promise((done, reject) => {
-      const onExit = () => { clearTimeout(timer); done(); };
-      const timer = setTimeout(() => { child.off("exit", onExit); reject(new Error("Packaged app did not terminate after forced kill")); }, 5000);
-      child.once("exit", onExit);
-    });
-  }
+  requireValue(await waitForExit(child, 5000), "Packaged app did not terminate after forced kill");
+  return true;
+}
+
+/** Cleanup is secondary evidence. Preserve the original app/test error and
+ * always attempt stdout/stderr logging even when process cleanup itself fails. */
+export async function cleanupSmokePhase({ primaryError, stop, writeLogs }) {
+  let cleanupError;
+  try { await stop(); } catch (error) { cleanupError = error; }
+  try { await writeLogs(cleanupError); }
+  catch (error) { if (!cleanupError) cleanupError = error; }
+  if (!primaryError && cleanupError) throw cleanupError;
 }
 
 async function runPhase(executable, profile, output, phase, timeoutMs) {
@@ -92,7 +113,7 @@ async function runPhase(executable, profile, output, phase, timeoutMs) {
   child.once("error", error => { launchError = error; });
   child.once("exit", code => { exited = true; exitCode = code; });
   const deadline = Date.now() + timeoutMs;
-  let report;
+  let report, primaryError;
   try {
     while (Date.now() < deadline) {
       if (launchError) throw launchError;
@@ -102,7 +123,7 @@ async function runPhase(executable, profile, output, phase, timeoutMs) {
         validateSmokeReport(report, phase);
         if (phase === "crash") {
           requireValue(!exited, "Crash phase exited before the launcher could force termination");
-          await forceStop(child);
+          requireValue(await forceStop(child), "Crash phase exited before external forced termination");
           report.forcedTermination = true;
           break;
         }
@@ -122,10 +143,17 @@ async function runPhase(executable, profile, output, phase, timeoutMs) {
     // observing process exit/termination, never self-reported by the app.
     await writeFile(reportPath, JSON.stringify(report, null, 2));
     return report;
+  } catch (error) {
+    primaryError = error;
+    throw error;
   } finally {
-    await forceStop(child);
-    await writeFile(join(output, `${phase}.stdout.log`), stdout);
-    await writeFile(join(output, `${phase}.stderr.log`), stderr);
+    await cleanupSmokePhase({ primaryError, stop: () => forceStop(child), writeLogs: async cleanupError => {
+      await Promise.all([
+        writeFile(join(output, `${phase}.stdout.log`), stdout),
+        writeFile(join(output, `${phase}.stderr.log`), stderr),
+        ...(cleanupError ? [writeFile(join(output, `${phase}.cleanup.log`), String(cleanupError))] : []),
+      ]);
+    } });
   }
 }
 
@@ -142,7 +170,7 @@ export async function runDesktopSmoke({ executable, output, timeoutMs = 60_000 }
   for (const phase of SMOKE_PHASES) {
     try { reports[phase] = await runPhase(executablePath, profile, evidence, phase, timeoutMs); }
     finally {
-      for (const extension of ["json", "png", "stdout.log", "stderr.log"]) {
+      for (const extension of ["json", "png", "stdout.log", "stderr.log", "cleanup.log"]) {
         try { await copyFile(join(evidence, `${phase}.${extension}`), join(outputPath, `${phase}.${extension}`)); }
         catch (error) { if (error?.code !== "ENOENT") throw error; }
       }

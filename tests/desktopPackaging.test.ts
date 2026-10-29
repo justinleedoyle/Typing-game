@@ -1,8 +1,8 @@
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { validateSmokeReport, validateSmokeSequence } from "../scripts/desktop-smoke.mjs";
-import { parseDesktopSmokeArgs, prepareDesktopSmoke } from "../desktop/smoke";
+import { cleanupSmokePhase, validateSmokeReport, validateSmokeSequence } from "../scripts/desktop-smoke.mjs";
+import { parseDesktopSmokeArgs, prepareDesktopSmoke, sendDesktopSmokeKey } from "../desktop/smoke";
 import { emptySave, LocalStorageBackend, type SaveState } from "../src/game/saveState";
 import { assert, assertEqual, suite } from "./_assert";
 
@@ -16,6 +16,29 @@ function report(phase: string, state?: SaveState): any {
       ...(phase === "seed" ? { uppercaseAndRelease: true, backspaceDispatched: true } : {}) }, durable: true, save,
     ...(phase === "crash" ? { forcedTermination: true } : { normalExit: true, exitCode: 0 }) };
 }
+
+await suite("Desktop smoke input: printable events populate Electron's raw character path", () => {
+  const events: unknown[] = [];
+  const window = { webContents: { sendInputEvent(event: unknown) { events.push(event); } } } as any;
+  sendDesktopSmokeKey(window, "S", ["shift"]);
+  sendDesktopSmokeKey(window, "a");
+  sendDesktopSmokeKey(window, "Backspace");
+  assertEqual(events, [
+    { type: "rawKeyDown", keyCode: "S", modifiers: ["shift"] }, { type: "keyUp", keyCode: "S", modifiers: ["shift"] },
+    { type: "rawKeyDown", keyCode: "a", modifiers: [] }, { type: "keyUp", keyCode: "a", modifiers: [] },
+    { type: "keyDown", keyCode: "Backspace", modifiers: [] }, { type: "keyUp", keyCode: "Backspace", modifiers: [] },
+  ], "printable rawKeyDown reaches Electron45's text conversion before dispatch while nonprintable behavior is retained");
+});
+
+await suite("Desktop smoke cleanup: failed process cleanup cannot hide the original app evidence", async () => {
+  const primary = new Error("real keyboard failure"), cleanup = new Error("taskkill exited255");
+  let logged: unknown;
+  await cleanupSmokePhase({ primaryError: primary, stop: async () => { throw cleanup; }, writeLogs: async (error: unknown) => { logged = error; } });
+  assertEqual(logged, cleanup, "stderr/stdout logging still runs with secondary cleanup information");
+  let rejected: unknown;
+  try { await cleanupSmokePhase({ stop: async () => { throw cleanup; }, writeLogs: async () => {} }); } catch (error) { rejected = error; }
+  assertEqual(rejected, cleanup, "cleanup failure remains visible when there was no earlier test failure");
+});
 
 await suite("Desktop smoke paths: only explicit disposable profiles and phase reports are accepted", () => {
   const profile = mkdtempSync(join(tmpdir(), "portalwrights-desktop-smoke-"));

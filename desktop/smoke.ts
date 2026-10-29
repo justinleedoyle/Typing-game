@@ -1,6 +1,6 @@
 // Explicit packaged-app QA mode. It is never selected by a game URL and can
 // only use a disposable profile and report location inside the OS temp folder.
-import type { BrowserWindow } from "electron";
+import type { BrowserWindow, Event, Input } from "electron";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { writeFile, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -92,10 +92,14 @@ async function settledSave(backend: SaveBackend): Promise<SaveState> {
   }
   throw new Error("Rendered checkpoint did not reach stable durable storage");
 }
-function key(window: BrowserWindow, value: string, modifiers: Array<"shift" | "alt"> = []): void {
-  window.webContents.sendInputEvent({ type: "keyDown", keyCode: value, modifiers });
+export function sendDesktopSmokeKey(window: BrowserWindow, value: string, modifiers: Array<"shift" | "alt"> = []): void {
+  // Electron45 converts keyDown to rawKeyDown only after the converter's text
+  // fields have been populated. Use rawKeyDown explicitly for printable input
+  // so the event has both its DomKey and its intended character text.
+  window.webContents.sendInputEvent({ type: value.length === 1 ? "rawKeyDown" : "keyDown", keyCode: value, modifiers });
   window.webContents.sendInputEvent({ type: "keyUp", keyCode: value, modifiers });
 }
+const key = sendDesktopSmokeKey;
 
 export async function runDesktopSmoke(options: DesktopSmokeOptions & {
   window: BrowserWindow;
@@ -104,19 +108,29 @@ export async function runDesktopSmoke(options: DesktopSmokeOptions & {
 }): Promise<void> {
   const { window, backend, phase, profile, report, unexpectedRequests } = options;
   const screenshot = join(dirname(report), `${phase}.png`);
+  let beforeTyping: SaveState | undefined;
+  let actualSave: SaveState | undefined;
+  const inputEvents: Array<Pick<Input, "type" | "key" | "code" | "shift" | "control" | "alt" | "meta" | "isAutoRepeat">> = [];
+  const observeInput = (_event: Event, input: Input) => {
+    if (inputEvents.length >= 64) return;
+    inputEvents.push({ type: input.type, key: input.key, code: input.code, shift: input.shift,
+      control: input.control, alt: input.alt, meta: input.meta, isAutoRepeat: input.isAutoRepeat });
+  };
+  // Only this explicitly selected synthetic QA profile is observed. These are
+  // Electron's public input events; no Phaser state is read or changed.
+  window.webContents.on("before-input-event", observeInput);
   try {
     await waitForWindow(window, "Boolean(document.querySelector('[data-desktop-ready=\"true\"]'))", "actual desktop startup");
     await waitForWindow(window, "Boolean(document.querySelector('[data-active-scene=\"TitleScene\"]'))", "actual Title creation");
     key(window, "Enter");
     await waitForWindow(window, "Boolean(document.querySelector('[data-active-scene=\"WinterMountainScene\"]'))", "saved Winter checkpoint");
-    let beforeTyping: SaveState | undefined;
     if (phase === "seed") {
       beforeTyping = await settledSave(backend);
       // Claim only a safe prefix of "save the huntress". The uppercase event
       // must reach the case-insensitive target; Backspace reverses its final
       // character and the first Escape releases it without choosing a branch.
       key(window, "S", ["shift"]);
-      key(window, "A");
+      key(window, "a");
       key(window, "Backspace");
       key(window, "Escape");
     }
@@ -134,6 +148,7 @@ export async function runDesktopSmoke(options: DesktopSmokeOptions & {
       return {canvas:Boolean(canvas && canvas.width > 0 && canvas.height > 0),fontsReady:document.fonts.status==='loaded' && fonts.some(font=>font.status==='loaded'),fonts,activeScene:document.querySelector('[data-active-scene]')?.getAttribute('data-active-scene')};
     })()`, false);
     const save = await settledSave(backend);
+    actualSave = save;
     if (beforeTyping) {
       if (save.keyStats.s?.hits !== 1 || save.keyStats.s?.misses !== 0 ||
           save.keyStats.a?.hits !== 1 || save.keyStats.a?.misses !== 0 ||
@@ -148,13 +163,19 @@ export async function runDesktopSmoke(options: DesktopSmokeOptions & {
         ...(beforeTyping ? { uppercaseAndRelease: true, backspaceDispatched: true,
           evidence: "Uppercase S and plain A each recorded one correct hit; Backspace dispatched; Escape released the partial claim before ordinary pause. Checkpoint/resources/choices stayed unchanged. Cursor reversal is separately covered by the controller unit test." } : {}),
       },
-      durable: true, save };
+      durable: true, save, inputEvents };
     const temporary = `${report}.tmp`;
     await writeFile(temporary, JSON.stringify(result, null, 2)); await rename(temporary, report);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     try { if (!window.isDestroyed()) await writeFile(screenshot, (await window.webContents.capturePage()).toPNG()); } catch { /* Keep the first failure. */ }
-    await writeFile(report, JSON.stringify({ version: 1, phase, ok: false, error: message, unexpectedRequests: [...unexpectedRequests] }, null, 2));
+    await writeFile(report, JSON.stringify({ version: 1, phase, ok: false, error: message, unexpectedRequests: [...unexpectedRequests],
+      // These full snapshots are safe synthetic test data, useful to distinguish
+      // wrong native characters from a real persistence/checkpoint regression.
+      diagnostics: { beforeTyping, save: actualSave, inputEvents },
+    }, null, 2));
     throw error;
+  } finally {
+    if (!window.isDestroyed()) window.webContents.off("before-input-event", observeInput);
   }
 }

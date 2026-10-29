@@ -654,7 +654,7 @@ export class SkyIslandScene extends Phaser.Scene {
       case "etta":
         if (data.skipped === true) {
           this.setNarrator("The scholar watches you go in silence.");
-          this.band.setObjective("Press Enter or Space to return to the temple path.");
+          this.band.setObjective("Press Enter or Space to return to the lantern-lit path.");
           this.readThen(() => this.startTemple(3));
         } else this.startEttaEncounter(3);
         break;
@@ -708,8 +708,8 @@ export class SkyIslandScene extends Phaser.Scene {
       if (image) { this.tweens.killTweensOf(image); image.setAngle(-22); }
     }
     this.checkpoint("path", { index, reading: true });
-    const responses = ["You keep your balance and reach the far end of the bridge.",
-      "You lift the lantern aside. Its flame stays lit as you pass.", "You cross the last gap and reach the island path."];
+    const responses = ["You steady your footing and move past the uneven stones.",
+      "You lift the lantern aside. Its flame stays lit as you pass.", "You step across the last stone and find firm footing."];
     this.setNarrator(responses[index]!);
     this.band.setObjective("Path crossed. Press Enter or Space to continue.");
     this.readThen(() => this.runPathBeats(index + 1));
@@ -795,7 +795,7 @@ export class SkyIslandScene extends Phaser.Scene {
     });
     this.checkpoint("etta-book", { nextTemple: 3, stage: "shelved" });
     this.setNarrator("Scholar Etta's Last Volume — a page appears in the Almanac.");
-    this.band.setObjective("Almanac memory earned. Press Enter or Space to return to the temples.");
+    this.band.setObjective("Almanac memory earned. Press Enter or Space to return to the scroll trials.");
     this.readThen(() => { this.hideEtta(); this.startTemple(3); });
   }
 
@@ -813,7 +813,7 @@ export class SkyIslandScene extends Phaser.Scene {
     let words: string[];
 
     if (choices["fork2"] === "cut-tether") {
-      narratorLine = "The island is higher now. You can barely see the lanterns from here.";
+      narratorLine = "The island is higher now. Its lanterns still burn in the open air.";
       words = ["the", "sky", "is", "wide", "and", "open"];
     } else if (choices["fork2"] === "answer-kindly") {
       narratorLine = "The wind still circles the lit summit. It hasn't found a new question.";
@@ -995,7 +995,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private startAct1(): void {
     this.checkpoint("arrival");
-    this.band.setObjective("Cross the floating path. Press Enter or Space when ready.");
+    this.band.setObjective("Follow the lantern-lit path. Press Enter or Space when ready.");
     this.narration.say("sky_intro_arrival");
     playPortalArrivalWake(this, this.wrenContainer, {
       kind: "mote",
@@ -1022,16 +1022,16 @@ export class SkyIslandScene extends Phaser.Scene {
     this.checkpoint("path", { index: idx, reading: false });
     const beat = PATH_BEATS[idx];
     const narrations: readonly string[] = [
-      "A narrow stone bridge arches between two floating rocks. Keep your balance.",
+      "Uneven stones line the edge of the terrace. Keep your balance.",
       "A paper lantern hangs right across the path, still lit. Lift it aside gently.",
-      "Stepping stones. The gaps are wide, the island hums below your feet.",
+      "A line of raised stones crosses the paving. Step carefully from stone to stone.",
     ];
     const responses: readonly string[] = [
-      "You keep your balance and reach the far end of the bridge.",
+      "You steady your footing and move past the uneven stones.",
       "You lift the lantern aside. Its flame stays lit as you pass.",
-      "You cross the last gap and reach the island path.",
+      "You step across the last stone and find firm footing.",
     ];
-    this.band.setObjective(`Type ${beat} to continue across the floating path.`);
+    this.band.setObjective(`Type ${beat} to follow the lantern-lit path.`);
     this.showPathCue(beat);
     this.setNarrator(narrations[idx] ?? "");
     const wordPos = this.pathWordPosition(beat);
@@ -1346,7 +1346,7 @@ export class SkyIslandScene extends Phaser.Scene {
       }
     });
     this.setNarrator(
-      "The Lantern-Lighter raises its light toward the tower path. Its lanterns flare, and pale shapes answer from within.",
+      "The Lantern-Lighter's glow brightens. Nearby lanterns flare, and pale shapes stir inside them.",
       "Lantern-Lighter",
     );
     this.playLighterWarningHandoff();
@@ -1406,7 +1406,7 @@ export class SkyIslandScene extends Phaser.Scene {
     if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseSkyWave({ y: 710, ringWidth: 980, ringHeight: 160 });
 
-    this.setNarrator("Two lantern-spirits drift from the tower path, pale and unhurried.");
+    this.setNarrator("Two lantern-spirits drift down from the hanging lights, pale and unhurried.");
     this.band.setObjective("Clear the lantern-spirits before they reach Wren.");
     const words = pickAdaptiveWords(
       filterWordsByLength(SKY_ISLAND_WORD_BANK, 6, 8),
@@ -1500,9 +1500,9 @@ export class SkyIslandScene extends Phaser.Scene {
     const templeNames = [
       "The first gate. Read ahead before the lantern beams hide the untyped letters.",
       "The second gate. Two scrolls now, on different winds. Read both; save what you can.",
-      "The third chamber. Two scrolls at once now.", // unused — idx 2 is the sealed scroll
-      "The fourth chamber. Three scrolls, and the beams are hungry. Triage.",
-      "The fifth and final chamber. They fly, three at once. Type before they leave you.",
+      "The third scroll trial. Two scrolls at once now.", // unused — idx 2 is the sealed scroll
+      "The fourth scroll trial. Three scrolls, and the beams are hungry. Triage.",
+      "The fifth and final scroll trial. They fly, three at once. Type before they leave you.",
     ];
     this.setNarrator(templeNames[idx] ?? "");
     this.band.setObjective(
@@ -1575,6 +1575,8 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private quietLordIntrusionAnchor(): { x: number; y: number } {
+    // Gate two's 90px scar fits below both scrolls and above Wren's idle breath.
+    const y = 525;
     let threat: ScrollingPhrase | null = null;
     for (const phrase of this.activePhrases) {
       if (phrase.isResolved()) continue;
@@ -1583,10 +1585,10 @@ export class SkyIslandScene extends Phaser.Scene {
       }
     }
 
-    if (!threat) return { x: this.scale.width / 2, y: 380 };
+    if (!threat) return { x: this.scale.width / 2, y };
     return {
       x: Phaser.Math.Clamp(threat.getX(), 340, this.scale.width - 340),
-      y: Phaser.Math.Clamp(threat.getY(), 280, this.scale.height - 360),
+      y,
     };
   }
 
@@ -2027,7 +2029,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.setTempleBeamsActive(false);
     this.band.setObjective("Meet the scholar. Press Enter or Space to listen.");
     this.setNarrator(
-      "A side chamber off the temple path. A spirit scholar stands holding a single unburned book.",
+      "Beside the terrace path, a scholar-spirit stands holding a single unburned book.",
     );
     this.showEtta();
     this.readThen(() => {
@@ -2074,7 +2076,7 @@ export class SkyIslandScene extends Phaser.Scene {
             this.hideEtta();
             this.checkpoint("etta", { nextTemple: nextTempleIdx, skipped: true });
             this.setNarrator("The scholar watches you go in silence.");
-            this.band.setObjective("Press Enter or Space to return to the temple path.");
+            this.band.setObjective("Press Enter or Space to return to the lantern-lit path.");
             this.readThen(() => this.startTemple(nextTempleIdx));
           },
         });
@@ -2137,7 +2139,7 @@ export class SkyIslandScene extends Phaser.Scene {
                       }
                     });
                     this.setNarrator("Scholar Etta's Last Volume — a page appears in the Almanac.");
-                    this.band.setObjective("Almanac memory earned. Press Enter or Space to return to the temples.");
+                    this.band.setObjective("Almanac memory earned. Press Enter or Space to return to the scroll trials.");
                     // Keep the placed book and Etta visible while the player reads.
                     this.readThen(() => {
                       this.hideEtta();
@@ -2353,11 +2355,11 @@ export class SkyIslandScene extends Phaser.Scene {
       this.runPassageChain(
         helpedBefore ? ["etta thanks you quietly", "the beacon brightens"]
           : ["carry her books", "the shelves hold them", "etta thanks you quietly", "the beacon brightens"],
-        helpedBefore ? ["Scholar Etta traces a title with one finger.", "The great beacon above brightens. It was watching."] : [
+        helpedBefore ? ["Scholar Etta traces a title with one finger.", "The beacon brightens. It was watching."] : [
           "One by one the shelves fill up.",
           "Scholar Etta traces a title with one finger.",
           "She says nothing, but the lanterns flicker warmly.",
-          "The great beacon above brightens. It was watching.",
+          "The beacon brightens. It was watching.",
         ],
         () => {
           this.ettaDone = true;
@@ -2689,7 +2691,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.setNarrator("You speak to what remains of the spirit.");
     const response = (): void => {
       this.checkpoint("answer-kindly", { reading: true });
-      this.setNarrator("The lanterns around the summit brighten. The island breathes.");
+      this.setNarrator("The lanterns across the terrace brighten. The island breathes.");
       this.band.setObjective("The spirit heard you. Press Enter or Space to continue.");
       this.fadeOutForkCue(this.kindAnswerCue); this.kindAnswerCue = null;
       this.readThen(() => this.startLanternMothGate());

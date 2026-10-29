@@ -3,8 +3,9 @@ import ts from "typescript";
 import { assert, assertEqual, suite } from "./_assert";
 import { checkpointIndex } from "../src/game/chapterFlow";
 import { FORGE_STEPS, forgePassageIndex, forgeStep } from "../src/game/forgeCheckpoint";
-import { emptySave, migrate, SaveStore, type SaveState } from "../src/game/saveState";
+import { emptySave, LocalStorageBackend, migrate, SaveStore, type SaveBackend, type SaveState } from "../src/game/saveState";
 import { SessionStats, SPELL_COST } from "../src/game/sessionStats";
+import { TypingInputController } from "../src/game/typingInput";
 import { rememberCompanionDecision, rememberRealmFork, resolveCompanionDecision, resolveRealmFork } from "../src/game/realmChoices";
 import { resolveCombatLoadout } from "../src/game/relicEffects";
 import { OFFENSIVE_ONE_SHOTS, isSingleTargetOneShot, pickHardestEnemy } from "../src/game/oneShotInvocation";
@@ -22,13 +23,14 @@ const names = ["init", "checkpoint", "savedStageData", "hasSavedPassage", "resto
   "startBossPhase3", "bossDefeated", "startFork2", "startFork2PeacefulBranch", "showPeacefulOrderAnswer",
   "startFork2FightBranch", "showFightAnswer", "afterFork2", "startCompanionGate", "awardSongbird", "showSongbirdAnswer",
   "perchSongbirdOnWren", "startTrueNamePassage", "deliverTrueNamePassage", "startEnding", "commitFork",
-  "runPassageChain", "beginCombatWave", "applyOneShot", "catwalkCueX", "catwalkEntranceWrenX", "catwalkWrenX", "catwalkWordPosition"];
+  "runPassageChain", "showFornEmptyHands", "beginCombatWave", "applyOneShot", "catwalkCueX", "catwalkEntranceWrenX", "catwalkWrenX", "catwalkWordPosition"];
 const constants = source.statements.filter(ts.isVariableStatement).map(statement => statement.getText(source)).join("\n");
 const code = ts.transpileModule(`${constants}\nclass Forge {
   ${names.map(name => owner.members.find(member => member.name?.getText(source) === name)!.getText(source)).join("\n")}
 }`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 const noop = () => {};
-const body = (x = 0, y = 0) => ({ x, y, scene: true, alpha: 1,
+const body = (x = 0, y = 0) => ({ x, y, scene: true, alpha: 1, texture: { key: "forn" }, width: 509, height: 640,
+  setTexture(key: string) { this.texture.key = key; return this; },
   setPosition(x: number, y: number) { this.x = x; this.y = y; return this; },
   setAlpha(value: number) { this.alpha = value; return this; }, setScale() { return this; },
   once: noop, destroy() { this.scene = false; }, getAt: () => ({ setVisible: noop }),
@@ -46,6 +48,23 @@ const bindings = {
   pickAdaptiveWords: (bank: string[], count: number) => bank.slice(0, count), shuffle: (items: unknown[]) => items.slice(),
 };
 const Forge = new Function(...Object.keys(bindings), code + "; return Forge;")(...Object.values(bindings));
+const wordUrl = new URL("../src/game/wordTarget.ts", import.meta.url);
+const wordSource = ts.createSourceFile(wordUrl.pathname, readFileSync(wordUrl, "utf8"), ts.ScriptTarget.Latest, true);
+const wordOwner = wordSource.statements.find(node => ts.isClassDeclaration(node) && node.name?.text === "TextWordTarget") as ts.ClassDeclaration;
+const wordCode = ts.transpileModule(`class NativeWord {
+  ${["remaining", "rawRemaining", "caseSensitive", "isComplete", "advance", "onComplete"].map(name =>
+    wordOwner.members.find(member => member.name?.getText(wordSource) === name)!.getText(wordSource)).join("\n")}
+}`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+const NativeWord = new Function("playWordCompleteBurst", "PALETTE_HEX", `${wordCode}; return NativeWord;`)(noop, { brass: 1 });
+function nativeWord(options: any) {
+  const target = new NativeWord();
+  Object.assign(target, { opts: options, word: options.word.toLowerCase(), caseWord: options.word,
+    cursor: 0, complete: false, spellClaimed: false, altClaimed: false, container: body(),
+    relayout: noop, playBannerWake: noop, setCandidate: noop, setDimmed: noop, miss: noop, onRelease: noop,
+    onClaim(mods: any) { this.spellClaimed = mods.spell; this.altClaimed = mods.alt; }, destroy: noop,
+  });
+  return target;
+}
 const stores: SaveStore[] = [];
 
 function fresh(): SaveState {
@@ -54,20 +73,23 @@ function fresh(): SaveState {
   return save;
 }
 
-function fixture(initial = fresh(), revisit = false) {
+function fixture(initial = fresh(), revisit = false, backend?: SaveBackend) {
   let persisted: SaveState | null = null;
-  const store = new SaveStore({ load: async () => initial, save: async state => { persisted = structuredClone(state); } }, initial,
-    { saveDelayMs: 60_000 });
+  const store = backend ? new SaveStore(backend, initial) : new SaveStore(
+    { load: async () => initial, save: async state => { persisted = structuredClone(state); } }, initial, { saveDelayMs: 60_000 });
   stores.push(store);
   const scene = new Forge();
-  const captions: string[] = [], props: string[] = [], gifts: Array<{ id: string; restored: boolean }> = [];
+  const captions: string[] = [], props: string[] = [], gifts: Array<{ id: string; restored: boolean }> = [], words: any[] = [];
   const timers: Array<() => void> = [];
   let gate: (() => void) | null = null, word: any = null, clearWave: (() => void) | null = null;
   let spent = [] as string[];
   const stats = new SessionStats();
-  const makeWord = (options: any) => { word = options; return options; };
+  const frames = new Map([["forn", { width: 509, height: 640 }], ["forn-empty-hands", { width: 1118, height: 1407 }]]);
+  const makeWord = (options: any) => { word = options; words.push(options); return options; };
   Object.assign(scene, {
     clearForgeKeepsake: noop, scale: { width: 1920, height: 1080 },
+    textures: { exists: (key: string) => frames.has(key), get: (key: string) => ({ getSourceImage: () => frames.get(key) }),
+      createCanvas(key: string, width: number, height: number) { frames.set(key, { width, height }); return { context: { drawImage: noop }, refresh: noop }; } },
     wrenContainer: body(522, 460), wrenSprite: body(),
     tweens: { killTweensOf: noop, add: noop }, cameras: { main: { shake: noop, flash: noop } },
     band: { setObjective: noop }, narration: { say: (key: string) => captions.push(key) },
@@ -84,7 +106,7 @@ function fixture(initial = fresh(), revisit = false) {
     spawnAdvancingGolem: (x: number, y: number, command: string) => ({ container: body(x, y), command }),
     watchForWaveClear: (next: () => void) => { clearWave = next; },
     showGregorSprite() { this.gregorSprite = body(); props.push("gregor"); }, hideGregorSprite: noop,
-    showFornSprite() { this.fornSprite = body(); props.push("forn"); }, hideFornSprite: noop,
+    showFornSprite() { this.fornSprite = body(400, 866); props.push("forn"); }, hideFornSprite: noop,
     showFork1ChoiceCues() { this.apprenticeCue = body(); props.push("bellows", "valve"); },
     showApprenticeSprite: noop, hideApprenticeSprite: noop,
     showFork2ChoiceCues() { this.standDownCue = body(); this.fightCue = body(); props.push("console", "fight-cue"); },
@@ -112,7 +134,7 @@ function fixture(initial = fresh(), revisit = false) {
   scene.director = { wordLengthBias: () => 0, advanceMs: (value: number) => value, enemyCount: (value: number) => value };
   spent = typeof scene.resumeCheckpoint?.data.spentOneShots === "string" ? scene.resumeCheckpoint.data.spentOneShots.split(",").filter(Boolean) : [];
   scene.oneShotInvoker = { getSpent: () => spent };
-  return { scene, store, stats, props, gifts, captions,
+  return { scene, store, stats, props, gifts, captions, words,
     word: () => word, gate: () => gate,
     continue() { assert(gate, "the native Continue gate is held"); const next = gate!; gate = null; next(); },
     tick() { assert(timers.length, "an original timer is pending"); timers.shift()!(); },
@@ -152,8 +174,16 @@ await suite("Forge checkpoints: native repair phrases and held Hammer acknowledg
     assertEqual(!!f.gate(), reading, "a completed phrase resumes its existing response; an unfinished phrase restarts directly");
     assertEqual(f.gifts.filter(gift => gift.id === "bellows-hammer").length, branch === "forn" && (index > 2 || (index === 2 && reading)) ? 1 : 0,
       "only progress at or after the real gift phrase restores the Hammer");
+    if (branch === "forn") assertEqual(f.scene.fornSprite.texture.key, index > 2 || (index === 2 && reading) ? "forn-empty-hands-frame" : "forn",
+      "only the actual gift and later repair checkpoints restore empty-handed Forn");
     assert(f.gifts.every(gift => gift.restored), "restoration settles the hand prop without replaying its transfer");
     assertEqual(f.store.get().satchel, [], "neither phrase restoration nor acknowledgment grants the reward early");
+    if (!reading && index > 0) {
+      const responses = branch === "forn"
+        ? ["The iron bellows groan back to life under your hands.", "Forn's deft fingers find the seam and press it shut.", "The old smith presses the hammer into your hands without a word."]
+        : ["The valve groans shut. The fire stutters.", "A ragged cheer goes up from the apprentices in the shadows.", "Something cold and heavy is pressed into your palm."];
+      assertEqual(f.captions.at(-1), responses[index - 1], "an unfinished resumed phrase retains the already-earned response instead of repeating its branch introduction");
+    }
     if (reading) f.continue();
     const expected = branch === "forn" ? ["work the bellows", "seal the seam", "forn gives you his hammer", "the forge breathes again"]
       : ["block the valve", "the apprentices cheer", "they hand you a wrench", "the forge chokes and slows"];
@@ -185,6 +215,125 @@ await suite("Forge checkpoints: boss word boundaries preserve capitals and both 
       if (cp.step === "boss-defeated") assert(resumed.gate() && !resumed.word(), "the final repetition restores defeat reading without recreating the boss fight");
       else assertEqual(resumed.untilWord().word, index + 1 < words.length ? words[index + 1] : cp.step === "boss2" ? "HOLD" : "stand DOWN", "persisted completion resumes the next actual target");
     }
+  }
+});
+
+await suite("Forge checkpoints: the earned Hammer handoff restores empty-handed Forn through the final repair response", async () => {
+  const f = fixture(); f.scene.startFork1();
+  f.words.find(word => word.word === "help smith forn").onComplete();
+  f.continue();
+  for (let index = 0; index < 2; index++) { f.word().onComplete(); f.continue(); }
+  assertEqual([f.word().word, f.scene.fornSprite.texture.key], ["forn gives you his hammer", "forn"], "the original chosen route keeps the Hammer with Forn until the gift is complete");
+  f.word().onComplete();
+  assertEqual(f.scene.fornSprite.texture.key, "forn-empty-hands-frame", "the completed native gift phrase empties the smith's painted glove");
+  assertEqual(f.store.get().satchel, [], "the visible gift still precedes the original saved reward");
+  const held = await f.reload(); held.scene.resumeForge();
+  assert(held.gate() && !held.word(), "the earned third response retains its original Continue on reload");
+  assertEqual([held.scene.fornSprite.texture.key, held.scene.fornSprite.x, held.scene.fornSprite.y], ["forn-empty-hands-frame", 400, 866], "restoring the received Hammer preserves the empty-handed smith at his original feet anchor");
+  held.continue();
+  assertEqual([held.word().word, held.scene.fornSprite.texture.key], ["the forge breathes again", "forn-empty-hands-frame"], "the next original phrase cannot recreate the gifted Hammer");
+  const pending = await held.reload(); pending.scene.resumeForge();
+  assertEqual(pending.captions.at(-1), "The old smith presses the hammer into your hands without a word.", "the earned pending final-phrase checkpoint restores its prior handoff context");
+  assert(pending.word()?.word === "the forge breathes again" && !pending.gate(), "restoring narrative context leaves the same target live without adding another reading gate");
+  held.word().onComplete();
+  const fourth = await held.reload(); fourth.scene.resumeForge();
+  assert(fourth.gate() && fourth.scene.fornSprite.texture.key === "forn-empty-hands-frame", "the earned fourth response retains the received-item pose too");
+  fourth.continue();
+  assertEqual(fourth.store.get().satchel, ["bellows-hammer"], "the same final repair Continue commits exactly one reward");
+  assert(fourth.captions.at(-1)!.includes("rests in your hands"), "the reward caption agrees with its still-held painting");
+});
+
+await suite("Forge keepsake wording: all held fork rewards retain their existing commits and Continue gates", () => {
+  for (const [stage, branch, relic] of [[1, "forn", "bellows-hammer"], [1, "cabal", "sabotage-wrench"], [2, "peaceful", "master-key"], [2, "fought", "golem-heart"]] as const) {
+    const f = fixture();
+    if (stage === 1) f.scene.afterFork1(branch, relic);
+    else f.scene.afterFork2(branch, relic);
+    assertEqual(f.store.get().satchel, [relic], "the original fork reward still commits before its held acknowledgment");
+    assert(f.gate() && f.captions.at(-1)!.includes("rests in your hands"), "the existing Continue accompanies truthful held-item wording");
+    assertEqual(f.store.get().checkpoint!.step, stage === 1 ? "fork1-reward" : "fork2-reward", "wording cannot move the original saved boundary");
+  }
+});
+
+await suite("Forge checkpoints: the real final character saves each held repair response before its320ms visual exit", async () => {
+  for (const branch of ["forn", "cabal"] as const) {
+    const f = fixture(), input = new TypingInputController(f.store), nativeWords: any[] = [], exits: any[] = [];
+    f.scene.typingInput = input;
+    const makeNativeWord = (options: any) => {
+      const target = nativeWord(options);
+      nativeWords.push(target); return target;
+    };
+    f.scene.makeFornWord = makeNativeWord;
+    f.scene.makeForgeChoiceWord = (_body: unknown, options: any) => makeNativeWord(options);
+    f.scene.registerActiveTarget = (...targets: any[]) => targets.forEach(target => input.register(target));
+    f.scene.tweens.add = (options: any) => { if (options.duration === 320) exits.push(options); };
+    const type = (word: string) => { for (const letter of word) input.handleChar(letter); };
+    const finishExit = () => { assert(exits.length, "the real TextWordTarget owns its original delayed visual completion"); exits.shift().onComplete(); };
+    f.scene.startFork1();
+    type(branch === "forn" ? "help smith forn" : "join the apprentices"); finishExit(); f.continue();
+    const phrases = branch === "forn" ? ["work the bellows", "seal the seam", "forn gives you his hammer", "the forge breathes again"]
+      : ["block the valve", "the apprentices cheer", "they hand you a wrench", "the forge chokes and slows"];
+    for (const [index, phrase] of phrases.entries()) {
+      const target = nativeWords.at(-1);
+      assertEqual(target.opts.word, phrase, "the native branch callback provides the original phrase");
+      type(phrase);
+      assert(target.isComplete() && !input.hasClaim(), "the real controller settles the final matched character");
+      assert(!f.gate() && exits.length === 1, "the original response still waits for its320ms exit callback");
+      const cp = f.store.get().checkpoint!;
+      assertEqual([cp.step, cp.data.index, cp.data.reading], [branch, index, true], "logical completion saves its held response before the visual callback");
+      assertEqual(cp.data.statsCombo, input.getStats().getCombo(), "the saved combo includes the actual final character");
+      assertEqual(cp.data.statsSoul, input.getStats().getSoul(), "the saved Soul includes the actual final character");
+      const reloaded = await f.reload(); reloaded.scene.resumeForge();
+      assert(reloaded.gate() && !reloaded.word(), "a real SaveStore reload inside the visual gap restores the earned response rather than repeating the phrase");
+      assertEqual(reloaded.stats.captureCheckpoint(), input.getStats().captureCheckpoint(), "all settled keystroke resources survive the early reload exactly");
+      assertEqual(reloaded.store.get().satchel, [], "saving a completed phrase cannot run its later reward Continue early");
+      finishExit();
+      assert(f.gate(), "the original delayed callback still installs exactly its existing held response");
+      f.continue();
+    }
+    assertEqual(f.store.get().satchel, [branch === "forn" ? "bellows-hammer" : "sabotage-wrench"], "only the final original Continue grants the chosen reward");
+  }
+});
+
+await suite("Forge checkpoints: completed repair is durable in real local storage before the default debounce or visual exit", async () => {
+  const originalSetTimeout = globalThis.setTimeout, originalClearTimeout = globalThis.clearTimeout;
+  const scheduled = new Map<object, { delay: number }>();
+  // Keep the host debounce pending without replacing any SaveStore/backend
+  // method. Only microtasks may run before the persistence assertions below.
+  globalThis.setTimeout = ((_callback: unknown, delay = 0) => {
+    const token = {}; scheduled.set(token, { delay }); return token;
+  }) as typeof setTimeout;
+  globalThis.clearTimeout = ((token: object) => { scheduled.delete(token); }) as typeof clearTimeout;
+  try {
+    const storage = new Map<string, string>();
+    const backend = new LocalStorageBackend({ getItem: key => storage.get(key) ?? null, setItem: (key, value) => { storage.set(key, value); } });
+    const seed = fresh(); seed.realms["clockwork-forge"]!.choices.fork1 = "forn";
+    seed.checkpoint = { scene: "ClockworkForgeScene", step: "forn", data: {
+      index: 3, reading: false, combatSatchel: "", statsHits: "11111111", statsCombo: 8, statsBestCombo: 8, statsSoul: 63,
+    } };
+    await backend.save(seed);
+    const f = fixture(seed, false, backend), input = new TypingInputController(f.store), exits: any[] = [];
+    input.getStats().restoreCheckpoint(seed.checkpoint.data);
+    f.scene.typingInput = input;
+    f.scene.makeFornWord = nativeWord;
+    f.scene.registerActiveTarget = (...targets: any[]) => targets.forEach(target => input.register(target));
+    f.scene.tweens.add = (options: any) => { if (options.duration === 320) exits.push(options); };
+    f.scene.resumeForge();
+    assert([...scheduled.values()].some(timer => timer.delay === 250), "the actual SaveStore retains its original default250ms debounce");
+    for (const letter of "the forge breathes again") input.handleChar(letter);
+    assert(!f.gate() && exits.length === 1, "the normal held response still waits for the original320ms visual exit");
+    await Promise.resolve();
+    const persisted = await backend.load();
+    assertEqual([persisted!.checkpoint!.step, persisted!.checkpoint!.data.index, persisted!.checkpoint!.data.reading], ["forn", 3, true],
+      "reopening real local storage before any debounce callback preserves the completed phrase");
+    assertEqual(persisted!.checkpoint!.data.statsCombo, input.getStats().getCombo(), "durable storage includes the actual final character's combo");
+    assertEqual(persisted!.checkpoint!.data.statsHits, input.getStats().captureCheckpoint().statsHits, "durable storage includes the actual final keystroke history");
+    const reopened = fixture(persisted!, false, backend); reopened.scene.resumeForge();
+    assert(reopened.gate() && !reopened.word(), "a fresh actual scene restores the response without a test flush, elapsed debounce, or visual completion");
+    assertEqual(reopened.store.get().satchel, [], "local durability still cannot grant the reward before its original Continue");
+    exits.shift().onComplete();
+    assert(f.gate() && f.store.get().satchel.length === 0, "the eventual original visual callback still presents its response before the reward");
+  } finally {
+    globalThis.setTimeout = originalSetTimeout; globalThis.clearTimeout = originalClearTimeout;
   }
 });
 

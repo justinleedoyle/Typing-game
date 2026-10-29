@@ -14,7 +14,7 @@ const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.S
 const owner = source.statements.find(ts.isClassDeclaration)!;
 const methods = ["init", "checkpoint", "savedStageData", "resumeSky", "settleResumedActor", "resumePath", "resumeBoss", "restoreEttaBookPose", "resumeEttaBook", "finishRestoredEttaBook",
   "runPathBeats", "startLanternLighter", "onLighterConvoComplete", "startFirstSpiritEncounter", "beginFirstSpiritEncounter", "startFirstSpiritEncounterFixed", "defeatSpirit", "onFirstEncounterCleared",
-  "startAct2", "startTemple", "onTempleCleared", "startSealedScrollTemple", "startEttaEncounter", "startEttaHelp", "moveEttaBook", "startFork1", "startFork1HelpEtta", "startFork1StealFlame", "startAct3",
+  "startAct2", "startTemple", "quietLordIntrusionAnchor", "onTempleCleared", "startSealedScrollTemple", "startEttaEncounter", "startEttaHelp", "moveEttaBook", "startFork1", "startFork1HelpEtta", "startFork1StealFlame", "startAct3",
   "startBossPhase1", "startBossPhase2", "startBossPhase3", "onBossDefeated", "startFork2", "startFork2KindEnding", "startFork2CutTether", "startLanternMothGate", "showMothAnswer", "restoreMothPerch",
   "startTrueNamePassage", "startEnding", "commitFork", "runPassageChain", "applyOneShot"];
 const constants = source.statements.filter(ts.isVariableStatement).map(statement => statement.getText(source)).join("\n");
@@ -191,6 +191,35 @@ await suite("Sky encounters: restart uses entry resources and preserves complete
   restored.scene.usedOneShots.push("jam-foe"); restored.scene.onTempleCleared();
   assertEqual(restored.store.get().checkpoint?.data.usedOneShots, "toll-strike,jam-foe", "a cleared encounter commits charge consumption at its next safe boundary");
   await restored.flush();
+});
+
+await suite("Sky intrusion: the actual second gate keeps its scar clear of both scrolls and Wren", async () => {
+  const f = fixture(); f.scene.startTemple(1);
+  const rows = f.scene.phraseSpawns.map((phrase: any) => phrase.y);
+  assertEqual(rows, [320, 430], "the actual two-scroll gate retains its authored rows");
+  f.scene.activePhrases.forEach((phrase: any, index: number) => Object.assign(phrase, {
+    isResolved: () => false, getProgress: () => index === 0 ? 0.4 : 0.2,
+    getX: () => index === 0 ? 640 : 1280, getY: () => phrase.y,
+  }));
+  const anchor = f.scene.quietLordIntrusionAnchor();
+  const scarHalfHeight = (32 + 58) / 2;
+  const bannerHalfHeight = 72 / 2;
+  assertEqual(anchor.x, 640, "the most advanced live scroll retains the original horizontal association");
+  assert(anchor.y - scarHalfHeight >= Math.max(...rows) + bannerHalfHeight + 8,
+    "the complete ink scar leaves a readable margin below both moving banner rows");
+  assert(anchor.y + scarHalfHeight + 8 <= f.scene.wrenContainer.y - 240 - 5,
+    "the complete scar stays above Wren's head even at the top of the existing idle breath");
+  const intrusion = f.timers.find(timer => timer.delay === 1800);
+  assert(intrusion, "the original delayed intrusion still belongs to the actual second gate");
+  f.scene.activePhrases = [];
+  assertEqual(f.scene.quietLordIntrusionAnchor(), { x: 960, y: anchor.y }, "a completed scroll cannot move the fallback into the words");
+  await f.flush();
+  for (const index of [3, 4]) {
+    const later = fixture(); later.scene.startTemple(index);
+    assertEqual(later.scene.phraseSpawns.map((phrase: any) => phrase.y), [320, 430, 540], "later three-scroll gates keep all original gameplay rows");
+    assert(!later.timers.some(timer => timer.delay === 1800), "a fresh later gate cannot place this second-gate-only intrusion over its third row");
+    await later.flush();
+  }
 });
 
 await suite("Sky inventory: resume keeps realm-entry effects while retaining later earned items", async () => {

@@ -22,6 +22,10 @@ export interface TextWordTargetOptions {
   /** Higher wins on first-letter ties. Default 0. */
   priority?: number;
   onComplete: () => void;
+  /** Durable bookkeeping when the typing controller settles the final character,
+   * after its keystroke statistics are recorded. The visual onComplete response
+   * still follows the original320ms exit animation. */
+  onSettled?: () => void;
   /** Fired instead of onComplete when the target was claimed in spell mode
    *  (first letter typed with Shift held). If omitted, onComplete runs
    *  normally and spell mode is purely cosmetic. */
@@ -381,6 +385,7 @@ export class TextWordTarget implements WordTarget {
   }
 
   onComplete(): void {
+    this.opts.onSettled?.();
     const spell = this.spellClaimed;
     const alt = this.altClaimed;
 

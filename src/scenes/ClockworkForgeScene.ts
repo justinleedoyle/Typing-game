@@ -94,6 +94,7 @@ import forgeBellowsWorkstation from "../../art/forge/bellows-workstation.png";
 import forgeValveWorkstation from "../../art/forge/valve-workstation.png";
 import forgeCommandConsole from "../../art/forge/command-console.png";
 import fornSprite from "../../art/forge/forn.png";
+import fornEmptyHandsSprite from "../../art/forge/forn-empty-hands.png";
 import gregorSprite from "../../art/forge/gregor.png";
 import apprenticeSprite from "../../art/forge/apprentice.png";
 import runaPortrait from "../../art/runa/runa-front.png";
@@ -336,6 +337,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.load.image("forge-valve-workstation", forgeValveWorkstation);
     this.load.image("forge-command-console", forgeCommandConsole);
     this.load.image("forn", fornSprite);
+    this.load.image("forn-empty-hands", fornEmptyHandsSprite);
     this.load.image("forge-gregor", gregorSprite);
     this.load.image("forge-apprentice", apprenticeSprite);
     this.load.image("forge-companion-songbird", brassSongbirdSprite);
@@ -1368,6 +1370,29 @@ export class ClockworkForgeScene extends Phaser.Scene {
     });
   }
 
+  /** The gifted Hammer leaves the painted glove as the separate keepsake
+   * leaves Forn. Normalize the alternate to his original texture frame so
+   * the same origin, scale and already-running attention/idle tweens stay valid. */
+  private showFornEmptyHands(): void {
+    const sprite = this.fornSprite;
+    if (!sprite?.scene || !this.textures.exists("forn-empty-hands")) return;
+    const key = "forn-empty-hands-frame";
+    if (!this.textures.exists(key)) {
+      const original = this.textures.get("forn").getSourceImage() as HTMLImageElement;
+      const empty = this.textures.get("forn-empty-hands").getSourceImage() as HTMLImageElement;
+      const canvas = this.textures.createCanvas(key, original.width, original.height);
+      if (!canvas) return;
+      // Alpha-visible head/boot bounds: original[6,634), alternate[10,1387).
+      // Align the painted body as well as its canvas, so giving the Hammer
+      // cannot lift Forn's boots or alter his established displayed height.
+      const bodyScaleY = (634 - 6) / (1387 - 10);
+      canvas.context.drawImage(empty, 0, 6 - 10 * bodyScaleY,
+        original.width, empty.height * bodyScaleY);
+      canvas.refresh();
+    }
+    sprite.setTexture(key);
+  }
+
   private showFork1ChoiceCues(): void {
     this.showApprenticeSprite();
     if (!this.bellowsWorkstation?.scene) {
@@ -1696,8 +1721,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
     });
     this.checkpoint("fork1-reward");
     this.setNarrator(choice === "forn"
-      ? "Forn's Bellows Hammer joins your satchel. The repaired bellows breathe steadily."
-      : "The apprentices' Sabotage Wrench joins your satchel. The foundry's fire burns lower.");
+      ? "Forn's Bellows Hammer rests in your hands. The repaired bellows breathe steadily."
+      : "The apprentices' Sabotage Wrench rests in your hands. The foundry's fire burns lower.");
     this.band.setObjective("Keepsake collected. Press Enter or Space to continue through the forge.");
     this.readThen(() => this.startAct3());
   }
@@ -2132,8 +2157,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
     });
     this.checkpoint("fork2-reward");
     this.setNarrator(choice === "peaceful"
-      ? "The Master Key joins your satchel. The forge's oldest lock will know it."
-      : "You recover a Golem Heart from the fallen brass. It still remembers the command.");
+      ? "The Master Key rests in your hands. The forge's oldest lock will know it."
+      : "A Golem Heart rests in your hands, recovered from the fallen brass. It still remembers the command.");
     this.band.setObjective("Keepsake collected. Press Enter or Space to continue.");
     this.readThen(() => this.startCompanionGate());
   }
@@ -2803,7 +2828,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // The gift phrase owns the Hammer's visual transfer. Restore its settled
     // hand position during its acknowledgment and all following repair beats.
     if (owner === "forn" && (step > 2 || (step === 2 && resumeReading))) {
+      this.showFornEmptyHands();
       this.showForgeKeepsake("bellows-hammer", 475, true);
+    }
+    if (!resumeReading && step > 0) {
+      const previousResponse = narratorLines[step - 1] ?? "";
+      if (previousResponse) this.setNarrator(previousResponse);
     }
 
     const advance = (): void => {
@@ -2872,6 +2902,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
             ringRadius: 24,
           });
         },
+        onSettled: () => {
+          const line = narratorLines[step] ?? "";
+          if (checkpointStep) {
+            this.checkpoint(checkpointStep, { index: line ? step : step + 1, reading: !!line });
+            // A reload may precede the250ms autosave and320ms visual exit.
+            // Queue local durability now; existing save errors remain available
+            // through the store, and input never waits for optional cloud work.
+            void this.store.flush().catch(() => {});
+          }
+        },
         onComplete: () => {
           releaseTrueNameAnchor();
           playWrenAction(this.wrenSprite);
@@ -2902,6 +2942,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
           step++;
           this.clearActiveTargets();
           if (owner === "forn" && word === FORN_PASSAGES[2]) {
+            this.showFornEmptyHands();
             this.showForgeKeepsake("bellows-hammer", 475);
           }
           if (line) {

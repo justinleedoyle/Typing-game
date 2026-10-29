@@ -31,6 +31,7 @@ await import("./desktopFileStorage.test.ts");
 await import("./desktopPackaging.test.ts");
 await import("./desktopBackend.test.ts");
 await import("./fonts.test.ts");
+await import("./keyboardQueue.test.ts");
 await import("./checkpointResources.test.ts");
 await import("./bellCheckpoint.test.ts");
 await import("./forgeCheckpoint.test.ts");

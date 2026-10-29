@@ -30,7 +30,7 @@ export function validateSmokeReport(report, phase) {
   const checkpoint = report.save.checkpoint;
   requireValue(checkpoint.scene === "WinterMountainScene" && checkpoint.step === (phase === "seed" || phase === "verify" ? "fork1" : "firefly"), `${phase} resumed the wrong checkpoint`);
   requireValue(checkpoint.data?.candles === 2 && checkpoint.data?.statsSoul === 62.5 && checkpoint.data?.statsCombo === 8, `${phase} changed the synthetic checkpoint resources`);
-  if (phase === "seed") requireValue(report.keyboard?.uppercaseAndRelease === true && report.keyboard?.backspaceDispatched === true, "Seed did not verify synthetic uppercase typing and safe prefix release");
+  if (phase === "seed") requireValue(report.keyboard?.uppercaseAndRelease === true && report.keyboard?.backspaceDispatched === true && report.keyboard?.sameFramePrefixBurst === true, "Seed did not verify the unpaced native prefix regression and safe release");
   requireValue(report.save.keyStats?.s?.hits === 1 && report.save.keyStats.s.misses === 0 && report.save.keyStats?.a?.hits === 1 && report.save.keyStats.a.misses === 0 && Object.keys(report.save.keyStats).length === 2, `${phase} did not retain the two exact keyboard smoke hits`);
   return report;
 }

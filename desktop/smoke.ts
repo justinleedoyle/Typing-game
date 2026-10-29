@@ -92,14 +92,40 @@ async function settledSave(backend: SaveBackend): Promise<SaveState> {
   }
   throw new Error("Rendered checkpoint did not reach stable durable storage");
 }
-export function sendDesktopSmokeKey(window: BrowserWindow, value: string, modifiers: Array<"shift" | "alt"> = []): void {
+async function rendererFrames(window: BrowserWindow): Promise<void> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      window.webContents.executeJavaScript("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))", false),
+      new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error("Renderer did not advance between synthetic key events")), 2000); }),
+    ]);
+  } finally { if (timeout !== undefined) clearTimeout(timeout); }
+}
+
+export async function sendDesktopSmokeKey(window: BrowserWindow, value: string, modifiers: Array<"shift" | "alt"> = [], settle: () => Promise<void> = () => rendererFrames(window)): Promise<void> {
   // Electron45 converts keyDown to rawKeyDown only after the converter's text
   // fields have been populated. Use rawKeyDown explicitly for printable input
   // so the event has both its DomKey and its intended character text.
   window.webContents.sendInputEvent({ type: value.length === 1 ? "rawKeyDown" : "keyDown", keyCode: value, modifiers });
+  // Phaser's DOM event queue clears at POST_STEP. Separate down/up and the
+  // next key across actual renderer frames rather than bursting a whole test
+  // into one queue. This changes only QA event delivery, never the game clock.
+  await settle();
   window.webContents.sendInputEvent({ type: "keyUp", keyCode: value, modifiers });
+  await settle();
 }
 const key = sendDesktopSmokeKey;
+
+/** Deliberately keep this burst unpaced: it is the regression for the observed
+ * Phaser queue replay when multiple native key events arrive before POST_STEP.
+ * Ordinary navigation still uses the paced helper above. */
+export function sendDesktopSmokePrefixBurst(window: BrowserWindow): void {
+  const prefix: Array<[string, Array<"shift" | "alt">]> = [["S", ["shift"]], ["a", []], ["Backspace", []]];
+  for (const [value, modifiers] of prefix) {
+    window.webContents.sendInputEvent({ type: value.length === 1 ? "rawKeyDown" : "keyDown", keyCode: value, modifiers });
+    window.webContents.sendInputEvent({ type: "keyUp", keyCode: value, modifiers });
+  }
+}
 
 export async function runDesktopSmoke(options: DesktopSmokeOptions & {
   window: BrowserWindow;
@@ -122,26 +148,25 @@ export async function runDesktopSmoke(options: DesktopSmokeOptions & {
   try {
     await waitForWindow(window, "Boolean(document.querySelector('[data-desktop-ready=\"true\"]'))", "actual desktop startup");
     await waitForWindow(window, "Boolean(document.querySelector('[data-active-scene=\"TitleScene\"]'))", "actual Title creation");
-    key(window, "Enter");
+    await key(window, "Enter");
     await waitForWindow(window, "Boolean(document.querySelector('[data-active-scene=\"WinterMountainScene\"]'))", "saved Winter checkpoint");
     if (phase === "seed") {
       beforeTyping = await settledSave(backend);
-      // Claim only a safe prefix of "save the huntress". The uppercase event
-      // must reach the case-insensitive target; Backspace reverses its final
-      // character and the first Escape releases it without choosing a branch.
-      key(window, "S", ["shift"]);
-      key(window, "a");
-      key(window, "Backspace");
-      key(window, "Escape");
+      // Claim only a safe prefix of "save the huntress". All three native
+      // down/up pairs are intentionally sent together to retain the real
+      // same-frame replay regression; exactly one s/a hit must be persisted.
+      sendDesktopSmokePrefixBurst(window);
+      await rendererFrames(window);
+      await key(window, "Escape");
     }
     // This dispatch checks Electron's own keyboard path. It is synthetic input,
     // not evidence about a physical Windows keyboard/layout or human pacing.
-    key(window, "Escape");
+    await key(window, "Escape");
     await waitForWindow(window, "Boolean(document.querySelector('[data-active-scene=\"ChapterPauseMenu\"]'))", "ordinary pause menu");
     await wait(220); // Original menu's180ms input guard remains unchanged.
-    key(window, "Escape");
+    await key(window, "Escape");
     await waitForWindow(window, "Boolean(document.querySelector('[data-active-scene=\"WinterMountainScene\"]'))", "ordinary pause resume");
-    key(window, "Shift"); key(window, "Alt");
+    await key(window, "Shift"); await key(window, "Alt");
     const renderer = await window.webContents.executeJavaScript(`(() => {
       const canvas = document.querySelector('canvas');
       const fonts = Array.from(document.fonts).map(font => ({family:font.family,status:font.status,style:font.style,weight:font.weight}));
@@ -160,8 +185,9 @@ export async function runDesktopSmoke(options: DesktopSmokeOptions & {
     await writeFile(screenshot, (await window.webContents.capturePage()).toPNG());
     const result = { version: 1, phase, ok: true, profileIsolated: insideTemp(profile), offline: true,
       unexpectedRequests: [...unexpectedRequests], renderer, keyboard: { source: "Electron synthetic input", pauseAndResume: true, shiftAndAltReleased: true,
-        ...(beforeTyping ? { uppercaseAndRelease: true, backspaceDispatched: true,
-          evidence: "Uppercase S and plain A each recorded one correct hit; Backspace dispatched; Escape released the partial claim before ordinary pause. Checkpoint/resources/choices stayed unchanged. Cursor reversal is separately covered by the controller unit test." } : {}),
+        delivery: "Navigation down/up events use separate renderer frames; seed's S+a+Backspace deliberately uses one unpaced native burst.",
+        ...(beforeTyping ? { uppercaseAndRelease: true, backspaceDispatched: true, sameFramePrefixBurst: true,
+          evidence: "Unpaced uppercase S and plain A each recorded exactly one correct hit; Backspace dispatched in the same burst; paced Escape released the partial claim before ordinary pause. Checkpoint/resources/choices stayed unchanged. Cursor reversal is separately covered by the controller unit test." } : {}),
       },
       durable: true, save, inputEvents };
     const temporary = `${report}.tmp`;

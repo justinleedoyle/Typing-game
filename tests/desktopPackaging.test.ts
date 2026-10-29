@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cleanupSmokePhase, validateSmokeReport, validateSmokeSequence } from "../scripts/desktop-smoke.mjs";
-import { parseDesktopSmokeArgs, prepareDesktopSmoke, sendDesktopSmokeKey } from "../desktop/smoke";
+import { parseDesktopSmokeArgs, prepareDesktopSmoke, sendDesktopSmokeKey, sendDesktopSmokePrefixBurst } from "../desktop/smoke";
 import { emptySave, LocalStorageBackend, type SaveState } from "../src/game/saveState";
 import { assert, assertEqual, suite } from "./_assert";
 
@@ -13,21 +13,47 @@ function report(phase: string, state?: SaveState): any {
   if (!state) save.keyStats = { s: { hits: 1, misses: 0 }, a: { hits: 1, misses: 0 } };
   return { version: 1, phase, ok: true, profileIsolated: true, offline: true, unexpectedRequests: [],
     renderer: { canvas: true, fontsReady: true, activeScene: "WinterMountainScene" }, keyboard: { pauseAndResume: true,
-      ...(phase === "seed" ? { uppercaseAndRelease: true, backspaceDispatched: true } : {}) }, durable: true, save,
+      ...(phase === "seed" ? { uppercaseAndRelease: true, backspaceDispatched: true, sameFramePrefixBurst: true } : {}) }, durable: true, save,
     ...(phase === "crash" ? { forcedTermination: true } : { normalExit: true, exitCode: 0 }) };
 }
 
-await suite("Desktop smoke input: printable events populate Electron's raw character path", () => {
+await suite("Desktop smoke input: printable events populate Electron's raw character path", async () => {
   const events: unknown[] = [];
   const window = { webContents: { sendInputEvent(event: unknown) { events.push(event); } } } as any;
-  sendDesktopSmokeKey(window, "S", ["shift"]);
-  sendDesktopSmokeKey(window, "a");
-  sendDesktopSmokeKey(window, "Backspace");
+  const settle = async () => {};
+  await sendDesktopSmokeKey(window, "S", ["shift"], settle);
+  await sendDesktopSmokeKey(window, "a", [], settle);
+  await sendDesktopSmokeKey(window, "Backspace", [], settle);
   assertEqual(events, [
     { type: "rawKeyDown", keyCode: "S", modifiers: ["shift"] }, { type: "keyUp", keyCode: "S", modifiers: ["shift"] },
     { type: "rawKeyDown", keyCode: "a", modifiers: [] }, { type: "keyUp", keyCode: "a", modifiers: [] },
     { type: "keyDown", keyCode: "Backspace", modifiers: [] }, { type: "keyUp", keyCode: "Backspace", modifiers: [] },
   ], "printable rawKeyDown reaches Electron45's text conversion before dispatch while nonprintable behavior is retained");
+});
+
+await suite("Desktop smoke regression: S, A and Backspace are deliberately sent as one unpaced native burst", () => {
+  const events: unknown[] = [];
+  const window = { webContents: { sendInputEvent(event: unknown) { events.push(event); }, executeJavaScript() { throw new Error("Burst must not wait for a renderer frame"); } } } as any;
+  sendDesktopSmokePrefixBurst(window);
+  assertEqual(events, [
+    { type: "rawKeyDown", keyCode: "S", modifiers: ["shift"] }, { type: "keyUp", keyCode: "S", modifiers: ["shift"] },
+    { type: "rawKeyDown", keyCode: "a", modifiers: [] }, { type: "keyUp", keyCode: "a", modifiers: [] },
+    { type: "keyDown", keyCode: "Backspace", modifiers: [] }, { type: "keyUp", keyCode: "Backspace", modifiers: [] },
+  ], "all six events are dispatched synchronously with no renderer/frame wait, retaining the replay regression");
+});
+
+await suite("Desktop smoke input: keyup and completion wait for separate renderer-frame boundaries", async () => {
+  const events: any[] = [], frames: Array<() => void> = [];
+  const window = { webContents: { sendInputEvent(event: unknown) { events.push(event); } } } as any;
+  let complete = false;
+  const work = sendDesktopSmokeKey(window, "S", ["shift"], () => new Promise<void>(resolve => { frames.push(resolve); })).then(() => { complete = true; });
+  assertEqual(events.map(event => event.type), ["rawKeyDown"], "keyup cannot be sent while the down-frame barrier is pending");
+  assertEqual(complete, false, "the caller cannot advance to its next key before frames settle");
+  frames.shift()!(); await Promise.resolve();
+  assertEqual(events.map(event => event.type), ["rawKeyDown", "keyUp"], "keyup is sent only after the down event's frame barrier");
+  assertEqual(complete, false, "the key remains pending until its separate up-frame barrier");
+  frames.shift()!(); await work;
+  assertEqual(complete, true, "the next key is permitted only after both frame boundaries");
 });
 
 await suite("Desktop smoke cleanup: failed process cleanup cannot hide the original app evidence", async () => {
@@ -103,6 +129,8 @@ await suite("Desktop packaged evidence: failures and lost restart progress canno
   assert(rejects(() => validateSmokeSequence(notKilled)), "a self-exiting app cannot masquerade as the externally forced crash phase");
   const noUppercase = structuredClone(seed); delete noUppercase.keyboard.uppercaseAndRelease;
   assert(rejects(() => validateSmokeReport(noUppercase, "seed")), "a pause-only seed cannot claim uppercase/release evidence");
+  const pacedOnly = structuredClone(seed); delete pacedOnly.keyboard.sameFramePrefixBurst;
+  assert(rejects(() => validateSmokeReport(pacedOnly, "seed")), "paced typing alone cannot claim the actual same-frame regression was exercised");
   const lostHit = structuredClone(reports); lostHit.recover.save.keyStats.s.hits = 0;
   assert(rejects(() => validateSmokeSequence(lostHit)), "crash recovery must retain the actual normalized uppercase hit");
   const repeatedTyping = structuredClone(reports); repeatedTyping.verify.save.keyStats.a.hits = 2;

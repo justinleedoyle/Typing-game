@@ -13,6 +13,7 @@ import { SunkenBellScene } from "./scenes/SunkenBellScene";
 import { TitleScene } from "./scenes/TitleScene";
 import { WinterMountainScene } from "./scenes/WinterMountainScene";
 import { ensureGameFonts } from "./game/fonts";
+import { installKeyboardQueueDrain } from "./game/keyboardQueue";
 import { desktopBridge } from "./game/desktopBridge";
 import { installDesktopLifecycle } from "./game/desktopBackend";
 import { showRecoveryDialog, type RecoveryDialog } from "./game/ui/recoveryDialog";
@@ -112,6 +113,7 @@ async function startGame(): Promise<void> {
   },
   scene: [TitleScene, OpeningScene, PortalChamberScene, WinterMountainScene, SunkenBellScene, ClockworkForgeScene, SkyIslandScene, HauntedWoodScene, GreatBattleScene, HomecomingScene, AlmanacScene, SettingsScene],
   });
+  installKeyboardQueueDrain(game);
   if (desktopBridge()) {
     const appElement = document.querySelector<HTMLElement>("#app")!;
     appElement.dataset.desktopReady = "true";

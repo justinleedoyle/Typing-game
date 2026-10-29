@@ -12,7 +12,7 @@ import { SERIF } from "../game/palette";
 import { cornerTicks, UI_CSS, UI_HEX } from "../game/ui/uiTheme";
 import study from "../../art/references/opening-typewriter-study-clean.png";
 import runa from "../../art/runa/runa-front.png";
-import saga from "../../art/sibling/sibling-front.png";
+import saga from "../../art/sibling/sibling-empty-hands.png";
 import magnus from "../../art/sibling/magnus-front.png";
 import sagaEmbrace from "../../art/sibling/saga-wren-embrace.png";
 import magnusEmbrace from "../../art/sibling/magnus-wren-embrace.png";

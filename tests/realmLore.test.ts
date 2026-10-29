@@ -104,7 +104,7 @@ await suite("Realm Almanac: every fork combination records the actual chosen act
     { realm: "winter-mountain", first: [["huntress", "freed Sigrid"], ["firefly", "followed the fireflies"]], second: [["bury", "built a cairn"], ["pelt", "took the old wolf's pelt"]] },
     { realm: "sunken-bell", first: [["chant", "opened the cathedral doors slowly"], ["force", "forced the cathedral doors open"]], second: [["free-aurland", "unspoke the binding"], ["claim-tongue", "took its iron tongue"]] },
     { realm: "clockwork-forge", first: [["forn", "repair the iron bellows"], ["cabal", "shut a furnace valve"]], second: [["peaceful", "typed STAND DOWN"], ["fought", "fought the last two command-golems"]] },
-    { realm: "sky-island", first: [["help-etta", "books back to the shelves"], ["steal-flame", "beacon dimmed"]], second: [["answer-kindly", "you kept the light"], ["cut-tether", "binding the spirit to the beacon"]] },
+    { realm: "sky-island", first: [["help-etta", "return a book to the shelves"], ["steal-flame", "beacon dimmed"]], second: [["answer-kindly", "you kept the light"], ["cut-tether", "binding the spirit to the beacon"]] },
     { realm: "haunted-wood", first: [["offering", "i remember you"], ["bone-flute", "took the bone flute"]], second: [["bargain", "you are not gone"], ["force", "lit the grove"]] },
   ];
   for (const { realm, first, second } of branches) {
@@ -168,7 +168,7 @@ await suite("Story copy: one living Holdfast and identity-neutral Wren records",
   assert(!gates.body.includes("without a stumble"), "moving gates are not falsely recorded as five no-miss tests");
   const lighter = ALMANAC_LORE_PAGES["the-lantern-lighters-vigil"]!.body;
   assert(lighter.includes("i came to help."), "Lantern-Lighter memory records Wren's actual typed reply");
-  assert(lighter.includes("long questions") && lighter.includes("light toward the tower path"), "Lantern-Lighter memory preserves the warning and light handoff");
+  assert(lighter.includes("long questions") && lighter.includes("light toward the terrace path"), "Lantern-Lighter memory preserves the warning and light handoff");
   assert(!lighter.includes("let Wren help with the row") && !lighter.includes("corrected Wren"), "memory does not claim an unplayed counting task or invented mistakes");
   const riddles = ALMANAC_LORE_PAGES["the-scholar-spirits-riddles"]!.body;
   assert(riddles.indexOf("second answer") < riddles.indexOf("Agai") && riddles.indexOf("Agai") < riddles.indexOf("third answer"), "the scratched fragment appears between the second and third answers");

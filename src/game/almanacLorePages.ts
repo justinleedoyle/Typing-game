@@ -160,7 +160,7 @@ export const ALMANAC_LORE_PAGES: Record<string, AlmanacLorePage> = {
     realmId: "sky-island",
     title: "The Lantern-Lighter's Vigil",
     body:
-      "A child-spirit tended the great beacon, moving along the rails with a taper that never burned down. “I light them, and I count them,” she said. “That is the whole of my work. Miscount, and the island falls.” She had been counting for two hundred years and was not tired — counting, she explained, is not the sort of thing that tires you, if you love the things you count. Wren answered, “i came to help.” The Lantern-Lighter warned of the Scholar-Spirit's long questions, then raised its light toward the tower path. The lanterns flared, and pale shapes answered from within.",
+      "A child-spirit tended the great beacon, moving along the rails with a taper that never burned down. “I light them, and I count them,” she said. “That is the whole of my work. Miscount, and the island falls.” She had been counting for two hundred years and was not tired — counting, she explained, is not the sort of thing that tires you, if you love the things you count. Wren answered, “i came to help.” The Lantern-Lighter warned of the Scholar-Spirit's long questions, then raised its light toward the terrace path. The lanterns flared, and pale shapes descended from the hanging lights.",
   },
 
   "scholar-ettas-last-volume": {

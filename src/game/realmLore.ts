@@ -74,7 +74,7 @@ export const REALM_LORE: Record<string, RealmLore> = {
       "The fourth portal opened in golden air. The island had been tethered too low for years, and the lanterns the scholars hung from every surface were running out of moths.",
     endings: {
       "help-etta":
-        "Wren carried Scholar Etta's books back to the shelves. The beacon brightened, and Etta's Ledger came home with Wren.",
+        "Wren helped Scholar Etta return a book to the shelves. The beacon brightened, and Etta's Ledger came home with Wren.",
       beacon:
         "Wren took a curl of flame from the beacon. The lanterns dipped as the beacon dimmed; Wren carried away the Beacon-Spark.",
       "answer-kindly":
@@ -82,7 +82,7 @@ export const REALM_LORE: Record<string, RealmLore> = {
       "cut-tether":
         "Wren pulled the thread binding the spirit to the beacon. The island lurched, then steadied as a freed wind rushed past. Wren kept the Tether-Cord.",
       moth:
-        "A lantern-moth had watched from the beacon. When Wren welcomed her, she flew down and folded her wings against the satchel.",
+        "A lantern-moth had watched from the beacon. When Wren welcomed her, she flew down and settled on Wren's wrist.",
     },
   },
 

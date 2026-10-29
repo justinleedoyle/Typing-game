@@ -126,6 +126,60 @@ const openingCode = ts.transpileModule(`class Opening { ${openingMethods.map(nam
 const emptyHandsPng = readFileSync(new URL("../art/sibling/sibling-empty-hands.png", import.meta.url));
 const emptyHandsHeight = emptyHandsPng.readUInt32BE(20);
 
+await suite("Homecoming arrival: Saga waits without reclaiming the drawing already given to Wren", () => {
+  const path = new URL("../src/scenes/HomecomingScene.ts", import.meta.url);
+  const source = ts.createSourceFile(path.pathname, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
+  const owner = source.statements.find(ts.isClassDeclaration)!;
+  const assets = Object.fromEntries(source.statements.filter(ts.isImportDeclaration)
+    .filter(statement => (statement.moduleSpecifier as ts.StringLiteral).text.endsWith(".png"))
+    .map(statement => [statement.importClause!.name!.text, (statement.moduleSpecifier as ts.StringLiteral).text]));
+  const code = ts.transpileModule(`class Arrival { ${["preload", "create", "actor"].map(name =>
+    owner.members.find(member => member.name?.getText(source) === name)!.getText(source)).join("\n")} }`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  for (const gender of ["boy", "girl", null] as const) {
+    const loaded = new Map<string, string>(), images: any[] = [], containers: any[] = [];
+    let heldCards = 0;
+    const node = (x = 0, y = 0): any => ({ x, y, children: [],
+      setDepth() { return this; }, setOrigin(x: number, y: number) { this.origin = [x, y]; return this; },
+      setScale(value: number) { this.scale = value; return this; }, setText() { return this; },
+      add(child: unknown) { this.children.push(child); return this; },
+    });
+    const noop = () => {};
+    const Arrival = new Function(...Object.keys(assets), "preloadWren", "installChapterMenu", "addLocalGroundShadow",
+      "applySceneActorLighting", "addIdleBreath", "makeWrenSprite", "NarrationManager", "ChapterReading",
+      "homecomingLines", "reducedMotion", "SERIF", "UI_CSS", `${code}; return Arrival;`)(
+      ...Object.values(assets), noop, () => ({}), () => ({}), noop, noop, () => ({ ...node(), height: 1000 }),
+      class { sayRaw() {} }, class { show() { heldCards++; } }, homecomingLines, () => false, "serif", {},
+    );
+    const scene = new Arrival();
+    Object.assign(scene, {
+      store: { get: () => ({ wrenGender: gender }) }, load: { image: (key: string, path: string) => loaded.set(key, path) },
+      add: {
+        image(x: number, y: number, key: string) {
+          const png = readFileSync(new URL(loaded.get(key)!, path));
+          const image = { ...node(x, y), key, width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
+          images.push(image); return image;
+        },
+        container(x: number, y: number) { const container = node(x, y); containers.push(container); return container; },
+        rectangle: node, text: node,
+      },
+      input: { keyboard: { on: noop } }, events: { once: noop }, cameras: { main: { fadeIn: noop } },
+    });
+    scene.preload(); scene.create();
+    assertEqual(loaded.get("homecoming-saga"), "../../art/sibling/sibling-empty-hands.png", "arrival loads the approved post-gift painting");
+    const sibling = containers.find(container => container.x === 1430);
+    if (gender) {
+      const portrait = sibling.children.find((child: any) => child.key);
+      assertEqual([sibling.x, sibling.y, portrait.x, portrait.y, portrait.origin, portrait.height * portrait.scale],
+        [1430, 950, 0, 0, [.5, 1], gender === "boy" ? 270 : 350], "the original waiting footprint and floor remain unchanged");
+      assertEqual(portrait.key, gender === "boy" ? "homecoming-saga" : "homecoming-magnus", "Magnus retains his own original waiting pose");
+    } else assert(!sibling, "legacy identity does not invent a sibling");
+    assertEqual(heldCards, 1, "the original first caption still waits on one Continue");
+    assert(!images.some(image => image.key.includes("embrace")), "the waiting pose does not prematurely begin the unchanged embrace");
+  }
+});
+
 function openingBody(kind: string, x = 0, y = 0): any {
   return { kind, x, y, scene: true, active: true, scaleX: 1, scaleY: 1, alpha: 1,
     parentContainer: null, children: [] as any[], height: kind === "sibling-portrait" ? 727 : 240,

@@ -4,19 +4,29 @@ import EventEmitter from "eventemitter3";
 import { RELICS } from "../src/game/relics";
 import { TypingInputController, type WordTarget } from "../src/game/typingInput";
 import { navigationAction } from "../src/game/ui/navigationPolicy";
+import { decorativeTween, installPresentation, PRESENTATION_CHANGED, reducedMotion } from "../src/game/presentation";
 import { assert, assertClose, assertEqual, suite } from "./_assert";
 
 const url = new URL("../src/scenes/PortalChamberScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
-const names = ["drawRoom", "drawRuna", "drawWren", "drawArch", "renderArch", "drawPortalGlow", "drawArchLabels", "drawArchKeystone", "drawKeystoneGlyph", "drawArchStatusPlaque", "registerPortalZoneTargets", "registerRealmPortalTarget", "registerShelfZoneTargets", "registerPortalReturnTarget", "registerDeskAlmanacTarget", "registerNavTarget", "stageHubTarget", "drawDisplayShelf", "clearShelfDisplay", "stageShelfObject", "openAlmanac", "resumeAfterAlmanac", "enterZone", "clearZoneTargets", "onKeyDown"];
+const names = ["drawRoom", "drawRuna", "drawWren", "drawArch", "renderArch", "setPortalSpin", "setCompletedPortalFocus", "updateAllArchAppearances", "focusPortalForScene", "pulsePortalTyping", "playHubArrival", "drawPortalGlow", "drawArchLabels", "drawArchKeystone", "drawKeystoneGlyph", "drawArchStatusPlaque", "registerPortalZoneTargets", "registerRealmPortalTarget", "registerShelfZoneTargets", "registerPortalReturnTarget", "registerDeskAlmanacTarget", "registerNavTarget", "stageHubTarget", "drawDisplayShelf", "clearShelfDisplay", "stageShelfObject", "openAlmanac", "resumeAfterAlmanac", "enterZone", "clearZoneTargets", "onKeyDown"];
 const constants = source.statements.filter(ts.isVariableStatement).map(node => node.getText(source)).join("\n");
 const targetY = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "archTargetY")!;
 const create = owner.members.find(node => node.name?.getText(source) === "create") as ts.MethodDeclaration;
 const placeWren = create.body!.statements.find(node => ts.isExpressionStatement(node) && node.expression.getText(source).startsWith("this.wrenContainer = this.drawWren("))!;
+const presentationStatements: Record<string, ts.Node> = {};
+function findPresentationStatements(node: ts.Node): void {
+  if (ts.isExpressionStatement(node)) for (const operation of ["on", "off"]) {
+    if (node.getText(source).startsWith(`this.events.${operation}(PRESENTATION_CHANGED,`)) presentationStatements[operation] = node;
+  }
+  node.forEachChild(findPresentationStatements);
+}
+findPresentationStatements(create);
 const code = ts.transpileModule(`${constants}\n${targetY.getText(source)}\nclass Hub {
   static geometry = { ARCHES, ZONE_X, WREN_Y, SHELF_GRID, SHELF_STATION, RUNA_DESK_STATION, HUB_STATIONS };
   placeWren() { ${placeWren.getText(source)} }
+  bindPresentation() { ${presentationStatements.on.getText(source)} this.events.once("shutdown", () => { ${presentationStatements.off.getText(source)} }); }
   ${names.map(name => owner.members.find(node => node.name?.getText(source) === name)!.getText(source)).join("\n")}
 }`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 const pngSize = (path: string) => { const bytes = readFileSync(new URL(path, import.meta.url)); return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }; };
@@ -55,12 +65,13 @@ function glyphSignature(call: { ops: DrawOp[]; x: number; y: number }) {
   }) })));
 }
 
-function fixture(satchel: string[] = [], cleared = 0) {
+function fixture(satchel: string[] = [], cleared = 0, motionReduced = false) {
   let now = 0, paused = false;
   const scheduled: Array<{ at: number; next: () => void }> = [];
   const objects: any[] = [], tweens: any[] = [], masks: any[] = [], words: any[] = [], drifts: any[] = [], breaths: any[] = [], launches: any[] = [], stationFocus: any[] = [];
   const events = new EventEmitter();
-  const state = { typewriterAwakened: true, satchel, realms: {} as Record<string, any> };
+  const state = { typewriterAwakened: true, satchel, realms: {} as Record<string, any>, reducedMotion: motionReduced };
+  const data = new Map<string, unknown>();
   function object(x = 0, y = 0, key = "") {
     const b: any = { x, y, key, scene: true, active: true, alpha: 1, scaleX: 1, scaleY: 1, children: [], ops: [], destroyed: 0,
       setOrigin(x: number, y = x) { this.originX = x; this.originY = y; return this; },
@@ -89,15 +100,20 @@ function fixture(satchel: string[] = [], cleared = 0) {
     constructor(readonly opts: any) { this.priority = opts.priority ?? 0; this.width = (advances[opts.word] ?? opts.word.length * 0.55) * opts.fontSize + (opts.frame === "banner" ? bannerPad : 0); words.push(this); }
     remaining() { return this.opts.word.toLowerCase().slice(this.cursor); }
     isComplete() { return this.cursor === this.opts.word.length; }
-    advance() { this.cursor++; } miss() {} onClaim(mods: any) { this.opts.onClaim?.(mods); }
-    onRelease() { this.cursor = 0; } setDimmed() {} setCandidate() {}
+    advance() { this.cursor++; this.opts.onAdvance?.(this.cursor); }
+    reverse() { if (this.cursor === 0) return false; this.cursor--; return true; }
+    resetCursor() { this.cursor = 0; }
+    miss() {} onClaim(mods: any) { this.opts.onClaim?.(mods); }
+    onRelease() { if (this.isComplete()) return; this.cursor = 0; this.opts.onRelease?.(); }
+    setDimmed() {} setCandidate() {}
     onComplete() { later(320, () => { if (!this.destroyed) this.opts.onComplete(); }); }
     destroy() { this.destroyed = true; } playEntryWake() {} playIdleFloat() {}
     getAnchorX() { return this.opts.x; } getAnchorY() { return this.opts.y; }
   }
   const globals = {
-    TextWordTarget: Target, RELICS, SERIF: "Iowan Old Style", UI_HEX: { panel: 0, brass: 0, frame: 0 }, PALETTE: { cream: "cream", brass: "brass" }, PALETTE_HEX: { brass: 0 },
+    TextWordTarget: Target, RELICS, SERIF: "Iowan Old Style", UI_HEX: { panel: 0, brass: 0xc8a85f, frame: 0 }, PALETTE: { cream: "cream", brass: "brass" }, PALETTE_HEX: { brass: 0xc8a85f },
     Phaser: { Scenes: { Events: { SHUTDOWN: "shutdown" } } }, navigationAction,
+    decorativeTween, reducedMotion, PRESENTATION_CHANGED, playSceneEventPulse: noop,
     isPuristToggleKey: () => false, playClack: noop, playChime: noop,
     addBackdropDrift: (_s: any, body: any) => drifts.push(body), addIdleBreath: (_s: any, body: any) => breaths.push(body),
     addAmbientDrift: noop, addLivingLight: noop, addGroundShadow: noop, addContainerWake: noop, applySceneActorLighting: noop,
@@ -109,10 +125,10 @@ function fixture(satchel: string[] = [], cleared = 0) {
   for (const [i, arch] of Hub.geometry.ARCHES.entries()) state.realms[arch.id] = { cleared: i < cleared };
   const keyboard = new Set<unknown>(); keyboard.add(hub.onKeyDown);
   Object.assign(hub, {
-    scale: { width: 1920, height: 1080 }, store: { get: () => state }, events,
+    scale: { width: 1920, height: 1080 }, store: { get: () => state }, events, data,
     archGraphics: new Map(), archGlows: new Map(), archSprites: new Map(), portalInstructionObjects: [],
     shelfDisplayObjects: [], zoneTargets: [], portalWordAnchors: [], stationWordAnchorReleases: [],
-    activeZone: "portals", showPortalRevisits: true, openingUtilityScene: false, almanacOverlayOpen: false,
+    activeZone: "portals", focusedCompletedPortal: null, openingUtilityScene: false, almanacOverlayOpen: false, portalTypingPulseTimes: new Map(),
     typingInput: new TypingInputController(), narration: { clear: noop, say: noop, clearAfter: noop },
     input: { keyboard: { on(_event: string, fn: unknown) { keyboard.add(fn); }, off(_event: string, fn: unknown) { keyboard.delete(fn); } } },
     scene: { launch(key: string, data: any) { launches.push({ key, data }); }, pause() { paused = true; }, isActive: () => !paused },
@@ -120,21 +136,32 @@ function fixture(satchel: string[] = [], cleared = 0) {
       image(x: number, y: number, key: string) { return Object.assign(object(x, y, key), key === "runa-sprite" ? runa : key === "wren-front" ? wren : { width: 80, height: 120 }); },
       container: object, graphics,
       text(x: number, y: number, text: string, style: any) { return Object.assign(object(x, y), { text, style }); },
-      sprite(x: number, y: number, key: string) { const b = object(x, y, key); b.anims = { isPlaying: false }; b.play = () => { b.anims.isPlaying = true; }; b.stop = () => { b.anims.isPlaying = false; }; b.clearTint = () => b; return b; },
+      sprite(x: number, y: number, key: string) { const b = object(x, y, key); b.anims = { isPlaying: false, timeScale: 1 }; b.play = () => { b.anims.isPlaying = true; return b; }; b.stop = () => { b.anims.isPlaying = false; return b; }; b.setFrame = (frame: number) => { b.frame = frame; return b; }; b.clearTint = () => { b.tint = null; return b; }; b.setTint = (tint: number) => { b.tint = tint; return b; }; return b; },
     }, make: { graphics }, textures: { exists: (key: string) => !key.includes("missing-icon") },
-    time: { delayedCall: later }, tweens: { add(options: any) { tweens.push(options); return options; }, killTweensOf(body: any) { for (const t of tweens) if (t.targets === body) t.cancelled = true; } },
+    time: { delayedCall: later, get now() { return now; } }, tweens: { add(options: any) {
+      const t = { ...options, paused: false, pause() { this.paused = true; }, resume() { this.paused = false; } }; tweens.push(t);
+      if (!options.repeat && !options.yoyo) later((options.delay ?? 0) + (options.duration ?? 0), () => {
+        if (t.cancelled || t.paused || !t.targets.scene) return;
+        for (const key of ["x", "y", "alpha", "scaleX", "scaleY"]) if (typeof t[key] === "number") t.targets[key] = t[key];
+        t.onComplete?.();
+      });
+      return t;
+    }, killTweensOf(body: any) { for (const t of tweens) if (t.targets === body) t.cancelled = true; } },
     startHubForegroundLife: noop, drawHubStations: noop, walkWrenTo: noop, clearDeskDisplay: noop, clearAccountDisplay: noop,
     clearPortalFloorCallWake: noop, playShelfDisplayWake: noop, playHubActorAction: noop, pulseStation: noop, playUtilityStationExitWake: noop,
-    attachStationWordAnchor: () => noop, attachPortalWordAnchor: () => noop, attachPortalFloorCallAnchor: () => noop, playPortalClaimLine: noop, focusPortalForScene: noop,
-    pulsePortalTyping: noop, focusStation: (station: any) => stationFocus.push(station), pulseStationTyping: noop, showPortalFloorCallGlow: noop, showPortalFloorCallWake: noop,
+    attachStationWordAnchor: () => noop, attachPortalWordAnchor: () => noop, attachPortalFloorCallAnchor: () => noop, playPortalClaimLine: noop,
+    playHubActorFocus: noop, playHubArrivalFlecks: noop, playHubArrivalMaterialize: noop,
+    focusStation: (station: any) => stationFocus.push(station), pulseStationTyping: noop, showPortalFloorCallGlow: noop, showPortalFloorCallWake: noop,
     onEnterPortal: noop, registerAccountZoneTargets: noop,
     registerDeskZoneTargets() { this.registerDeskAlmanacTarget(); this.registerPortalReturnTarget(70); },
     chapterMenu: { handleKey: () => false },
   });
+  installPresentation(hub, hub.store);
   return { hub, geometry: Hub.geometry, objects, masks, words, tweens, drifts, breaths, launches, state, keyboard, stationFocus,
     paused: () => paused,
     resumeBook() { paused = false; hub.resumeAfterAlmanac(); },
     tick(ms: number) { const end = now + ms; while (true) { scheduled.sort((a,b) => a.at-b.at); if (!scheduled[0] || scheduled[0].at > end) break; const t = scheduled.shift()!; now = t.at; t.next(); } now = end; },
+    key(key: string) { if (!paused) for (const listener of keyboard) (listener as Function).call(hub, { key, ctrlKey: false, metaKey: false, repeat: false, preventDefault: noop }); },
     type(word: string) { if (paused) return; for (const key of word) for (const listener of keyboard) (listener as Function).call(hub, { key, ctrlKey: false, metaKey: false, repeat: false, preventDefault: noop }); },
   };
 }
@@ -160,6 +187,84 @@ await suite("Hub integration: the painted architecture and every portal mask sha
   }
   f.hub.events.emit("shutdown");
   assert(f.masks.every(mask => mask.destroyed === 1), "scene shutdown releases every actual aperture mask once");
+});
+
+await suite("Hub integration: usable completed passages remain faint amber and respect motion preferences", () => {
+  for (const cleared of [0, 1, 5]) for (const motionReduced of [false, true]) {
+    const f = fixture([], cleared, motionReduced);
+    for (const arch of f.geometry.ARCHES) f.hub.drawArch(arch);
+    f.hub.bindPresentation(); f.hub.updateAllArchAppearances();
+    for (const [i, arch] of f.geometry.ARCHES.entries()) {
+      const sprite = f.hub.archSprites.get(arch.id), glow = f.hub.archGlows.get(arch.id);
+      if (i > cleared) {
+        assert(!sprite.visible && !glow.visible && !sprite.anims.isPlaying, "locked passages retain dark stone and stopped animation");
+        continue;
+      }
+      assert(sprite.visible && glow.visible && sprite.mask === glow.mask, "every usable passage retains its masked painted swirl, including all five completed realms");
+      assertEqual(sprite.anims.isPlaying, !motionReduced, "reduced motion stops decorative portal animation without hiding the passage");
+      if (motionReduced) assertEqual(sprite.frame, 0, "the quiet portal uses a stable first frame");
+      if (i < cleared) {
+        assert(sprite.alpha > 0 && sprite.alpha < 0.35 && sprite.tint === 0xe9b56b, "completed portals are visibly warm and faint rather than blank or full-strength blue");
+        if (!motionReduced) assert(sprite.anims.timeScale > 0 && sprite.anims.timeScale < 0.4, "completed passage motion stays slower than the next realm");
+      } else assertEqual([sprite.alpha, sprite.tint, sprite.anims.timeScale], [1, null, 1], "the next passage retains the stronger original blue sprite and normal speed");
+    }
+    const glowTweens = f.tweens.filter(t => [...f.hub.archGlows.values()].includes(t.targets));
+    assert(glowTweens.every(t => t.paused === motionReduced), "the actual presentation helper also stops glow breathing under reduced motion");
+    f.state.reducedMotion = !motionReduced; f.hub.events.emit(PRESENTATION_CHANGED);
+    const usable = [...f.hub.archSprites.values()].filter((sprite: any) => sprite.visible);
+    assert(usable.every((sprite: any) => sprite.anims.isPlaying === motionReduced), "a live comfort-setting change updates every usable portal through the actual scene listener");
+    assert(glowTweens.every(t => t.paused === !motionReduced), "the same preference change updates living light without moving its painted aperture");
+    f.hub.events.emit("shutdown");
+    assertEqual(f.hub.events.listenerCount(PRESENTATION_CHANGED), 0, "scene shutdown removes both appearance and decorative-motion listeners");
+  }
+  for (const battleCleared of [false, true]) {
+    const f = fixture([], 5); f.state.realms["great-battle"] = { cleared: battleCleared };
+    f.hub.enterZone("portals", false);
+    assertEqual(f.hub.zoneTargets.filter((word: any) => f.geometry.ARCHES.some((arch: any) => arch.label === word.opts.word)).map((word: any) => word.opts.word), f.geometry.ARCHES.map((arch: any) => arch.label), "all five revisits are immediately registered before and after the finale, without a discovery flag");
+    assert(!f.words.some(word => word.opts.word === "old paths"), "no extra old-paths command hides already usable realm names");
+    assert(f.words.some(word => word.opts.word === (battleCleared ? "begin again" : "defend holdfast")), "revealing the revisits preserves the appropriate finale action");
+  }
+});
+
+await suite("Hub integration: completed portal focus belongs to typing and releases cleanly on cancellation or station exit", () => {
+  for (const motionReduced of [false, true]) {
+    for (const release of ["Escape", "Backspace", "reset", "station"] as const) {
+      const f = fixture([], 1, motionReduced);
+      for (const arch of f.geometry.ARCHES) f.hub.drawArch(arch);
+      f.hub.updateAllArchAppearances(); f.hub.enterZone("portals", false);
+      const arch = f.geometry.ARCHES[0], sprite = f.hub.archSprites.get(arch.id), next = f.hub.archSprites.get(f.geometry.ARCHES[1].id);
+      const rest = sprite.alpha, size = [sprite.scaleX, sprite.scaleY], before = f.objects.length;
+      const label = f.words.find(word => word.opts.word === arch.label), nextLabel = f.words.find(word => word.opts.word === f.geometry.ARCHES[1].label);
+      assert(label.opts.idleAlpha < nextLabel.opts.idleAlpha, "revisit names stay secondary to the next realm");
+      f.type("w"); f.tick(160);
+      const focused = sprite.alpha;
+      assert(f.hub.typingInput.hasClaim() && f.hub.focusedCompletedPortal === arch.id && focused > rest && focused < next.alpha, "the genuinely claimed revisit brightens while remaining secondary to the next blue portal");
+      assertEqual([sprite.scaleX, sprite.scaleY, f.objects.length], [...size, before], "completed-portal typing adds no scaling or competing ring effect");
+      if (release === "Backspace") {
+        f.key("Backspace"); f.tick(160);
+        assert(f.hub.typingInput.hasClaim() && sprite.alpha === focused, "reversing the first character keeps the word selected until Backspace releases at its start");
+        f.key("Backspace");
+      } else if (release === "reset") f.hub.typingInput.reset();
+      else if (release === "station") f.hub.enterZone("shelf", false);
+      else f.key("Escape");
+      f.tick(2000);
+      assertEqual([sprite.alpha, f.hub.focusedCompletedPortal, f.hub.typingInput.hasClaim()], [rest, null, false], "cancellation, reset or station replacement restores the faint portal and leaves no stale claim");
+    }
+    const f = fixture([], 5, motionReduced);
+    for (const arch of f.geometry.ARCHES) f.hub.drawArch(arch);
+    f.hub.updateAllArchAppearances(); f.hub.enterZone("portals", false); f.hub.placeWren();
+    const arch = f.geometry.ARCHES[0], sprite = f.hub.archSprites.get(arch.id), rest = sprite.alpha;
+    f.hub.hubArrival = arch.id; f.hub.playHubArrival(); f.tick(1000);
+    assertEqual([sprite.alpha, f.hub.focusedCompletedPortal], [rest, null], "actual realm-return attention never leaves an unclaimed completed portal at typing-focus brightness");
+    f.type("w"); f.key("Escape"); f.type("w"); f.tick(1000);
+    assert(sprite.alpha > rest && f.hub.typingInput.hasClaim(), "a rapid release and reclaim cancels the obsolete fade instead of dimming the new claim");
+    f.key("Escape"); f.tick(1000);
+    assertEqual(sprite.alpha, rest, "the final release stays dim after every earlier tween deadline");
+    f.hub.setCompletedPortalFocus(arch, true); f.tick(160);
+    assert(!f.hub.typingInput.hasClaim() && sprite.alpha > rest, "the recovery case begins with an independently focused portal and no typing claim");
+    f.hub.enterZone("desk", false); f.tick(1000);
+    assertEqual([sprite.alpha, f.hub.focusedCompletedPortal], [rest, null], "zone cleanup also restores an unclaimed focus left by an interrupted handoff");
+  }
 });
 
 await suite("Hub integration: above-arch names and carved realm glyphs stay on their painted architecture", () => {

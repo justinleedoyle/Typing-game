@@ -57,6 +57,7 @@ const Chamber = sceneMethods("../src/scenes/PortalChamberScene.ts", [
   navigationAction, isPuristToggleKey: () => false, playClack() {}, playChime() {},
   HUB_STATIONS: { almanac: { x: 490 } },
   ZONE_X: { portals: 990, desk: 490, shelf: 1400, account: 1700 },
+  ARCHES: [], // These navigation cases do not render portal surfaces.
 });
 const Almanac = sceneMethods("../src/scenes/AlmanacScene.ts", ["closeBook", "onKeyDown"], {
   navigationAction, playChime() {}, playClack() {},

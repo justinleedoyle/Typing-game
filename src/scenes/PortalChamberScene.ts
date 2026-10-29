@@ -1,6 +1,6 @@
 import { installChapterMenu } from "../game/ui/pauseMenu";
 import { navigationAction } from "../game/ui/navigationPolicy";
-import { reducedMotion } from "../game/presentation";
+import { decorativeTween, PRESENTATION_CHANGED, reducedMotion } from "../game/presentation";
 import Phaser from "phaser";
 import { applySceneActorLighting } from "../game/actorLighting";
 import { resetSave } from "../game/resetSave";
@@ -98,6 +98,8 @@ const ARCHES: readonly ArchSpec[] = [
 ] as const;
 
 const REALM_SEQUENCE = ARCHES.map((a) => a.id);
+const COMPLETED_PORTAL_ALPHA = 0.22;
+const COMPLETED_PORTAL_FOCUS_ALPHA = 0.52;
 
 // Wren's X position when standing in each zone — aligned to the painted
 // desk (left), portal floor (centre), and utility stations. Shelf uses the
@@ -220,7 +222,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private stationTypingPulseTimes = new WeakMap<StationSpec, number>();
   private portalTypingPulseTimes = new Map<string, number>();
   private ambientHandle?: AmbientHandle;
-  private showPortalRevisits = false;
+  private focusedCompletedPortal: string | null = null;
   private hubArrival: HubArrivalSource | null = null;
   private activeZone: Zone = "portals";
   private openingUtilityScene = false;
@@ -253,7 +255,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.portalFloorCallWakeObjects = [];
     this.stationTypingPulseTimes = new WeakMap();
     this.portalTypingPulseTimes = new Map();
-    this.showPortalRevisits = false;
+    this.focusedCompletedPortal = null;
     this.activeZone = "portals";
     this.openingUtilityScene = false;
     this.almanacOverlayOpen = false;
@@ -306,6 +308,7 @@ export class PortalChamberScene extends Phaser.Scene {
     }
     this.updateAllArchAppearances();
     this.drawArchLabels();
+    this.events.on(PRESENTATION_CHANGED, this.updateAllArchAppearances, this);
 
     this.wrenContainer = this.drawWren(ZONE_X.portals, WREN_Y);
 
@@ -341,6 +344,7 @@ export class PortalChamberScene extends Phaser.Scene {
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.events.off(Phaser.Scenes.Events.RESUME, this.resumeAfterAlmanac, this);
+      this.events.off(PRESENTATION_CHANGED, this.updateAllArchAppearances, this);
       this.ambientHandle?.stop();
       this.clearPersistentStationWordAnchors();
       this.difficultyNotice?.destroy();
@@ -385,6 +389,8 @@ export class PortalChamberScene extends Phaser.Scene {
     // A zone replacement also ends any ambiguous prefix. Unregistering every
     // old target alone leaves that buffer invisible against the new targets.
     this.typingInput.handleChar("Escape");
+    const focusedArch = ARCHES.find((arch) => arch.id === this.focusedCompletedPortal);
+    if (focusedArch) this.setCompletedPortalFocus(focusedArch, false);
     for (const anchor of this.portalWordAnchors) {
       anchor.destroy();
     }
@@ -518,33 +524,12 @@ export class PortalChamberScene extends Phaser.Scene {
     }
 
     // Secondary targets — all cleared realms are revisitable at lower priority.
-    const allRealmsCleared = nextAvailableIdx >= REALM_SEQUENCE.length;
-    if (!allRealmsCleared || this.showPortalRevisits) {
-      for (let i = 0; i < nextAvailableIdx; i++) {
-        this.registerRealmPortalTarget(ARCHES[i], i, true, {
-          fontSize: 20,
-          priority: -1,
-          entryDelayMs: 80 + i * 28,
-        });
-      }
-    } else {
-      this.registerNavTarget(
-        "old paths",
-        HUB_STATIONS.portalFloor.x - 170,
-        HUB_STATIONS.portalFloor.y - 120,
-        () => {
-          this.showPortalRevisits = true;
-          this.enterZone("portals", false);
-        },
-        {
-          fontSize: 18,
-          priority: -1,
-          stationPulse: HUB_STATIONS.portalFloor,
-          frame: "banner",
-          entryDelayMs: 130,
-          idleAlpha: 0.84,
-        },
-      );
+    for (let i = 0; i < nextAvailableIdx; i++) {
+      this.registerRealmPortalTarget(ARCHES[i], i, true, {
+        fontSize: 20,
+        priority: -1,
+        entryDelayMs: 80 + i * 28,
+      });
     }
 
     // Zone navigation (away from portals).
@@ -608,9 +593,14 @@ export class PortalChamberScene extends Phaser.Scene {
       priority: opts.priority,
       outline: true,
       frame: "banner",
+      idleAlpha: revisit ? 0.82 : 1,
       onClaim: () => {
+        if (revisit) this.setCompletedPortalFocus(arch, true);
         this.playPortalClaimLine(arch);
         this.focusPortalForScene(arch.sceneKey);
+      },
+      onRelease: () => {
+        if (revisit) this.setCompletedPortalFocus(arch, false);
       },
       onAdvance: () => this.pulsePortalTyping(arch.sceneKey),
       onComplete: () => {
@@ -1855,7 +1845,6 @@ export class PortalChamberScene extends Phaser.Scene {
       (id) => !state.realms[id]?.cleared,
     );
     const nextIdx = firstUnclearedIdx === -1 ? REALM_SEQUENCE.length : firstUnclearedIdx;
-    const allRealmsCleared = nextIdx >= REALM_SEQUENCE.length;
 
     ARCHES.forEach((arch, i) => {
       const isNext    = i === nextIdx;
@@ -1864,13 +1853,12 @@ export class PortalChamberScene extends Phaser.Scene {
       this.renderArch(
         arch,
         isNext ? "next" : isCleared ? "cleared" : isLocked ? "locked" : "dark",
-        allRealmsCleared,
       );
     });
   }
 
   private drawArch(spec: ArchSpec): void {
-    // Graphics for the warm-amber cleared-realm ring (static).
+    // Keep the painted opening as the portal's sole frame.
     const g = this.add.graphics().setDepth(-4);
     this.archGraphics.set(spec.id, g);
 
@@ -1885,7 +1873,7 @@ export class PortalChamberScene extends Phaser.Scene {
       .setAlpha(0.2);
     this.archGlows.set(spec.id, glow);
     const stagger = ARCHES.findIndex((a) => a.id === spec.id) * 130;
-    this.tweens.add({
+    decorativeTween(this, this.tweens.add({
       targets: glow,
       alpha: { from: 0.15, to: 0.36 },
       scaleX: { from: 0.97, to: 1.04 },
@@ -1894,7 +1882,7 @@ export class PortalChamberScene extends Phaser.Scene {
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
-    });
+    }));
 
     // Painted portal sprite — 168x338 frames, arch fills the frame top to
     // bottom. Anchored bottom-center on the painted arch bottom (baseY).
@@ -1925,12 +1913,12 @@ export class PortalChamberScene extends Phaser.Scene {
   private renderArch(
     spec: ArchSpec,
     state: "next" | "cleared" | "dark" | "locked",
-    quietCleared = false,
   ): void {
     const g = this.archGraphics.get(spec.id);
     const glow = this.archGlows.get(spec.id);
     const sprite = this.archSprites.get(spec.id);
     if (!g || !sprite) return;
+    this.tweens.killTweensOf(sprite);
     g.clear();
 
     if (state === "locked" || state === "dark") {
@@ -1941,25 +1929,17 @@ export class PortalChamberScene extends Phaser.Scene {
     }
 
     if (state === "cleared") {
-      if (quietCleared) {
-        glow?.setVisible(false);
-        sprite.setVisible(false);
-        if (sprite.anims.isPlaying) sprite.stop();
-        return;
-      }
-      // The painted arch is the frame. A second, smaller drawn arch looked
-      // like a misplaced doorway; the carved keystone carries status.
+      // A dim version of the same painted swirl means this passage is still
+      // usable. The keystone carries completion; blue remains the next call.
       if (glow) {
-        this.drawPortalGlow(
-          glow,
-          { ...spec, width: spec.width * 0.34, height: spec.height * 0.28 },
-          PALETTE_HEX.brass,
-          0.16,
-        );
+        this.drawPortalGlow(glow, spec, PALETTE_HEX.brass, 0.1);
         glow.setVisible(true);
       }
-      sprite.setVisible(false);
-      if (sprite.anims.isPlaying) sprite.stop();
+      sprite.setVisible(true).setTint(0xe9b56b);
+      sprite.setScale(spec.width / 168, spec.height / 338);
+      sprite.setAlpha(this.focusedCompletedPortal === spec.id
+        ? COMPLETED_PORTAL_FOCUS_ALPHA : COMPLETED_PORTAL_ALPHA);
+      this.setPortalSpin(sprite, 0.25);
       return;
     }
 
@@ -1972,7 +1952,29 @@ export class PortalChamberScene extends Phaser.Scene {
     sprite.setScale(spec.width / 168, spec.height / 338);
     sprite.clearTint();
     sprite.setAlpha(1);
+    this.setPortalSpin(sprite, 1);
+  }
+
+  private setPortalSpin(sprite: Phaser.GameObjects.Sprite, speed: number): void {
+    if (reducedMotion(this)) {
+      sprite.stop().setFrame(0);
+      return;
+    }
     if (!sprite.anims.isPlaying) sprite.play("portal-spin");
+    sprite.anims.timeScale = speed;
+  }
+
+  private setCompletedPortalFocus(arch: ArchSpec, focused: boolean): void {
+    if (!this.store.get().realms[arch.id]?.cleared) return;
+    if (focused && this.focusedCompletedPortal === arch.id) return;
+    if (!focused && this.focusedCompletedPortal !== arch.id) return;
+    this.focusedCompletedPortal = focused ? arch.id : null;
+    const sprite = this.archSprites.get(arch.id);
+    if (!sprite?.active) return;
+    this.tweens.killTweensOf(sprite);
+    const alpha = focused ? COMPLETED_PORTAL_FOCUS_ALPHA : COMPLETED_PORTAL_ALPHA;
+    if (reducedMotion(this)) sprite.setAlpha(alpha);
+    else this.tweens.add({ targets: sprite, alpha, duration: 160, ease: "Sine.easeOut" });
   }
 
   private drawPortalGlow(
@@ -2176,6 +2178,12 @@ export class PortalChamberScene extends Phaser.Scene {
     const arch = ARCHES.find((a) => a.sceneKey === sceneKey);
     if (!arch) return;
     this.playHubActorFocus(arch.x);
+
+    if (this.store.get().realms[arch.id]?.cleared) {
+      // Arrival also calls this helper; sustained emphasis belongs only to an
+      // actual claimed word, set explicitly by that word's onClaim callback.
+      return;
+    }
 
     const sprite = this.archSprites.get(arch.id);
     const glow = this.archGlows.get(arch.id);
@@ -2505,6 +2513,7 @@ export class PortalChamberScene extends Phaser.Scene {
 
     const arch = ARCHES.find((a) => a.sceneKey === sceneKey);
     if (!arch) return;
+    if (this.store.get().realms[arch.id]?.cleared) return;
     const pulse = this.add
       .graphics()
       .setPosition(arch.x, arch.baseY - arch.height / 2 + 34)

@@ -75,6 +75,14 @@ export function showRecoveryDialog(options: {
     return button;
   });
   panel.append(controls);
+  const links = Array.from(panel.querySelectorAll<HTMLAnchorElement>("a[href]"));
+  const linkAttributes = links.map(link => ({ link, tabIndex: link.getAttribute("tabindex"), disabled: link.getAttribute("aria-disabled") }));
+  panel.addEventListener("click", event => {
+    if (busy && links.some(link => link === event.target || link.contains(event.target as Node))) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
   overlay.append(panel);
   document.body.append(overlay);
   const isTop = () => {
@@ -87,9 +95,12 @@ export function showRecoveryDialog(options: {
     event.stopImmediatePropagation();
     if (event.key === "Tab") {
       event.preventDefault();
-      if (busy || !buttons.length) return;
-      const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-      buttons[(index + (event.shiftKey ? buttons.length - 1 : 1)) % buttons.length]?.focus();
+      if (busy) return;
+      const focusable = Array.from(panel.querySelectorAll<HTMLButtonElement | HTMLAnchorElement>("a[href], button"))
+        .filter(control => control.tabIndex >= 0 && control.getAttribute("aria-disabled") !== "true" && !(control as HTMLButtonElement).disabled);
+      const index = focusable.indexOf(document.activeElement as HTMLButtonElement | HTMLAnchorElement);
+      const next = index < 0 ? (event.shiftKey ? focusable.length - 1 : 0) : (index + (event.shiftKey ? focusable.length - 1 : 1)) % focusable.length;
+      focusable[next]?.focus();
       return;
     }
     if (event.repeat || busy) { event.preventDefault(); return; }
@@ -118,6 +129,13 @@ export function showRecoveryDialog(options: {
       busy = value;
       panel.setAttribute("aria-busy", String(value));
       buttons.forEach(button => { button.disabled = value; button.style.opacity = value ? "0.5" : "1"; });
+      linkAttributes.forEach(({ link, tabIndex, disabled }) => {
+        if (value) { link.setAttribute("aria-disabled", "true"); link.setAttribute("tabindex", "-1"); }
+        else {
+          if (disabled === null) link.removeAttribute("aria-disabled"); else link.setAttribute("aria-disabled", disabled);
+          if (tabIndex === null) link.removeAttribute("tabindex"); else link.setAttribute("tabindex", tabIndex);
+        }
+      });
       if (!value && isTop()) buttons[0]?.focus();
     },
   };

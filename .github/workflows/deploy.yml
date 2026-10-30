@@ -20,12 +20,24 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
 
       - run: npm ci
 
+      - run: npm test
+
       - run: npm run build
+
+      - name: Record deployed source
+        run: |
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from "node:fs";
+          writeFileSync("dist/build-info.json", JSON.stringify({
+            sourceCommit: process.env.GITHUB_SHA,
+            builtAtUTC: new Date().toISOString(),
+          }, null, 2) + "\n");
+          NODE
 
       - name: Publish static build to gh-pages
         env:

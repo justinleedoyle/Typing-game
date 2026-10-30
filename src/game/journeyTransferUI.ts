@@ -8,13 +8,30 @@ export interface NativeJourneyFiles {
   exportJourney(): Promise<boolean | null>;
 }
 
-/** A browser download is a request, not confirmation that a file reached disk. */
-export function downloadJourneyTransfer(state: SaveState): void {
+export interface JourneyTransferDownload {
+  link: HTMLAnchorElement;
+  dispose(): void;
+}
+
+/** Keep a real link available for a manual retry until its owner disposes it.
+ * A download request is not confirmation that a file reached disk. */
+export function downloadJourneyTransfer(state: SaveState): JourneyTransferDownload {
   const url = URL.createObjectURL(new Blob([encodeJourneyTransfer(state)], { type: "application/json" }));
   const link = document.createElement("a");
   link.href = url; link.download = journeyTransferFilename(state);
+  link.textContent = "Download journey file";
+  Object.assign(link.style, { display: "inline-block", color: "#e6c574", fontSize: "22px", lineHeight: "1.5", margin: "0 0 28px", textUnderlineOffset: "4px" });
+  let disposed = false;
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    link.removeAttribute("href");
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
   try { document.body.append(link); link.click(); }
-  finally { link.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000); }
+  catch (error) { dispose(); throw error; }
+  return { link, dispose };
 }
 
 function comparison(preview: SaveImportPreview): HTMLElement | undefined {
@@ -44,9 +61,11 @@ export function showJourneyTransfer(options: {
   download?: (state: SaveState) => void;
 }): { destroy(): void } {
   let dialog: RecoveryDialog | undefined;
+  let download: JourneyTransferDownload | undefined;
   let destroyed = false, busy = false, generation = 0;
   const show = options.showDialog ?? showRecoveryDialog;
-  const destroy = () => { destroyed = true; generation++; dialog?.destroy(); dialog = undefined; };
+  const clearDownload = () => { download?.dispose(); download = undefined; };
+  const destroy = () => { destroyed = true; generation++; clearDownload(); dialog?.destroy(); dialog = undefined; };
   const close = () => { if (busy || destroyed) return; destroy(); options.onClose(); };
   const render = (model: Parameters<typeof showRecoveryDialog>[0]) => { dialog?.destroy(); dialog = show(model); };
   const perform = async <T>(phase: "read" | "export" | "commit", work: () => Promise<T>, success: (result: T) => void) => {
@@ -69,12 +88,15 @@ export function showJourneyTransfer(options: {
     }
   };
   const exportFile = () => { void perform("export", async () => {
+    clearDownload();
     if (options.native) return options.native.exportJourney();
     if (!options.backend.snapshotForTransfer) throw new Error("Journey export is unavailable.");
     const state = await options.backend.snapshotForTransfer();
     if (destroyed) return false;
     if (!state) return null;
-    (options.download ?? downloadJourneyTransfer)(state); return true;
+    if (options.download) options.download(state);
+    else download = downloadJourneyTransfer(state);
+    return true;
   }, result => menu(result === null ? "There is no saved journey to export yet. Begin playing, then save and return to the title." : result === false ? "The file dialog was cancelled. Your journey has not changed." : options.native ? "The journey file was saved. Keep it somewhere safe." : "Your browser has been asked to download the journey file. Check your Downloads before opening it in the desktop game.")); };
   const review = (preview: SaveImportPreview) => {
     render({
@@ -102,6 +124,7 @@ export function showJourneyTransfer(options: {
     title: "Move a journey",
     message: status ?? (options.native ? "Keep a portable copy of this computer's journey, or bring a journey file here from the browser game." : "Save a portable copy of the journey on this device, then open that file in the desktop game."),
     detail: options.native ? "Importing is separate from Google sign-in and cloud saving. You will review the file before anything is replaced." : "In the desktop game, choose Move a journey, then Choose a journey file. This export does not move or delete your browser save.",
+    content: download?.link,
     actions: [
       { label: "Back to title · Esc", shortcut: "Escape", onSelect: close },
       { label: "Save a journey file · E", shortcut: "e", onSelect: exportFile },

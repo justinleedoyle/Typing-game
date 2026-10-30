@@ -238,7 +238,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private activePhrases: ScrollingPhrase[] = [];
   private templePhrasesRemaining = 0;
   /** Reused crossing hazards, visible only while moving scroll gates are active. */
-  private templeLanterns: Phaser.GameObjects.Graphics[] = [];
+  private templeLanterns: Phaser.GameObjects.Container[] = [];
   private templeBeamsActive = false;
   private warmLightCueShown = false;
   private graceSaveNoticed = false;
@@ -4615,39 +4615,70 @@ export class SkyIslandScene extends Phaser.Scene {
    *  Beam alpha is intentionally readable but soft — the player should see the
    *  zone, but the beams shouldn't compete with the phrase banners they obscure. */
   private drawTempleLanterns(): void {
+    const rig = this.add.container(0, 0).setDepth(15);
+    const cord = this.add.graphics();
+    // These points belong to the painted left and right timber posts in the
+    // fixed1920px scene. One sagging cord supports all three trial lanterns.
+    const left = { x: 465, y: 200 };
+    const right = { x: 1720, y: 150 };
+    const cordY = (x: number): number => {
+      const t = (x - left.x) / (right.x - left.x);
+      return (1 - t) ** 2 * left.y + 2 * (1 - t) * t * 235 + t ** 2 * right.y;
+    };
+    const strokeCord = (width: number, color: number, alpha: number) => {
+      cord.lineStyle(width, color, alpha);
+      cord.beginPath();
+      for (let i = 0; i <= 32; i++) {
+        const x = left.x + (right.x - left.x) * i / 32;
+        if (i === 0) cord.moveTo(x, cordY(x));
+        else cord.lineTo(x, cordY(x));
+      }
+      cord.strokePath();
+    };
+    strokeCord(3, 0x382d24, 0.8);
+    strokeCord(1.2, 0xb4956b, 0.55);
+    rig.add(cord);
+
     for (const x of LANTERN_BLUR_XS) {
-      const g = this.add.graphics().setDepth(15);
+      const g = this.add.graphics();
       const beamTop = 220;
       const beamBottom = 660;
-      const halfWidth = LANTERN_BLUR_RADIUS;
-      // Outer halo — soft amber wash across the full blur radius
-      g.fillStyle(0xf5c842, 0.12);
-      g.fillRect(x - halfWidth, beamTop, halfWidth * 2, beamBottom - beamTop);
-      // Inner brighter core — narrower column for the "you're in the zone" cue
-      g.fillStyle(0xfdedb0, 0.18);
-      g.fillRect(x - 36, beamTop, 72, beamBottom - beamTop);
-      // Lantern body at the top of the beam
-      g.fillStyle(0xd49020, 0.85);
-      g.fillEllipse(x, beamTop + 20, 40, 54);
-      g.fillStyle(0xfdedb0, 0.95);
-      g.fillEllipse(x, beamTop + 20, 18, 24);
-      // Hanging string
-      g.lineStyle(1.5, 0x8a7060, 0.85);
-      g.beginPath();
-      g.moveTo(x, beamTop - 30);
-      g.lineTo(x, beamTop);
-      g.strokePath();
-      // Gentle pulse — the beam breathes so it doesn't feel like dead UI
-      this.tweens.add({
+      // Nested low-opacity washes feather the same blur footprint rather than
+      // drawing a hard translucent panel over the painting. Works in Canvas too.
+      for (let i = 0; i < 8; i++) {
+        const halfWidth = LANTERN_BLUR_RADIUS * (1 - i / 8);
+        const insetY = i * 3;
+        g.fillStyle(0xf5d596, 0.022);
+        g.fillRoundedRect(x - halfWidth, beamTop + insetY,
+          halfWidth * 2, beamBottom - beamTop - insetY * 2, Math.min(14, halfWidth / 2));
+      }
+      g.fillStyle(0xffedc0, 0.06);
+      g.fillRoundedRect(x - 36, beamTop + 24, 72, beamBottom - beamTop - 48, 12);
+      rig.add(g);
+
+      const eyeY = beamTop - 8;
+      cord.lineStyle(2.6, 0x382d24, 0.82);
+      cord.lineBetween(x, cordY(x), x, eyeY);
+      cord.lineStyle(1, 0xb4956b, 0.6);
+      cord.lineBetween(x, cordY(x), x, eyeY);
+      const paper = this.add.image(x, eyeY, "sky-traversal-lantern");
+      const bounds = SKY_PATH_PAINTINGS.lantern;
+      paper.setOrigin((bounds.left + bounds.right) / 2 / paper.width, bounds.top / paper.height);
+      paper.setScale(66 / (bounds.bottom - bounds.top));
+      applySceneActorLighting(this, paper);
+      rig.add(paper);
+
+      // The light breathes; the painted cage and its support stay solid.
+      decorativeTween(this, this.tweens.add({
         targets: g,
         alpha: { from: 0.85, to: 1 },
         duration: 2200 + Math.random() * 600,
         yoyo: true,
         repeat: -1,
         ease: "Sine.easeInOut",
-      });
-      this.templeLanterns.push(g);
+      }));
     }
+    this.templeLanterns.push(rig);
   }
 
   private drawAmbientLanterns(): void {

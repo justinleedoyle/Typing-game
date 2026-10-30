@@ -1176,13 +1176,8 @@ export class OpeningScene extends Phaser.Scene {
       durationMs: isBoy ? 880 : 980,
     });
 
-    const doorway = this.add.graphics().setPosition(isBoy ? 10 : -4, -142);
-    doorway.fillStyle(isBoy ? 0xeedec0 : 0x8fa4bc, isBoy ? 0.07 : 0.1);
-    doorway.fillEllipse(0, 0, isBoy ? 128 : 154, isBoy ? 248 : 290);
-    doorway.lineStyle(2, isBoy ? 0xc9a14a : 0x8fa4bc, isBoy ? 0.12 : 0.16);
-    doorway.strokeEllipse(0, 0, isBoy ? 104 : 126, isBoy ? 220 : 252);
-    actor.add(doorway);
-
+    // The room's actual lamplight and doorway light own the illumination;
+    // a body-sized halo would make the sibling read as a separate cutout.
     actor.add(addLocalGroundShadow(this, isBoy ? 110 : 136, 22, { y: 7, alpha: 0.28 }));
     const img = this.add
       .image(0, 0, isBoy ? "sibling-sprite" : "magnus-sprite")
@@ -1190,9 +1185,7 @@ export class OpeningScene extends Phaser.Scene {
     // Magnus reads taller (older sibling) than Saga; both still sit below
     // doorway height so the painted portal stays legible past them.
     img.setScale((isBoy ? 260 : 300) / img.height);
-    // Tint multipliers soften the bright nightgown+pale skin against the
-    // dim study palette. Saga gets a warm cream cast (sits in lamplight);
-    // Magnus gets a cool blue-gray (reads as older + a beat more distant).
+    // Both siblings share the study's light, just like Runa and Wren.
     applySceneActorLighting(this, img);
     actor.add(img);
     this.siblingPortrait = img;
@@ -1210,10 +1203,6 @@ export class OpeningScene extends Phaser.Scene {
       actor.add(drawing);
       this.siblingKeepsake = drawing;
     } else {
-      const doorShadow = this.add.graphics().setPosition(-18, -130).setAlpha(0.68);
-      doorShadow.fillStyle(0x273241, 0.32);
-      doorShadow.fillRoundedRect(-42, -138, 84, 260, 34);
-      actor.addAt(doorShadow, 0);
       this.siblingKeepsake = null;
     }
 

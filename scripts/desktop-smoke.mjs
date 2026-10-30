@@ -31,7 +31,7 @@ export function validateSmokeReport(report, phase) {
   requireValue(checkpoint.scene === "WinterMountainScene" && checkpoint.step === (phase === "seed" || phase === "verify" ? "fork1" : "firefly"), `${phase} resumed the wrong checkpoint`);
   requireValue(checkpoint.data?.candles === 2 && checkpoint.data?.statsSoul === 62.5 && checkpoint.data?.statsCombo === 8, `${phase} changed the synthetic checkpoint resources`);
   if (phase === "seed") requireValue(report.keyboard?.uppercaseAndRelease === true && report.keyboard?.backspaceDispatched === true && report.keyboard?.sameFramePrefixBurst === true, "Seed did not verify the unpaced native prefix regression and safe release");
-  if (phase === "seed") requireValue(report.transfer?.syntheticPicker === true && report.transfer.explicitReview === true &&
+  if (phase === "seed") requireValue(report.transfer?.syntheticPicker === true && report.transfer.explicitReview === true && report.transfer.importControlVisible === true &&
     report.transfer.cancelPreserved === true && report.transfer.sourceUnchanged === true && report.transfer.exportedOriginal === true &&
     report.transfer.archivePreserved === true && report.transfer.runIdentity === true,
   "Seed did not verify explicit transfer review, cancellation, file I/O and preservation of the previous journey");

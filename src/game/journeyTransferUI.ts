@@ -84,7 +84,6 @@ export function showJourneyTransfer(options: {
       content: comparison(preview),
       actions: [
         { label: "Keep this computer unchanged · Esc", shortcut: "Escape", onSelect: () => menu("The import was cancelled. This computer's journey has not changed.") },
-        ...(preview.current ? [{ label: "Save current journey file · E", shortcut: "e", onSelect: exportFile }] : []),
         { label: "Import this journey · I", shortcut: "i", onSelect: () => { void perform("commit", async () => {
           if (!options.backend.commitImport) throw new Error("Journey import is unavailable.");
           return options.backend.commitImport(preview.token);

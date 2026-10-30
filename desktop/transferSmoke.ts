@@ -150,6 +150,14 @@ export async function runTransferSmoke(options: { window: BrowserWindow; backend
     return text.includes('Synthetic desktop original') && text.includes('Synthetic Windows review');
   })()`, false);
   requireValue(comparison, "Transfer review did not display both distinct journey summaries");
+  const importControlVisible = await window.webContents.executeJavaScript(`(() => {
+    const panel = Array.from(document.querySelectorAll('[data-recovery-dialog]')).at(-1)?.querySelector('[role="dialog"]');
+    const button = Array.from(panel?.querySelectorAll('button') ?? []).find(item => item.textContent?.includes('Import this journey'));
+    if (!panel || !button) return false;
+    const p = panel.getBoundingClientRect(), b = button.getBoundingClientRect();
+    return b.top >= p.top && b.bottom <= p.bottom && b.left >= p.left && b.right <= p.right;
+  })()`, false);
+  requireValue(importControlVisible, "Transfer confirmation needs scrolling in the review window");
   await capture("review");
   requireValue(stable(await backend.load()) === stable(expected.original), "Choosing a file replaced progress before explicit confirmation");
   await sendDesktopSmokeKey(window, "Escape");
@@ -169,7 +177,7 @@ export async function runTransferSmoke(options: { window: BrowserWindow; backend
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     if (await window.webContents.executeJavaScript("!document.querySelector('[data-recovery-dialog]') && document.querySelector('[data-active-scene]')?.getAttribute('data-active-scene') === 'TitleScene'", false)) {
-      return { syntheticPicker: true, explicitReview: true, cancelPreserved: true, ...files };
+      return { syntheticPicker: true, explicitReview: true, importControlVisible: true, cancelPreserved: true, ...files };
     }
     await wait(100);
   }

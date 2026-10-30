@@ -14,7 +14,7 @@ function report(phase: string, state?: SaveState): any {
   return { version: 1, phase, ok: true, profileIsolated: true, offline: true, unexpectedRequests: [],
     renderer: { canvas: true, fontsReady: true, activeScene: "WinterMountainScene" }, keyboard: { pauseAndResume: true,
       ...(phase === "seed" ? { uppercaseAndRelease: true, backspaceDispatched: true, sameFramePrefixBurst: true } : {}) }, durable: true, save,
-    ...(phase === "seed" ? { transfer: { syntheticPicker: true, explicitReview: true, cancelPreserved: true, sourceUnchanged: true, exportedOriginal: true, archivePreserved: true, runIdentity: true } } : {}),
+    ...(phase === "seed" ? { transfer: { syntheticPicker: true, explicitReview: true, importControlVisible: true, cancelPreserved: true, sourceUnchanged: true, exportedOriginal: true, archivePreserved: true, runIdentity: true } } : {}),
     ...(phase === "crash" ? { forcedTermination: true } : { normalExit: true, exitCode: 0 }) };
 }
 

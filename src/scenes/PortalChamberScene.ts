@@ -545,7 +545,7 @@ export class PortalChamberScene extends Phaser.Scene {
       {
         fontSize: 19,
         stationPulse: HUB_STATIONS.desk,
-        frame: "banner",
+        frame: "inscription",
         entryDelayMs: 110,
         idleAlpha: 0.84,
       },
@@ -558,7 +558,7 @@ export class PortalChamberScene extends Phaser.Scene {
       {
         fontSize: 19,
         stationPulse: HUB_STATIONS.shelf,
-        frame: "banner",
+        frame: "inscription",
         entryDelayMs: 150,
         idleAlpha: 0.84,
       },
@@ -596,7 +596,7 @@ export class PortalChamberScene extends Phaser.Scene {
       fontSize: opts.fontSize,
       priority: opts.priority,
       outline: true,
-      frame: "banner",
+      frame: "inscription",
       idleAlpha: revisit ? 0.82 : 1,
       onClaim: () => {
         if (revisit) this.setCompletedPortalFocus(arch, true);
@@ -981,11 +981,11 @@ export class PortalChamberScene extends Phaser.Scene {
 
     this.registerNavTarget("almanac", SHELF_STATION.x, SHELF_STATION.targetY,
       () => this.openAlmanac(), {
-        fontSize: 20, stationPulse: HUB_STATIONS.shelf, frame: "banner", entryDelayMs: 70,
+        fontSize: 20, stationPulse: HUB_STATIONS.shelf, frame: "inscription", entryDelayMs: 70,
       });
     this.registerNavTarget("portals", SHELF_STATION.x, SHELF_STATION.targetY + 58,
       () => this.enterZone("portals"), {
-        fontSize: 19, stationPulse: HUB_STATIONS.shelf, frame: "banner", entryDelayMs: 100,
+        fontSize: 19, stationPulse: HUB_STATIONS.shelf, frame: "inscription", entryDelayMs: 100,
       });
   }
 
@@ -998,7 +998,7 @@ export class PortalChamberScene extends Phaser.Scene {
       {
         fontSize: 20,
         stationPulse: HUB_STATIONS.portalFloor,
-        frame: "banner",
+        frame: "inscription",
         entryDelayMs,
         idleAlpha: 0.84,
       },
@@ -1135,7 +1135,7 @@ export class PortalChamberScene extends Phaser.Scene {
     opts: {
       fontSize?: number;
       priority?: number;
-      frame?: "banner";
+      frame?: "banner" | "inscription";
       stationPulse?: StationSpec;
       entryDelayMs?: number;
       idleAlpha?: number;
@@ -1504,7 +1504,7 @@ export class PortalChamberScene extends Phaser.Scene {
       fontSize: 20,
       priority: -1,
       outline: true,
-      frame: "banner",
+      frame: "inscription",
       idleAlpha: 0.76,
       onClaim: () => this.focusStation(HUB_STATIONS.almanac),
       onAdvance: () => this.pulseStationTyping(HUB_STATIONS.almanac),

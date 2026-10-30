@@ -3157,6 +3157,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     const c = this.createRootedWoodProp(1230, "wood-flute-hollow", 260, -74, 660);
     const flute = this.add.image(0, -74, "wood-bone-flute");
     flute.setScale(104 / flute.height);
+    applySceneActorLighting(this, flute);
     c.add(flute);
     this.boneFluteProp = flute;
     return c;
@@ -3203,6 +3204,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.clearHeldWoodRelic();
     const vial = this.add.image(this.wrenContainer.x + 52, this.wrenContainer.y - 96, "wood-ash-vial");
     vial.setScale(62 / vial.height).setDepth(43);
+    applySceneActorLighting(this, vial);
     this.heldWoodRelic = vial;
   }
 

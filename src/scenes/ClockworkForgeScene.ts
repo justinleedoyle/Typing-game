@@ -1503,6 +1503,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const prop = this.add.image(0, FOUNDRY_GROUND_Y - ownerY, this.forgeWorkstationTexture(key));
     prop.setOrigin(0.5, 1);
     prop.setScale(visibleWidth / prop.width);
+    applySceneActorLighting(this, prop);
     c.add(prop);
     if (!reducedMotion(this)) {
       c.setAlpha(0);

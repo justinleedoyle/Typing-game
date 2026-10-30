@@ -64,7 +64,7 @@ interface StudyTargetOptions {
   y: number;
   fontSize: number;
   response: StudyResponsePoint;
-  frame?: "banner" | null;
+  frame?: "banner" | "inscription" | null;
   onComplete: () => void;
 }
 
@@ -829,7 +829,7 @@ export class OpeningScene extends Phaser.Scene {
       y: opts.y,
       fontSize: opts.fontSize,
       outline: true,
-      frame: opts.frame === null ? undefined : opts.frame ?? "banner",
+      frame: opts.frame === null ? undefined : opts.frame ?? "inscription",
       onClaim: () => {
         this.playStudyClaimLine(opts.response, target);
         this.playStudyClaimPulse(opts.response);

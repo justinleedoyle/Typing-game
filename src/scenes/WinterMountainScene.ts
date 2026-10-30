@@ -1030,6 +1030,7 @@ export class WinterMountainScene extends Phaser.Scene {
       cue.add(addLocalGroundShadow(this, 252, 18, { y: 4, alpha: 0.24 }));
       const log = this.add.image(0, 0, "winter-fallen-pine").setOrigin(0.5, 0.83);
       log.setScale(320 / log.width);
+      applySceneActorLighting(this, log);
       cue.add(log);
     }
     if (completedBeats > 0) {
@@ -2913,6 +2914,7 @@ export class WinterMountainScene extends Phaser.Scene {
     image.setOrigin((footprint.x + footprint.width / 2) / image.width,
       (footprint.y + footprint.height) / image.height);
     image.setScale(visibleWidth / footprint.width);
+    applySceneActorLighting(this, image);
   }
 
   private showCairnCue(): Phaser.GameObjects.Container {

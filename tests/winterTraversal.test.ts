@@ -56,6 +56,7 @@ function fixture(reduced = false) {
     // Artwork failure lifecycle is covered by assetLoadRecovery.test; this fixture isolates staging.
     beginAssetLoad: noop, assetLoadBlocked: () => false,
     reducedMotion: () => reduced,
+    applySceneActorLighting: noop,
     addLocalGroundShadow: () => ({ shadow: true }),
     addIdleBreath: (_scene: unknown, body: any) => breaths.push(body),
     attachWordBodyAnchor: (_scene: unknown, owner: any, _position: any, options: any) => {

@@ -97,7 +97,7 @@ function fixture(satchel: string[] = [], cleared = 0, motionReduced = false) {
   function later(ms: number, next: () => void) { scheduled.push({ at: now + ms, next }); }
   class Target implements WordTarget {
     cursor = 0; destroyed = false; priority: number; width: number;
-    constructor(readonly opts: any) { this.priority = opts.priority ?? 0; this.width = (advances[opts.word] ?? opts.word.length * 0.55) * opts.fontSize + (opts.frame === "banner" ? bannerPad : 0); words.push(this); }
+    constructor(readonly opts: any) { this.priority = opts.priority ?? 0; this.width = (advances[opts.word] ?? opts.word.length * 0.55) * opts.fontSize + (opts.frame ? bannerPad : 0); words.push(this); }
     remaining() { return this.opts.word.toLowerCase().slice(this.cursor); }
     isComplete() { return this.cursor === this.opts.word.length; }
     advance() { this.cursor++; this.opts.onAdvance?.(this.cursor); }
@@ -278,10 +278,10 @@ await suite("Hub integration: above-arch names and carved realm glyphs stay on t
     const labels = f.words.filter(word => f.geometry.ARCHES.some((arch: any) => arch.label === word.opts.word)).sort((a,b) => a.opts.x-b.opts.x);
     for (const word of labels) {
       const arch = f.geometry.ARCHES.find((arch: any) => arch.label === word.opts.word);
-      assertEqual(word.opts.frame, "banner", "realm names have complete readable plates above their doors");
+      assert(word.opts.outline, "realm names retain glyph contrast against the painted bookcase");
       assertEqual(word.opts.x, arch.x, "every nameplate shares its own painted door center");
-      // A deliberately generous 1.5em text line plus the real banner padding
-      // contains the full plate; reserve the existing four-pixel idle breath too.
+      // A deliberately generous 1.5em line plus full banner padding also
+      // contains the quieter inscription rule and its small shadow.
       const halfHeight = (word.opts.fontSize * 1.5 + bannerPadY) / 2;
       assert(word.opts.y - halfHeight >= 250 && word.opts.y + halfHeight < 296 / backdrop.height * 1080 - 8, "the full plate stays below the caption lane and above the painted keystone");
       assert(actorTop - 4 > word.opts.y + halfHeight, "Wren's full head bounds stay below every nameplate, including the centered Forge revisit");

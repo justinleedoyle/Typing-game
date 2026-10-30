@@ -189,9 +189,9 @@ function workshopFixture(reduced = false) {
   for (let y = 2; y <= 9; y++) for (let x = 3; x <= 7; x++) pixels[(y * 10 + x) * 4 + 3] = 255;
   pixels[(11 * 10) * 4 + 3] = 8; // negligible export haze is not the metal base
   const sourceImage = { naturalWidth: 10, naturalHeight: 12 };
-  const Workshop = new Function("document", "reducedMotion", "playBodyImpact", "PALETTE_HEX", workstationCode + "; return Workshop;")(
+  const Workshop = new Function("document", "reducedMotion", "playBodyImpact", "PALETTE_HEX", "applySceneActorLighting", workstationCode + "; return Workshop;")(
     { createElement() { scans++; return { getContext() { return { drawImage() {}, getImageData() { return { data: pixels }; } }; } }; } },
-    () => reduced, (_scene: unknown, body: any, options: any) => impacts.push({ body, options }), { ember: 0xcd7445 },
+    () => reduced, (_scene: unknown, body: any, options: any) => impacts.push({ body, options }), { ember: 0xcd7445 }, () => {},
   );
   const scene = new Workshop();
   Object.assign(scene, {

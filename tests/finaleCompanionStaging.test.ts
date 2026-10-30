@@ -12,7 +12,8 @@ function compile(code: string, globals: Record<string, unknown>, result: string)
 }
 const battle = source("../src/scenes/GreatBattleScene.ts");
 const owner = battle.statements.find(ts.isClassDeclaration)!;
-const methods = ["showFinaleCompanionAction", "applyGlassFishHitWindow", "registerActiveTarget", "drawQuietLord"]
+const methods = ["showFinaleCompanionAction", "applyGlassFishHitWindow", "registerActiveTarget", "drawQuietLord",
+  "quietLordBodyTarget", "quietLordClaimOrigin", "updateStrikeLinePosition", "playBellsTongueStrikeCue"]
   .map(name => owner.members.find(member => member.name?.getText(battle) === name)!.getText(battle)).join("\n");
 const constants = battle.statements.filter(ts.isVariableStatement).flatMap(statement =>
   statement.declarationList.declarations.filter(declaration => declaration.name.getText(battle).startsWith("QUIET_LORD_"))
@@ -26,15 +27,18 @@ const Stage = compile(stage.getText(living).replace(/^export\s+/, ""), {
 }, "stageCompanionCameo");
 
 function node(x = 0, y = 0): any {
-  return { x, y, alpha: 1, scaleX: 1, scaleY: 1, originX: 0, originY: 0, scene: true, children: [] as any[], ellipses: [] as number[][],
+  return { x, y, alpha: 1, scaleX: 1, scaleY: 1, originX: 0, originY: 0, scene: true, children: [] as any[], ellipses: [] as number[][], lines: [] as number[][], pen: [0, 0],
     setDepth() { return this; }, setAlpha(alpha: number) { this.alpha = alpha; return this; },
     setPosition(px: number, py: number) { this.x = px; this.y = py; return this; },
     setOrigin(px: number, py = px) { this.originX = px; this.originY = py; return this; },
     setScale(scale: number) { this.scaleX = this.scaleY = scale; return this; },
     setFlipX() { return this; }, setTint() { return this; },
     fillStyle() { return this; }, lineStyle() { return this; }, strokeEllipse() { return this; },
+    clear() { this.lines = []; return this; }, beginPath() { return this; }, strokePath() { return this; },
+    moveTo(px: number, py: number) { this.pen = [px, py]; return this; },
+    lineTo(px: number, py: number) { this.lines.push([...this.pen, px, py]); this.pen = [px, py]; return this; },
     fillEllipse(...args: number[]) { this.ellipses.push(args); return this; },
-    add(child: any) { this.children.push(...(Array.isArray(child) ? child : [child])); return this; },
+    add(child: any) { for (const item of Array.isArray(child) ? child : [child]) { item.parentContainer = this; this.children.push(item); } return this; },
   };
 }
 
@@ -47,6 +51,7 @@ function fixture(flashesReduced = false) {
   const targets: any[] = [];
   const dismissals: any[] = [];
   const breaths: any[] = [];
+  const impacts: any[] = [];
   const Finale = compile(`${constants}\nclass Finale { ${methods} }`, {
     stageCompanionCameo(scene: any, options: any) { specs.push(options); return Stage(scene, options); },
     reducedFlashes: () => flashesReduced, playChime: noop, playActorAttention: noop,
@@ -54,6 +59,7 @@ function fixture(flashesReduced = false) {
       return scene.add.image(0, 0, "quiet-lord").setOrigin(0.5, 1).setScale(480 / 930);
     },
     addLocalGroundShadow: () => ({}), addContainerWake: noop,
+    playBodyImpact(_scene: any, body: any, options: any) { impacts.push({ body, options }); },
     addIdleBreath(_scene: any, body: any, options: any) { breaths.push({ body, options }); }, SERIF: "serif",
   }, "Finale");
   const s = new Finale();
@@ -64,7 +70,7 @@ function fixture(flashesReduced = false) {
       container: (x: number, y: number) => node(x, y),
       graphics() { const g = node(); graphics.push(g); return g; },
       image(x: number, y: number, key: string) { const image = { ...node(x, y), key, height: key === "quiet-lord" ? 930 : 1024 }; images.push(image); return image; },
-      text: (x: number, y: number, text: string) => ({ ...node(x, y), text }),
+      text: (x: number, y: number, text: string) => ({ ...node(x, y), text, width: text.length * 24 }),
     },
     showRelicNotice: noop, band: { setObjective: noop }, playGlassFishCorridorCue: noop,
     time: { delayedCall(ms: number, next: () => void) { timers.push({ ms, next }); } },
@@ -77,9 +83,9 @@ function fixture(flashesReduced = false) {
     clearActiveTargets() { s.activeTargets = []; },
     dismissFinaleCompanionAction(...args: any[]) { dismissals.push(args); },
     cameras: { main: { flash() { flashes += 1; } } },
-    drawQuietLordGroundSeal: () => ({}), updateStrikeLinePosition: noop,
+    drawQuietLordGroundSeal: () => ({}),
   });
-  return { s, specs, images, graphics, timers, tweens, targets, dismissals, breaths, flashes: () => flashes };
+  return { s, specs, images, graphics, timers, tweens, targets, dismissals, breaths, impacts, flashes: () => flashes };
 }
 
 await suite("Finale fish opening: actual cameo and word envelopes stay separate without changing its native action or continuation", () => {
@@ -112,6 +118,40 @@ await suite("Finale fish opening: actual cameo and word envelopes stay separate 
   }
 });
 
+await suite("Finale grounding: both kindness sizes keep the painted feet, word stroke and floor at one courtyard anchor", () => {
+  const f = fixture();
+  f.s.drawQuietLord(false, true);
+  const lord = f.s.quietLordContainer;
+  const sprite = f.images.find(image => image.key === "quiet-lord")!;
+  const text = f.s.againText;
+  const stroke = f.s.strikeLineGraphic;
+  assert(stroke.parentContainer === text.parentContainer && stroke.parentContainer === lord,
+    "name and strike share the actual transform rather than independently guessing world coordinates");
+  assertEqual(stroke.lines, [[text.x - text.width / 2, text.y, text.x + text.width / 2, text.y]],
+    "the stroke crosses the rendered word in their shared local coordinates");
+  for (const scale of [1, 0.82, 0.6]) {
+    lord.setScale(scale);
+    const feet = { x: lord.x + sprite.x * scale, y: lord.y + sprite.y * scale };
+    assertEqual(feet, { x: 960, y: 660 }, "initial, kindness and later shrink retain the same world floor contact");
+    assertEqual(f.s.quietLordBodyTarget(), feet, "arrival and facet feedback use that visible floor contact");
+  }
+});
+
+await suite("Finale grounding: claim and impact endpoints follow the scaled painted body", () => {
+  const f = fixture();
+  f.s.drawQuietLord(false, true);
+  const lord = f.s.quietLordContainer;
+  for (const scale of [1, 0.82, 0.6]) {
+    lord.setScale(scale);
+    assertEqual(f.s.quietLordClaimOrigin(40, 608), { x: 960 + 40 * scale, y: 660 - 52 * scale },
+      "the claim ends52 painted pixels above the visible feet, including both kindness shrink sizes");
+    f.s.playBellsTongueStrikeCue();
+    const impact = f.impacts.at(-1)!;
+    assertEqual(impact.body.y + impact.options.offsetY, 660 - 52 * scale,
+      "the actual relic impact shares the scaled claim endpoint instead of appearing below the sprite");
+  }
+});
+
 await suite("Finale Lord eyes: both actual overlay lights stay inside the accepted asymmetric painted hood", () => {
   for (const force of [false, true]) for (const kind of [false, true]) {
     const f = fixture();
@@ -122,12 +162,12 @@ await suite("Finale Lord eyes: both actual overlay lights stay inside the accept
     // left of the image midpoint. Bounds include the full ellipse, not just its center.
     for (const [x, y, width, height] of eyes.ellipses) {
       assert(x - width / 2 >= -66 && x + width / 2 <= -14, "the entire eye stays within the measured painted face opening");
-      assert(y - height / 2 >= 260 && y + height / 2 <= 310, "the entire eye stays vertically inside the hood");
+      assert(y - height / 2 >= 260 - 660 && y + height / 2 <= 310 - 660, "the entire eye stays vertically inside the hood, relative to the feet");
     }
     const sprite = f.images.find(image => image.key === "quiet-lord")!;
     const figure = f.breaths[0]!.body;
     assert(figure.children.includes(sprite) && figure.children.includes(eyes), "eyes share the painted figure's breath and cannot drift separately");
-    assertEqual([sprite.originX, sprite.originY, sprite.y], [0.5, 1, 660], "the accepted feet anchor and painted body remain unchanged");
+    assertEqual([sprite.originX, sprite.originY, sprite.y, f.s.quietLordContainer.y], [0.5, 1, 0, 660], "the painted feet remain at the accepted courtyard anchor while the parent scales around them");
     assertEqual(f.s.quietLordContainer.scaleX, kind ? 0.82 : 1, "the original kindness shrink still moves figure and eyes together");
   }
 });

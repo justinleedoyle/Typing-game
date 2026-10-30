@@ -43,12 +43,15 @@ const IDENTITY_CARD_W = 230;
 const IDENTITY_CARD_H = 124;
 const IDENTITY_CARD_OFFSET_X = 150;
 const NAME_TARGET = { x: 910, y: 640 };
-const TYPEWRITER_TARGET = { x: 790, y: 700 };
+// Keep the name above the machine's visible right edge, clear of Runa.
+const TYPEWRITER_TARGET = { x: 650, y: 525 };
+// The painted keyboard is lower than its label; light and feedback belong here.
+const TYPEWRITER_SOURCE = { x: 600, y: 638 };
 const PORTAL_TARGET = { x: 1510, y: 610 };
 const STUDY_RESPONSE = {
   identity: { ...IDENTITY_CHOICE_TARGET, color: PALETTE_HEX.cream },
   name: { ...NAME_TARGET, color: PALETTE_HEX.cream },
-  typewriter: { ...TYPEWRITER_TARGET, color: PALETTE_HEX.brass },
+  typewriter: { ...TYPEWRITER_SOURCE, color: PALETTE_HEX.brass },
   portal: { ...PORTAL_TARGET, color: PALETTE_HEX.frost },
 } as const;
 type StudyResponsePoint = (typeof STUDY_RESPONSE)[keyof typeof STUDY_RESPONSE];
@@ -167,8 +170,8 @@ export class OpeningScene extends Phaser.Scene {
       maxDurationMs: 15000,
     });
     addLivingLight(this, {
-      x: 790,
-      y: 740,
+      x: TYPEWRITER_SOURCE.x,
+      y: TYPEWRITER_SOURCE.y,
       width: 250,
       height: 160,
       color: 0xf0ad58,
@@ -263,7 +266,7 @@ export class OpeningScene extends Phaser.Scene {
   }
 
   private startStudySourceWakes(): void {
-    const typewriter = this.add.container(TYPEWRITER_TARGET.x, TYPEWRITER_TARGET.y + 40);
+    const typewriter = this.add.container(TYPEWRITER_SOURCE.x, TYPEWRITER_SOURCE.y);
     addContainerWake(this, typewriter, {
       kind: "ember",
       intervalMs: 520,
@@ -973,6 +976,7 @@ export class OpeningScene extends Phaser.Scene {
         color: point.color,
         alpha: 0.13,
         depth: -2,
+        sourceOffsetY: point === STUDY_RESPONSE.typewriter ? 0 : -36,
         targetOffsetY: 24,
       },
     );

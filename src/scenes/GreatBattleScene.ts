@@ -1234,6 +1234,9 @@ export class GreatBattleScene extends Phaser.Scene {
     y = 500,
   ): { x: number; y: number } {
     const cx = this.quietLordContainer?.x ?? this.scale.width / 2;
+    // Keep the original word/body clearance as the figure now shrinks from
+    // its grounded feet rather than from the top of the screen.
+    y += QUIET_LORD_FOOT_Y * (1 - (this.quietLordContainer?.scaleY ?? 1));
 
     if (total >= 3) {
       const lane = Math.max(0, Math.min(2, index));

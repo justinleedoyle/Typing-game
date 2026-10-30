@@ -13,7 +13,7 @@ function compile(code: string, globals: Record<string, unknown>, result: string)
 const battle = source("../src/scenes/GreatBattleScene.ts");
 const owner = battle.statements.find(ts.isClassDeclaration)!;
 const methods = ["showFinaleCompanionAction", "applyGlassFishHitWindow", "registerActiveTarget", "drawQuietLord",
-  "quietLordBodyTarget", "quietLordClaimOrigin", "updateStrikeLinePosition", "playBellsTongueStrikeCue"]
+  "quietLordBodyTarget", "quietLordClaimOrigin", "updateStrikeLinePosition", "playBellsTongueStrikeCue", "lordDuelWordPosition"]
   .map(name => owner.members.find(member => member.name?.getText(battle) === name)!.getText(battle)).join("\n");
 const constants = battle.statements.filter(ts.isVariableStatement).flatMap(statement =>
   statement.declarationList.declarations.filter(declaration => declaration.name.getText(battle).startsWith("QUIET_LORD_"))
@@ -149,6 +149,24 @@ await suite("Finale grounding: claim and impact endpoints follow the scaled pain
     const impact = f.impacts.at(-1)!;
     assertEqual(impact.body.y + impact.options.offsetY, 660 - 52 * scale,
       "the actual relic impact shares the scaled claim endpoint instead of appearing below the sprite");
+  }
+});
+
+await suite("Finale grounding: live duel words stay clear of the name and above the combat console at both shrink sizes", () => {
+  const f = fixture();
+  f.s.drawQuietLord(false, true);
+  const lord = f.s.quietLordContainer;
+  for (const scale of [1, 0.82, 0.6]) {
+    lord.setScale(scale);
+    const nameY = lord.y + f.s.againText.y * scale;
+    const center = f.s.lordDuelWordPosition(1, 3, 500);
+    assert(center.y - nameY > 70, "the middle attack word cannot sit on top of the Lord's revealed name");
+    for (let i = 0; i < 3; i++) {
+      const word = f.s.lordDuelWordPosition(i, 3, 500);
+      assert(word.y + 50 < 880, "all three attack lanes retain clearance above the combat console");
+    }
+    const climax = f.s.lordDuelWordPosition(0, 1, 520);
+    assert(climax.y + 50 < 880, "the larger capital-answer word fits even after the final kindness shrink");
   }
 });
 

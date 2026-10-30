@@ -286,6 +286,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.chapterMenu = installChapterMenu(this, {
       store: this.store,
       hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),
+      escapeHint: () => this.activeZone === "portals" ? "Esc · pause" : "Esc · portals",
       onLeave: () => this.scene.start("TitleScene"),
       leaveLabel: "Save & return to title",
       leaveHint: "Your journey is saved. Continue from the title to resume your latest saved place.",

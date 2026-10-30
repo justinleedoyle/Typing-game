@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { EventEmitter } from "node:events";
 import ts from "typescript";
 import { navigationAction } from "../src/game/ui/navigationPolicy";
 import { decideBeatGate } from "../src/game/beatGate";
@@ -32,7 +33,7 @@ const install = pauseSource.statements.find(node => ts.isFunctionDeclaration(nod
 const installMenu = compile(install.getText(pauseSource).replace(/^export /, ""), "installChapterMenu", {
   installPresentation() {}, navigationAction, localSaveNotice: () => null,
   KEY: "ChapterPauseMenu", ChapterPauseMenu: class {}, SERIF: "serif", UI_CSS: {},
-  Phaser: { Core: { Events: { BLUR: "blur" } } },
+  Phaser: { Core: { Events: { BLUR: "blur" } }, Scenes: { Events: { POST_UPDATE: "postupdate" } } },
 });
 const bellSource = source("../src/scenes/SunkenBellScene.ts");
 const bellClass = bellSource.statements.find(ts.isClassDeclaration)!;
@@ -51,12 +52,14 @@ const keyboardUpdate = compile(`const update = ${update.initializer.getText(keyb
   Events: { KEY_DOWN: "keydown-", ANY_KEY_DOWN: "keydown", KEY_UP: "keyup-", ANY_KEY_UP: "keyup" },
 });
 
-function text() {
-  return { setOrigin() { return this; }, setDepth() { return this; }, setVisible() { return this; },
-    setText() { return this; }, destroy() {} };
+function text(value = "") {
+  return { text: value, updates: 0, setOrigin() { return this; }, setDepth() { return this; }, setVisible() { return this; },
+    setText(value: string) { this.text = value; this.updates++; return this; }, destroy() {} };
 }
-function fixture() {
-  const state = { ownerActive: false, pauseActive: true, launches: 0, ownerDispatches: 0, flushes: 0, claim: false };
+function fixture(escapeHint?: () => string) {
+  const state = { ownerActive: false, pauseActive: true, launches: 0, ownerDispatches: 0, flushes: 0, claim: false, claimReads: 0 };
+  const sceneEvents = new EventEmitter();
+  const texts: ReturnType<typeof text>[] = [];
   const typed: string[] = [];
   const store = { flush: () => { state.flushes += 1; return Promise.resolve(); }, getLastError: () => null };
   const owner = new Bell();
@@ -66,12 +69,13 @@ function fixture() {
       get: () => ({}), isActive: (key?: string) => key === "ChapterPauseMenu" ? state.pauseActive : state.ownerActive,
       pause: () => { state.ownerActive = false; }, resume: () => { state.ownerActive = true; },
       launch: () => { state.pauseActive = true; state.launches += 1; pause.openedAt = pause.time.now; }, bringToTop() {},
+      stop: () => { state.pauseActive = false; },
     },
-    game: { events: { on() {}, off() {} } }, events: { once() {} },
-    add: { text }, time: { addEvent: () => ({ remove() {} }) },
+    game: { events: { on() {}, off() {} } }, events: sceneEvents,
+    add: { text: (_x: number, _y: number, value: string) => { const result = text(value); texts.push(result); return result; } }, time: { addEvent: () => ({ remove() {} }) },
     reading: { handleKey: () => false }, typingInput: { handleChar: (key: string) => typed.push(key) }, beatPhase: "free",
   });
-  owner.chapterMenu = installMenu(owner, { store, hasClaim: () => state.claim, onLeave() {} });
+  owner.chapterMenu = installMenu(owner, { store, escapeHint, hasClaim: () => { state.claimReads++; return state.claim; }, onLeave() {} });
   pause = new Pause();
   Object.assign(pause, {
     config: { store, owner }, time: { now: 1000 }, openedAt: 0, busy: false, canResolve: false, selected: 0,
@@ -99,8 +103,49 @@ function fixture() {
     plugins.forEach(plugin => plugin.update());
     return event;
   };
-  return { state, typed, pause, dispatch };
+  return { state, typed, pause, dispatch, sceneEvents, texts, menu: owner.chapterMenu };
 }
+
+await suite("pause hint: follows the actual next Escape action and releases its scene listener", () => {
+  const f = fixture();
+  const hint = f.texts[0]!;
+  assertEqual(f.state.claimReads, 0, "installation does not read an uninitialized typing controller");
+  assertEqual(hint.text, "Esc · pause", "idle hint matches the normal pause action");
+  f.sceneEvents.emit("postupdate");
+  assertEqual(hint.updates, 0, "unchanged frames do not rerender the hint");
+  f.state.claim = true;
+  f.sceneEvents.emit("postupdate");
+  assertEqual(hint.text, "Esc · release word", "active typing explains the cancellation action");
+  f.sceneEvents.emit("postupdate");
+  assertEqual(hint.updates, 1, "a stable claimed word does not rerender each frame");
+  f.state.claim = false;
+  f.sceneEvents.emit("postupdate");
+  assertEqual(hint.text, "Esc · pause", "release restores the normal pause hint");
+  f.sceneEvents.emit("shutdown");
+  assertEqual(f.sceneEvents.listenerCount("postupdate"), 0, "scene shutdown removes the hint listener");
+  f.menu.destroy();
+  f.state.claim = true;
+  f.sceneEvents.emit("postupdate");
+  assertEqual(hint.updates, 2, "destroyed hints cannot receive stale updates");
+});
+
+await suite("pause hint: room navigation stays truthful and typing cancellation takes priority", () => {
+  let zone = "shelf";
+  const f = fixture(() => zone === "portals" ? "Esc · pause" : "Esc · portals");
+  const hint = f.texts[0]!;
+  f.sceneEvents.emit("postupdate");
+  assertEqual(hint.text, "Esc · portals", "a room station names its actual back destination");
+  f.state.claim = true;
+  f.sceneEvents.emit("postupdate");
+  assertEqual(hint.text, "Esc · release word", "a partial command releases before leaving its station");
+  f.state.claim = false;
+  f.sceneEvents.emit("postupdate");
+  assertEqual(hint.text, "Esc · portals", "cancelled typing restores the station's back hint");
+  zone = "portals";
+  f.sceneEvents.emit("postupdate");
+  assertEqual(hint.text, "Esc · pause", "the portal area retains normal pause guidance");
+  f.menu.destroy();
+});
 
 await suite("pause input: Escape, Enter and Space resume once in either Phaser scene dispatch order", () => {
   for (const order of ["pause-first", "owner-first"] as const) for (const key of ["Escape", "Enter", " "]) {

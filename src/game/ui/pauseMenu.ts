@@ -11,6 +11,8 @@ import { navigationAction, cyclePreference } from "./navigationPolicy";
 interface ChapterMenuOptions {
   store: SaveStore;
   hasClaim: () => boolean;
+  /** Idle Escape hint when the owner routes back instead of opening pause. */
+  escapeHint?: () => string;
   onLeave: () => void;
   leaveLabel?: string;
   leaveHint?: string;
@@ -181,6 +183,13 @@ export function installChapterMenu(scene: Phaser.Scene, options: ChapterMenuOpti
     fontFamily: SERIF, fontSize: "21px", color: UI_CSS.cream,
     backgroundColor: "#111724", padding: { x: 12, y: 8 },
   }).setOrigin(1, 0).setDepth(1950);
+  // Match the next Escape action: a claimed word is released before pausing.
+  // Read after scene creation, when its typing controller is installed.
+  const updateHint = () => {
+    const label = options.hasClaim() ? "Esc · release word" : options.escapeHint?.() ?? "Esc · pause";
+    if (hint.text !== label) hint.setText(label);
+  };
+  scene.events.on(Phaser.Scenes.Events.POST_UPDATE, updateHint);
   const status = scene.add.text(1880, 80, "", {
     fontFamily: SERIF, fontSize: "19px", color: UI_CSS.brass,
     backgroundColor: "#111724", padding: { x: 10, y: 5 },
@@ -199,6 +208,7 @@ export function installChapterMenu(scene: Phaser.Scene, options: ChapterMenuOpti
     if (destroyed) return;
     destroyed = true;
     scene.game.events.off(Phaser.Core.Events.BLUR, onBlur);
+    scene.events.off(Phaser.Scenes.Events.POST_UPDATE, updateHint);
     hint.destroy();
     status.destroy();
     statusTimer.remove();

@@ -14,6 +14,7 @@ function report(phase: string, state?: SaveState): any {
   return { version: 1, phase, ok: true, profileIsolated: true, offline: true, unexpectedRequests: [],
     renderer: { canvas: true, fontsReady: true, activeScene: "WinterMountainScene" }, keyboard: { pauseAndResume: true,
       ...(phase === "seed" ? { uppercaseAndRelease: true, backspaceDispatched: true, sameFramePrefixBurst: true } : {}) }, durable: true, save,
+    ...(phase === "seed" ? { transfer: { syntheticPicker: true, explicitReview: true, cancelPreserved: true, sourceUnchanged: true, exportedOriginal: true, archivePreserved: true, runIdentity: true } } : {}),
     ...(phase === "crash" ? { forcedTermination: true } : { normalExit: true, exitCode: 0 }) };
 }
 
@@ -131,6 +132,8 @@ await suite("Desktop packaged evidence: failures and lost restart progress canno
   assert(rejects(() => validateSmokeReport(noUppercase, "seed")), "a pause-only seed cannot claim uppercase/release evidence");
   const pacedOnly = structuredClone(seed); delete pacedOnly.keyboard.sameFramePrefixBurst;
   assert(rejects(() => validateSmokeReport(pacedOnly, "seed")), "paced typing alone cannot claim the actual same-frame regression was exercised");
+  const noTransfer = structuredClone(seed); delete noTransfer.transfer;
+  assert(rejects(() => validateSmokeReport(noTransfer, "seed")), "startup-only evidence cannot claim the actual reviewed transfer and preserved originals");
   const lostHit = structuredClone(reports); lostHit.recover.save.keyStats.s.hits = 0;
   assert(rejects(() => validateSmokeSequence(lostHit)), "crash recovery must retain the actual normalized uppercase hit");
   const repeatedTyping = structuredClone(reports); repeatedTyping.verify.save.keyStats.a.hits = 2;

@@ -6,7 +6,8 @@ import { SceneRunGuard } from "../game/sceneRunGuard";
 import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
 import { downloadSaveRecovery, saveRecoveryPresentation } from "../game/saveRecovery";
 import { showRecoveryDialog, type RecoveryDialog } from "../game/ui/recoveryDialog";
-import { defaultSaveBackend } from "../game/desktopBackend";
+import { defaultSaveBackend, DesktopSaveBackend } from "../game/desktopBackend";
+import { showJourneyTransfer } from "../game/journeyTransferUI";
 import { titleCheckpoint } from "../game/titleResume";
 import { saveChoiceFocus, saveChoicePresentation, saveJourneySummary } from "../game/saveChoice";
 import { SERIF } from "../game/palette";
@@ -54,6 +55,8 @@ export class TitleScene extends Phaser.Scene {
   private resolvingSave = false;
   private recoveryDialog?: RecoveryDialog;
   private recoveringSave = false;
+  private transfer?: { destroy(): void };
+  private transferring = false;
   private readonly run = new SceneRunGuard();
 
   constructor() {
@@ -65,6 +68,7 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private resetTitleRun(): void {
+    this.transfer?.destroy(); this.transfer = undefined; this.transferring = false;
     this.recoveryDialog?.destroy();
     this.recoveryDialog = undefined;
     this.recoveringSave = false;
@@ -161,7 +165,7 @@ export class TitleScene extends Phaser.Scene {
     });
 
     this.prompt = this.add
-      .text(TITLE_PROMPT.x, TITLE_PROMPT.y, "press any key", {
+      .text(TITLE_PROMPT.x, TITLE_PROMPT.y, "Enter · begin or continue", {
         fontFamily: SERIF,
         fontSize: "22px",
         color: UI_CSS.ink,
@@ -183,6 +187,10 @@ export class TitleScene extends Phaser.Scene {
     // wait on disk I/O. registry stores the backend so tests / future
     // SupabaseBackend swap can override it from outside.
     this.loadStore();
+    const dev = parseDevTarget(typeof location !== "undefined" ? location.search : "");
+    if (!dev.unlock) this.add.text(TITLE_PROMPT.x, TITLE_PROMPT.y + 78, "Move a journey · T", {
+      fontFamily: SERIF, fontSize: "21px", color: UI_CSS.brass,
+    }).setOrigin(0.5).setDepth(6).setInteractive({ useHandCursor: true }).on("pointerdown", () => { void this.openTransfer(); });
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -190,6 +198,7 @@ export class TitleScene extends Phaser.Scene {
       this.recoveryDialog?.destroy();
       this.recoveryDialog = undefined;
       this.recoveringSave = false;
+      this.transfer?.destroy(); this.transfer = undefined; this.transferring = false;
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.store = undefined;
       this.storePromise = undefined;
@@ -475,9 +484,13 @@ export class TitleScene extends Phaser.Scene {
 
   private onKeyDown(event: KeyboardEvent): void {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (this.transferring) return;
     if (this.saveChoicePanel) {
       this.handleSaveChoiceKey(event);
       return;
+    }
+    if (event.key.toLowerCase() === "t" && !event.repeat && !parseDevTarget(typeof location !== "undefined" ? location.search : "").unlock) {
+      void this.openTransfer(); return;
     }
     if (event.key.length !== 1 && event.key !== "Enter" && event.key !== " ") {
       return;
@@ -493,6 +506,30 @@ export class TitleScene extends Phaser.Scene {
       this.playTitleStartPulse();
     }
     void this.beginTransition();
+  }
+
+  private async openTransfer(): Promise<void> {
+    if (this.transferring || this.run.has("transition") || this.recoveringSave || this.saveChoicePanel) return;
+    this.transferring = true;
+    const token = this.run.token();
+    this.recoveryDialog = showRecoveryDialog({ title: "Opening journey transfer", message: "Reading the saved journey before showing transfer options…", actions: [] });
+    this.recoveryDialog.setBusy(true);
+    try {
+      this.store = await (this.storePromise ?? this.loadStore());
+      if (!this.run.isCurrent(token)) return;
+      this.recoveryDialog.destroy(); this.recoveryDialog = undefined;
+      if (!this.backend) { this.transferring = false; return; }
+      this.transfer = showJourneyTransfer({ backend: this.backend,
+        native: this.backend instanceof DesktopSaveBackend ? this.backend : undefined,
+        onClose: () => { if (this.run.isCurrent(token)) this.scene.restart(); },
+        onImported: () => { if (this.run.isCurrent(token)) this.scene.restart(); },
+      });
+    } catch (error) {
+      if (!this.run.isCurrent(token)) return;
+      this.recoveryDialog?.destroy(); this.recoveryDialog = undefined;
+      this.transferring = false; this.storePromise = undefined;
+      await this.presentSaveLoadFailure(error, token);
+    }
   }
 
   private async beginTransition(): Promise<void> {

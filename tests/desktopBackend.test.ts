@@ -86,3 +86,24 @@ await suite("Desktop close: failed saving stays frozen with retry, and only Keep
   while (replies.length < 2) await Promise.resolve();
   assertEqual([replies, frozen, resumed], [[[1, false], [2, true]], 2, 1], "retry drains the same retained progress and never briefly resumes gameplay");
 });
+
+await suite("Desktop close: an in-flight rejected import reply is a failed write, not a successful transport acknowledgement", async () => {
+  let release: ((reply: DesktopSaveReply) => void) | undefined, model: any;
+  const replies: unknown[] = [];
+  const bridge: DesktopBridge = { version: 1, platform: "win32", async openSaveSession() { return "import-session"; },
+    async requestSave(_session, operation) {
+      if (operation === "commitImport") return await new Promise<DesktopSaveReply>(done => { release = done; });
+      return { ok: true, value: null, conflict: null };
+    }, onCloseRequest() { return () => {}; }, finishClose(id, saved) { replies.push([id, saved]); } };
+  const backend = new DesktopSaveBackend(bridge), oldTitleStore = await SaveStore.load(backend);
+  const commit = backend.commitImport("confirmed-token").catch(error => error);
+  while (!release) await Promise.resolve();
+  const close = createDesktopCloseHandler({ bridge, store: () => oldTitleStore, freeze: () => () => {},
+    showDialog(next) { model = next; return { destroy() {}, setMessage() {}, setBusy() {} }; } });
+  close(19); await Promise.resolve();
+  release({ ok: false, conflict: null, error: { name: "Error", message: "Backup flush could not be confirmed" } });
+  await commit;
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  assertEqual(replies, [], "a clean old Title store cannot hide the pending import's failed storage reply");
+  assertEqual(model.actions.length, 2, "the game stays open with the ordinary retry or keep-playing recovery");
+});

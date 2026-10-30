@@ -7,6 +7,9 @@ import type { DesktopSaveReply, DesktopSaveOperation } from "../src/game/desktop
 import { FileStoragePort } from "./fileStorage";
 import { desktopReviewProfile } from "./reviewProfile";
 import { parseDesktopSmokeArgs, prepareDesktopSmoke, runDesktopSmoke } from "./smoke";
+import { createJourneyFileActions } from "./journeyFiles";
+import { decodeJourneyTransfer } from "../src/game/saveTransfer";
+import { prepareTransferSmoke, transferSmokePaths } from "./transferSmoke";
 
 const GAME_URL = "almanac://game/index.html";
 const smoke = parseDesktopSmokeArgs(process.argv);
@@ -33,7 +36,10 @@ async function start(): Promise<void> {
   const contentRoot = resolve(app.getAppPath(), "desktop-dist/renderer");
   const disk = new FileStoragePort(join(app.getPath("userData"), "journeys"));
   const smokeBackend = new LocalStorageBackend(disk);
-  if (smoke) await prepareDesktopSmoke(smokeBackend, smoke.phase);
+  if (smoke) {
+    await prepareDesktopSmoke(smokeBackend, smoke.phase);
+    if (smoke.phase === "seed") await prepareTransferSmoke(smokeBackend, smoke.profile);
+  }
 
   protocol.handle("almanac", request => {
     const url = new URL(request.url);
@@ -63,6 +69,22 @@ async function start(): Promise<void> {
     webPreferences: { preload: join(app.getAppPath(), "desktop-dist/preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, devTools: !app.isPackaged },
   });
   window.setMenu(null);
+  const journeyFiles = createJourneyFileActions({
+    async chooseOpen() {
+      if (!window || window.isDestroyed()) return null;
+      // Windows CI supplies an explicitly synthetic picker only inside its
+      // validated disposable seed profile. Normal launches always use the OS.
+      if (smoke?.phase === "seed") return transferSmokePaths(smoke.profile).input;
+      const result = await dialog.showOpenDialog(window, { title: "Choose a journey file", properties: ["openFile", "dontAddToRecent"], filters: [{ name: "Journey files", extensions: ["json"] }] });
+      return result.canceled ? null : result.filePaths[0] ?? null;
+    },
+    async chooseSave(suggestedName) {
+      if (!window || window.isDestroyed()) return null;
+      if (smoke?.phase === "seed") return transferSmokePaths(smoke.profile).output;
+      const result = await dialog.showSaveDialog(window, { title: "Save a journey file", defaultPath: suggestedName, properties: ["showOverwriteConfirmation", "dontAddToRecent"], filters: [{ name: "Journey files", extensions: ["json"] }] });
+      return result.canceled ? null : result.filePath ?? null;
+    },
+  });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event, url) => { if (url !== GAME_URL) event.preventDefault(); });
   window.webContents.on("will-attach-webview", event => event.preventDefault());
@@ -113,6 +135,14 @@ async function start(): Promise<void> {
       else if (operation === "getRecovery") value = await backend.getRecovery();
       else if (operation === "startFreshAfterRecovery") value = await backend.startFreshAfterRecovery(payload as Parameters<typeof backend.startFreshAfterRecovery>[0]);
       else if (operation === "resolveConflict" && (payload === "local" || payload === "cloud")) value = await backend.resolveConflict(payload);
+      else if (operation === "snapshotForTransfer") value = await backend.snapshotForTransfer();
+      else if (operation === "prepareImport") value = await backend.prepareImport(decodeJourneyTransfer(JSON.stringify({ format: "portalwrights-journey", version: 1, exportedAt: new Date().toISOString(), state: payload })));
+      else if (operation === "commitImport" && typeof payload === "string") value = await backend.commitImport(payload);
+      else if (operation === "chooseImport") value = await journeyFiles.chooseImport();
+      else if (operation === "exportJourney") {
+        const state = await backend.snapshotForTransfer();
+        value = state ? await journeyFiles.exportJourney(state) : null;
+      }
       else throw new Error("This save action is unavailable.");
       return { ok: true, value, conflict: backend.getConflict() };
     } catch (error) {

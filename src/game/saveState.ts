@@ -214,6 +214,13 @@ export interface SaveRecoverySnapshot {
     previousDeviceChoice: string | null;
   };
 }
+/** Read-only comparison shown before an explicit guest journey transfer. The
+ * candidate returned to the UI is a copy, never the authority used at commit. */
+export interface SaveImportPreview {
+  token: string;
+  current: SaveState | null;
+  incoming: SaveState;
+}
 export interface SaveBackend {
   /** Desktop close drains the current in-memory autosave before exiting. */
   onStoreReady?(store: SaveStore): void;
@@ -226,6 +233,9 @@ export interface SaveBackend {
   resolveConflict?(source: SaveSource): Promise<SaveState>;
   getRecovery?(): Promise<SaveRecoverySnapshot | null>;
   startFreshAfterRecovery?(snapshot: SaveRecoverySnapshot): Promise<SaveState>;
+  snapshotForTransfer?(): Promise<SaveState | null>;
+  prepareImport?(state: SaveState): Promise<SaveImportPreview>;
+  commitImport?(token: string): Promise<SaveState>;
 }
 export interface StoragePort {
   getItem(key: string): string | null;
@@ -259,6 +269,19 @@ interface DeviceConflictRecord {
   currentRaw: string | null;
   local: SaveState;
   cloud: SaveState;
+}
+interface SaveImportTransaction {
+  token: string;
+  sequence: number;
+  copies: SaveRecoverySnapshot["copies"];
+  current: SaveState | null;
+  incoming: SaveState;
+  planned?: SaveState;
+  plannedRaw?: string;
+  archiveRaw?: string;
+  archiveAcknowledged: boolean;
+  started: boolean;
+  completed: boolean;
 }
 const STORAGE_KEY = "portalwrights-almanac.save.v1";
 function browserStorage(): StoragePort {
@@ -296,6 +319,8 @@ export function loadLastKnownGood(storage: StoragePort = browserStorage(), key =
 export class LocalStorageBackend implements SaveBackend {
   private observedRaw: string | null | undefined;
   private recoverySnapshot: SaveRecoverySnapshot | null = null;
+  private importSequence = 0;
+  private importTransaction: SaveImportTransaction | null = null;
   private readonly writer = `${Date.now()}-${++localWriterSequence}-${Math.random().toString(36).slice(2)}`;
   constructor(private readonly storage: StoragePort = browserStorage(), readonly userId: string | null = null, private readonly lock: LocalSaveLock = defaultLocalLock) {}
   get storageKey(): string { return this.userId === null ? STORAGE_KEY : `${STORAGE_KEY}.user.${encodeURIComponent(this.userId)}`; }
@@ -370,6 +395,99 @@ export class LocalStorageBackend implements SaveBackend {
       pendingDeviceChoice: this.storage.getItem(this.pendingKey),
       previousDeviceChoice: this.storage.getItem(this.recoveryKey),
     };
+  }
+  private transferState(copies: SaveRecoverySnapshot["copies"]): SaveState | null {
+    let primary: SaveState | null = null, backup: SaveState | null = null;
+    let damaged: unknown;
+    for (const [name, raw] of [["primary", copies.primary], ["backup", copies.backup]] as const) {
+      if (raw === null) continue;
+      try {
+        const value = parseSave(raw);
+        if (name === "primary") primary = value; else backup = value;
+      } catch (error) {
+        if (error instanceof UnsupportedSaveVersionError) throw error;
+        damaged ??= error;
+      }
+    }
+    // Transfers are stricter than normal last-good fallback: never hide a
+    // damaged active copy while presenting an apparently clear replacement.
+    const pending = this.parseDeviceRecord(copies.pendingDeviceChoice);
+    if (damaged) throw damaged;
+    if (pending) throw new LocalSaveConflictError("Resolve the device-save choice before transferring a journey. Both copies have been kept.");
+    return primary ?? backup;
+  }
+  /** Export only acknowledged device bytes, never a caller's in-memory store.
+   * This does not refresh the writer baseline or mutate pending choices. */
+  async snapshotForTransfer(): Promise<SaveState | null> {
+    return this.lock.run(this.storageKey, () => {
+      const current = this.transferState(this.recoveryCopies());
+      return current ? structuredClone(current) : null;
+    });
+  }
+  async prepareImport(state: SaveState): Promise<SaveImportPreview> {
+    if (this.userId !== null) throw new InvalidSaveError("A transferred journey can only replace guest progress. Account and cloud progress have not been changed.");
+    const sequence = ++this.importSequence;
+    this.importTransaction = null;
+    const incoming = migrate(state);
+    return this.lock.run(this.storageKey, () => {
+      if (sequence !== this.importSequence) throw new InvalidSaveError("Another transfer was selected. Review that journey before importing.");
+      const copies = this.recoveryCopies();
+      const current = this.transferState(copies);
+      const token = globalThis.crypto?.randomUUID?.() ?? `transfer-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      this.importTransaction = { token, sequence, copies, current, incoming, archiveAcknowledged: false, started: false, completed: false };
+      return { token, current: current ? structuredClone(current) : null, incoming: structuredClone(incoming) };
+    });
+  }
+  async commitImport(token: string): Promise<SaveState> {
+    return this.lock.run(this.storageKey, () => {
+      const issued = this.importTransaction;
+      if (this.userId !== null || typeof token !== "string" || !issued || issued.token !== token || issued.sequence !== this.importSequence) {
+        throw new InvalidSaveError("This transfer has not been confirmed for the current guest save. Choose the file and review it again.");
+      }
+      const copies = this.recoveryCopies();
+      try { this.transferState(copies); }
+      catch (error) { this.importTransaction = null; throw error; }
+      const sameOriginals = stableJson(copies) === stableJson(issued.copies);
+      const sameMetadata = copies.pendingDeviceChoice === issued.copies.pendingDeviceChoice && copies.previousDeviceChoice === issued.copies.previousDeviceChoice;
+      const ownPartialWrite = issued.started && sameMetadata && copies.primary === issued.plannedRaw &&
+        (copies.backup === issued.copies.backup || copies.backup === issued.plannedRaw);
+      if ((!issued.completed && !sameOriginals && !ownPartialWrite) ||
+          (issued.completed && !(sameMetadata && copies.primary === issued.plannedRaw && copies.backup === issued.plannedRaw))) {
+        this.importTransaction = null;
+        throw new InvalidSaveError("Saved progress changed while this transfer was open. Choose the file and review both journeys again.");
+      }
+      if (!issued.planned) {
+        const previousTime = Math.max(Date.now(), issued.incoming.updatedAt, issued.current?.updatedAt ?? 0);
+        const updatedAt = previousTime + 1;
+        if (!Number.isFinite(updatedAt) || updatedAt <= previousTime) throw new InvalidSaveError("This journey's save time cannot be advanced safely. Existing progress has not been changed.");
+        issued.planned = migrate({ ...issued.incoming, updatedAt });
+        issued.plannedRaw = JSON.stringify(issued.planned);
+        issued.archiveRaw = JSON.stringify({ version: 1, kind: "journey-transfer", token: issued.token,
+          capturedAt: Date.now(), copies: issued.copies, incoming: issued.planned });
+      }
+      const archiveKey = `${this.storageKey}.transfer.${issued.token}`;
+      const existingArchive = this.storage.getItem(archiveKey);
+      if ((existingArchive !== null && existingArchive !== issued.archiveRaw) ||
+          (issued.archiveAcknowledged && existingArchive !== issued.archiveRaw)) {
+        this.importTransaction = null;
+        throw new InvalidSaveError("The transfer's recovery copy changed. Existing progress has been kept; choose the file and review it again.");
+      }
+      if (issued.completed) return structuredClone(issued.planned);
+      // An unconfirmed archive or primary write may have reached disk before
+      // reporting failure. Retry uses the same timestamp/bytes and archive;
+      // it never adopts unrelated changes or rotates a backup ahead of primary.
+      if (!issued.archiveAcknowledged) {
+        this.storage.setItem(archiveKey, issued.archiveRaw!);
+        issued.archiveAcknowledged = true;
+      }
+      issued.started = true;
+      this.storage.setItem(this.storageKey, issued.plannedRaw!);
+      this.storage.setItem(`${this.storageKey}.lkg`, issued.plannedRaw!);
+      this.observedRaw = issued.plannedRaw;
+      this.recoverySnapshot = null;
+      issued.completed = true;
+      return structuredClone(issued.planned);
+    });
   }
   private recoveryReason(copies: SaveRecoverySnapshot["copies"]): SaveRecoverySnapshot["reason"] | null {
     let damaged = false;
@@ -709,6 +827,21 @@ export class SyncedBackend implements SaveBackend {
     // any raw account data to a download or another caller.
     await this.verifyRecoveryOwner();
     if (scoped !== this.scoped || owner !== this.owner) throw new CloudSaveError("The signed-in account changed. Retry loading before opening save recovery.");
+    return snapshot;
+  }
+  async snapshotForTransfer(): Promise<SaveState | null> {
+    const scoped = this.scoped;
+    const owner = this.owner;
+    const verify = async () => {
+      await this.verifyRecoveryOwner();
+      if (scoped !== this.scoped || owner !== this.owner) throw new CloudSaveError("The signed-in account changed. Retry loading before transferring its device save.");
+      if (this.conflict) throw new SaveConflictError("Resolve the cloud-save choice before transferring a journey. Both versions have been kept.");
+    };
+    await verify();
+    const snapshot = await scoped.snapshotForTransfer();
+    // The read may wait for another document's lock. Do not expose an earlier
+    // account cache after its identity or binding changed during that wait.
+    await verify();
     return snapshot;
   }
   async startFreshAfterRecovery(snapshot: SaveRecoverySnapshot): Promise<SaveState> {

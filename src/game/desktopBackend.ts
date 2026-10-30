@@ -1,7 +1,7 @@
 import { desktopBridge, type DesktopBridge, type DesktopSaveOperation } from "./desktopBridge";
 import {
   CloudSaveError, InvalidSaveError, LocalSaveConflictError, SaveConflictError, UnsupportedSaveVersionError,
-  SyncedBackend, type SaveBackend, type SaveConflict, type SaveRecoverySnapshot, type SaveSource, type SaveState, type SaveStore,
+  SyncedBackend, type SaveBackend, type SaveConflict, type SaveImportPreview, type SaveRecoverySnapshot, type SaveSource, type SaveState, type SaveStore,
 } from "./saveState";
 import { showRecoveryDialog, type RecoveryDialog } from "./ui/recoveryDialog";
 
@@ -16,11 +16,12 @@ export class DesktopSaveBackend implements SaveBackend {
   constructor(private readonly bridge: DesktopBridge) { this.session = bridge.openSaveSession(); }
   onStoreReady(store: SaveStore): void { activeStore = store; }
   getConflict(): SaveConflict | null { return this.conflict && structuredClone(this.conflict); }
-  private async call(operation: DesktopSaveOperation, payload?: unknown): Promise<SaveState | SaveRecoverySnapshot | null | undefined> {
-    const work = this.bridge.requestSave(await this.session, operation, payload);
-    pendingWrites.add(work);
-    try {
-      const reply = await work;
+  private async call(operation: DesktopSaveOperation, payload?: unknown): Promise<SaveState | SaveRecoverySnapshot | SaveImportPreview | boolean | null | undefined> {
+    const session = await this.session;
+    // Close must await interpreted failures as well as IPC delivery. A reply
+    // with ok:false acknowledges transport, not a durable storage operation.
+    const work = (async () => {
+      const reply = await this.bridge.requestSave(session, operation, payload);
       this.conflict = reply.conflict;
       if (!reply.ok) {
         const error = reply.error;
@@ -30,13 +31,21 @@ export class DesktopSaveBackend implements SaveBackend {
         throw Constructor ? new Constructor(error?.message) : new Error(error?.message ?? "Device saving could not finish. Your previous save has been kept.");
       }
       return reply.value;
-    } finally { pendingWrites.delete(work); }
+    })();
+    pendingWrites.add(work);
+    try { return await work; }
+    finally { pendingWrites.delete(work); }
   }
   async load(): Promise<SaveState | null> { return await this.call("load") as SaveState | null; }
   async save(state: SaveState): Promise<void> { await this.call("save", state); }
   async getRecovery(): Promise<SaveRecoverySnapshot | null> { return await this.call("getRecovery") as SaveRecoverySnapshot | null; }
   async startFreshAfterRecovery(snapshot: SaveRecoverySnapshot): Promise<SaveState> { return await this.call("startFreshAfterRecovery", snapshot) as SaveState; }
   async resolveConflict(source: SaveSource): Promise<SaveState> { return await this.call("resolveConflict", source) as SaveState; }
+  async snapshotForTransfer(): Promise<SaveState | null> { return await this.call("snapshotForTransfer") as SaveState | null; }
+  async prepareImport(state: SaveState): Promise<SaveImportPreview> { return await this.call("prepareImport", state) as SaveImportPreview; }
+  async commitImport(token: string): Promise<SaveState> { return await this.call("commitImport", token) as SaveState; }
+  async chooseImport(): Promise<SaveState | null> { return await this.call("chooseImport") as SaveState | null; }
+  async exportJourney(): Promise<boolean | null> { return await this.call("exportJourney") as boolean | null; }
 }
 
 export function defaultSaveBackend(): SaveBackend {

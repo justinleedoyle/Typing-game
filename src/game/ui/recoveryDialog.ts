@@ -17,6 +17,7 @@ export function showRecoveryDialog(options: {
   title: string;
   message: string;
   detail?: string;
+  content?: HTMLElement;
   actions: RecoveryDialogAction[];
 }): RecoveryDialog {
   const previousFocus = document.activeElement;
@@ -52,6 +53,7 @@ export function showRecoveryDialog(options: {
     Object.assign(detail.style, { fontSize: "18px", lineHeight: "1.5", color: "#cbbf9f", whiteSpace: "pre-line", margin: "0 0 28px" });
     panel.append(detail);
   }
+  if (options.content) panel.append(options.content);
   const controls = document.createElement("div");
   Object.assign(controls.style, { display: "flex", flexDirection: "column", gap: "14px", alignItems: "stretch", maxWidth: "560px", margin: "0 auto" });
   let destroyed = false;

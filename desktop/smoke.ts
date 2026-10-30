@@ -6,6 +6,7 @@ import { writeFile, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { emptySave, type SaveBackend, type SaveState } from "../src/game/saveState";
+import { runTransferSmoke } from "./transferSmoke";
 
 export type DesktopSmokePhase = "seed" | "verify" | "crash" | "recover";
 export interface DesktopSmokeOptions { phase: DesktopSmokePhase; profile: string; report: string }
@@ -148,6 +149,7 @@ export async function runDesktopSmoke(options: DesktopSmokeOptions & {
   try {
     await waitForWindow(window, "Boolean(document.querySelector('[data-desktop-ready=\"true\"]'))", "actual desktop startup");
     await waitForWindow(window, "Boolean(document.querySelector('[data-active-scene=\"TitleScene\"]'))", "actual Title creation");
+    const transfer = phase === "seed" ? await runTransferSmoke({ window, backend, profile }) : undefined;
     await key(window, "Enter");
     await waitForWindow(window, "Boolean(document.querySelector('[data-active-scene=\"WinterMountainScene\"]'))", "saved Winter checkpoint");
     if (phase === "seed") {
@@ -189,7 +191,7 @@ export async function runDesktopSmoke(options: DesktopSmokeOptions & {
         ...(beforeTyping ? { uppercaseAndRelease: true, backspaceDispatched: true, sameFramePrefixBurst: true,
           evidence: "Unpaced uppercase S and plain A each recorded exactly one correct hit; Backspace dispatched in the same burst; paced Escape released the partial claim before ordinary pause. Checkpoint/resources/choices stayed unchanged. Cursor reversal is separately covered by the controller unit test." } : {}),
       },
-      durable: true, save, inputEvents };
+      durable: true, save, inputEvents, ...(transfer ? { transfer } : {}) };
     const temporary = `${report}.tmp`;
     await writeFile(temporary, JSON.stringify(result, null, 2)); await rename(temporary, report);
   } catch (error) {

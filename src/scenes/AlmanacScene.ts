@@ -546,10 +546,7 @@ export class AlmanacScene extends Phaser.Scene {
 
     // ─── Left page — title + realm strip ────────────────────────────────────
 
-    this.addPageText(LEFT_PAGE_X, TOP_TEXT_Y, `${state.profileName}'s Almanac`, {
-      fontSize: "44px",
-      color: PAGE_INK,
-    });
+    this.addOverviewTitle(state.profileName);
     this.addPageText(
       LEFT_PAGE_X,
       TOP_TEXT_Y + 64,
@@ -640,6 +637,30 @@ export class AlmanacScene extends Phaser.Scene {
     );
 
     this.renderPageFooter();
+  }
+
+  private addOverviewTitle(profileName: string): void {
+    // Imported and legacy names can be longer than the Settings editor allows.
+    // Bound only the displayed prefix before asking Phaser to measure it.
+    const name: string[] = [];
+    let shortened = false;
+    for (const point of profileName) {
+      if (name.length === 64) { shortened = true; break; }
+      name.push(/\s/u.test(point) ? " " : point);
+    }
+    const label = (): string => `${name.join("")}${shortened ? "…" : ""}'s Almanac`;
+    const title = this.addPageText(LEFT_PAGE_X, TOP_TEXT_Y, label(), {
+      fontSize: "44px", color: PAGE_INK,
+    });
+    // The subtitle begins64px below; leave room for the normal8px page wake.
+    const fits = (): boolean => title.width <= PAGE_TEXT_WIDTH && title.height <= 56;
+    for (let size = 43; size >= 24 && !fits(); size--) title.setFontSize(size);
+    if (fits()) return;
+    shortened = true;
+    while (name.length > 0 && !fits()) {
+      name.pop();
+      title.setText(label());
+    }
   }
 
   private addOverviewQuietLordRecord(x: number, y: number, fragment: string): void {

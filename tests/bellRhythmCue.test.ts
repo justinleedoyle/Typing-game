@@ -200,6 +200,8 @@ class DoorPart {
   getData(key: string) { return this.data[key]; }
   getByName(name: string) { return this.children.find(child => child.name === name) ?? null; }
   add(child: DoorPart) { this.children.push(child); return this; }
+  getIndex(child: DoorPart) { return this.children.indexOf(child); }
+  addAt(child: DoorPart, index: number) { this.children.splice(index, 0, child); return this; }
   destroy() { this.children.forEach(child => child.destroy()); this.scene = null; }
   fillStyle() { return this; } fillRoundedRect() { return this; } fillRect() { return this; }
   fillPoints() { return this; }
@@ -217,6 +219,7 @@ function doorFixture(reducedMotion = false) {
   let corridors = 0, frontResets = 0;
   const wren = new DoorPart(960, 820);
   const wrenSprite = new DoorPart();
+  wren.add(wrenSprite);
   Object.assign(bell, {
     checkpoint() {},
     reducedMotion, scale: { width: 1920, height: 1080 }, wrenContainer: wren, wrenSprite, fork1Choice: null,

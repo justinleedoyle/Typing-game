@@ -10,7 +10,7 @@ const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.S
 const owner = source.statements.find(ts.isClassDeclaration)!;
 const names = ["init", "preload", "checkpoint", "savedStageData", "hasSavedPassage", "startHuntressBranch",
   "runPassageChain", "winterPassageOwnerBinding", "winterPassageWordPosition", "fadeOutHuntress",
-  "clearHuntressHorn", "transferHuntressHorn", "presentWinterPassageReaction", "clearWinterForkCues", "onKeyDown", "makeWinterForkWord",
+  "clearHuntressHorn", "transferHuntressHorn", "holdWinterProp", "presentWinterPassageReaction", "clearWinterForkCues", "onKeyDown", "makeWinterForkWord",
   "addWinterAftermathPainting", "fitWinterAftermathPainting", "showCairnCue", "showPeltCue", "receivePeltVisual", "clearHeldPelt", "winterForkChoiceWordPosition", "startFork1", "fadeInHuntress", "showFireflyCue", "startFork2", "startAftermathPassage", "startFoxGate", "showFoxRefusalDeparture", "dismissFoxCompanion", "startTrueNamePassage"];
 const methods = names.map(name => owner.members.find(member => member.name?.getText(source) === name)!.getText(source));
 const passages = source.statements.filter(ts.isVariableStatement).flatMap(statement =>
@@ -78,7 +78,7 @@ function fixture(options: { reduced?: boolean; restored?: boolean; missingArt?: 
   Object.assign(s, {
     motionReduced: options.reduced === true,
     huntressSprite: huntress, huntressHornSprite: null, huntressHornTransferToken: 0, huntressHornTransferPending: false,
-    wrenContainer: { x: 960, y: 842, scene: true }, scale: { width: 1920, height: 1080 },
+    wrenContainer: { x: 960, y: 842, scene: true, children: [] as any[], getIndex(child: any) { return this.children.indexOf(child); }, addAt(child: any, index: number) { this.children.splice(index, 0, child); child.parentContainer = this; } }, scale: { width: 1920, height: 1080 },
     wrenSprite: {}, activeTargets: [], forkChoiceWordAnchors: [],
     fireflyCue: null, cairnCue: null, peltCue: null,
     fork1Choice: null, fork2Choice: null, foxDecided: true, foxSpared: true, candles: 3,
@@ -110,12 +110,14 @@ function fixture(options: { reduced?: boolean; restored?: boolean; missingArt?: 
         origin: [] as number[], destroyed: 0, lit: false,
         setOrigin(...origin: number[]) { this.origin = origin; return this; },
         setDepth(depth: number) { this.depth = depth; return this; },
+        setPosition(x: number, y: number) { this.x = x; this.y = y; return this; },
         setScale(scale: number) { this.scale = scale; return this; },
         destroy() { this.scene = false; this.destroyed += 1; },
       };
       images.push(image); return image;
     } },
   });
+  s.wrenContainer.children.push(s.wrenSprite);
   return { s, images, tweens, killed, gates, targets, captions, checkpoints, timers, waves, state, huntress,
     continue() { const next = gates.shift(); assert(next, "an actual held Continue is available"); next!(); },
     settle() { const tween = tweens.at(-1); assert(tween, "the actual horn movement was scheduled");
@@ -139,10 +141,10 @@ await suite("Winter horn: the actual two phrases transfer painted art before the
   const captionsBeforeHandoff = f.captions.length;
   f.targets[1].onComplete();
   const horn = f.images[0];
-  assertEqual([horn.key, horn.x, horn.y, horn.depth], ["almanac-icon-hunters-horn", 602, 736, 61],
+  assertEqual([horn.key, horn.x, horn.y, horn.depth], ["almanac-icon-hunters-horn", 582, 800, 61],
     "the existing painted horn begins at the actual Huntress hand above actors");
   assert(horn.lit, "the prop uses the realm's existing actor lighting");
-  assertClose(Math.max(horn.width, horn.height) * horn.scale, 76, 0.00001, "the painted prop is legible at its intended size");
+  assertClose(Math.max(horn.width, horn.height) * horn.scale, 64, 0.00001, "the painted prop is legible at its intended size");
   assertEqual(f.captions.length, captionsBeforeHandoff, "the received-horn caption waits for the transfer to settle");
   assertEqual(f.gates.length, 0, "Continue cannot skip the moving handoff before its acknowledgment exists");
   assertEqual(f.s.huntressHornTransferPending, true, "the visual wait owns early story keys until it settles");
@@ -150,7 +152,9 @@ await suite("Winter horn: the actual two phrases transfer painted art before the
     ["huntress", 1, true], "the existing response checkpoint is saved before the visual wait");
   assertEqual(f.state.satchel, [], "visual receipt does not move the existing realm-ending inventory award");
   const tween = f.settle();
-  assertEqual([tween.duration, horn.x, horn.y], [650, 918, 720], "the same horn settles into Wren's near hand");
+  assertEqual([tween.duration, horn.x, horn.y], [650, -42, -65], "the same horn settles at the painted fingers in Wren's body coordinates");
+  assertEqual(horn.parentContainer, f.s.wrenContainer, "the received horn follows Wren's body after travel settles");
+  assert(f.s.wrenContainer.children.indexOf(horn) < f.s.wrenContainer.children.indexOf(f.s.wrenSprite), "the receiving sleeve overlaps the horn contact");
   assertEqual(f.s.huntressHornTransferPending, false, "the held response replaces the visual-wait input guard");
   assertEqual(f.captions.at(-1), "She presses a spiral horn into your hand and gestures uphill.", "the exact canon acknowledgment follows settling");
   assertEqual(f.gates.length, 1, "the acknowledgment keeps one deliberate Continue gate");
@@ -252,7 +256,7 @@ await suite("Winter horn: reduced motion and restored acknowledgment settle imme
       f.continue(); f.targets[0].onComplete(); f.continue(); f.targets[1].onComplete();
     }
     const horn = f.images[0];
-    assertEqual([horn.x, horn.y], [918, 720], "the received horn is already in Wren's hand");
+    assertEqual([horn.x, horn.y], [-42, -65], "the received horn is already in Wren's hand");
     assertEqual(f.tweens.length, 0, "neither reduced motion nor checkpoint restore starts a transfer tween");
     assertEqual(f.s.huntressHornTransferPending, false, "immediate handoffs leave no invisible input wait");
     assertEqual(f.targets.length, options.restored ? 0 : 2, "checkpoint restoration does not ask for completed words again");
@@ -376,7 +380,7 @@ function aftermathFixture(reduced = false) {
     huntressHornTransferToken: 0, huntressHornTransferPending: false, forkChoiceWordAnchors: [],
     fork1Choice: "huntress", fork2Choice: null, foxDecided: true, foxSpared: true, candles: 3,
     resumeCheckpoint: null, activeTargets: [], scale: { width: 1920, height: 1080 },
-    wrenContainer: { x: 960, y: 842, scene: true }, wrenSprite: {},
+    wrenContainer: { x: 960, y: 842, scene: true, children: [] as any[], getIndex(child: any) { return this.children.indexOf(child); }, addAt(child: any, index: number) { this.children.splice(index, 0, child); child.parentContainer = this; } }, wrenSprite: {},
     typingInput: { getStats: () => stats },
     store: { get: () => state, update: (fn: (state: any) => void) => fn(state), setCheckpoint: (value: any) => { state.checkpoint = structuredClone(value); } },
     narration: { say: noop, bottom: () => 300 }, setNarrator: noop, band: { setObjective: (text: string) => tasks.push(text) },
@@ -424,6 +428,7 @@ function aftermathFixture(reduced = false) {
       existing: noop,
     },
   });
+  s.wrenContainer.children.push(s.wrenSprite);
   return { s, bodies, images, tweens, gates, targets, state, timers, tasks, foxEntries: () => foxEntries,
     next() { const next = gates.shift(); assert(next, "the original aftermath response is held"); next!(); } };
 }
@@ -594,8 +599,10 @@ await suite("Winter carried pelt: the same source empties before its held respon
     f.targets.at(-1).onComplete();
     assertEqual(f.tasks.at(-1), "The pelt is in your hands. Press Enter or Space to continue.", "the final held response acknowledges the visible item instead of asking for finished typing");
     assertEqual([receivedResponse, f.gates.length, f.timers.length], [1, 1, 0], "the synchronous transfer adds no wait, timer or Continue");
-    assertEqual([source.x, source.y, source.depth, source.alpha], [1024, 746, 61, 1], "the folded fur rests beside Wren's hand at fixed opacity");
-    assertClose((source.right - source.left) * source.scale, 104, 0.01, "the received pelt has a modest104px true-alpha width");
+    assertEqual([source.x, source.y, source.depth, source.alpha], [54, -50, 61, 1], "the folded fur rests beside Wren's hand at fixed opacity");
+    assertClose((source.right - source.left) * source.scale, 80, 0.01, "the received pelt has a modest80px true-alpha width");
+    assertEqual(source.parentContainer, f.s.wrenContainer, "the folded pelt follows the body instead of drifting away during idle breath");
+    assert(f.s.wrenContainer.children.indexOf(source) < f.s.wrenContainer.children.indexOf(f.s.wrenSprite), "the painted sleeve stays in front of the carrying contact");
     assert(!f.tweens.some(tween => tween.targets === source), "the held solid has no bob or transfer animation gate");
     f.next();
     assertEqual(f.timers.map(timer => timer.ms), [900], "the final response retains the original passage interval");

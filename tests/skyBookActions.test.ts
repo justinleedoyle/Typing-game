@@ -5,21 +5,24 @@ import { assert, assertEqual, suite } from "./_assert";
 const url = new URL("../src/scenes/SkyIslandScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
-const names = ["startEttaHelp", "showEttaBookCue", "moveEttaBook", "clearEttaBookCue", "onKeyDown"];
+const names = ["startEttaHelp", "showEttaBookCue", "moveEttaBook", "restoreEttaBookPose", "setEttaCarryPose", "updateEttaBookCarry", "clearEttaBookCue", "onKeyDown"];
 const code = ts.transpileModule(`class Sky { ${names.map(name => owner.members.find(m => m.name?.getText(source) === name)!.getText(source)).join("\n")} }`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 const noop = () => {};
 function prop(x = 0, y = 0, key = "") {
-  return { x, y, key, scene: true, width: 1536, height: 1024, alpha: 1, angle: 0, depth: 0, children: [] as any[],
+  return { x, y, key, texture:{key}, scaleX:1, scaleY:1, scene: true, width: 1536, height: 1024, alpha: 1, angle: 0, depth: 0, children: [] as any[],
     setDepth(n: number) { this.depth = n; return this; }, setAlpha(n: number) { this.alpha = n; return this; },
     setPosition(x: number, y: number) { this.x = x; this.y = y; return this; },
     setAngle(n: number) { this.angle = n; return this; }, setOrigin() { return this; },
-    setTexture(value: string) { this.key = value; return this; },
-    setScale(value: number) { this.displayHeight = this.height * value; return this; },
-    setDisplaySize(w: number, h: number) { return this; }, add(p: any) { this.children.push(p); return this; },
+    setTexture(value: string) { this.key = value; this.texture={key:value}; return this; },
+    setScale(value: number, y=value) { this.displayHeight = this.height * y; this.scaleX=value;this.scaleY=y;return this; },
+    setDisplaySize(w: number, h: number) { this.displayWidth=w;this.displayHeight=h;return this; }, add(p: any) { this.children.push(p); return this; },
     destroy() { this.scene = false; },
   };
 }
 const globals = {
+  ETTA_BOOK_WIDTH:112, ETTA_BOOK_CARRY_Y:-104,
+  Phaser:{Scenes:{Events:{UPDATE:"update"}}},
+  setWrenPose:(sprite:any,pose:string)=>{sprite.setTexture(`wren-${pose}`);sprite.setScale(240/sprite.height);}, makeWrenCarryHands:()=>prop(),
   ETTA_CHAIN_1: "lift the book", ETTA_CHAIN_2: "place it gently", ETTA_BOOK_WORD_Y: 500, ETTA_SPRITE_HEIGHT: 280,
   playChime: noop, playActorAttention: noop, applySceneActorLighting: noop, PALETTE_HEX: { brass: 0 },
   addLocalGroundShadow: () => prop(), reducedMotion: (s: any) => s.reduced,
@@ -31,10 +34,14 @@ function fixture(reduced = false) {
   const captions: string[] = [], entered: number[] = [], keys: string[] = [], killed: any[] = [];
   const save = { realms: {} as Record<string, any>, almanacLore: [] as string[] };
   let task = "", hides = 0;
+  const sprite=prop(0,0,"wren-front"),listeners:Array<{fn:Function,context:any}>=[];sprite.setScale(240/sprite.height);
+  Object.assign(sprite,{getWorldTransformMatrix:()=>({tx:s.wrenContainer.x,ty:s.wrenContainer.y,a:sprite.scaleX,d:sprite.scaleY,
+    transformPoint(x:number,y:number){return {x:this.tx+x*this.a,y:this.ty+y*this.d};}})});
   Object.assign(s, {
     checkpoint() {}, savedStageData() { return {}; },
     reduced, ettaBookCue: null, ettaBookShelf: null, ettaBookGroundShadow: null, ettaBookMoving: false,
-    wrenContainer: { x: 960, y: 826 }, ettaSprite: prop(), ettaDone: false,
+    wrenContainer: { x: 960, y: 826 }, wrenSprite:sprite,
+    events:{on(_event:string,fn:Function,context:any){listeners.push({fn,context});},off(_event:string,fn:Function,context:any){for(let n=listeners.length-1;n>=0;n--)if(listeners[n].fn===fn&&listeners[n].context===context)listeners.splice(n,1);}}, ettaSprite: prop(), ettaDone: false,
     add: { container: (x: number, y: number) => prop(x, y), image: (x: number, y: number, key: string) => prop(x, y, key) },
     tweens: { add: (t: any) => { tweens.push(t); }, killTweensOf: (p: any) => killed.push(p) },
     band: { setObjective: (text: string) => { task = text; } },
@@ -45,7 +52,7 @@ function fixture(reduced = false) {
     hideEtta: () => { hides++; s.clearEttaBookCue(true); }, startTemple: (n: number) => entered.push(n),
     reading: { handleKey: () => false }, typingInput: { handleChar: (key: string) => keys.push(key) },
   });
-  return { s, save, gates, targets, tweens, captions, entered, keys, killed, task: () => task, hides: () => hides,
+  return { s, save, gates, targets, tweens, captions, entered, keys, killed, listeners, task: () => task, hides: () => hides,
     next() { const next = gates.shift(); assert(next, "the real scene offers Continue"); next!(); },
     settle() { const tween = tweens.findLast(t => t.duration === 520); assert(tween, "semantic book action exists");
       tween.targets.setPosition(tween.x, tween.y).setAngle(tween.angle); tween.onComplete(); return tween; },
@@ -59,6 +66,7 @@ await suite("Sky book: actual native actions reach carried and shelved states be
     const book = f.s.ettaBookCue, shelf = f.s.ettaBookShelf, shadow = f.s.ettaBookGroundShadow;
     assertEqual([f.s.ettaSprite.key, f.s.ettaSprite.displayHeight], ["etta-empty", 280], "Etta has empty hands at the same actor height when the single world volume appears");
     assertEqual(book.children[0].key, "etta-volume", "book uses the new painted world prop");
+    assertEqual(book.children[0].displayWidth,112,"the same volume fits the carrying hands instead of covering the hood");
     assertEqual(shelf.children[1].key, "etta-shelf", "the destination is visibly present before lifting");
     assertEqual(f.targets[0].word, "lift the book", "the native lift phrase is unchanged");
     f.targets[0].onAdvance(13, 13);
@@ -70,7 +78,8 @@ await suite("Sky book: actual native actions reach carried and shelved states be
       assertEqual(f.gates.length, 0, "no held-result gate appears while the book is still on the ground");
       assert(f.task().includes("Lifting"), "the temporary task describes the physical action"); f.settle();
     }
-    assertEqual([book.x, book.y, book.angle], [898, 714, -8], "the same book visibly reaches Wren's near hand");
+    assertEqual([book.x, book.y, book.angle], [960, 722, -3], "the same book visibly rests across Wren's carrying forearms");
+    assertEqual([f.s.wrenSprite.key,f.s.ettaCarryHands.scene,f.listeners.length],["wren-carry",true,1],"the received book owns one painted carrying pose and one foreground grip");
     assertEqual(shadow.alpha, 0, "the ground shadow does not travel through the air with the book");
     assert(f.task().includes("Book lifted"), "the received state precedes its acknowledgment");
     assertEqual(f.save.almanacLore, [], "lifting alone does not award the placement memory"); f.next();
@@ -81,6 +90,7 @@ await suite("Sky book: actual native actions reach carried and shelved states be
     f.targets[1].onComplete();
     if (!reduced) { assertEqual(f.save.almanacLore, [], "memory waits until the book reaches the shelf"); f.settle(); }
     assertEqual([book.x, book.y, book.angle], [shelf.x, shelf.y - 94, 0], "the placed book settles on its visible shelf");
+    assertEqual([f.s.wrenSprite.key,f.s.ettaCarryHands,f.listeners.length],["wren-front",null,0],"placement releases the fingers and update owner before the reward reading");
     assertEqual(f.save.almanacLore, ["scholar-ettas-last-volume"], "the original memory is earned once");
     assertEqual(f.save.realms["sky-island"].choices.ettaHelped, "yes", "the original help flag remains durable");
     assertEqual([f.hides(), f.entered.length], [0, 0], "Etta and the shelved book remain through reward reading"); f.next();

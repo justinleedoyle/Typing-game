@@ -25,6 +25,7 @@ function revisit(choices: Readonly<Record<string, string>>, satchel: readonly st
   const gates: Array<() => void> = [];
   const memories: string[][] = [];
   Object.assign(forge, {
+    restoreForgeRevisitAftermath() {},
     wrenContainer: {}, store: { get: () => state },
     setNarrator: (line: string) => { caption = line; },
     band: { setObjective: (line: string) => { objective = line; } },

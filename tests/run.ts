@@ -86,6 +86,7 @@ await import("./realmChoices.test.ts");
 await import("./revisitStory.test.ts");
 await import("./branchStoryConsistency.test.ts");
 await import("./forgeRevisitStory.test.ts");
+await import("./forgeWoodAftermath.test.ts");
 await import("./woodPromiseStory.test.ts");
 await import("./navigationPolicy.test.ts");
 await import("./homecoming.test.ts");

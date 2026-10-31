@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { assert, assertEqual, suite } from "./_assert";
+import { resolveRealmFork } from "../src/game/realmChoices";
 
 const url = new URL("../src/scenes/SkyIslandScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
@@ -9,7 +10,7 @@ const method = owner.members.find(value => value.name?.getText(source) === "star
 const code = ts.transpileModule(`class Sky { ${method.getText(source)} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;
-const Sky = new Function("playPortalArrivalWake", `${code}; return Sky;`)(() => {});
+const Sky = new Function("playPortalArrivalWake", "resolveRealmFork", `${code}; return Sky;`)(() => {}, resolveRealmFork);
 
 await suite("Sky revisit: each saved ending keeps its island outcome and leaves progress unchanged", () => {
   for (const fork2 of ["answer-kindly", "cut-tether"] as const) {
@@ -24,7 +25,7 @@ await suite("Sky revisit: each saved ending keeps its island outcome and leaves 
     const gates: Array<() => void> = [];
     const memories: string[][] = [];
     Object.assign(s, {
-      wrenContainer: {}, store: { get: () => state },
+      stageSkyRevisitAftermath() {}, wrenContainer: {}, store: { get: () => state },
       setNarrator: (line: string) => { caption = line; },
       band: { setObjective: (line: string) => { objective = line; } },
       readThen: (next: () => void) => gates.push(next),

@@ -72,6 +72,8 @@ import {
   bobWrenSprite,
   flashWrenMiss,
   makeWrenSprite,
+  makeWrenCarryHands,
+  setWrenPose,
   playWrenAction,
   playWrenFocus,
   playWrenHurt,
@@ -118,6 +120,8 @@ const ETTA_SPRITE_DEPTH = 50;
 // Keep choice plates above Etta's painted hood and book actions above Wren's.
 const ETTA_CHOICE_WORD_LIFT = ETTA_SPRITE_HEIGHT - 120 + 84;
 const ETTA_BOOK_WORD_Y = 500;
+const ETTA_BOOK_WIDTH = 112;
+const ETTA_BOOK_CARRY_Y = -104;
 const SEALED_SCROLL_Y = 480;
 const ETTA_RESTING_ALPHA = 0.9;
 const LIGHTER_SPRITE_HEIGHT = 188;
@@ -245,6 +249,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
+  private ettaCarryHands: Phaser.GameObjects.Container | null = null;
   private lighterSprite: Phaser.GameObjects.Image | null = null;
   private lighterReplyAnchors: WordBodyAnchorHandle[] = [];
   private firstSpiritsEmergeFromLanterns = false;
@@ -349,6 +354,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.ettaSprite = null;
     this.ettaWordAnchors = [];
     this.ettaBookCue = null;
+    this.ettaCarryHands = null;
     this.ettaBookShelf = null;
     this.ettaBookGroundShadow = null;
     this.ettaBookMoving = false;
@@ -391,7 +397,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.load.image("sky-companion-lantern-moth", lanternMothSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
-    preloadWren(this);
+    preloadWren(this, { carry: true });
   }
 
   create(): void {
@@ -765,13 +771,45 @@ export class SkyIslandScene extends Phaser.Scene {
   private restoreEttaBookPose(stage: "carried" | "shelved"): void {
     const cue = this.showEttaBookCue();
     this.tweens.killTweensOf(cue);
+    if (this.ettaBookShelf?.scene) this.tweens.killTweensOf(this.ettaBookShelf);
     this.ettaBookShelf?.setAlpha(1);
     this.ettaBookGroundShadow?.setAlpha(0);
     const position = stage === "carried"
-      ? { x: this.wrenContainer.x - 62, y: this.wrenContainer.y - 112 }
+      ? { x: this.wrenContainer.x, y: this.wrenContainer.y + ETTA_BOOK_CARRY_Y }
       : { x: this.ettaBookShelf?.x ?? 1260, y: (this.ettaBookShelf?.y ?? 826) - 94 };
-    cue.setPosition(position.x, position.y).setAngle(stage === "carried" ? -8 : 0).setAlpha(1).setDepth(61);
+    cue.setPosition(position.x, position.y).setAngle(stage === "carried" ? -3 : 0).setScale(1).setAlpha(1).setDepth(61);
     this.ettaBookMoving = false;
+    this.setEttaCarryPose(stage === "carried");
+  }
+
+  private setEttaCarryPose(active: boolean): void {
+    this.events.off(Phaser.Scenes.Events.UPDATE, this.updateEttaBookCarry, this);
+    if (!active) {
+      this.ettaCarryHands?.destroy();
+      this.ettaCarryHands = null;
+      if (this.wrenSprite?.scene && this.wrenSprite.texture.key === "wren-carry") {
+        setWrenPose(this.wrenSprite, "front");
+      }
+      return;
+    }
+    if (!this.wrenSprite?.scene) return;
+    setWrenPose(this.wrenSprite, "carry");
+    this.ettaCarryHands ??= makeWrenCarryHands(this).setDepth(62);
+    this.updateEttaBookCarry();
+    this.events.on(Phaser.Scenes.Events.UPDATE, this.updateEttaBookCarry, this);
+  }
+
+  private updateEttaBookCarry(): void {
+    const cue = this.ettaBookCue;
+    const hands = this.ettaCarryHands;
+    if (!cue?.scene || !hands?.scene || !this.wrenSprite?.scene || this.ettaBookMoving) return;
+    const transform = this.wrenSprite.getWorldTransformMatrix();
+    const restingScale = 240 / this.wrenSprite.height;
+    const support = transform.transformPoint(0, ETTA_BOOK_CARRY_Y / restingScale);
+    // Keep the volume in world space for its word anchors and particles, while
+    // following the same breathing/typing movement as the painted forearms.
+    cue.setPosition(support.x, support.y);
+    hands.setPosition(transform.tx, transform.ty).setScale(transform.a, transform.d);
   }
 
   private resumeEttaBook(): void {
@@ -821,18 +859,20 @@ export class SkyIslandScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private startRevisit(): void {
+    this.stageSkyRevisitAftermath();
     playPortalArrivalWake(this, this.wrenContainer, {
       kind: "mote",
       color: 0xf5c842,
     });
-    const choices = this.store.get().realms["sky-island"]?.choices ?? {};
+    const state = this.store.get();
+    const second = resolveRealmFork("sky-island", "fork2", state.realms["sky-island"], state.satchel);
     let narratorLine: string;
     let words: string[];
 
-    if (choices["fork2"] === "cut-tether") {
+    if (second === "cut-tether") {
       narratorLine = "The island is higher now. Its lanterns still burn in the open air.";
       words = ["the", "sky", "is", "wide", "and", "open"];
-    } else if (choices["fork2"] === "answer-kindly") {
+    } else if (second === "answer-kindly") {
       narratorLine = "The wind still circles the lit summit. It hasn't found a new question.";
       words = ["the", "lanterns", "hold", "the", "dark"];
     } else {
@@ -843,6 +883,39 @@ export class SkyIslandScene extends Phaser.Scene {
     this.setNarrator(narratorLine);
     this.band.setObjective("Type the sky memory to return to the Almanac.");
     this.readThen(() => this.deliverRevisitPassage(words));
+  }
+
+  /** Reconstruct only recorded, completed consequences; never replay a gift. */
+  private stageSkyRevisitAftermath(): void {
+    const state = this.store.get();
+    const progress = state.realms["sky-island"];
+    const first = resolveRealmFork("sky-island", "fork1", progress, state.satchel);
+    const second = resolveRealmFork("sky-island", "fork2", progress, state.satchel);
+    const helped = first === "help-etta" || progress?.choices.ettaHelped === "yes"
+      || state.almanacLore.includes("scholar-ettas-last-volume");
+    if (helped) this.restoreEttaBookPose("shelved");
+    if (first === "help-etta" || first === "steal-flame") {
+      this.beaconFlameCue ??= this.createBeaconFlameCue();
+      const beacon = this.beaconFlameCue;
+      this.tweens.killTweensOf(beacon);
+      // The foreground shelf ends at1390; the established masonry beacon
+      // sits on a separate solid terrace patch rather than inside its rack.
+      beacon.setPosition(1540, 792).setAlpha(1);
+      if (first === "steal-flame") {
+        for (const name of ["beacon-spark", "beacon-light"]) {
+          const light = beacon.getByName(name);
+          if (!light?.scene) continue;
+          this.tweens.killTweensOf(light);
+          light.destroy();
+        }
+        beacon.setActive(false);
+      }
+    }
+    // The kind answer brightened the painted summit lamps independently of
+    // Etta or theft. A cut tether leaves their ordinary open-air light; the
+    // recovered cord belongs to the satchel, not invented debris on the path.
+    if (second === "answer-kindly") this.setAmbientLanternFieldAlpha(1, 0);
+    else if (second === "cut-tether") this.setAmbientLanternFieldAlpha(0.42, 0);
   }
 
   private deliverRevisitPassage(words: string[]): void {
@@ -2237,7 +2310,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.ettaBookGroundShadow = shadow;
     const c = this.add.container(760, 826).setDepth(43).setAlpha(0);
     const book = this.add.image(0, 0, "etta-volume").setOrigin(0.5, 0.88);
-    book.setDisplaySize(176, 176 * book.height / book.width);
+    book.setDisplaySize(ETTA_BOOK_WIDTH, ETTA_BOOK_WIDTH * book.height / book.width);
     applySceneActorLighting(this, book);
     c.add(book);
     this.ettaBookCue = c;
@@ -2249,18 +2322,19 @@ export class SkyIslandScene extends Phaser.Scene {
     const cue = this.ettaBookCue;
     if (!cue?.scene) { this.ettaBookMoving = false; onDone(); return; }
     this.ettaBookMoving = true;
+    this.setEttaCarryPose(false);
     this.tweens.killTweensOf(cue);
     cue.setDepth(61).setAlpha(1);
     this.ettaBookShelf?.setAlpha(1);
     this.ettaBookGroundShadow?.setAlpha(0);
     const shelf = this.ettaBookShelf;
     const end = state === "carried"
-      ? { x: this.wrenContainer.x - 62, y: this.wrenContainer.y - 112, angle: -8 }
+      ? { x: this.wrenContainer.x, y: this.wrenContainer.y + ETTA_BOOK_CARRY_Y, angle: -3 }
       : { x: shelf?.x ?? 1260, y: (shelf?.y ?? 826) - 94, angle: 0 };
     const finish = (): void => {
       // Leaving or restarting the scene invalidates an unfinished prop action.
       if (this.ettaBookCue !== cue || !cue.scene) return;
-      this.ettaBookMoving = false;
+      this.restoreEttaBookPose(state);
       onDone();
     };
     if (reducedMotion(this)) {
@@ -2290,6 +2364,7 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private clearEttaBookCue(fade = false): void {
+    this.setEttaCarryPose(false);
     this.clearEttaBookWordAnchors();
     const props = [this.ettaBookCue, this.ettaBookShelf];
     this.ettaBookCue = null;
@@ -4306,10 +4381,11 @@ export class SkyIslandScene extends Phaser.Scene {
       light.destroy();
     }
     this.clearHeldBeaconSpark();
-    // Keep the received curl outside the cloak and readable at a 1250px
-    // viewport. Its tip stays below the hood; the base meets the hand area.
-    const flame = this.add.image(this.wrenContainer.x + 64, this.wrenContainer.y - 96, "sky-beacon-flame").setDepth(43);
+    // Its true painted base meets the front palm. Parenting behind Wren's
+    // sleeve keeps the received curl attached through breathing and typing.
+    const flame = this.add.image(46, -65, "sky-beacon-flame").setDepth(43);
     this.fitBeaconPainting(flame, 56, "flame");
+    this.wrenContainer.addAt(flame, Math.max(0, this.wrenContainer.getIndex(this.wrenSprite)));
     this.heldBeaconSpark = flame;
   }
 

@@ -11,7 +11,7 @@ const url = new URL("../src/scenes/WinterMountainScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
 const names = ["checkpoint", "savedStageData", "hasSavedPassage", "startFireflyBranch", "showFireflyCue",
-  "showFireflyHollow", "receiveFireflyLanternVisual", "clearFireflyLantern", "dismissFireflyCue", "clearWinterForkCues",
+  "showFireflyHollow", "receiveFireflyLanternVisual", "holdWinterProp", "clearFireflyLantern", "dismissFireflyCue", "clearWinterForkCues",
   "presentWinterPassageReaction", "runPassageChain", "winterPassageOwnerBinding", "winterPassageWordPosition", "winterForkChoiceWordPosition", "makeWinterForkWord", "clearForkChoiceWordAnchors"];
 const constants = source.statements.filter(ts.isVariableStatement).map(statement => statement.getText(source)).join("\n");
 const code = ts.transpileModule(`${constants}\nclass Winter {
@@ -48,6 +48,8 @@ function display(x = 0, y = 0, key = ""): any {
     setOrigin(...value: number[]) { this.origin = value; return this; }, setScale(value: number) { this.scale = value; return this; },
     setPosition(x: number, y: number) { this.x = x; this.y = y; return this; }, setAlpha(value: number) { this.alpha = value; return this; },
     add(child: any) { this.children.push(child); child.parentContainer = this; return this; },
+    getIndex(child: any) { return this.children.indexOf(child); },
+    addAt(child: any, index: number) { if (child.parentContainer === this) this.remove(child); this.children.splice(index, 0, child); child.parentContainer = this; return this; },
     remove(child: any) { this.children.splice(this.children.indexOf(child), 1); child.parentContainer = null; },
     getByName(name: string) { return this.children.find((child: any) => child.name === name); },
     once(_event: string, next: () => void) { destroyHooks.push(next); return this; },
@@ -86,6 +88,7 @@ function fixture(initial: SaveState = emptySave()) {
     fadeOutHuntress: noop, clearHuntressHorn: noop, clearHeldPelt: noop,
     startWave: (index: number) => waves.push(index),
   });
+  scene.wrenContainer.add(scene.wrenSprite);
   return { scene, store, captions, objectives, images, tweens, timers, waves, target: () => target, gate: () => gate,
     continue() { assert(gate, "the native Continue is held"); const next = gate!; gate = null; next(); },
     async reload() { await store.flush(); return fixture(persisted!); },
@@ -137,12 +140,14 @@ await suite("Winter fireflies: taking and reloading carry the same lantern and l
   const f = fixture(); f.scene.startFireflyBranch(2); f.continue(); f.target().onComplete(); f.continue();
   const lantern = f.scene.fireflyLanternSprite, hollow = f.scene.fireflyCue;
   f.target().onComplete();
-  assertEqual([f.scene.fireflyLanternSprite, lantern.parentContainer, lantern.x, lantern.y, lantern.depth], [lantern, null, 1014, 722, 61], "the same lantern is removed from the hollow and placed in Wren's hand");
+  assertEqual([f.scene.fireflyLanternSprite, lantern.parentContainer, lantern.x, lantern.y, lantern.depth], [lantern, f.scene.wrenContainer, 46, -65, 61], "the same lantern leaves the hollow and its loop meets Wren's fingers in the breathing body container");
+  assertEqual([lantern.scale * lantern.height, ...lantern.origin], [58, 0.5, 0.04], "the resized lantern hangs from its actual top loop, not a centered chest anchor");
+  assert(f.scene.wrenContainer.children.indexOf(lantern) < f.scene.wrenContainer.children.indexOf(f.scene.wrenSprite), "the receiving fingers and sleeve overlap the loop");
   assert(!hollow.children.includes(lantern), "the taken lantern cannot remain duplicated in the hollow");
   assertEqual(f.images.filter(image => image.key === "almanac-icon-firefly-lantern").length, 1, "taking reuses one physical painting");
   assert(f.gate() && f.captions.at(-1)!.includes("in your hands"), "the original carried-lantern acknowledgment has no added wait");
   const restored = await f.reload(); restored.scene.startFireflyBranch(2);
-  assertEqual([restored.scene.fireflyLanternSprite.parentContainer, restored.scene.fireflyLanternSprite.x, restored.scene.fireflyLanternSprite.y], [null, 1014, 722], "the actual held second response restores empty tree and carried lantern");
+  assertEqual([restored.scene.fireflyLanternSprite.parentContainer, restored.scene.fireflyLanternSprite.x, restored.scene.fireflyLanternSprite.y], [restored.scene.wrenContainer, 46, -65], "the actual held second response restores empty tree and carried lantern");
   restored.continue();
   assertEqual(restored.timers.map(timer => timer.ms), [900], "Continue retains the original post-passage delay");
   restored.timers.shift().next();

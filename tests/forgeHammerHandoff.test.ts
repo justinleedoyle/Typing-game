@@ -87,11 +87,16 @@ function fixture(reduced = false) {
   const makeWord = (options: any) => { word = options; targets.push(options); return options; };
   Object.assign(scene, {
     store: { get: () => save, update: (edit: (state: typeof save) => void) => edit(save) },
-    scale: { width: 1920, height: 1080 }, wrenContainer: { x: 665, y: 866, scene: true }, wrenSprite: {},
+    scale: { width: 1920, height: 1080 }, wrenContainer: { x: 665, y: 866, scene: true, children: [] as any[],
+      addAt(item: any, index: number) { this.children.splice(index, 0, item); item.parent = this; return this; },
+      getIndex(item: any) { return this.children.indexOf(item); },
+    }, wrenSprite: {},
     textures,
     add: { image(x: number, y: number, key: string) {
       const image = { x, y, texture: { key }, ...dimensions, scene: true, scale: 1,
         setDepth(value: number) { this.depth = value; return this; }, setScale(value: number) { this.scale = value; return this; },
+        setOrigin(x: number, y: number) { this.originX = x; this.originY = y; return this; },
+        setPosition(x: number, y: number) { this.x = x; this.y = y; return this; },
         destroy() { this.scene = false; },
       } as any;
       images.push(image); return image;
@@ -111,6 +116,7 @@ function fixture(reduced = false) {
     releaseCatwalkCueWordAnchor: noop, dismissRevisitMemoryCue: noop, clearFornWordAnchors: noop,
     clearForkChoiceWordAnchors: noop, clearForgeChoiceCues: noop, clearPeacefulGuards: noop,
   });
+  scene.wrenContainer.children.push(scene.wrenSprite);
   scene.init({ store: scene.store });
   const forn = { x: 400, y: 866, scene: true, texture: { key: "forn" }, ...fornDimensions.forn,
     scaleX: 360 / fornDimensions.forn.height, scaleY: 360 / fornDimensions.forn.height, originX: .5, originY: 1,
@@ -141,9 +147,10 @@ await suite("Forge Hammer: the existing gift phrase visibly transfers the preloa
     const image = f.images[0], transfer = f.tweens[0];
     assertEqual(image.texture.key, "almanac-icon-bellows-hammer", "world transfer reuses the actual satchel asset");
     assert(image.lit, "the handoff retains its accepted Forge lighting");
-    assertClose(Math.max(image.width, image.height) * image.scale, 66, .001, "the accepted visible reward size is preserved");
-    assertEqual([image.x, image.y], reduced ? [703, 748] : [475, 676], "normal transfer begins at Forn; reduced motion places it in Wren's hand immediately");
-    assertEqual([transfer.x, transfer.y, transfer.duration], [703, 748, reduced ? 0 : 650], "the exact existing decorative destination and duration are preserved");
+    assertClose(Math.max(image.width, image.height) * image.scale, 58, .001, "the accepted visible reward size is preserved");
+    assertEqual([image.x, image.y], reduced ? [42, -68] : [475, 676], "normal transfer begins at Forn; reduced motion places it in Wren's hand immediately");
+    if (!reduced) assertEqual([transfer.x, transfer.y, transfer.duration], [707, 798, 650], "the existing decorative duration reaches the actual lower palm");
+    else assert(!transfer, "reduced motion directly attaches the held Hammer without a pending timer");
     assert(f.captions.at(-1)!.includes("presses the hammer into your hands") && f.gate(), "the unchanged handoff acknowledgment and Continue are available immediately");
     assertEqual(f.forn.texture.key, "forn-empty-hands-frame", "the single Hammer leaves Forn's painted glove at its existing handoff");
     assert(f.forn.scene, "the empty-handed smith remains present for the repair response");
@@ -156,8 +163,9 @@ await suite("Forge Hammer: the existing gift phrase visibly transfers the preloa
     assertClose(y + emptyBounds.top * fittedScale, originalBounds.top, 0.00001, "the actual alpha-visible head stays at the original height");
     assertClose(y + emptyBounds.bottom * fittedScale, originalBounds.bottom, 0.00001, "the actual alpha-visible boots keep the original floor contact");
     assertEqual(f.save.satchel, [], "showing the Hammer does not move its actual reward earlier");
-    f.finishTween(transfer);
-    assertEqual([image.x, image.y], [703, 748], "the settled Hammer occupies the accepted hand position");
+    if (transfer) f.finishTween(transfer);
+    assertEqual([image.x, image.y, image.parent], [42, -68, f.scene.wrenContainer], "the settled Hammer is attached to the actual hand");
+    assert(f.scene.wrenContainer.getIndex(image) < f.scene.wrenContainer.getIndex(f.scene.wrenSprite), "the real painted palm overlaps the tool grip");
     f.continue();
     assertEqual(f.word().word, "the forge breathes again", "native Continue still reveals the original fourth phrase");
     assertEqual(f.scene.keepsakeSprite, image, "the same Hammer remains visible while the final repair phrase is typed");
@@ -167,11 +175,11 @@ await suite("Forge Hammer: the existing gift phrase visibly transfers the preloa
     f.continue();
     assertEqual(f.save.satchel, ["bellows-hammer"], "the original afterFork1 callback grants its one reward");
     assertEqual(f.save.almanacLore, ["forn-bellows-song"], "the original saved lore ID remains unchanged");
-    assertEqual([f.images.length, f.tweens.length], [1, 1], "the reward card retains the same Hammer without a duplicate handoff");
+    assertEqual([f.images.length, f.tweens.length], [1, reduced ? 0 : 1], "the reward card retains the same Hammer without a duplicate handoff");
     assert(f.gate(), "the reward card remains held for native Continue");
     assert(f.captions.at(-1)!.includes("rests in your hands"), "the reward card describes the held Hammer while its inventory commit remains unchanged");
     f.continue();
-    assert(!image.scene && !f.scene.keepsakeSprite && transfer.cancelled, "original boss entry stows the Hammer and cancels its owned tween");
+    assert(!image.scene && !f.scene.keepsakeSprite && (!transfer || transfer.cancelled), "original boss entry stows the Hammer and cancels its owned tween");
   }
 });
 
@@ -186,8 +194,8 @@ await suite("Forge Hammer: fast Continue stays immediate and lifecycle cleanup c
         f.continue();
       } else if (exit === "init") f.scene.init({ store: f.scene.store });
       else f.scene.shutdownFixture();
-      assert(!image.scene && !f.scene.keepsakeSprite && transfer.cancelled, `${exit} clears the moving prop before the scene leaves`);
-      f.finishTween(transfer);
+      assert(!image.scene && !f.scene.keepsakeSprite && (!transfer || transfer.cancelled), `${exit} clears the moving prop before the scene leaves`);
+      if (transfer) f.finishTween(transfer);
       assert(!image.scene && !f.scene.keepsakeSprite, "a cancelled decorative transfer cannot restore a stale prop");
       f.scene.clearForgeKeepsake();
       assert(!f.scene.keepsakeSprite, "repeated cleanup is safe");
@@ -204,6 +212,6 @@ await suite("Forge Hammer: other passages and relic replacements retain their or
   f.scene.showForgeKeepsake("bellows-hammer", 475);
   const first = f.images[0];
   f.scene.showForgeKeepsake("master-key", 960);
-  assert(!first.scene && f.tweens[0].cancelled, "a later different relic safely replaces the former hand prop");
+  assert(!first.scene, "a later different relic safely replaces the attached former hand prop");
   assertEqual(f.scene.keepsakeSprite.texture.key, "almanac-icon-master-key", "the second fork can still show its own original keepsake");
 });

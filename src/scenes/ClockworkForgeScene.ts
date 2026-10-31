@@ -233,6 +233,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   /** The apprentices' speaker stays beside their valve during the first fork. */
   private apprenticeSprite?: Phaser.GameObjects.Image;
   private keepsakeSprite?: Phaser.GameObjects.Image;
+  private revisitGolem: Phaser.GameObjects.Container | null = null;
 
   private shiftHeld = false;
   private altHeld = false;
@@ -315,6 +316,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.bossContainer = undefined!;
     this.bossSprite = undefined!;
     this.keepsakeSprite = undefined;
+    this.revisitGolem = null;
     this.oneShotInvoker = null;
     this.shiftHeld = false;
     this.altHeld = false;
@@ -687,18 +689,19 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── Revisit mode ────────────────────────────────────────────────────────────
 
   private startRevisit(): void {
-    playPortalArrivalWake(this, this.wrenContainer, {
-      kind: "ember",
-      color: PALETTE_HEX.ember,
-      ringWidth: 148,
-      ringHeight: 42,
-    });
     const state = this.store.get();
     const progress = state.realms["clockwork-forge"];
     // Use the same precedence as chapter recovery: explicit forks outrank the
     // historical combined ending and any stale keepsakes in an old satchel.
     const first = resolveRealmFork("clockwork-forge", "fork1", progress, state.satchel);
     const second = resolveRealmFork("clockwork-forge", "fork2", progress, state.satchel);
+    this.restoreForgeRevisitAftermath(first, second);
+    playPortalArrivalWake(this, this.wrenContainer, {
+      kind: "ember",
+      color: PALETTE_HEX.ember,
+      ringWidth: 148,
+      ringHeight: 42,
+    });
     let narratorLine: string;
     let words: string[];
 
@@ -729,6 +732,29 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.setNarrator(narratorLine);
     this.band.setObjective("Type the forge memory to return to the Almanac.");
     this.readThen(() => this.deliverRevisitPassage(words));
+  }
+
+  /** Return to the established foundry floor and leave the work the player
+   * actually chose in the room. These are silent scenery, never new rewards. */
+  private restoreForgeRevisitAftermath(first: string | null, second: string | null): void {
+    this.restoreForgeStage("fork2", undefined);
+    if (first === "forn") {
+      this.showFornSprite();
+      this.showFornEmptyHands();
+      this.bellowsWorkstation ??= this.drawForgeWorkstation(650, FOUNDRY_GROUND_Y,
+        "forge-bellows-workstation", 260);
+    } else if (first === "cabal") {
+      this.showApprenticeSprite();
+      this.apprenticeSprite?.setPosition(400, FOUNDRY_GROUND_Y).setFlipX(false);
+      this.apprenticeCue ??= this.drawApprenticeCue(650, FOUNDRY_GROUND_Y);
+    }
+    if ((second === "peaceful" || second === "fought") && !this.revisitGolem?.scene) {
+      const container = this.add.container(1500, FLOOR_Y).setDepth(37);
+      const sprite = this.drawGolemInto(container, false);
+      if (second === "fought") sprite.setTint(0x68615b);
+      container.setData("forge-aftermath", second);
+      this.revisitGolem = container;
+    }
   }
 
   private deliverRevisitPassage(words: string[]): void {
@@ -834,7 +860,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private revisitMemoryWordPosition(idx: number, total: number): { x: number; y: number } {
     const cue = this.revisitMemoryCuePosition(idx, total);
-    return { x: cue.x, y: cue.y - 108 };
+    const y = Math.abs(cue.x - this.wrenContainer.x) < 165
+      ? Math.min(cue.y - 108, this.wrenContainer.y - 280)
+      : cue.y - 108;
+    return { x: cue.x, y };
   }
 
   private attachRevisitMemoryWordAnchor(target: TextWordTarget): void {
@@ -2816,17 +2845,23 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // through the final repair phrase and reward card rather than handing it twice.
     if (this.keepsakeSprite?.scene && this.keepsakeSprite.texture.key === icon.key) return;
     this.clearForgeKeepsake();
-    const end = { x: this.wrenContainer.x + 38, y: this.wrenContainer.y - 118 };
+    const hand = { x: 42, y: -68 };
+    const end = { x: this.wrenContainer.x + hand.x, y: this.wrenContainer.y + hand.y };
     const immediate = restored || reducedMotion(this);
     const item = this.add.image(immediate ? end.x : fromX,
       immediate ? end.y : FOUNDRY_GROUND_Y - 190, icon.key).setDepth(61);
-    item.setScale(66 / Math.max(item.width, item.height));
+    item.setOrigin(0.5, id === "golem-heart" ? 0.5 : 0.75);
+    item.setScale((id === "golem-heart" ? 46 : 58) / Math.max(item.width, item.height));
     this.keepsakeSprite = item;
     applySceneActorLighting(this, item);
-    this.tweens.add({
-      targets: item, ...end, duration: immediate ? 0 : 650,
-      ease: "Sine.easeInOut",
-    });
+    const settle = (): void => {
+      if (!item.scene || this.keepsakeSprite !== item) return;
+      this.wrenContainer.addAt(item, this.wrenContainer.getIndex(this.wrenSprite));
+      item.setPosition(hand.x, hand.y);
+    };
+    if (immediate) { settle(); return; }
+    this.tweens.add({ targets: item, ...end, duration: 650,
+      ease: "Sine.easeInOut", onComplete: settle });
   }
 
   private clearForgeKeepsake(): void {
@@ -2900,7 +2935,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
         fontSize: 36,
         burstColor: trueNameSeal ? PALETTE_HEX.ember : undefined,
         onClaim: () => {
-          playWrenFocus(this.wrenSprite);
+          // The settled palm stays on the carried handle during the remaining
+          // repair phrase; a walk/cast texture would move that hand away.
+          if (!this.keepsakeSprite?.scene) playWrenFocus(this.wrenSprite);
           if (!trueNameSeal?.scene) return;
           playClaimLine(
             this,
@@ -2938,7 +2975,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         },
         onComplete: () => {
           releaseTrueNameAnchor();
-          playWrenAction(this.wrenSprite);
+          if (!this.keepsakeSprite?.scene) playWrenAction(this.wrenSprite);
           if (trueNameSeal?.scene) {
             playBodyImpact(this, trueNameSeal, {
               kind: "ember",

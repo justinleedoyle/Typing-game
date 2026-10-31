@@ -51,8 +51,14 @@ function startMemory(Scene: any, state: unknown) {
   let objective = "";
   const gates: Array<() => void> = [];
   const memories: string[][] = [];
+  const aftermath: unknown[] = [];
   Object.assign(scene, {
     wrenContainer: {}, store: { get: () => state },
+    showCairnCue() { aftermath.push("cairn"); },
+    showFireflyHollow() { aftermath.push("hollow"); },
+    clearFireflyLantern() { aftermath.push("empty-hollow"); },
+    showDoorCues() { aftermath.push("doorway"); },
+    openCathedralDoor(mode: string, immediate: boolean) { aftermath.push({ mode, immediate }); },
     setNarrator: (line: string) => { caption = line; },
     band: { setObjective: (line: string) => { objective = line; } },
     readThen: (next: () => void) => gates.push(next),
@@ -65,7 +71,7 @@ function startMemory(Scene: any, state: unknown) {
   gates[0]!();
   assertEqual(memories.length, 1, "Continue starts the memory once");
   assertEqual(JSON.stringify(state), before, "revisit does not rewrite saved choices, rewards or completion");
-  return { caption, objective, words: memories[0]! };
+  return { caption, objective, words: memories[0]!, aftermath };
 }
 
 await suite("Winter branches: both aftermath memories wait for deliberate reading and preserve saved outcomes", () => {
@@ -225,4 +231,28 @@ await suite("Hub branches: entering the actual desk zone uses its latest complet
   assertEqual(cards, ["clockwork-forge"], "reflection card and narration describe the same completed realm");
   assertEqual(actions, ["wake", "runa", "book", "return"], "reflection does not alter the desk's existing interactions");
   assertEqual(JSON.stringify(state), before, "visiting the desk preserves progress and inventory");
+});
+
+await suite("Winter revisit aftermath: only an actual recorded burial restores the existing cairn", () => {
+  for (const fork2 of ["bury", "pelt", "unknown"]) {
+    const story = startMemory(Winter, frozenStory("winter-mountain", { fork2 }));
+    assertEqual(story.aftermath, fork2 === "bury" ? ["cairn"] : [], "a return retains the buried cairn without respawning taken fur or inventing an unknown burial");
+  }
+  const firefly = startMemory(Winter, frozenStory("winter-mountain", { fork1: "firefly", fork2: "bury" }, ["firefly-lantern", "cairn-token"]));
+  assertEqual(firefly.aftermath, ["hollow", "empty-hollow", "cairn"], "the chosen firefly trail retains its tree with no duplicate carried lantern beside the independent burial cairn");
+});
+
+await suite("Bell revisit aftermath: the saved or unambiguous legacy passage stays open without replaying a branch", () => {
+  for (const sample of [
+    { choices: { fork1: "chant" }, items: ["lock-bar"], door: "chant" },
+    { choices: { fork1: "force" }, items: ["quiet-chant"], door: "force" },
+    { choices: {}, items: ["quiet-chant"], door: "chant" },
+    { choices: {}, items: ["lock-bar"], door: "force" },
+    { choices: {}, items: ["quiet-chant", "lock-bar"], door: null },
+    { choices: {}, items: [], door: null },
+  ]) {
+    const story = startMemory(Bell, frozenStory("sunken-bell", sample.choices, sample.items));
+    assertEqual(story.aftermath, sample.door === null ? [] : ["doorway", { mode: sample.door, immediate: true }],
+      "only a resolved first fork restores the accepted doorway directly in its open state; ambiguous history keeps the neutral Bell view");
+  }
 });

@@ -211,6 +211,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private heldWoodRelic: Phaser.GameObjects.Image | null = null;
   private fluteHandoffPending = false;
   private groveLightCue: Phaser.GameObjects.Container | null = null;
+  private revisitAftermath: Phaser.GameObjects.Container | null = null;
   private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
   private pathCue: Phaser.GameObjects.Container | null = null;
   private pathCueIndex: number | null = null;
@@ -266,6 +267,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.heldWoodRelic = null;
     this.fluteHandoffPending = false;
     this.groveLightCue = null;
+    this.revisitAftermath = null;
     this.forkChoiceWordAnchors = [];
     this.snowFoxTripNoticed = false;
     this.shrineForgivenessNoticed = false;
@@ -648,14 +650,18 @@ export class HauntedWoodScene extends Phaser.Scene {
       kind: "mist",
       color: 0xd8e2cf,
     });
-    const choices = this.store.get().realms["haunted-wood"]?.choices ?? {};
+    const state = this.store.get();
+    const progress = state.realms["haunted-wood"];
+    const first = resolveRealmFork("haunted-wood", "fork1", progress, state.satchel);
+    const second = resolveRealmFork("haunted-wood", "fork2", progress, state.satchel);
+    this.restoreWoodRevisitAftermath(first, second);
     let narratorLine: string;
     let words: string[];
 
-    if (choices["fork2"] === "bargain") {
+    if (second === "bargain") {
       narratorLine = "The wood is quiet. The Ghost-King kept his promise.";
       words = ["the", "remembered", "rest", "now"];
-    } else if (choices["fork1"] === "offering") {
+    } else if (first === "offering") {
       narratorLine = "The crossroads shrine has a new candle. Someone else found it.";
       words = ["we", "are", "not", "forgotten"];
     } else {
@@ -666,6 +672,49 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.setNarrator(narratorLine);
     this.band.setObjective("Type the wood memory to return to the Almanac.");
     this.readThen(() => this.deliverRevisitPassage(words));
+  }
+
+  /** A return keeps the chosen shrine/hollow and a spent fire's ground mark.
+   * None of these quiet remnants can award an item or imply an unfound name. */
+  private restoreWoodRevisitAftermath(first: string | null, second: string | null): void {
+    if (this.revisitAftermath?.scene) return;
+    const aftermath = this.add.container(0, 0).setDepth(-0.4);
+    this.revisitAftermath = aftermath;
+    if (first === "offering") {
+      this.offeringCue = this.createRootedWoodProp(400, "wood-offering-shrine", 230, -72, 0);
+      this.tweens.killTweensOf(this.offeringCue);
+      this.offeringCue.setAlpha(1);
+      const candle = this.add.graphics();
+      candle.fillStyle(0x3a3022, 0.9);
+      candle.fillEllipse(0, -76, 27, 7);
+      candle.fillStyle(0xb9ab85, 1);
+      candle.fillRoundedRect(-5, -99, 10, 23, 2);
+      candle.fillStyle(0xe9d2a4, 0.8);
+      candle.fillEllipse(0, -99, 10, 3);
+      candle.fillStyle(0xf3d498, 0.8);
+      candle.fillEllipse(0, -108, 5, 11);
+      this.offeringCue.add(candle);
+    } else if (first === "bone-flute") {
+      this.boneFluteCue = this.createRootedWoodProp(1450, "wood-flute-hollow", 260, -74, 0);
+      this.tweens.killTweensOf(this.boneFluteCue);
+      this.boneFluteCue.setAlpha(1);
+      // The flute stays in the saved satchel; the visited hollow is empty.
+      this.boneFluteProp = null;
+    }
+    if (second === "force") {
+      const ash = this.add.graphics();
+      const x = this.scale.width * 0.06;
+      ash.fillStyle(0x100e0d, 0.42);
+      ash.fillEllipse(x, 770, 200, 28);
+      ash.fillStyle(0x211b16, 0.36);
+      ash.fillEllipse(x - 18, 767, 158, 20);
+      ash.lineStyle(2, 0x86786a, 0.3);
+      for (const [dx, dy, length] of [[-78, -2, 17], [-45, -8, 23], [-14, 5, 15],
+        [18, -5, 19], [48, 2, 13], [68, -4, 11]] as const) {
+        ash.lineBetween(x + dx, 770 + dy, x + dx + length, 767 + dy);
+      }
+      aftermath.add(ash);
+    }
   }
 
   private deliverRevisitPassage(words: string[]): void {
@@ -3176,12 +3225,12 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.boneFluteCue?.remove(flute);
     this.add.existing(flute);
     flute.setPosition(world.tx, world.ty).setDepth(43).setAlpha(1);
-    flute.setScale(86 / flute.height);
+    flute.setOrigin(0.5, 0.8).setScale(72 / flute.height);
     this.boneFluteProp = null;
     this.heldWoodRelic = flute;
-    const hand = { x: this.wrenContainer.x + 52, y: this.wrenContainer.y - 96 };
+    const hand = { x: this.wrenContainer.x + 42, y: this.wrenContainer.y - 68 };
     if (reducedMotion(this)) {
-      flute.setPosition(hand.x, hand.y);
+      this.attachHeldWoodRelic(flute);
       onSettled();
       return;
     }
@@ -3195,6 +3244,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       onComplete: () => {
         if (!flute.scene) return;
         this.fluteHandoffPending = false;
+        this.attachHeldWoodRelic(flute);
         onSettled();
       },
     });
@@ -3202,10 +3252,18 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private showGatheredAshVial(): void {
     this.clearHeldWoodRelic();
-    const vial = this.add.image(this.wrenContainer.x + 52, this.wrenContainer.y - 96, "wood-ash-vial");
-    vial.setScale(62 / vial.height).setDepth(43);
+    const vial = this.add.image(0, 0, "wood-ash-vial");
+    vial.setOrigin(0.5, 0.75).setScale(44 / vial.height).setDepth(43);
     applySceneActorLighting(this, vial);
     this.heldWoodRelic = vial;
+    this.attachHeldWoodRelic(vial);
+  }
+
+  /** The existing sleeve/palm paints in front of the handle, and the keepsake
+   * shares Wren's breathing/movement instead of hovering beside the cloak. */
+  private attachHeldWoodRelic(relic: Phaser.GameObjects.Image): void {
+    this.wrenContainer.addAt(relic, this.wrenContainer.getIndex(this.wrenSprite));
+    relic.setPosition(42, -68);
   }
 
   private clearHeldWoodRelic(): void {

@@ -680,6 +680,13 @@ export class SunkenBellScene extends Phaser.Scene {
     // true when the clock isn't running, so input flows freely.
 
     const state = this.store.get();
+    const door = resolveRealmFork("sunken-bell", "fork1", state.realms["sunken-bell"], state.satchel);
+    if (door === "chant" || door === "force") {
+      // A completed passage stays open on the same accepted nave painting.
+      // Do not reconstruct either choice or a second removable lock bar.
+      this.showDoorCues();
+      this.openCathedralDoor(door, true);
+    }
     const ending = resolveRealmFork("sunken-bell", "fork2", state.realms["sunken-bell"], state.satchel);
     let narratorLine: string;
     let words: string[];
@@ -789,7 +796,8 @@ export class SunkenBellScene extends Phaser.Scene {
 
   private revisitMemoryCuePosition(idx: number, total: number): { x: number; y: number } {
     const spacing = total <= 4 ? 190 : 165;
-    const startX = this.scale.width / 2 - ((total - 1) * spacing) / 2;
+    const centerX = this.doorwayStage?.scene ? NAVE_DOOR.centerX : this.scale.width / 2;
+    const startX = centerX - ((total - 1) * spacing) / 2;
     return {
       x: startX + idx * spacing,
       y: idx % 2 === 0 ? 800 : 760,
@@ -2949,7 +2957,7 @@ export class SunkenBellScene extends Phaser.Scene {
   private showAurlandToken(): void {
     this.clearAurlandToken();
     const giver = this.aurlandImage;
-    const hand = { x: 38, y: -118 };
+    const hand = { x: 46, y: -65 };
     const destination = {
       x: this.wrenContainer.x + hand.x,
       y: this.wrenContainer.y + hand.y,
@@ -2959,14 +2967,14 @@ export class SunkenBellScene extends Phaser.Scene {
       immediate ? destination.x : giver.x + 44,
       immediate ? destination.y : giver.y - 150,
       "bell-trident-token",
-    ).setDepth(61);
-    token.setScale(64 / Math.max(token.width, token.height));
+    ).setOrigin(0.5, 0.1).setDepth(61);
+    token.setScale(56 / Math.max(token.width, token.height));
     applySceneActorLighting(this, token);
     this.aurlandToken = token;
     const settle = (): void => {
       if (this.aurlandToken !== token || !token.scene || !this.wrenContainer.scene) return;
       // Reparent only at arrival so the held keepsake follows Wren's quiet breath.
-      this.wrenContainer.add(token);
+      this.wrenContainer.addAt(token, Math.max(0, this.wrenContainer.getIndex(this.wrenSprite)));
       token.setPosition(hand.x, hand.y);
       if (this.aurlandImage === giver) this.hideAurland();
     };
@@ -3989,10 +3997,10 @@ export class SunkenBellScene extends Phaser.Scene {
     if (this.heldLockBarSprite?.scene) return;
     const icon = satchelIconFor("lock-bar");
     if (!icon || !this.textures.exists(icon.key)) return;
-    const bar = this.add.image(52, -112, icon.key).setDepth(61);
-    bar.setScale(132 / Math.max(bar.width, bar.height));
+    const bar = this.add.image(42, -65, icon.key).setOrigin(0.26, 0.32).setDepth(61);
+    bar.setScale(106 / Math.max(bar.width, bar.height));
     applySceneActorLighting(this, bar);
-    this.wrenContainer.add(bar);
+    this.wrenContainer.addAt(bar, Math.max(0, this.wrenContainer.getIndex(this.wrenSprite)));
     this.heldLockBarSprite = bar;
   }
 

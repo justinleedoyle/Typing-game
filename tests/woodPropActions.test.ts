@@ -6,7 +6,7 @@ import { assert, assertClose, assertEqual, suite } from "./_assert";
 const url = new URL("../src/scenes/HauntedWoodScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const sceneClass = source.statements.find(ts.isClassDeclaration)!;
-const methods = ["finishFlute","init", "preload", "createRootedWoodProp", "addRootedWoodPainting", "createOfferingCue", "createBoneFluteCue", "createGroveLightCue", "showFork1Cues", "showFork2Cues", "startFork1", "startFork2", "makeWoodForkWord", "fadeOutForkCue", "drawShrine", "pulseShrine", "settleBoneFluteInHand", "showGatheredAshVial", "clearHeldWoodRelic", "clearWoodForkCues", "startFork1BoneFlute", "startFork2Force", "runPassageChain", "ownerPassageWordPosition", "drawGhostKingRootThrone", "drawGhostKing", "fadeGhostKingBody", "onKeyDown"];
+const methods = ["finishFlute","init", "preload", "createRootedWoodProp", "addRootedWoodPainting", "createOfferingCue", "createBoneFluteCue", "createGroveLightCue", "showFork1Cues", "showFork2Cues", "startFork1", "startFork2", "makeWoodForkWord", "fadeOutForkCue", "drawShrine", "pulseShrine", "settleBoneFluteInHand", "showGatheredAshVial", "attachHeldWoodRelic", "clearHeldWoodRelic", "clearWoodForkCues", "startFork1BoneFlute", "startFork2Force", "runPassageChain", "ownerPassageWordPosition", "drawGhostKingRootThrone", "drawGhostKing", "fadeGhostKingBody", "onKeyDown"];
 const constants = source.statements.filter(ts.isVariableStatement).flatMap(statement =>
   statement.declarationList.declarations.filter(declaration => ["WOOD_BRANCH_WORD_Y", "GHOST_KING_SPRITE_HEIGHT"].includes(declaration.name.getText(source)))
     .map(declaration => `const ${declaration.getText(source)};`)).join("\n");
@@ -52,13 +52,16 @@ function fixture(reduced = false) {
     once(_event: string, callback: () => void) { this.listeners.push(callback); return this; },
     setDepth(value: number) { this.depth = value; return this; }, setAlpha(value: number) { this.alpha = value; return this; },
     add(child: any) { this.children.push(child); child.parent = this; return this; },
+    addAt(child: any, index: number) { this.children.splice(index, 0, child); child.parent = this; return this; },
+    getIndex(child: any) { return this.children.indexOf(child); },
     remove(child: any) { this.children = this.children.filter(value => value !== child); child.parent = null; return this; },
     destroy() { this.scene = false; for (const child of this.children) child.destroy?.(); this.children = []; for (const listener of this.listeners.splice(0)) listener(); },
   });
+  const wren = container(960, 826), wrenSprite = {}; wren.add(wrenSprite);
   Object.assign(scene, {
     checkpoint() {},
     scale: { width: 1920, height: 1080 },
-    wrenContainer: { x: 960, y: 826 }, wrenSprite: {},
+    wrenContainer: wren, wrenSprite,
     heldWoodRelic: null, boneFluteProp: null, fluteHandoffPending: false, offeringCue: null, groveLightCue: null, forkChoiceWordAnchors: [],
     store: { get: () => save, update: (edit: (state: typeof save) => void) => edit(save) },
     load: { image: (key: string) => loaded.push(key) },
@@ -190,7 +193,7 @@ await suite("Wood flute: native taking empties the hollow and shows the existing
     assert(hollow.children.includes(flute), "reaching alone does not take the flute or grant a reward");
     f.continue();
     assertEqual(f.target().word, "take it", "the original final native action is unchanged");
-    f.scene.wrenContainer = { x: 1010, y: 810 };
+    Object.assign(f.scene.wrenContainer, { x: 1010, y: 810 });
     f.target().onComplete();
     assert(!hollow.children.includes(flute), "the same flute leaves the hollow before the held result");
     assertEqual(f.scene.heldWoodRelic, flute, "the actual painted source moves, with no second flute created");
@@ -207,9 +210,10 @@ await suite("Wood flute: native taking empties the hollow and shows the existing
       assert(!movement, "reduced motion settles directly without a travel tween");
     }
     assertEqual(f.scene.fluteHandoffPending, false, "a settled or reduced-motion handoff releases input before the response gate");
-    assertEqual([flute.x, flute.y], [1062, 714], "the hand follows actual Wren coordinates, not a fixed scene point");
+    assertEqual([flute.x, flute.y, flute.parent], [42, -68, f.scene.wrenContainer], "the settled flute belongs to Wren’s actual hand and follows subsequent movement");
+    assert(f.scene.wrenContainer.getIndex(flute) < f.scene.wrenContainer.getIndex(f.scene.wrenSprite), "the original sleeve and palm overlap the flute grip");
     assertEqual([flute.depth, flute.alpha], [43, 1], "the held flute remains visible above the world actor");
-    assertEqual(flute.height * flute.scale, 86, "the hand-held flute has a physical, readable size");
+    assertEqual(flute.height * flute.scale, 72, "the hand-held flute has a physical, readable size");
     assert(f.captions.at(-1)?.startsWith("The flute is cold."), "the original truthful result appears after the handoff");
     f.continue();
     assertEqual(f.save.satchel, ["bone-flute"], "the original response Continue earns the single relic");
@@ -226,7 +230,9 @@ await suite("Wood gathered ash: the existing vial is visible before the conseque
     f.scene.startFork2Force();
     const vial = f.images.find(image => image.key === "wood-ash-vial");
     assert(vial?.scene, "the gathered result has a real painted vial in the world");
-    assertEqual([vial.x, vial.y, vial.height * vial.scale], [1012, 730, 62], "the compact vial sits at Wren's hand below the hood");
+    assertEqual([vial.x, vial.y, vial.height * vial.scale], [42, -68, 44], "the compact vial sits at Wren's hand below the hood");
+    assertEqual(vial.parent, f.scene.wrenContainer, "the same vial follows Wren rather than floating at a world coordinate");
+    assert(f.scene.wrenContainer.getIndex(vial) < f.scene.wrenContainer.getIndex(f.scene.wrenSprite), "the sleeve/palm overlaps the received vial");
     assertEqual(f.save.satchel, ["ash-vial"], "the original force reward remains immediate");
     assert(f.captions.at(-1)?.includes("vial of ash"), "the unchanged consequence agrees with the visible prop");
     assertEqual(f.entered, [], "combat still waits for the original held Continue");

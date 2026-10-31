@@ -743,10 +743,17 @@ export class WinterMountainScene extends Phaser.Scene {
       color: PALETTE_HEX.frost,
     });
     const choices = this.store.get().realms["winter-mountain"]?.choices ?? {};
+    if (choices["fork1"] === "firefly") {
+      this.showFireflyHollow();
+      this.clearFireflyLantern();
+    }
     let narratorLine: string;
     let words: string[];
 
     if (choices["fork2"] === "bury") {
+      // Keep the actual low cairn in its original snow contact on return.
+      // The pelt route deliberately leaves this place empty: its fur was taken.
+      this.showCairnCue();
       narratorLine = "The cairn is still standing.";
       words = ["the", "snow", "keeps", "the", "quiet"];
     } else if (choices["fork2"] === "pelt") {
@@ -2433,17 +2440,19 @@ export class WinterMountainScene extends Phaser.Scene {
     const icon = satchelIconFor("hunters-horn");
     if (!icon || !this.textures.exists(icon.key)) { onSettled(); return; }
     const token = this.huntressHornTransferToken;
-    const end = { x: this.wrenContainer.x - 42, y: this.wrenContainer.y - 122 };
+    const hand = { x: -42, y: -65 };
+    const end = { x: this.wrenContainer.x + hand.x, y: this.wrenContainer.y + hand.y };
     const immediate = restored || reducedMotion(this);
     const from = this.huntressSprite?.scene
-      ? { x: this.huntressSprite.x + 42, y: this.huntressSprite.y - 106 }
+      ? { x: this.huntressSprite.x + 22, y: this.huntressSprite.y - 42 }
       : end;
     const horn = this.add.image(immediate ? end.x : from.x, immediate ? end.y : from.y, icon.key)
-      .setOrigin(0.5).setDepth(61);
-    horn.setScale(76 / Math.max(horn.width, horn.height));
+      .setOrigin(0.82, 0.32).setDepth(61);
+    horn.setScale(64 / Math.max(horn.width, horn.height));
     applySceneActorLighting(this, horn);
     this.huntressHornSprite = horn;
-    if (immediate) { onSettled(); return; }
+    const hold = () => this.holdWinterProp(horn, hand.x, hand.y);
+    if (immediate) { hold(); onSettled(); return; }
     this.huntressHornTransferPending = true;
     let settled = false;
     this.tweens.add({
@@ -2452,9 +2461,17 @@ export class WinterMountainScene extends Phaser.Scene {
         if (settled || token !== this.huntressHornTransferToken || this.huntressHornSprite !== horn || !horn.scene) return;
         settled = true;
         this.huntressHornTransferPending = false;
+        hold();
         onSettled();
       },
     });
+  }
+
+  /** A settled keepsake shares Wren's feet-origin body movement. Its handle
+   * meets the painted fingers, with the sleeve in front of the contact. */
+  private holdWinterProp(prop: Phaser.GameObjects.Image, x: number, y: number): void {
+    this.wrenContainer.addAt(prop, Math.max(0, this.wrenContainer.getIndex(this.wrenSprite)));
+    prop.setPosition(x, y);
   }
 
   private presentWinterPassageReaction(
@@ -2616,7 +2633,8 @@ export class WinterMountainScene extends Phaser.Scene {
       cue.remove(lantern);
       this.add.existing(lantern);
     }
-    lantern.setPosition(this.wrenContainer.x + 54, this.wrenContainer.y - 120).setDepth(61);
+    lantern.setScale(58 / lantern.height).setOrigin(0.5, 0.04).setDepth(61);
+    this.holdWinterProp(lantern, 46, -65);
   }
 
   private clearFireflyLantern(): void {
@@ -2948,8 +2966,9 @@ export class WinterMountainScene extends Phaser.Scene {
       this.peltCue!.removeAll(true);
       this.add.existing(pelt);
     }
-    this.fitWinterAftermathPainting(pelt, "winter-aftermath-pelt", 104);
-    pelt.setPosition(this.wrenContainer.x + 64, this.wrenContainer.y - 96).setDepth(61).setAlpha(1);
+    this.fitWinterAftermathPainting(pelt, "winter-aftermath-pelt", 80);
+    pelt.setDepth(61).setAlpha(1);
+    this.holdWinterProp(pelt, 54, -50);
     this.heldPeltSprite = pelt;
   }
 

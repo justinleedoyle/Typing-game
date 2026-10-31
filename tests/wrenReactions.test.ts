@@ -11,6 +11,7 @@ const code = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
 interface WrenHelpers {
+  preloadWren(scene: unknown, opts?: { carry?: boolean }): void;
   bobWrenSprite(image: Image): void;
   playWrenFocus(image: Image): void;
   playWrenAction(image: Image): void;
@@ -178,4 +179,33 @@ await suite("Wren reactions: repeated damage restores the stable pose and guards
   assertEqual(resting(image), initial, "the second damage reaction does not inherit the first knockback");
   assertEqual(restored, 1, "the current recovery runs its scene hook once");
   assert(!image.tinted && !image.getData("wrenHurtTimer"), "recovery clears tint and timer state");
+});
+
+await suite("Wren carrying: rapid typing keeps the painted supporting arms and explicit release defeats stale reactions", () => {
+  const { image, active } = fixture("SkyIslandScene");
+  exports.setWrenPose(image, "carry");
+  const initial = resting(image);
+  for (let key = 0; key < 8; key++) {
+    exports.playWrenFocus(image);
+    assertEqual(image.texture.key, "wren-carry", "claiming a book word cannot swap its supporting arms for a walk frame");
+    image.x -= 2; image.y -= 1;
+    exports.bobWrenSprite(image);
+    exports.playWrenAction(image);
+    assertEqual(image.texture.key, "wren-carry", "completed book words cannot introduce the cast pose and its staff");
+    image.y -= 3;
+  }
+  const oldCallbacks = active.map(tween => tween.onComplete);
+  exports.setWrenPose(image, "front");
+  const released = resting(image);
+  for (const callback of oldCallbacks) callback?.();
+  assertEqual(resting(image), released, "putting down the book removes the carry pose even if a prior reaction completes late");
+  assertEqual([released.key, released.x, released.y], ["wren-front", initial.x, initial.y], "release retains Wren's original foot position");
+});
+
+await suite("Wren carrying: only a scene requesting the pose expands its required artwork gate", () => {
+  const ordinary: string[] = [], carrying: string[] = [];
+  exports.preloadWren({ load: { image: (key: string) => ordinary.push(key) } });
+  exports.preloadWren({ load: { image: (key: string) => carrying.push(key) } }, { carry: true });
+  assertEqual(ordinary, ["wren-front", "wren-walk", "wren-cast", "wren-hurt"], "all other scenes retain their original required pose set");
+  assertEqual(carrying, [...ordinary, "wren-carry"], "the carrying scene preloads its new pose through the existing asset recovery gate");
 });

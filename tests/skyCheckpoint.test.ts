@@ -12,7 +12,7 @@ import { assert, assertEqual, suite } from "./_assert";
 const url = new URL("../src/scenes/SkyIslandScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
-const methods = ["init", "checkpoint", "savedStageData", "resumeSky", "settleResumedActor", "resumePath", "resumeBoss", "restoreEttaBookPose", "resumeEttaBook", "finishRestoredEttaBook",
+const methods = ["init", "checkpoint", "savedStageData", "resumeSky", "settleResumedActor", "resumePath", "resumeBoss", "stageSkyRevisitAftermath", "restoreEttaBookPose", "setEttaCarryPose", "updateEttaBookCarry", "showEttaBookCue", "clearEttaBookCue", "resumeEttaBook", "finishRestoredEttaBook",
   "runPathBeats", "startLanternLighter", "onLighterConvoComplete", "startFirstSpiritEncounter", "beginFirstSpiritEncounter", "startFirstSpiritEncounterFixed", "defeatSpirit", "onFirstEncounterCleared",
   "startAct2", "startTemple", "quietLordIntrusionAnchor", "onTempleCleared", "startSealedScrollTemple", "startEttaEncounter", "startEttaHelp", "moveEttaBook", "startFork1", "startFork1HelpEtta", "startFork1StealFlame", "startAct3",
   "startBossPhase1", "startBossPhase2", "startBossPhase3", "onBossDefeated", "startFork2", "startFork2KindEnding", "startFork2CutTether", "releaseFork2Spirit", "startLanternMothGate", "showMothAnswer", "restoreMothPerch",
@@ -26,7 +26,10 @@ const globals = {
   resolveCombatLoadout, rememberRealmFork, resolveRealmFork, rememberCompanionDecision, resolveCompanionDecision,
   reducedMotion: (s: any) => s.reduced, PALETTE_HEX: { brass: 1, ember: 2, frost: 3 },
   Phaser: { Math: { Clamp: (n: number, min: number, max: number) => Math.max(min, Math.min(max, n)) },
-    GameObjects: { Events: { DESTROY: "destroy" } }, Cameras: { Scene2D: { Events: { FADE_OUT_COMPLETE: "fade" } } } },
+    Scenes: { Events: { UPDATE: "update" } }, GameObjects: { Events: { DESTROY: "destroy" } }, Cameras: { Scene2D: { Events: { FADE_OUT_COMPLETE: "fade" } } } },
+  setWrenPose: (sprite: any, pose: string) => { sprite.texture = { key: `wren-${pose}` }; sprite.setScale(240 / sprite.height); },
+  makeWrenCarryHands: (scene: any) => { const hands = prop(); scene.carryHandBuilds.push(hands); return hands; },
+  addLocalGroundShadow: () => prop(), applySceneActorLighting: noop,
   addIdleBreath: noop, playWrenFocus: noop, playWrenAction: noop, playChime: noop, playActorAttention: noop, playWaveSting: noop,
   playWrenHurt: noop, playQuietLordIntrusion: noop, flashQuietLordFragment: noop, playBellToll: noop, playSparkZap: noop,
   playBodyImpact: noop, dismissTrueNameSeal: noop, playClaimLine: noop, playBodyTypePulse: noop, playRealmReturnDeparture: noop,
@@ -37,10 +40,13 @@ const globals = {
 };
 const Sky = new Function(...Object.keys(globals), `${script}; return Sky;`)(...Object.values(globals));
 function prop(x = 0, y = 0): any {
-  return { x, y, scene: true, alpha: 1, angle: 0, scale: 1,
+  return { x, y, scene: true, alpha: 1, angle: 0, scale: 1, scaleX:1, scaleY:1, width:1000, height:1000, texture:{key:"test"}, children:[] as any[],
     setPosition(x: number, y: number) { this.x = x; this.y = y; return this; },
-    setAlpha(n: number) { this.alpha = n; return this; }, setScale(n: number) { this.scale = n; return this; },
-    setAngle(n: number) { this.angle = n; return this; }, setDepth() { return this; }, setVisible() { return this; }, setTint() { return this; },
+    setAlpha(n: number) { this.alpha = n; return this; }, setScale(n: number, y = n) { this.scale = n; this.scaleX = n; this.scaleY = y; return this; },
+    setTexture(key:string) { this.texture={key};return this; }, setOrigin() {return this;}, setName(name:string) {this.name=name;return this;},
+    setDisplaySize(width:number,height:number) {this.displayWidth=width;this.displayHeight=height;return this;},
+    add(child:any) {this.children.push(...(Array.isArray(child)?child:[child]));return this;},
+    setAngle(n: number) { this.angle = n; return this; }, setActive(active:boolean) {this.active=active;return this;}, setDepth() { return this; }, setVisible() { return this; }, setTint() { return this; },
     getAt() { return prop(); }, getByName() { return this.paper ??= prop(); }, once: noop, destroy() { this.scene = false; } };
 }
 function fixture(initial?: SaveState, reduced = false) {
@@ -48,10 +54,16 @@ function fixture(initial?: SaveState, reduced = false) {
   const backend = { async load() { return migrate(JSON.parse(stored)); }, async save(state: SaveState) { stored = JSON.stringify(state); } };
   const store = new SaveStore(backend, migrate(JSON.parse(stored)), { saveDelayMs: 60000 });
   const scene = new Sky(), stats = new SessionStats();
+  const updateListeners: Array<{fn:Function, context:any}> = [], carryHandBuilds:any[] = [], images:any[] = [];
+  const sprite=prop();sprite.texture={key:"wren-front"};sprite.setScale(.24);
+  sprite.getWorldTransformMatrix=()=>({tx:scene.wrenContainer.x+sprite.x,ty:scene.wrenContainer.y+sprite.y,a:sprite.scaleX,d:sprite.scaleY,
+    transformPoint(x:number,y:number){return {x:this.tx+x*this.a,y:this.ty+y*this.d};}});
   const targets: any[] = [], gates: Array<() => void> = [], timers: Array<{ delay: number; callback: () => void }> = [], captions: string[] = [], tweens: any[] = [], entered: string[] = [];
   Object.assign(scene, {
     store, reduced, typingInput: { getStats: () => stats }, oneShotInvoker: { getSpent: () => [] },
-    scale: { width: 1920, height: 1080 }, wrenContainer: prop(960, 826), wrenSprite: {},
+    scale: { width: 1920, height: 1080 }, wrenContainer: prop(960, 826), wrenSprite: sprite, carryHandBuilds,
+    events:{on(_event:string,fn:Function,context:any){updateListeners.push({fn,context});},off(_event:string,fn:Function,context:any){for(let n=updateListeners.length-1;n>=0;n--)if(updateListeners[n].fn===fn&&updateListeners[n].context===context)updateListeners.splice(n,1);}},
+    add:{container:(x:number,y:number)=>prop(x,y),image:(x:number,y:number,key:string)=>{const image=prop(x,y);image.texture={key};images.push(image);return image;}},
     combat: resolveCombatLoadout([], "sky-island"), ambientLanterns: [], usedOneShots: [], phraseSpawns: [],
     time: { delayedCall(delay: number, callback: () => void) { timers.push({ delay, callback }); } },
     tweens: { killTweensOf: (body: any) => tweens.filter(tween => tween.targets === body).forEach(tween => tween.cancelled = true),
@@ -75,12 +87,14 @@ function fixture(initial?: SaveState, reduced = false) {
     drawSealedScroll: () => prop(), skyOwnedWordPosition: () => ({ x: 700, y: 500 }),
     showEtta() { scene.ettaSprite ??= prop(); }, hideEtta() { scene.ettaSprite = null; },
     showEttaBookCue() { scene.ettaBookCue ??= prop(760, 826); scene.ettaBookShelf ??= prop(1260, 826); scene.ettaBookGroundShadow ??= prop(760, 828); return scene.ettaBookCue; },
-    fadeOutForkCue: noop, showFork1Cues() { scene.ettaSprite = prop(); scene.beaconFlameCue = prop(); },
+    clearEttaBookWordAnchors:noop, fadeOutForkCue: noop, showFork1Cues() { scene.ettaSprite = prop(); scene.beaconFlameCue = prop(); },
     showFork2Cues() { scene.kindAnswerCue = prop(); scene.tetherThreadCue = prop(); scene.fork2Scholar = prop(776,710); scene.beaconFlameCue = prop(1140,792); },
     dimBeaconFlameVisual() { scene.dimmed = true; }, takeBeaconSparkVisual() { scene.taken = true; scene.heldBeaconSpark = prop(); }, clearHeldBeaconSpark: noop,
     drawScholarSpirit: () => prop(960, 400), scholarBossWordPosition: () => ({ x: 960, y: 500 }), tweenBossBow: noop, flashBossEyes: noop, spawnBossLanternBurst: noop,
     showLanternMothCompanion() { scene.lanternMothCompanion ??= prop(1160, 650); }, pulseLanternMothCompanion: noop,
     settleLanternMothOnWren(callback: () => void) { scene.landed = true; callback(); }, dismissLanternMothCompanion() { scene.lanternMothCompanion = null; },
+    createBeaconFlameCue() { const beacon=prop(1320,792),flame=prop(),light=prop();beacon.getByName=(name:string)=>name==="beacon-spark"?flame:name==="beacon-light"?light:null;scene.beaconBuilds.push(beacon);return beacon; },
+    beaconBuilds:[],
     showAlmanacStamp: noop, playOneShotSourceLine: noop,
     startAct1() { entered.push("arrival"); scene.checkpoint("arrival"); },
     startRevisit() { entered.push("revisit"); },
@@ -89,7 +103,7 @@ function fixture(initial?: SaveState, reduced = false) {
   stats.restoreCheckpoint(scene.resumeCheckpoint?.data ?? {});
   function next() { const gate = gates.shift(); assert(gate, "Continue has an existing native gate"); gate!(); }
   function complete() { const target = scene.activeTargets.at(-1); assert(target, "the pending phrase is visible"); target.onComplete(); }
-  return { scene, store, stats, backend, targets, gates, timers, captions, tweens, entered, next, complete,
+  return { scene, store, stats, backend, targets, gates, timers, captions, tweens, entered, updateListeners, carryHandBuilds, images, next, complete,
     async reload() { await store.flush(); const restored = await SaveStore.load(backend, { saveDelayMs: 60000 }); return fixture(structuredClone(restored.get()) as SaveState, reduced); },
     async flush() { await store.flush(); },
   };
@@ -256,7 +270,7 @@ await suite("Sky book: interrupted transfers settle the one book before the held
       const f = fixture(undefined, reduced); f.scene.checkpoint("etta-book", { stage, nextTemple: 3 });
       const resumed = await f.reload(); resumed.scene.resumeSky();
       const book = resumed.scene.ettaBookCue;
-      assertEqual([book.x, book.y, book.angle], stage === "shelved" ? [1260, 732, 0] : [898, 714, -8], "restoration reconstructs the received or shelved pose without replaying a move");
+      assertEqual([book.x, book.y, book.angle], stage === "shelved" ? [1260, 732, 0] : [960, 722, -3], "restoration reconstructs the received or shelved pose without replaying a move");
       assert(!resumed.tweens.some(tween => tween.duration === 520), "reload does not replay the handoff animation");
       assertEqual(resumed.scene.ettaBookMoving, false, "restored input is not held by a stale transfer");
       if (stage === "place") assertEqual(resumed.targets.at(-1).word, "place it gently", "completed lift never repeats");
@@ -306,7 +320,7 @@ await suite("Sky help branch: one last volume keeps its four-versus-two phrases,
     const book = f.scene.ettaBookCue;
     const pose = (scene: any) => [scene.ettaBookCue.x, scene.ettaBookCue.y, scene.ettaBookCue.angle];
     const expectedPose = (completed: number) => helpedBefore || completed >= 2
-      ? [1260, 732, 0] : completed === 1 ? [898, 714, -8] : [760, 826, 0];
+      ? [1260, 732, 0] : completed === 1 ? [960, 722, -3] : [760, 826, 0];
     assert(book?.scene && f.scene.ettaBookShelf?.scene, "the later encounter stages the existing single volume and shelf");
     assertEqual(pose(f.scene), expectedPose(0), "the already-placed book begins shelved; skipped help begins with one ground volume");
     assertEqual(f.gates.length, 1, "the unchanged introduction remains held before typing");
@@ -420,4 +434,93 @@ await suite("Sky completion: final passage retains marker until actual completio
   const other = fixture(); other.scene.revisit = true;
   other.store.setCheckpoint({ scene: "SunkenBellScene", step: "fork1", data: {} });
   other.scene.startEnding(); assertEqual(other.store.get().checkpoint?.scene, "SunkenBellScene", "even ending cleanup on a revisit cannot clear another realm marker"); await other.flush();
+});
+
+
+await suite("Sky carrying: one bounded volume follows the painted carrying pose and foreground fingers through real save restoration", async () => {
+  for(const reduced of [false,true]) {
+    const f=fixture(undefined,reduced);
+    f.scene.showEttaBookCue=()=>Sky.prototype.showEttaBookCue.call(f.scene);
+    const before=JSON.stringify(f.store.get());
+    f.scene.restoreEttaBookPose("carried");
+    const book=f.scene.ettaBookCue,hands=f.scene.ettaCarryHands;
+    assertEqual(f.images.filter((image:any)=>image.texture.key==="etta-volume").map((image:any)=>image.displayWidth),[112],"the actual book constructor bounds the single painted volume to the intended carry width");
+    assertEqual([f.scene.wrenSprite.texture.key,book.x,book.y,book.angle],["wren-carry",960,722,-3],"the carried volume is centered across the dedicated forearms below the face");
+    assertEqual(f.updateListeners.length,1,"one update listener keeps world-space anchors attached to the actor");
+    book.setScale(1.03);const shelfEntrance=f.scene.tweens.add({targets:f.scene.ettaBookShelf,alpha:0,duration:420});
+    f.scene.restoreEttaBookPose("carried");
+    assertEqual([book.scaleX,book.scaleY,f.scene.ettaBookShelf.alpha],[1,1,1],"a restored grip cannot retain an attention pulse or a half-faded shelf");
+    assert(shelfEntrance.cancelled,"restoration cancels the shelf entrance before it can later overwrite the settled pose");
+    f.scene.setEttaCarryPose(true);
+    assertEqual([f.carryHandBuilds.length,f.updateListeners.length],[1,1],"repeated restoration reuses one foreground grip and one update handler");
+    f.scene.wrenSprite.getWorldTransformMatrix=()=>({tx:1008,ty:803,a:.27,d:.21,transformPoint(x:number,y:number){return {x:this.tx+x*this.a,y:this.ty+y*this.d};}});
+    f.updateListeners[0].fn.call(f.updateListeners[0].context);
+    assertEqual([book.x,book.y,hands.x,hands.y,hands.scaleX,hands.scaleY],[1008,712,1008,803,.27,.21],"book and finger layer follow actual world translation and nonuniform typing/breathing scale");
+    f.scene.ettaBookMoving=true;
+    f.scene.wrenSprite.getWorldTransformMatrix=()=>{throw new Error("moving volume is not owned by the carried update");};
+    f.scene.updateEttaBookCarry();
+    assertEqual([book.x,book.y],[1008,712],"a live transfer retains exclusive position ownership");
+    f.scene.restoreEttaBookPose("shelved");
+    assertEqual([book.x,book.y,book.angle],[1260,732,0],"the one volume settles onto the unchanged physical shelf");
+    assertEqual([hands.scene,f.scene.ettaCarryHands,f.updateListeners.length,f.scene.wrenSprite.texture.key],[false,null,0,"wren-front"],"shelving destroys the foreground fingers, removes follow events and restores the normal actor pose");
+    assertEqual(JSON.stringify(f.store.get()),before,"display and cleanup never change durable progress, rewards or inventory");
+    f.scene.clearEttaBookCue();
+    f.scene.updateEttaBookCarry();
+    assertEqual([f.scene.ettaBookCue,f.scene.ettaBookShelf,f.updateListeners.length],[null,null,0],"cleanup leaves no book, shelf, grip or late update owner");
+    await f.flush();
+  }
+});
+
+await suite("Sky carrying: live and reduced transfers settle to the same supported pose, with stale callbacks cancelled on cleanup", async () => {
+  for(const reduced of [false,true]) {
+    const f=fixture(undefined,reduced);f.scene.showEttaBookCue();let delivered=0;
+    f.scene.moveEttaBook("carried",()=>{delivered++;});
+    if(!reduced) {
+      assertEqual([delivered,f.scene.ettaBookMoving],[0,true],"live handoff remains owned by its original transfer until it settles");
+      f.tweens.find(tween=>tween.duration===520).onComplete();
+    }
+    assertEqual([delivered,f.scene.ettaBookCue.x,f.scene.ettaBookCue.y,f.scene.ettaBookCue.angle,f.scene.wrenSprite.texture.key],[1,960,722,-3,"wren-carry"],"both modes use the exact restored carrying pose and one completion callback");
+    f.scene.moveEttaBook("shelved",()=>{delivered++;});
+    if(!reduced) f.tweens.filter(tween=>tween.duration===520).at(-1).onComplete();
+    assertEqual([delivered,f.scene.ettaCarryHands,f.updateListeners.length],[2,null,0],"both modes release the physical grip when placing the book");
+    await f.flush();
+  }
+  const f=fixture();f.scene.showEttaBookCue();let delivered=0;
+  f.scene.moveEttaBook("carried",()=>{delivered++;});const late=f.tweens.find(tween=>tween.duration===520).onComplete;
+  f.scene.clearEttaBookCue();late();
+  assertEqual([delivered,f.scene.ettaCarryHands,f.updateListeners.length],[0,null,0],"leaving the scene invalidates a late handoff before it can create fingers or fire story progression");await f.flush();
+});
+
+
+await suite("Sky revisits: recorded book, empty beacon and summit light survive mixed and historical routes without new rewards", async () => {
+  const rows=[
+    {choices:{fork1:"help-etta",fork2:"cut-tether"},items:["ettas-ledger","tether-cord"],lore:[],book:true,flame:true,alpha:.42},
+    {choices:{fork1:"steal-flame",fork2:"answer-kindly",ettaHelped:"yes"},items:["beacon-spark","wind-phrase"],lore:[],book:true,flame:false,alpha:1},
+    {choices:{fork1:"steal-flame",fork2:"answer-kindly"},items:["beacon-spark","ettas-ledger","wind-phrase"],lore:[],book:false,flame:false,alpha:1},
+    {choices:{},items:["ettas-ledger","wind-phrase"],lore:[],book:true,flame:true,alpha:1},
+    {choices:{},items:[],lore:["scholar-ettas-last-volume"],book:true,flame:null,alpha:null},
+    {choices:{},items:[],lore:[],book:false,flame:null,alpha:null},
+  ];
+  for(const row of rows) {
+    const state={...emptySave(),typewriterAwakened:true,satchel:row.items,almanacLore:row.lore,
+      realms:{"sky-island":{cleared:true,choices:row.choices}}};
+    const f=fixture(state),before=JSON.stringify(f.store.get());let alpha:number|null=null;
+    f.scene.setAmbientLanternFieldAlpha=(value:number,duration:number)=>{alpha=value;assertEqual(duration,0,"persisted lighting is restored immediately rather than replaying a choice");};
+    f.scene.stageSkyRevisitAftermath();
+    assertEqual(Boolean(f.scene.ettaBookCue?.scene),row.book,"only recorded early or later help retains the single volume");
+    if(row.book) assertEqual([f.scene.ettaBookCue.x,f.scene.ettaBookCue.y,f.scene.ettaCarryHands],[1260,732,null],"the completed book stays on its original shelf, not back in Wren's arms");
+    if(row.flame===null) assertEqual(f.scene.beaconBuilds.length,0,"unknown first-fork history does not invent a lit or stolen beacon");
+    else {
+      const beacon=f.scene.beaconFlameCue;
+      assertEqual([beacon.x,beacon.y],[1540,792],"the supported beacon contact is separate from the shelf footprint");
+      assert(1540-90>1260+130,"painted beacon and shelf silhouettes have a clear horizontal gap");
+      assertEqual([beacon.getByName("beacon-spark").scene,beacon.getByName("beacon-light").scene],[row.flame,row.flame],"theft leaves the actual brazier empty without replaying a spark reward");
+    }
+    assertEqual(alpha,row.alpha,"independent kind/cut lighting follows resolved history; unknown remains neutral");
+    f.scene.stageSkyRevisitAftermath();
+    assertEqual(f.scene.beaconBuilds.length,row.flame===null?0:1,"rebuilding a return never creates duplicate masonry or light");
+    assertEqual(JSON.stringify(f.store.get()),before,"visual aftermath never changes saved forks, rewards, inventory or completion");
+    await f.flush();const restored=await f.reload();restored.scene.stageSkyRevisitAftermath();
+    assertEqual(Boolean(restored.scene.ettaBookCue?.scene),row.book,"the same book aftermath is reconstructed after the real serializer/backend reload");await restored.flush();
+  }
 });

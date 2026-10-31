@@ -3,9 +3,10 @@ import wrenFront from "../../art/wren/wren-front.png";
 import wrenWalk from "../../art/wren/wren-walk-right.png";
 import wrenCast from "../../art/wren/wren-cast.png";
 import wrenHurt from "../../art/wren/wren-hurt.png";
+import wrenCarry from "../../art/wren/wren-carry.png";
 import { applySceneActorLighting, restoreSceneActorLighting } from "./actorLighting";
 
-export type WrenPose = "front" | "walk" | "cast" | "hurt";
+export type WrenPose = "front" | "walk" | "cast" | "hurt" | "carry";
 
 /** On-screen height of the Wren sprite at the 1920x1080 design resolution. */
 const WREN_DISPLAY_HEIGHT = 240;
@@ -15,12 +16,14 @@ const TEXTURE: Record<WrenPose, string> = {
   walk: "wren-walk",
   cast: "wren-cast",
   hurt: "wren-hurt",
+  carry: "wren-carry",
 };
 const SOURCE: Record<string, string> = {
   "wren-front": wrenFront,
   "wren-walk": wrenWalk,
   "wren-cast": wrenCast,
   "wren-hurt": wrenHurt,
+  "wren-carry": wrenCarry,
 };
 const HURT_TIMER_KEY = "wrenHurtTimer";
 const pendingReactions = new WeakMap<Phaser.GameObjects.Image, () => boolean>();
@@ -62,11 +65,30 @@ function beginReaction(img: Phaser.GameObjects.Image): () => boolean {
   return restore;
 }
 
-/** Loads every Wren pose texture. Call from a scene's preload(). */
-export function preloadWren(scene: Phaser.Scene): void {
+/** Load the regular poses; a carrying scene opts into its extra artwork. */
+export function preloadWren(scene: Phaser.Scene, opts: { carry?: boolean } = {}): void {
   for (const [key, src] of Object.entries(SOURCE)) {
+    if (key === "wren-carry" && !opts.carry) continue;
     scene.load.image(key, src);
   }
+}
+
+/** Foreground fingers from the same painted carrying pose. Keeping the book
+ * between the body and these small crops gives it a real supported grip. The
+ * caller keeps this layer on the sprite's exact transform while carrying. */
+export function makeWrenCarryHands(scene: Phaser.Scene): Phaser.GameObjects.Container {
+  const hands = scene.add.container(0, 0);
+  for (const region of [
+    { x: 0.318, y: 0.493, width: 0.161, height: 0.055 },
+    { x: 0.529, y: 0.493, width: 0.155, height: 0.055 },
+  ]) {
+    const hand = scene.add.image(0, 0, "wren-carry").setOrigin(0.5, 1);
+    hand.setCrop(region.x * hand.width, region.y * hand.height,
+      region.width * hand.width, region.height * hand.height);
+    applySceneActorLighting(scene, hand);
+    hands.add(hand);
+  }
+  return hands;
 }
 
 /**
@@ -141,7 +163,7 @@ export function playWrenAction(
   const originalScaleX = img.scaleX;
   const originalY = img.y;
   const scene = img.scene;
-  applyWrenPose(img, "cast", opts.faceLeft ?? originalScaleX < 0);
+  if (img.texture.key !== TEXTURE.carry) applyWrenPose(img, "cast", opts.faceLeft ?? originalScaleX < 0);
   scene.tweens.add({
     targets: img,
     y: originalY - 8,
@@ -165,7 +187,7 @@ export function playWrenFocus(
   const originalY = img.y;
   const scene = img.scene;
   const faceLeft = opts.faceLeft ?? originalScaleX < 0;
-  applyWrenPose(img, "walk", faceLeft);
+  if (img.texture.key !== TEXTURE.carry) applyWrenPose(img, "walk", faceLeft);
   scene.tweens.add({
     targets: img,
     x: originalX + (faceLeft ? -5 : 5),

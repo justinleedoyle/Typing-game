@@ -42,6 +42,7 @@ function fixture(reduced = false) {
   function node(x: number, y: number, key: string): any {
     return { x, y, key, width: 124, height: 256, scene: true, scaleX: 1, scaleY: 1,
       setDepth(depth: number) { this.depth = depth; return this; },
+      setOrigin(x: number, y: number) { this.origin = [x, y]; return this; },
       setScale(scale: number) { this.scaleX = this.scaleY = scale; return this; },
       setPosition(px: number, py: number) { this.x = px; this.y = py; return this; },
       getData() { return undefined; },
@@ -67,12 +68,15 @@ function fixture(reduced = false) {
   const state = { satchel: [] as string[], almanacLore: [] as string[],
     realms: { "sunken-bell": { cleared: false, choices: {} } } };
   const wren = { x: 960, y: 820, scene: true, children: [] as any[],
-    add(child: any) {
-      if (!this.children.includes(child)) this.children.push(child);
+    getIndex(child: any) { return this.children.indexOf(child); },
+    addAt(child: any, index: number) {
+      if (!this.children.includes(child)) this.children.splice(index, 0, child);
       child.parentContainer = this; events.push("at-hand");
     },
   };
+  const hero = node(0, 0, "wren"); wren.children.push(hero);
   Object.assign(scene, {
+    wrenSprite: hero,
     checkpoint() {},
     store: { get: () => state, update: (edit: (save: typeof state) => void) => edit(state) },
     commitFork: (_fork: string, requested: string) => requested,
@@ -206,16 +210,18 @@ await suite("Bell token: actual binding rewards, visible giver-to-hand action an
     assert(f.captions.at(-1)!.includes("presses a trident token into your hand"), "the accepted handoff caption remains intact");
     const token = f.scene.aurlandToken;
     assertEqual(token.key, "bell-trident-token", "the world handoff uses the painted token");
-    assertEqual(Math.max(token.width, token.height) * token.scaleY, 64, "the keepsake has a consistent handheld size");
+    assertEqual(Math.max(token.width, token.height) * token.scaleY, 56, "the keepsake has a consistent handheld size");
     assert(token.lit, "the painted gift shares the Bell's scene lighting");
     if (!reduced) {
       assertEqual([token.x, token.y], [704, 610], "the gift begins at Aurland's near hand");
       assert(f.scene.aurlandImage?.scene, "the king remains until the token reaches Wren");
       const transfer = f.tweens.find(tween => tween.targets === token)!;
-      assertEqual([transfer.x, transfer.y, transfer.duration], [998, 702, 650], "one decorative transfer reaches the existing Wren hand lane");
+      assertEqual([transfer.x, transfer.y, transfer.duration], [1006, 755, 650], "one decorative transfer reaches the existing Wren hand lane");
       f.finish(transfer);
     } else assert(!f.tweens.some(tween => tween.targets === token), "reduced motion has no token travel or delayed handoff");
-    assertEqual([token.parentContainer, token.x, token.y], [f.wren, 38, -118], "the settled gift belongs to Wren and follows the body's idle movement");
+    assertEqual([token.parentContainer, token.x, token.y], [f.wren, 46, -65], "the settled gift belongs to Wren and follows the body's idle movement");
+    assertEqual(token.origin, [0.5, 0.1], "the cord loop meets the fingers rather than centering the token over Wren's chest");
+    assert(f.wren.children.indexOf(token) < f.wren.children.indexOf(f.scene.wrenSprite), "the receiving sleeve stays in front of the token grip");
     const departure = f.tweens.find(tween => tween.targets.key === "aurland")!;
     assert(departure, "the original freedom departure begins only after receiving the gift");
     assertEqual(departure.duration, reduced ? 0 : 1000, "reduced motion removes the departure wait; normal freedom keeps its original fade");

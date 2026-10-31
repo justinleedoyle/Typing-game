@@ -69,7 +69,8 @@ function fixture(reduced = false) {
       setName(v: string) { this.name = v; return this; }, setActive(v: boolean) { this.active = v; return this; },
       setPosition(x: number, y: number) { this.x = x; this.y = y; return this; },
       setData(k: string, v: unknown) { data.set(k, v); return this; }, getData(k: string) { return data.get(k); },
-      add(child: any) { this.children.push(child); return this; }, getByName(name: string) { return this.children.find(child => child.name === name && child.scene) ?? null; },
+      add(child: any) { this.children.push(child);child.parentContainer=this;return this; },
+      addAt(child:any,index:number){this.children.splice(index,0,child);child.parentContainer=this;return this;},getIndex(child:any){return this.children.indexOf(child);}, getByName(name: string) { return this.children.find(child => child.name === name && child.scene) ?? null; },
       once(_event: string, callback: () => void) { destroyCallbacks.push(callback); return this; },
       lineStyle() { return this; }, points: [] as Array<{ x: number; y: number }>,
       fills: [] as any[], fillColor: 0, fillAlpha: 0,
@@ -103,10 +104,11 @@ function fixture(reduced = false) {
   };
   const Sky = new Function(...Object.keys(globals), code + "; return Sky;")(...Object.values(globals));
   const s = new Sky();
+  const wren=prop(960,826),sprite=prop(0,0,"wren-front");wren.add(sprite);
   Object.assign(s, {
     checkpoint(step: string, data = {}) { checkpoints.push({ step, data }); },
     savedStageData(step: string) { return s.resumeCheckpoint?.step === step ? s.resumeCheckpoint.data : {}; },
-    scale: { width: 1920, height: 1080 }, wrenContainer: prop(960, 826), wrenSprite: {},
+    scale: { width: 1920, height: 1080 }, wrenContainer:wren, wrenSprite:sprite,
     heldBeaconSpark: null, forkChoiceWordAnchors: [], kindAnswerCue: null, tetherThreadCue: null, fork2Scholar: null, fork2Tether: null, ambientLanterns: [],
     add: { container: prop, graphics: () => prop(0, 0), image(x: number, y: number, key: string) { const image = prop(x, y, key); images.push(image); return image; } },
     tweens: { add(options: any) { tweens.push(options); return options; }, killTweensOf(body: any) { for (const tween of tweens) if (tween.targets === body || Array.isArray(tween.targets) && tween.targets.includes(body)) tween.killed = true; } },
@@ -185,15 +187,22 @@ await suite("Sky stolen spark: original four phrases dim, take and hold painted 
       if (index === 1) assert(source.scene && source.alpha < 1 && light.alpha < 0.12, "the dimming response visibly reduces the source and its light");
       if (index === 2) {
         assert(!source.scene && !light.scene && !cue.active, "taking removes the source and stops its stand wake before the held result");
-        const held = f.s.heldBeaconSpark, bounds = paintedBounds(held);
+        const held = f.s.heldBeaconSpark, bounds = paintedBounds(held,f.s.wrenContainer);
         assertClose(bounds.bottom - bounds.top, 56, 0.1, "Wren holds a readable curl of the same painted fire");
-        assertEqual([held.x, held.y], [1024, 730], "the curl sits beside the hand area below the hood");
+        assertEqual([held.x, held.y], [46,-65], "the curl's fitted base meets the front palm in actor-local coordinates");
+        assertEqual(held.parentContainer,f.s.wrenContainer,"the received spark shares Wren's actual breath and travel owner");
+        assert(f.s.wrenContainer.getIndex(held)<f.s.wrenContainer.getIndex(f.s.wrenSprite),"Wren's painted sleeve occludes the flame base instead of the curl covering the arm");
+        assertClose(bounds.bottom,f.s.wrenContainer.y-65,.1,"the true alpha silhouette ends at the supported palm");
         const reviewScale = 1250 / f.s.scale.width;
         assert((bounds.bottom - bounds.top) * reviewScale >= 34 && (bounds.right - bounds.left) * reviewScale >= 15,
           "the actual painted silhouette remains distinguishable at the native review width");
-        assert(bounds.left > f.s.wrenContainer.x + 50 && bounds.top > f.s.wrenContainer.y - 160,
-          "the visible curl clears the cloak edge and stays below the hood");
-        assert(held.depth > 0 && held.alpha === 1, "the received flame draws above Wren at full opacity, independently of the dimmed source");
+        assert(bounds.left > f.s.wrenContainer.x + 30 && bounds.top > f.s.wrenContainer.y - 140,
+          "the visible curl sits beside the forearm and stays below the hood");
+        assert(held.depth > 0 && held.alpha === 1, "the received flame keeps its original opacity independently of the dimmed source");
+        const oldBottom=bounds.bottom;f.s.wrenContainer.setPosition(990,821);
+        assertClose(paintedBounds(held,f.s.wrenContainer).bottom,oldBottom-5,.1,"the supported spark follows actor movement without an independent world-space drift");
+        assertEqual([held.x,held.y],[46,-65],"breathing does not rewrite the local grip coordinates");
+        f.s.wrenContainer.setPosition(960,826);
         f.s.takeBeaconSparkVisual();
         assertEqual(f.s.heldBeaconSpark, held, "repeating the presentation cannot duplicate the received spark");
       }

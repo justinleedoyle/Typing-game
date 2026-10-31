@@ -50,6 +50,9 @@ class MemoryBackend implements SaveBackend {
 }
 function node(x = 960, y = 600): any {
   return { x, y, scene: true, alpha: 1, tint: 0, lit: false, width: 256, height: 129, children: [] as any[],
+    setOrigin(x: number, y: number) { this.origin = [x, y]; return this; },
+    getIndex(child: any) { return this.children.indexOf(child); },
+    addAt(child: any, index: number) { this.children.splice(index, 0, child); child.parentContainer = this; return this; },
     setDepth() { return this; }, setAlpha(v: number) { this.alpha = v; return this; },
     setScale(value: number) { this.scale = value; return this; },
     setTint(v: number) { this.tint = v; return this; }, add(child: any) { if (child) { this.children.push(child); child.parentContainer = this; } }, once() {},
@@ -309,7 +312,8 @@ await suite("Bell checkpoints: the earned force reward and reload retain a paint
   for (let i = 0; i < 4; i++) f.complete();
   const bar = f.scene.heldLockBarSprite;
   assert(bar?.scene && bar.lit && bar.parentContainer === f.scene.wrenContainer, "the actual reward card shows the lit bar attached to Wren");
-  assertEqual([bar.x, bar.y, bar.scale], [52, -112, 132 / 256], "the held painting occupies the accepted hand position at a bounded size");
+  assertEqual([bar.x, bar.y, bar.scale], [42, -65, 106 / 256], "the held painting occupies the accepted hand position at a bounded size");
+  assertEqual(bar.origin, [0.26, 0.32], "the lock bar shaft meets the painted fingers while the lock hangs below them");
   assert(f.hasGate() && f.captions.at(-1)!.includes("rests in your hands"), "the received prop accompanies the unchanged held acknowledgment immediately");
   const restored = await f.reload(); restored.scene.resumeBell();
   const restoredBar = restored.scene.heldLockBarSprite;

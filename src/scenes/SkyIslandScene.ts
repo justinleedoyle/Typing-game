@@ -2374,10 +2374,10 @@ export class SkyIslandScene extends Phaser.Scene {
       this.runPassageChain(
         helpedBefore ? ["etta thanks you quietly", "the beacon brightens"]
           : ["carry her book", "the shelf holds it", "etta thanks you quietly", "the beacon brightens"],
-        helpedBefore ? ["Scholar Etta traces a title with one finger.", "The beacon brightens. It was watching."] : [
+        helpedBefore ? ["Scholar Etta smiles at the volume on its shelf.", "The beacon brightens. It was watching."] : [
           "The book is heavier than it looks. Old paper, dense with writing.",
-          "The last volume rests safely on its shelf. Etta traces its title with one finger.",
-          "She says nothing, but the lanterns flicker warmly.",
+          "The last volume rests safely on its shelf.",
+          "Etta smiles, and the lanterns flicker warmly.",
           "The beacon brightens. It was watching.",
         ],
         () => {

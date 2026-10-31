@@ -225,7 +225,7 @@ export const ALMANAC_LORE_PAGES: Record<string, AlmanacLorePage> = {
     realmId: "haunted-wood",
     title: "The Wood's True Name",
     body:
-      "The Wood spoke its own ending: we are remembered. we are quiet. but we are not silent. Wren typed it whole. The fog lifted off the path, the crossroads markers fell, and the ghosts walked at last in the directions they had always meant to.",
+      "The Wood spoke its own ending: we are remembered. we are quiet. but we are not silent. Wren typed it whole. The mist settled around the clearing. The Ghost-King's voice fell quiet, but the remembered words remained.",
   },
 };
 

@@ -679,14 +679,15 @@ export class SunkenBellScene extends Phaser.Scene {
     // Revisit mode: don't start the BeatClock at all — isInWindow() returns
     // true when the clock isn't running, so input flows freely.
 
-    const choices = this.store.get().realms["sunken-bell"]?.choices ?? {};
+    const state = this.store.get();
+    const ending = resolveRealmFork("sunken-bell", "fork2", state.realms["sunken-bell"], state.satchel);
     let narratorLine: string;
     let words: string[];
 
-    if (choices["fork2"] === "free-aurland") {
+    if (ending === "free-aurland") {
       narratorLine = "The water is clearer. King Aurland sent word.";
       words = ["the", "deep", "is", "listening"];
-    } else if (choices["fork2"] === "claim-tongue") {
+    } else if (ending === "claim-tongue") {
       narratorLine = "The bell is silent. The tide has gone out further than it used to.";
       words = ["silence", "holds", "its", "shape"];
     } else {
@@ -3320,7 +3321,7 @@ export class SunkenBellScene extends Phaser.Scene {
   // ─── Ending ──────────────────────────────────────────────────────────────
 
   private startEnding(): void {
-    this.setStoryObjective("The Sunken Bell is restored. The Almanac records the journey.");
+    this.setStoryObjective("The Almanac records the Sunken Bell and the path you chose.");
     if (!this.revisit) this.store.update((s) => {
       if (this.fork1Choice) rememberRealmFork(s, "sunken-bell", "fork1", this.fork1Choice);
       if (this.fork2Choice) rememberRealmFork(s, "sunken-bell", "fork2", this.fork2Choice);
@@ -3332,7 +3333,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
     this.showAlmanacStamp(() => {
       this.setNarrator("The Sunken Bell rests in the Almanac. The way back to Holdfast is open.");
-      this.setStoryObjective("The Sunken Bell is restored. Continue to return to the chamber.");
+      this.setStoryObjective("The Sunken Bell is remembered. Continue to return to the chamber.");
       this.readThen(() => {
         playRealmReturnDeparture(this, this.wrenContainer, {
           kind: "bubble",

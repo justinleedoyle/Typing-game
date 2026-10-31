@@ -693,19 +693,36 @@ export class ClockworkForgeScene extends Phaser.Scene {
       ringWidth: 148,
       ringHeight: 42,
     });
-    const choices = this.store.get().realms["clockwork-forge"]?.choices ?? {};
-    const ending = choices["ending"] ?? "";
+    const state = this.store.get();
+    const progress = state.realms["clockwork-forge"];
+    // Use the same precedence as chapter recovery: explicit forks outrank the
+    // historical combined ending and any stale keepsakes in an old satchel.
+    const first = resolveRealmFork("clockwork-forge", "fork1", progress, state.satchel);
+    const second = resolveRealmFork("clockwork-forge", "fork2", progress, state.satchel);
     let narratorLine: string;
     let words: string[];
 
-    if (ending.includes("peaceful")) {
-      narratorLine = "The Forge is quiet. Forn is still at the bellows.";
+    if (second === "peaceful") {
+      narratorLine = first === "forn"
+        ? "The repaired bellows breathe steadily. Forn is still at his work, and the last golems rest."
+        : first === "cabal"
+          ? "The apprentices keep the furnace low. The last golems still rest with lowered arms."
+          : "The Forge is quiet. Its last golems still rest with lowered arms.";
       words = ["iron", "holds", "the", "heat"];
-    } else if (ending.includes("fought")) {
-      narratorLine = "The golem-heart you took left a silence in the core furnace.";
+    } else if (second === "fought") {
+      const aftermath = "The Golem Heart you took left a silence in the furnace.";
+      narratorLine = first === "forn"
+        ? `The repaired bellows breathe steadily. ${aftermath}`
+        : first === "cabal"
+          ? `The apprentices keep the furnace low. ${aftermath}`
+          : aftermath;
       words = ["gears", "turn", "without", "orders"];
     } else {
-      narratorLine = "The Forge runs on its own now. It always did, really.";
+      narratorLine = first === "forn"
+        ? "The repaired bellows breathe steadily. The forge remembers your work."
+        : first === "cabal"
+          ? "The apprentices have kept their slower rhythm. The foundry is quieter now."
+          : "The foundry holds its old heat. The words you left here still linger.";
       words = ["the", "forge", "remembers", "everything"];
     }
 

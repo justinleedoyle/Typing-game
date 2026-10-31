@@ -1792,7 +1792,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     playChime();
     this.fadeOutForkCue(this.boneFluteCue);
     this.boneFluteCue = null;
-    this.setNarrator("The Bone-Flute joins your satchel. Restless whispers follow you beyond the shrine.");
+    this.setNarrator("The Bone-Flute joins your satchel. Restless whispers follow you beyond the shrine. The lost ghost still waits by the trees, her name unfound.");
     this.band.setObjective("Bone-Flute collected. Press Enter or Space to continue into the wood.");
     this.readThen(() => {
       this.clearHeldWoodRelic();

@@ -13,6 +13,7 @@ import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { desktopBridge } from "../game/desktopBridge";
 import { RELICS } from "../game/relics";
+import { resolveRealmFork } from "../game/realmChoices";
 import type { Difficulty, SaveStore } from "../game/saveState";
 import {
   currentUserDisplayName,
@@ -186,9 +187,8 @@ const PORTAL_CALL_SOURCE_Y = HUB_STATIONS.portalFloor.y - 100;
 const HUB_FIRST_ARRIVAL_CAPTION_MS = 6_400;
 const HUB_SHORT_CAPTION_MS = 2_600;
 
-// Maps the last-cleared realm to its Runa desk-line ID in runaLines.ts. The
-// line text now lives there (single source of truth); the hub renders it via
-// narration.say(id) as the top caption, voice-ready like every other scene.
+// Default desk-line IDs. Realms with distinct consequences choose a line from
+// the saved branch below; absent history gets a neutral reflection.
 const DESK_LINE_IDS: Record<string, string> = {
   none:              "hub_desk_none",
   "winter-mountain": "hub_desk_winter",
@@ -840,13 +840,33 @@ export class PortalChamberScene extends Phaser.Scene {
     const lastCleared = [...REALM_SEQUENCE]
       .reverse()
       .find((id) => state.realms[id]?.cleared) ?? "none";
-    this.narration.say(DESK_LINE_IDS[lastCleared] ?? DESK_LINE_IDS["none"]);
+    this.narration.say(this.deskReflectionLineId(lastCleared));
     this.drawDeskReflectionCard(lastCleared);
     this.playDeskReflectionWake();
     this.playRunaAttention();
 
     this.registerDeskAlmanacTarget();
     this.registerPortalReturnTarget(70);
+  }
+
+  private deskReflectionLineId(realmId: string): string {
+    const state = this.store.get();
+    if (realmId === "sunken-bell") {
+      const ending = resolveRealmFork(realmId, "fork2", state.realms[realmId], state.satchel);
+      return ending === "free-aurland" ? "hub_desk_sunken_freed"
+        : ending === "claim-tongue" ? "hub_desk_sunken" : "hub_desk_sunken_unrecorded";
+    }
+    if (realmId === "clockwork-forge") {
+      const path = resolveRealmFork(realmId, "fork1", state.realms[realmId], state.satchel);
+      return path === "forn" ? "hub_desk_forge"
+        : path === "cabal" ? "hub_desk_forge_cabal" : "hub_desk_forge_unrecorded";
+    }
+    if (realmId === "sky-island") {
+      const ending = resolveRealmFork(realmId, "fork2", state.realms[realmId], state.satchel);
+      return ending === "answer-kindly" ? "hub_desk_sky_kind"
+        : ending === "cut-tether" ? "hub_desk_sky_untethered" : "hub_desk_sky";
+    }
+    return DESK_LINE_IDS[realmId] ?? DESK_LINE_IDS["none"]!;
   }
 
   private drawDeskReflectionCard(lastCleared: string): void {

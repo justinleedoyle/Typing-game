@@ -38,7 +38,7 @@ export const REALM_LORE: Record<string, RealmLore> = {
       "The second portal opened underwater — or nearly so. The kingdom of Tide-Glass sat on the seafloor, its glass spires green with old light, and its bell had kept the same drowned rhythm for a hundred years.",
     endings: {
       chant:
-        "Wren opened the cathedral doors slowly, on the bell's rhythm. The doors parted with grace, and Wren carried the Quiet Chant onward.",
+        "Wren opened the cathedral doors slowly, with a quiet chant. The doors parted with grace, and Wren carried the Quiet Chant onward.",
       force:
         "Wren forced the cathedral doors open with OPEN. A lock-bar came away from the doors and went into the satchel.",
       "free-king":
@@ -64,7 +64,7 @@ export const REALM_LORE: Record<string, RealmLore> = {
       fought:
         "Wren fought the last two command-golems. When the final golem fell, Wren claimed the Golem-Heart.",
       songbird:
-        "A brass songbird had watched from a high corner of the Forge. When Wren welcomed it, the bird landed on Wren's shoulder and sang one note.",
+        "A brass songbird had watched from a high corner of the Forge. When Wren welcomed it, the bird landed on Wren's shoulder and sang three notes.",
     },
   },
 
@@ -94,13 +94,13 @@ export const REALM_LORE: Record<string, RealmLore> = {
       offering:
         "At the crossroads shrine, Wren said, “i remember you.” The shrine glowed, and its keeper whispered Inga's name. Wren carried away the Shrine-Token.",
       "bone-flute":
-        "Wren took the bone flute from the shrine. The ghosts grew restless, and their whispers followed Wren along the path.",
+        "Wren took the bone flute from the shrine. The ghosts grew restless, and their whispers followed Wren along the path. The lost ghost's name remained unfound.",
       bargain:
         "Wren answered the Ghost-King with remembrance: “you are not gone.” The king listened, bowed, and gave Wren the Ghost-King's Promise.",
       "light-grove":
         "Wren lit the grove and faced the Ghost-King. The Ash-Vial carried that choice home after the last ward held.",
       "wisp-cat":
-        "The wisp-cat had circled Wren since the crossroads. When Wren welcomed her, she pressed her glowing side against Wren's ankle and followed home.",
+        "A wisp-cat appeared beside the root-throne. When Wren welcomed her, she pressed her glowing side against Wren's ankle and followed home.",
     },
   },
 };

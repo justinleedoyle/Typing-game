@@ -971,7 +971,7 @@ const SKY_LINES: readonly RunaLine[] = [
     id: "sky_fork1_intro",
     scene: "sky",
     trigger: "SkyIslandScene.startFork1() — Scholar Etta vs steal the flame (wired)",
-    text: "Etta tends her books by the lantern-lit path. Help her for her ledger, or take a spark from the beacon; its light will dim.",
+    text: "Etta tends her book by the lantern-lit path. Help her for her ledger, or take a spark from the beacon; its light will dim.",
     tone: "instruction",
     isNew: true,
   },

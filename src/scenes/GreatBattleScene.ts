@@ -30,6 +30,7 @@ import {
   resolveFacets,
 } from "../game/finaleFacets";
 import type { SaveStore } from "../game/saveState";
+import { titleHomecoming } from "../game/titleResume";
 import { TypingInputController } from "../game/typingInput";
 import { makeQuietLordSprite, preloadQuietLord } from "../game/quietLord";
 import {
@@ -654,8 +655,9 @@ export class GreatBattleScene extends Phaser.Scene {
     this.chapterMenu = installChapterMenu(this, {
       store: this.store,
       hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),
-      onLeave: () => this.scene.start("PortalChamberScene", { store: this.store }),
-      leaveHint: "Returning to the chamber restarts the final battle. Cleared realms and your satchel stay saved.",
+      onLeave: () => this.leaveBattle(),
+      leaveLabel: "Save & leave battle",
+      leaveHint: "An unfinished battle restarts from the chamber. A sealed victory continues home; your realms and satchel stay saved.",
     });
     this.cameras.main.fadeIn(700, 11, 10, 15);
 
@@ -4659,7 +4661,11 @@ export class GreatBattleScene extends Phaser.Scene {
       x: wordPos.x,
       y: wordPos.y,
       fontSize: 44,
+      onSettled: () => {
+        if (idx === words.length - 1) this.commitFinalVictory();
+      },
       onComplete: () => {
+        if (idx === words.length - 1) this.commitFinalVictory();
         // Cancel any pending brass-songbird stall timer for this word
         if (this.brassSongbirdStallTimer) {
           this.brassSongbirdStallTimer.remove();
@@ -4723,14 +4729,37 @@ export class GreatBattleScene extends Phaser.Scene {
     }
   }
 
+  private commitFinalVictory(): void {
+    // The fight is won at the completed phrase, before its final presentation.
+    // Monotonic flags distinguish a pending reunion from historical finished
+    // saves without turning its completion into a conflicting story choice.
+    const current = this.store.get().realms["great-battle"];
+    if (!current?.cleared || current.choices.homecomingStarted !== "yes") {
+      this.store.update((s) => {
+        const battle = s.realms["great-battle"];
+        s.realms["great-battle"] = {
+          ...battle, cleared: true,
+          choices: { ...battle?.choices, homecomingStarted: "yes" },
+        };
+      });
+    }
+    void this.store.flush().catch(() => { /* chapter save status offers retry */ });
+  }
+
   private onFinalPhraseComplete(): void {
     this.clearActiveTargets();
+    this.commitFinalVictory();
     this.band.setObjective("Again is sealed; watch the final mark.");
     // §5.5.10 — the period click-in. The word the realms spelled out letter by
     // letter (A → Ag → … → Again, no period) completes HERE: after a still beat
     // on "Again", the period SNAPS into place — "that's been the word the whole
     // time." A discrete beat before the white-out.
     this.runPeriodSeal(() => this.runWinFlash());
+  }
+
+  private leaveBattle(): void {
+    const destination = titleHomecoming(this.store.get()) ? "HomecomingScene" : "PortalChamberScene";
+    this.scene.start(destination, { store: this.store });
   }
 
   private runPeriodSeal(onDone: () => void): void {
@@ -4803,10 +4832,6 @@ export class GreatBattleScene extends Phaser.Scene {
           this.cameras.main.once(
             Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
             () => {
-              // Mark great battle as cleared
-              this.store.update((s) => {
-                s.realms["great-battle"] = { cleared: true, choices: {} };
-              });
               this.scene.start("HomecomingScene", { store: this.store });
             },
           );

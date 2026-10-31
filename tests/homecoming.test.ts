@@ -4,6 +4,9 @@ import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { OPENING_STEPS, openingStep, readingAction } from "../src/game/chapterFlow";
 import { makeSiblingDrawing } from "../src/game/siblingDrawing";
+import { CloudSaveError, SaveStore, emptySave, migrate, type SaveState } from "../src/game/saveState";
+import { titleHomecoming } from "../src/game/titleResume";
+import { decodeJourneyTransfer, encodeJourneyTransfer } from "../src/game/saveTransfer";
 
 await suite("Homecoming resolves the sibling promise actually made in the opening", () => {
   const boy = homecomingLines("boy").map(line => line.text).join(" ");
@@ -127,7 +130,7 @@ const openingCode = ts.transpileModule(`class Opening { ${openingMethods.map(nam
 const emptyHandsPng = readFileSync(new URL("../art/sibling/sibling-empty-hands.png", import.meta.url));
 const emptyHandsHeight = emptyHandsPng.readUInt32BE(20);
 
-function homecomingFixture(gender: "boy" | "girl" | null = "boy", reduced = false) {
+function homecomingFixture(gender: "boy" | "girl" | null = "boy", reduced = false, overrideStore?: SaveStore) {
   const path = new URL("../src/scenes/HomecomingScene.ts", import.meta.url);
   const source = ts.createSourceFile(path.pathname, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
   const owner = source.statements.find(ts.isClassDeclaration)!;
@@ -178,16 +181,18 @@ function homecomingFixture(gender: "boy" | "girl" | null = "boy", reduced = fals
   });
   const Arrival = new Function("beginAssetLoad", "assetLoadBlocked", ...Object.keys(assets), "preloadWren", "installChapterMenu", "addLocalGroundShadow",
     "applySceneActorLighting", "addIdleBreath", "makeWrenSprite", "makeSiblingDrawing", "NarrationManager", "ChapterReading",
-    "homecomingLines", "reducedMotion", "SERIF", "UI_CSS", "UI_HEX", "cornerTicks", `${code}; return Arrival;`)(
+    "homecomingLines", "reducedMotion", "rememberLocalSaveNotice", "CloudSaveError", "SERIF", "UI_CSS", "UI_HEX", "cornerTicks", `${code}; return Arrival;`)(
     // Artwork failure lifecycle is covered separately; this fixture isolates the homecoming.
     noop, () => false,
     ...Object.values(assets), noop, () => ({ handleKey: () => false, destroy: noop }), () => node(), noop, noop,
     () => ({ ...node(), height: 1000 }), makeSiblingDrawing,
     class { sayRaw(text: string) { captions.push(text); } clear() {} replay() {} }, Reading, homecomingLines,
-    () => reduced, "serif", {}, {}, () => node(),
+    () => reduced, (scene: any) => { scene.localSaveNotice = true; }, CloudSaveError, "serif", {}, {}, () => node(),
   );
   const scene = new Arrival();
-  const store = { get: () => ({ wrenGender: gender }) };
+  const state = emptySave(); state.wrenGender = gender; state.typewriterAwakened = true;
+  state.realms["great-battle"] = { cleared: true, choices: { homecomingStarted: "yes" } };
+  const store = overrideStore ?? { get: () => state, update(mutator: (state: SaveState) => void) { mutator(state); }, async flush() {} };
   Object.assign(scene, {
     scale: { width: 1920 }, time: { now: 0 },
     load: { image: (key: string, path: string) => loaded.set(key, path) },
@@ -208,6 +213,7 @@ function homecomingFixture(gender: "boy" | "girl" | null = "boy", reduced = fals
   });
   scene.init({ store }); scene.preload(); scene.create();
   return { scene, loaded, containers, graphics, tweens, captions, starts, images, store,
+    async settle() { await Promise.resolve(); },
     key(key = "Enter", repeat = false) { scene.time.now += 200; onKey?.({ key, repeat, preventDefault: noop }); },
     finish(tween: any) {
       for (const field of ["x", "y", "scaleX", "scaleY", "angle"]) if (field in tween) tween.targets[field] = tween[field];
@@ -233,7 +239,7 @@ await suite("Homecoming arrival: Saga waits without reclaiming the drawing alrea
   }
 });
 
-await suite("Homecoming drawing: one carried opening sketch unfolds, rests beside the Almanac, then permits the original embrace", () => {
+await suite("Homecoming drawing: one carried opening sketch unfolds, rests beside the Almanac, then permits the original embrace", async () => {
   for (const reduced of [false, true]) {
     const f = homecomingFixture("boy", reduced), s = f.scene;
     const paper = s.returnedDrawing, wren = s.wrenActor, sibling = s.siblingActor;
@@ -269,19 +275,20 @@ await suite("Homecoming drawing: one carried opening sketch unfolds, rests besid
     f.key();
     assert(s.reading.next && paper.scene, "the original credits gate retains the returned drawing on the desk");
     f.key(); f.key();
+    await f.settle();
     assertEqual(f.starts.map(args => args[0]), ["PortalChamberScene"], "the fourth original Continue returns to the library exactly once");
     assert(!paper.scene && !s.returnedDrawing && !s.deskAlmanac, "leaving clears both owned desk props");
   }
 });
 
-await suite("Homecoming drawing: leaving, shutdown and scene reuse cannot revive a late return or reading gate", () => {
+await suite("Homecoming drawing: leaving, shutdown and scene reuse cannot revive a late return or reading gate", async () => {
   for (const phase of ["unfold", "place", "embrace"] as const) for (const exit of ["leave", "shutdown", "reuse"] as const) {
     const f = homecomingFixture(), s = f.scene;
     f.key();
     if (phase !== "unfold") f.finish(f.tweens[0]);
     if (phase === "embrace") f.finish(f.tweens[1]);
     const paper = s.returnedDrawing, book = s.deskAlmanac, before = f.captions.length;
-    if (exit === "leave") s.returnToLibrary();
+    if (exit === "leave") await s.returnToLibrary();
     else if (exit === "shutdown") f.shutdown();
     else s.init({ store: f.store });
     for (const tween of [...f.tweens]) tween.onComplete?.();
@@ -290,11 +297,11 @@ await suite("Homecoming drawing: leaving, shutdown and scene reuse cannot revive
     assert(!s.reading.next, `${phase}/${exit}: late callbacks cannot reopen the consumed Continue`);
   }
   const held = homecomingFixture();
-  held.scene.returnToLibrary(); held.key(); held.key(" ");
+  await held.scene.returnToLibrary(); held.key(); held.key(" ");
   assertEqual([held.captions.length, held.tweens.length, held.starts.length], [1, 0, 1], "queued keys after leaving a held card cannot start the drawing or another scene transition");
 });
 
-await suite("Homecoming drawing: Magnus and legacy returns retain their original cards without Saga's props", () => {
+await suite("Homecoming drawing: Magnus and legacy returns retain their original cards without Saga's props", async () => {
   for (const gender of ["girl", null] as const) for (const reduced of [false, true]) {
     const f = homecomingFixture(gender, reduced), s = f.scene;
     assert(!s.returnedDrawing && !s.deskAlmanac, "the other identity and old saves cannot inherit Saga's drawing/book staging");
@@ -303,7 +310,160 @@ await suite("Homecoming drawing: Magnus and legacy returns retain their original
     assert(s.reading.next, "the original sibling/neutral card retains its one Continue");
     assertEqual(f.captions, homecomingLines(gender).slice(0, 2).map(line => line.text), "the original narrative sequence remains unchanged");
     f.key(); f.key(); f.key();
+    await f.settle();
     assertEqual(f.starts.map(args => args[0]), ["PortalChamberScene"], "the original three cards and credits still return to the library");
+  }
+});
+
+await suite("Homecoming recovery: the final phrase saves victory before its animation and an interrupted reunion survives transfer and restart", async () => {
+  const initial = emptySave("Earned Wren"); initial.typewriterAwakened = true; initial.wrenGender = "boy";
+  initial.satchel = ["brass-songbird", "wisp-cat"]; initial.almanacLore = ["the-word-again"];
+  for (const realm of ["winter-mountain", "sunken-bell", "clockwork-forge", "sky-island", "haunted-wood"]) {
+    initial.realms[realm] = { cleared: true, choices: { fork1: "remembered" } };
+  }
+  let durable = JSON.stringify(initial);
+  const backend = { async load() { return migrate(JSON.parse(durable)); }, async save(state: SaveState) { durable = JSON.stringify(state); } };
+  const store = await SaveStore.load(backend, { saveDelayMs: 60000 });
+  const path = new URL("../src/scenes/GreatBattleScene.ts", import.meta.url);
+  const source = ts.createSourceFile(path.pathname, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
+  const owner = source.statements.find(ts.isClassDeclaration)!;
+  const methods = ["onFinalPhraseComplete", "commitFinalVictory"].map(name =>
+    owner.members.find(member => member.name?.getText(source) === name)!.getText(source)).join("\n");
+  const code = ts.transpileModule(`class Victory { ${methods} }`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  const Victory = new Function(`${code}; return Victory;`)();
+  const victory = new Victory(); let flashes = 0; let presentFinalMark: (() => void) | undefined;
+  Object.assign(victory, { store, clearActiveTargets() {}, band: { setObjective() {} },
+    runPeriodSeal(next: () => void) { presentFinalMark = next; }, runWinFlash() { flashes++; } });
+  victory.onFinalPhraseComplete();
+  assert(titleHomecoming(store.get()), "the completed final phrase owns the win before any final-mark timer fires");
+  assertEqual(flashes, 0, "the unchanged final period/flash remains a separate presentation beat");
+  await store.flush();
+  const reopened = await SaveStore.load(backend, { saveDelayMs: 60000 });
+  assert(titleHomecoming(reopened.get()), "a close during the period animation returns to the reunion instead of replaying the battle");
+  const imported = decodeJourneyTransfer(encodeJourneyTransfer(reopened.get() as SaveState));
+  assert(titleHomecoming(imported), "portable journeys retain the pending reunion without a schema or format change");
+  assertEqual([imported.runId, imported.satchel, imported.almanacLore], [initial.runId, initial.satchel, initial.almanacLore], "victory/recovery retain identity and all earned possessions");
+  presentFinalMark!(); assertEqual(flashes, 1, "the original period callback still reaches its flash once");
+  const f = homecomingFixture("boy", true, reopened);
+  for (let card = 0; card < 3; card++) {
+    f.key(); await reopened.flush();
+    assert(titleHomecoming((await SaveStore.load(backend)).get()), `card ${card + 1}: interruption cannot skip the remaining reunion or credits`);
+  }
+  assert(f.scene.reading.next, "credits still wait for a deliberate exit");
+  await f.scene.returnToLibrary();
+  const completed = await SaveStore.load(backend);
+  assert(!titleHomecoming(completed.get()), "only the deliberate, durably saved library return closes the pending reunion");
+  assertEqual(completed.get().realms["great-battle"].choices, { homecomingStarted: "yes", homecomingCompleted: "yes" }, "both progress flags remain monotonic for cloud compatibility");
+  assertEqual(completed.get().runId, initial.runId, "completion never starts a new run");
+});
+
+await suite("Homecoming recovery: local write failure keeps the reunion visible and retry waits for durability", async () => {
+  const f = homecomingFixture("boy", true), s = f.scene;
+  let fail = true; let writes = 0;
+  f.store.flush = async () => { writes++; if (fail) throw new Error("Disk full"); };
+  f.key(); f.key(); f.key();
+  await s.returnToLibrary();
+  assertEqual([f.starts.length, s.leaving, writes], [0, false, 1], "a failed local save cannot depart or strand input behind a busy flag");
+  assert(s.returnedDrawing?.scene && s.deskAlmanac?.scene && s.reading.next, "failure retains the visible reunion/desk and a working retry Continue");
+  assert(s.returnStatus.visible && s.returnStatus.text.includes("Saving could not finish") && s.returnStatus.depth > 25,
+    "failure explains retry above the credits panel without hiding its message behind the ending artwork");
+  fail = false; await s.returnToLibrary();
+  assertEqual([f.starts.length, writes, s.returnedDrawing], [1, 2, null], "retry reaches the library once after the write succeeds");
+
+  const pending = homecomingFixture("girl", true);
+  let finishSave!: () => void;
+  pending.store.flush = () => new Promise<void>(resolve => { finishSave = resolve; });
+  const leave = pending.scene.returnToLibrary();
+  assertEqual(pending.starts.length, 0, "library transition waits while the final save is in flight");
+  pending.shutdown(); finishSave(); await leave;
+  assertEqual(pending.starts.length, 0, "a save completing after scene shutdown cannot revive the library transition");
+
+  const cloud = homecomingFixture(null, true);
+  cloud.store.flush = async () => { throw new CloudSaveError(); };
+  await cloud.scene.returnToLibrary();
+  assertEqual([cloud.starts.length, cloud.scene.localSaveNotice], [1, true], "a typed cloud-only failure permits the durable local return with the existing notice");
+});
+
+await suite("Finale recovery: the actual pause exit keeps unfinished fights at the chamber and sealed victories on their way home", async () => {
+  const path = new URL("../src/scenes/GreatBattleScene.ts", import.meta.url);
+  const source = ts.createSourceFile(path.pathname, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
+  const owner = source.statements.find(ts.isClassDeclaration)!;
+  const create = owner.members.find(member => member.name?.getText(source) === "create") as ts.MethodDeclaration;
+  // Run the real menu installation before the first artwork operation. Its
+  // callback and the real leave method dispatch both actual before/after states.
+  const methods = ["onFinalPhraseComplete", "commitFinalVictory", "leaveBattle"].map(name =>
+    owner.members.find(member => member.name?.getText(source) === name)!.getText(source)).join("\n");
+  const code = ts.transpileModule(`class Finale { create() { ${create.body!.statements.slice(0, 2)
+    .map(statement => statement.getText(source)).join("\n")} } ${methods} }`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  for (const sealed of [false, true]) {
+    const initial = emptySave(); initial.typewriterAwakened = true;
+    let durable = JSON.stringify(initial);
+    const store = new SaveStore({ async load() { return migrate(JSON.parse(durable)); }, async save(state) { durable = JSON.stringify(state); } }, initial, { saveDelayMs: 60000 });
+    let menu: any; const starts: any[] = [];
+    const Finale = new Function("assetLoadBlocked", "installChapterMenu", "titleHomecoming", `${code}; return Finale;`)(
+      () => false, (_scene: unknown, options: unknown) => { menu = options; return {}; }, titleHomecoming);
+    const scene = new Finale(); Object.assign(scene, { store, clearActiveTargets() {}, runPeriodSeal() {},
+      band: { setObjective() {} }, scene: { start: (...args: any[]) => starts.push(args) } });
+    scene.create();
+    assertEqual(menu.leaveLabel, "Save & leave battle", "the installed menu label remains truthful on either side of victory");
+    assert(menu.leaveHint.includes("unfinished battle") && menu.leaveHint.includes("sealed victory continues home"), "the menu explains both possible recovery destinations");
+    if (sealed) scene.onFinalPhraseComplete();
+    // The real pause menu flushes before invoking its leave callback.
+    await store.flush(); menu.onLeave();
+    assertEqual(starts.map(args => args[0]), [sealed ? "HomecomingScene" : "PortalChamberScene"], "same-session pause leave cannot hide an unseen earned reunion behind the completed library");
+    assertEqual(starts[0][1].store, store, "the destination uses the same durably saved journey");
+    assertEqual(titleHomecoming(migrate(JSON.parse(durable))), sealed, "a simultaneous restart reaches the same pending-homecoming decision");
+  }
+});
+
+await suite("Finale recovery: the last target settles victory durably before its exit and queued presentation timers", async () => {
+  const path = new URL("../src/scenes/GreatBattleScene.ts", import.meta.url);
+  const source = ts.createSourceFile(path.pathname, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
+  const owner = source.statements.find(ts.isClassDeclaration)!;
+  const methods = ["runFinalPhraseWords", "makeFinalPhraseWord", "commitFinalVictory", "onFinalPhraseComplete"].map(name =>
+    owner.members.find(member => member.name?.getText(source) === name)!.getText(source)).join("\n");
+  const code = ts.transpileModule(`class Finale { ${methods} }`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  const noop = () => {};
+  const Finale = new Function("playChime", "playClaimLine", "playBodyImpact", "attachWordBodyAnchor", `${code}; return Finale;`)(noop, noop, noop, () => ({}));
+  for (const index of [0, 1]) {
+    const initial = emptySave(); initial.typewriterAwakened = true;
+    let durable = JSON.stringify(initial), writes = 0;
+    const backend = { async load() { return migrate(JSON.parse(durable)); }, async save(state: SaveState) { writes++; durable = JSON.stringify(state); } };
+    const store = await SaveStore.load(backend, { saveDelayMs: 60000 });
+    const timers: Array<{ delay: number; next: () => void }> = [];
+    let targetOptions: any;
+    const scene = new Finale(); Object.assign(scene, {
+      store, scale: { width: 1920, height: 1080 }, band: { setObjective: noop },
+      finalPhraseWordPosition: () => ({ x: 960, y: 500 }),
+      createFinalPhraseWordTrace: () => ({ prop: { x: 960, y: 500 }, claim: noop, advance: noop, dissolve: noop }),
+      makeWord(options: unknown) { targetOptions = options; return {}; },
+      trackTargetAnchor: noop, clearTargetAnchor: noop, registerActiveTarget: noop,
+      pulseWrenDefender: noop, clearActiveTargets: noop, runPeriodSeal: noop,
+      againText: { x: 960, y: 430, alpha: .8 }, brightnessAlpha: 0,
+      screenBrightnessOverlay: { clear: noop, fillStyle: noop, fillRect: noop, setAlpha: noop },
+      tweens: { add: noop }, time: { delayedCall(delay: number, next: () => void) { timers.push({ delay, next }); } },
+    });
+    scene.runFinalPhraseWords(["come", "home."], index);
+    assertEqual(timers.length, 0, "target creation alone does not queue completion or victory");
+    store.recordKeystroke(index === 1 ? "." : "e", true);
+    targetOptions.onSettled();
+    await store.flush();
+    const restored = await SaveStore.load(backend);
+    assertEqual(titleHomecoming(restored.get()), index === 1, "only settling the last authored target records a won battle before the fade");
+    assertEqual(restored.get().keyStats[index === 1 ? "." : "e"].hits, 1, "the settled snapshot includes the final character's existing statistics");
+    assertEqual(timers.length, 0, "durability precedes all scene completion delays");
+    const atSettle = store.get().updatedAt;
+    targetOptions.onComplete();
+    assertEqual(timers.map(timer => timer.delay), [200], "the original visual callback retains its existing delay");
+    assertEqual(titleHomecoming(store.get()), index === 1, "the last visual callback is also safe if invoked as a completion fallback");
+    if (index === 1) {
+      const delayed = timers.shift()!; delayed.next();
+      assertEqual(timers.map(timer => timer.delay), [600], "the original period-preparation delay is retained");
+      timers.shift()!.next(); await store.flush();
+      assertEqual([store.get().updatedAt, writes], [atSettle, 1], "settled, visual and final-mark callbacks share one idempotent victory commit");
+    }
   }
 });
 

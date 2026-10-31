@@ -108,6 +108,24 @@ function fixture() {
   return { storage, local, cloud, synced, account: local.forUser("account-a") };
 }
 
+await suite("saveSync: pending and completed Homecoming are forward progress rather than conflicting choices", async () => {
+  for (const newerSide of ["device", "cloud"] as const) {
+    const { account, cloud, synced } = fixture();
+    const pending = state("Earned victory", 100); pending.typewriterAwakened = true;
+    pending.realms["great-battle"] = { cleared: true, choices: { homecomingStarted: "yes" } };
+    const completed = copy(pending); completed.updatedAt = 200;
+    completed.realms["great-battle"].choices.homecomingCompleted = "yes";
+    await account.save(newerSide === "device" ? completed : pending);
+    cloud.rows.set("account-a", newerSide === "cloud" ? completed : pending);
+    const loaded = await synced.load();
+    assertEqual(loaded?.realms["great-battle"].choices, completed.realms["great-battle"].choices,
+      `${newerSide}: the newer completed reunion advances without a false branch choice`);
+    await synced.flush();
+    assertEqual((await account.load())?.realms["great-battle"].choices, completed.realms["great-battle"].choices, "the durable device keeps the completed progress flags");
+    assertEqual(cloud.rows.get("account-a")?.realms["great-battle"].choices, completed.realms["great-battle"].choices, "the cloud copy retains completion without removing the original victory");
+  }
+});
+
 await suite("saveSync: newer offline progress survives an older cloud row", async () => {
   const { account, cloud, synced } = fixture();
   await account.save(state("New offline", 200));

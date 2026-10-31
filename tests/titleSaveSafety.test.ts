@@ -3,7 +3,7 @@ import ts from "typescript";
 import { emptySave, SaveStore, SaveConflictError, InvalidSaveError, UnsupportedSaveVersionError, type SaveBackend, type SaveConflict, type SaveState } from "../src/game/saveState";
 import { applyDevUnlock, parseDevTarget } from "../src/game/devUnlock";
 import { SceneRunGuard } from "../src/game/sceneRunGuard";
-import { titleCheckpoint } from "../src/game/titleResume";
+import { titleCheckpoint, titleHomecoming } from "../src/game/titleResume";
 import { resetSave } from "../src/game/resetSave";
 import { assert, assertEqual, suite } from "./_assert";
 
@@ -31,10 +31,10 @@ function fixture(search: string, conflict?: SaveConflict) {
     getConflict: () => conflict ?? null,
     async resolveConflict() { return durable; },
   };
-  const Title = new Function("location", "parseDevTarget", "applyDevUnlock", "emptySave", "SaveStore", "defaultSaveBackend", "setAudioLevel", "titleCheckpoint", "Phaser", "InvalidSaveError", "UnsupportedSaveVersionError",
+  const Title = new Function("location", "parseDevTarget", "applyDevUnlock", "emptySave", "SaveStore", "defaultSaveBackend", "setAudioLevel", "titleCheckpoint", "titleHomecoming", "Phaser", "InvalidSaveError", "UnsupportedSaveVersionError",
     `${code}; return Title;`)(
     { search }, parseDevTarget, applyDevUnlock, emptySave, SaveStore,
-    () => { throw new Error("unexpected default account backend"); }, () => {}, titleCheckpoint,
+    () => { throw new Error("unexpected default account backend"); }, () => {}, titleCheckpoint, titleHomecoming,
     { Cameras: { Scene2D: { Events: { FADE_OUT_COMPLETE: "fade" } } } },
     InvalidSaveError, UnsupportedSaveVersionError,
   );
@@ -94,4 +94,20 @@ await suite("Title conflicts: device recovery remains explicit and shutdown inva
   assertEqual([f.entered.length, f.counts.save], [0, 0], "no default choice or overwrite is made");
   const stale = fixture(""); await stale.scene.loadStore(); await stale.scene.beginTransition(); stale.run.end(); stale.settle();
   assertEqual(stale.entered, [], "a late transition cannot open a journey after Title shuts down");
+});
+
+await suite("Title recovery: only an explicitly pending earned Homecoming resumes before the library", async () => {
+  for (const marker of ["pending", "complete", "legacy", "not-won"] as const) {
+    const f = fixture("");
+    f.durable.checkpoint = null;
+    f.durable.realms["great-battle"] = { cleared: marker !== "not-won", choices: {} };
+    if (marker !== "legacy") f.durable.realms["great-battle"].choices.homecomingStarted = "yes";
+    if (marker === "complete") f.durable.realms["great-battle"].choices.homecomingCompleted = "yes";
+    const before = JSON.stringify(f.durable);
+    await f.scene.loadStore(); await f.scene.beginTransition(); f.settle();
+    assertEqual(f.entered[0]?.key, marker === "pending" ? "HomecomingScene" : "PortalChamberScene",
+      `${marker}: current reunion progress routes without replaying historical victories or inventing a win`);
+    assertEqual(JSON.stringify(f.durable), before, "loading a reunion never resets or rewrites the earned save");
+    assertEqual(f.counts.save, 0, "Title routing is read-only");
+  }
 });

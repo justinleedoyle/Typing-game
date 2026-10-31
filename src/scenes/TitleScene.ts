@@ -8,7 +8,7 @@ import { downloadSaveRecovery, saveRecoveryPresentation } from "../game/saveReco
 import { showRecoveryDialog, type RecoveryDialog } from "../game/ui/recoveryDialog";
 import { defaultSaveBackend, DesktopSaveBackend } from "../game/desktopBackend";
 import { showJourneyTransfer } from "../game/journeyTransferUI";
-import { titleCheckpoint } from "../game/titleResume";
+import { titleCheckpoint, titleHomecoming } from "../game/titleResume";
 import { saveChoiceFocus, saveChoicePresentation, saveJourneySummary } from "../game/saveChoice";
 import { SERIF } from "../game/palette";
 import {
@@ -569,6 +569,10 @@ export class TitleScene extends Phaser.Scene {
             return;
           }
           const state = this.store?.get();
+          if (state && titleHomecoming(state)) {
+            this.scene.start("HomecomingScene", { store: this.store });
+            return;
+          }
           const checkpoint = state ? titleCheckpoint(state) : null;
           if (checkpoint) {
             this.scene.start(checkpoint.scene, { store: this.store, checkpoint });

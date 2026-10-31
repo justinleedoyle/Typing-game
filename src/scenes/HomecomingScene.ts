@@ -1,13 +1,13 @@
 import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
 import Phaser from "phaser";
-import type { SaveStore } from "../game/saveState";
+import { CloudSaveError, type SaveStore } from "../game/saveState";
 import { homecomingLines } from "../game/homecoming";
 import { NarrationManager } from "../game/narrationManager";
 import { ChapterReading } from "../game/ui/chapterReading";
 import { installChapterMenu } from "../game/ui/pauseMenu";
 import { addIdleBreath, addLocalGroundShadow } from "../game/livingScene";
 import { applySceneActorLighting } from "../game/actorLighting";
-import { reducedMotion } from "../game/presentation";
+import { reducedMotion, rememberLocalSaveNotice } from "../game/presentation";
 import { makeWrenSprite, preloadWren } from "../game/wren";
 import { makeSiblingDrawing } from "../game/siblingDrawing";
 import { SERIF } from "../game/palette";
@@ -27,6 +27,7 @@ export class HomecomingScene extends Phaser.Scene {
   private narration!: NarrationManager;
   private menu?: ReturnType<typeof installChapterMenu>;
   private leaving = false;
+  private returnGeneration = 0;
   private wrenActor: Phaser.GameObjects.Container | null = null;
   private siblingActor: Phaser.GameObjects.Container | null = null;
   private reunionActor: Phaser.GameObjects.Container | null = null;
@@ -34,10 +35,13 @@ export class HomecomingScene extends Phaser.Scene {
   private deskAlmanac: Phaser.GameObjects.Graphics | null = null;
   private drawingOnDesk = false;
   private returningDrawing = false;
+  private returnStatus: Phaser.GameObjects.Text | null = null;
 
   constructor() { super("HomecomingScene"); }
   init(data: { store: SaveStore }): void {
+    this.returnGeneration++;
     this.clearDrawingReturn();
+    this.returnStatus?.destroy(); this.returnStatus = null;
     this.store = data.store;
     this.leaving = false;
     this.wrenActor = null;
@@ -58,7 +62,7 @@ export class HomecomingScene extends Phaser.Scene {
     if (assetLoadBlocked(this)) return;
     this.menu = installChapterMenu(this, {
       store: this.store, hasClaim: () => false,
-      onLeave: () => this.returnToLibrary(),
+      onLeave: () => { void this.returnToLibrary(); },
       leaveLabel: "Return to library",
       leaveHint: "Your victory is saved. You can return to the library whenever you are ready.",
     });
@@ -82,6 +86,11 @@ export class HomecomingScene extends Phaser.Scene {
     if (gender) this.siblingActor = this.actor(gender === "boy" ? "homecoming-saga" : "homecoming-magnus", 1430, 950, gender === "boy" ? 270 : 350);
     this.narration = new NarrationManager(this, { store: this.store, framed: true, y: 260, depth: 20 });
     this.reading = new ChapterReading(this, 1005);
+    this.returnStatus = this.add.text(960, 815, "", {
+      fontFamily: SERIF, fontSize: "24px", color: UI_CSS.cream,
+      backgroundColor: "#111724", padding: { x: 18, y: 12 },
+      align: "center", wordWrap: { width: 1000 },
+    }).setOrigin(.5).setDepth(1960).setVisible(false);
     const lines = homecomingLines(gender);
     const show = (index: number): void => {
       if (this.leaving) return;
@@ -114,8 +123,10 @@ export class HomecomingScene extends Phaser.Scene {
     };
     this.input.keyboard?.on("keydown", onKey);
     this.events.once("shutdown", () => {
+      this.returnGeneration++;
       this.leaving = true;
       this.clearDrawingReturn();
+      this.returnStatus?.destroy(); this.returnStatus = null;
       this.input.keyboard?.off("keydown", onKey);
       this.reading.destroy();
       this.menu?.destroy();
@@ -243,11 +254,32 @@ export class HomecomingScene extends Phaser.Scene {
     ].forEach(([text, y, size]) => panel.add(this.add.text(0, y as number, text as string, {
       fontFamily: SERIF, fontSize: `${size}px`, color: UI_CSS.cream,
     }).setOrigin(.5)));
-    this.reading.show(() => this.returnToLibrary(), null);
+    this.reading.show(() => { void this.returnToLibrary(); }, null);
   }
-  private returnToLibrary(): void {
+  private async returnToLibrary(): Promise<void> {
     if (this.leaving) return;
     this.leaving = true;
+    const generation = this.returnGeneration;
+    const store = this.store;
+    this.returnStatus?.setText("Keeping your victory before returning to the library…").setVisible(true);
+    store.update((s) => {
+      const battle = s.realms["great-battle"];
+      if (battle?.cleared && battle.choices.homecomingStarted === "yes") {
+        battle.choices.homecomingCompleted = "yes";
+      }
+    });
+    try { await store.flush(); }
+    catch (error) {
+      if (generation !== this.returnGeneration) return;
+      if (error instanceof CloudSaveError) rememberLocalSaveNotice(this);
+      else {
+        this.leaving = false;
+        this.returnStatus?.setText("Saving could not finish. Your victory is still here.\nContinue to try again, or press Esc to keep this screen open.").setVisible(true);
+        this.reading.show(() => { void this.returnToLibrary(); }, null);
+        return;
+      }
+    }
+    if (generation !== this.returnGeneration) return;
     this.clearDrawingReturn();
     this.scene.start("PortalChamberScene", { store: this.store, arrival: "great-battle" });
   }

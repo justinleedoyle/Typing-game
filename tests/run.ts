@@ -48,6 +48,7 @@ await import("./assetLoadRecovery.test.ts");
 await import("./typingInput.test.ts");
 await import("./sceneLifecycle.test.ts");
 await import("./pauseInput.test.ts");
+await import("./sceneInterruption.test.ts");
 await import("./mobileInput.test.ts");
 await import("./winterFireflyHandoff.test.ts");
 await import("./finaleWords.test.ts");

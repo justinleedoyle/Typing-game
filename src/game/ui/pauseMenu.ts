@@ -7,6 +7,7 @@ import { UI_CSS, UI_HEX } from "./uiTheme";
 import { SceneRunGuard } from "../sceneRunGuard";
 import { difficultyLabel } from "../purist";
 import { navigationAction, cyclePreference } from "./navigationPolicy";
+import { installTweenPauseClock } from "../sceneInterruption";
 
 interface ChapterMenuOptions {
   store: SaveStore;
@@ -167,18 +168,25 @@ class ChapterPauseMenu extends Phaser.Scene {
 /** Installed before scene artwork so preferences also apply on the first frame. */
 export function installChapterMenu(scene: Phaser.Scene, options: ChapterMenuOptions) {
   installPresentation(scene, options.store);
+  const disposeTweenClock = installTweenPauseClock(scene);
   if (!scene.scene.get(KEY)) scene.scene.add(KEY, ChapterPauseMenu, false);
   const open = () => {
     if (!scene.scene.isActive() || scene.scene.isActive(KEY)) return;
-    scene.scene.pause();
+    // The ScenePlugin queues pause until a future frame. Hide can stop frames
+    // immediately, so pause the public Systems now: retain the real timestamp,
+    // block intervening input and prevent paired blur/hide duplicate launches.
+    scene.sys.pause();
     scene.scene.launch(KEY, { ...options, owner: scene });
     scene.scene.bringToTop(KEY);
   };
-  const onBlur = () => {
+  const onInterruption = () => {
     open();
     void options.store.flush().catch(() => { /* status remains visible; data retained for retry */ });
   };
-  scene.game.events.on(Phaser.Core.Events.BLUR, onBlur);
+  scene.game.events.on(Phaser.Core.Events.BLUR, onInterruption);
+  // Visibility changes are a separate Phaser event: hiding a tab does not
+  // guarantee window blur. Return to an explicit pause, never live combat.
+  scene.game.events.on(Phaser.Core.Events.HIDDEN, onInterruption);
   const hint = scene.add.text(1880, 28, "Esc · pause", {
     fontFamily: SERIF, fontSize: "21px", color: UI_CSS.cream,
     backgroundColor: "#111724", padding: { x: 12, y: 8 },
@@ -207,7 +215,9 @@ export function installChapterMenu(scene: Phaser.Scene, options: ChapterMenuOpti
   const destroy = () => {
     if (destroyed) return;
     destroyed = true;
-    scene.game.events.off(Phaser.Core.Events.BLUR, onBlur);
+    scene.game.events.off(Phaser.Core.Events.BLUR, onInterruption);
+    scene.game.events.off(Phaser.Core.Events.HIDDEN, onInterruption);
+    disposeTweenClock();
     scene.events.off(Phaser.Scenes.Events.POST_UPDATE, updateHint);
     hint.destroy();
     status.destroy();

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
+import { createRequire } from "node:module";
 import ts from "typescript";
 import { navigationAction } from "../src/game/ui/navigationPolicy";
 import { decideBeatGate } from "../src/game/beatGate";
@@ -31,9 +32,9 @@ const resume = pauseClass.members.find(member => member.name?.getText(pauseSourc
 const Pause = compile(`class Pause { ${resume.getText(pauseSource)} }`, "Pause");
 const install = pauseSource.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "installChapterMenu")!;
 const installMenu = compile(install.getText(pauseSource).replace(/^export /, ""), "installChapterMenu", {
-  installPresentation() {}, navigationAction, localSaveNotice: () => null,
+  installPresentation() {}, installTweenPauseClock: () => () => {}, navigationAction, localSaveNotice: () => null,
   KEY: "ChapterPauseMenu", ChapterPauseMenu: class {}, SERIF: "serif", UI_CSS: {},
-  Phaser: { Core: { Events: { BLUR: "blur" } }, Scenes: { Events: { POST_UPDATE: "postupdate" } } },
+  Phaser: { Core: { Events: { BLUR: "blur", HIDDEN: "hidden" } }, Scenes: { Events: { POST_UPDATE: "postupdate" } } },
 });
 const bellSource = source("../src/scenes/SunkenBellScene.ts");
 const bellClass = bellSource.statements.find(ts.isClassDeclaration)!;
@@ -52,6 +53,21 @@ const keyboardUpdate = compile(`const update = ${update.initializer.getText(keyb
   Events: { KEY_DOWN: "keydown-", ANY_KEY_DOWN: "keydown", KEY_UP: "keyup-", ANY_KEY_UP: "keyup" },
 });
 
+function phaserMethod(path: string, name: string, globals: Record<string, unknown> = {}) {
+  const owner = source(path);
+  const method = find(owner, (node): node is ts.PropertyAssignment => ts.isPropertyAssignment(node) &&
+    node.name.getText(owner) === name && ts.isFunctionExpression(node.initializer));
+  return compile(`const method = ${method.initializer.getText(owner)};`, "method", globals);
+}
+const require = createRequire(import.meta.url);
+const sceneConstants = require("phaser/src/scene/const.js");
+const systemPause = phaserMethod("../node_modules/phaser/src/scene/Systems.js", "pause", {
+  Events: { PAUSE: "pause" }, CONST: sceneConstants,
+});
+const pluginPause = phaserMethod("../node_modules/phaser/src/scene/ScenePlugin.js", "pause");
+const pluginLaunch = phaserMethod("../node_modules/phaser/src/scene/ScenePlugin.js", "launch");
+const queueOp = phaserMethod("../node_modules/phaser/src/scene/SceneManager.js", "queueOp");
+
 function text(value = "") {
   return { text: value, updates: 0, setOrigin() { return this; }, setDepth() { return this; }, setVisible() { return this; },
     setText(value: string) { this.text = value; this.updates++; return this; }, destroy() {} };
@@ -59,6 +75,7 @@ function text(value = "") {
 function fixture(escapeHint?: () => string) {
   const state = { ownerActive: false, pauseActive: true, launches: 0, ownerDispatches: 0, flushes: 0, claim: false, claimReads: 0 };
   const sceneEvents = new EventEmitter();
+  const gameEvents = new EventEmitter();
   const texts: ReturnType<typeof text>[] = [];
   const typed: string[] = [];
   const store = { flush: () => { state.flushes += 1; return Promise.resolve(); }, getLastError: () => null };
@@ -71,7 +88,8 @@ function fixture(escapeHint?: () => string) {
       launch: () => { state.pauseActive = true; state.launches += 1; pause.openedAt = pause.time.now; }, bringToTop() {},
       stop: () => { state.pauseActive = false; },
     },
-    game: { events: { on() {}, off() {} } }, events: sceneEvents,
+    sys: { pause: () => { state.ownerActive = false; } },
+    game: { events: gameEvents }, events: sceneEvents,
     add: { text: (_x: number, _y: number, value: string) => { const result = text(value); texts.push(result); return result; } }, time: { addEvent: () => ({ remove() {} }) },
     reading: { handleKey: () => false }, typingInput: { handleChar: (key: string) => typed.push(key) }, beatPhase: "free",
   });
@@ -103,8 +121,55 @@ function fixture(escapeHint?: () => string) {
     plugins.forEach(plugin => plugin.update());
     return event;
   };
-  return { state, typed, pause, dispatch, sceneEvents, texts, menu: owner.chapterMenu };
+  return { owner, state, typed, pause, dispatch, sceneEvents, gameEvents, texts, menu: owner.chapterMenu };
 }
+
+await suite("pause interruption: hidden-only and blur events preserve one explicit pause until deliberate resume", () => {
+  for (const first of ["hidden", "blur"]) {
+    const f = fixture();
+    f.state.ownerActive = true; f.state.pauseActive = false;
+    f.gameEvents.emit(first);
+    assert(!f.state.ownerActive && f.state.pauseActive, `${first} stops the owner even without the other event`);
+    assertEqual(f.state.launches, 1, "one interruption opens one overlay");
+    f.gameEvents.emit(first === "hidden" ? "blur" : "hidden");
+    assertEqual(f.state.launches, 1, "paired browser events cannot duplicate the menu");
+    f.gameEvents.emit("visible"); f.gameEvents.emit("focus");
+    assert(!f.state.ownerActive && f.state.pauseActive, "returning to the tab never resumes combat automatically");
+    assertEqual(f.typed, [], "interruption cannot inject gameplay characters");
+    f.pause.time.now += 200;
+    f.dispatch("Escape", "pause-first");
+    assert(f.state.ownerActive && !f.state.pauseActive, "a deliberate resume retains the ordinary menu input guard");
+    f.sceneEvents.emit("shutdown");
+    assertEqual([f.gameEvents.listenerCount("hidden"), f.gameEvents.listenerCount("blur")], [0, 0], "shutdown removes both interruption listeners");
+    f.gameEvents.emit(first);
+    assertEqual(f.state.launches, 1, "a stopped chapter cannot open a stale pause overlay");
+  }
+});
+
+await suite("pause interruption: installed Phaser queuing cannot delay the freeze or duplicate a hidden-tab overlay", () => {
+  const f = fixture();
+  f.state.pauseActive = false;
+  const settings = { key: "chapter", status: sceneConstants.RUNNING, active: true };
+  const manager = { _queue: [] as Array<{ op: string; keyA: string }>, queueOp };
+  Object.assign(f.owner.scene, { key: "chapter", manager, pause: pluginPause, launch: pluginLaunch,
+    isActive: (key?: string) => key === "ChapterPauseMenu" ? false : settings.active,
+  });
+  f.owner.sys = { settings, events: f.sceneEvents, getStatus: () => settings.status, pause: systemPause };
+  let pauses = 0;
+  f.sceneEvents.on("pause", () => pauses++);
+  // Use the actual ScenePlugin once to establish its queued semantics. The
+  // hidden-tab fix must not rely on a frame arriving to process this queue.
+  f.owner.scene.pause();
+  assert(settings.active && manager._queue.length === 1, "the installed plugin really defers its pause");
+  manager._queue.length = 0;
+  f.gameEvents.emit("hidden");
+  assert(!settings.active && settings.status === sceneConstants.PAUSED, "the installed Systems freezes immediately, before the next frame");
+  assertEqual(pauses, 1, "the clock receives the pause timestamp during hiding");
+  assertEqual(manager._queue.map(operation => operation.op), ["start"], "only the menu launch waits for the renderer");
+  f.gameEvents.emit("blur"); f.gameEvents.emit("hidden");
+  assertEqual([pauses, manager._queue.length], [1, 1], "paired events before any frame cannot queue a second overlay");
+  f.menu.destroy();
+});
 
 await suite("pause hint: follows the actual next Escape action and releases its scene listener", () => {
   const f = fixture();

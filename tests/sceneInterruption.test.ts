@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import type Phaser from "phaser";
-import { installTweenPauseClock } from "../src/game/sceneInterruption";
+import { acknowledgeGameInterruption, installGameInterruptionTracker, installTweenPauseClock, needsInterruptionPause } from "../src/game/sceneInterruption";
 import { assert, assertEqual, suite } from "./_assert";
 
 // Exercise the installed engine's full TweenManager and Clock unchanged. Only
@@ -138,6 +138,24 @@ await suite("scene interruption: installation and shutdown are idempotent and a 
     f.events.emit("destroy"); dispose();
     assertEqual([f.events.listenerCount("pause"), f.events.listenerCount("resume")], [0, 0], "destroy also releases the new visit");
   });
+});
+
+await suite("scene interruption: game tracking survives focus return and releases every listener on destruction", () => {
+  const events = new EventEmitter();
+  const game = { events, hasFocus: false, loop: { inFocus: true } } as unknown as Phaser.Game;
+  const dispose = installGameInterruptionTracker(game);
+  assertEqual(installGameInterruptionTracker(game), dispose, "boot installs only one tracker per game");
+  assertEqual([events.listenerCount("blur"), events.listenerCount("hidden")], [1, 1], "repeat installation does not multiply global listeners");
+  assert(!needsInterruptionPause(game), "false default Game.hasFocus cannot invent an interruption");
+  events.emit("hidden"); events.emit("visible"); events.emit("focus");
+  assert(needsInterruptionPause(game), "focus returning never clears the interruption before a deliberate action");
+  acknowledgeGameInterruption(game);
+  assert(!needsInterruptionPause(game), "a deliberate acknowledgment releases the pending interruption");
+  events.emit("blur");
+  assert(needsInterruptionPause(game), "a later blur remains a distinct interruption");
+  events.emit("destroy"); dispose();
+  assertEqual([events.listenerCount("blur"), events.listenerCount("hidden"), events.listenerCount("destroy")], [0, 0, 0], "destroy drops the global tracker and its cleanup listener");
+  assert(!needsInterruptionPause(game), "a destroyed game's stale pending flag cannot leak into another activation");
 });
 
 await suite("scene interruption: low-Heart encouragement threshold and cooldown count active play instead of time away", () => {

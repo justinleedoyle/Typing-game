@@ -7,7 +7,7 @@ import { UI_CSS, UI_HEX } from "./uiTheme";
 import { SceneRunGuard } from "../sceneRunGuard";
 import { difficultyLabel } from "../purist";
 import { navigationAction, cyclePreference } from "./navigationPolicy";
-import { installTweenPauseClock } from "../sceneInterruption";
+import { acknowledgeGameInterruption, installTweenPauseClock, needsInterruptionPause } from "../sceneInterruption";
 
 interface ChapterMenuOptions {
   store: SaveStore;
@@ -100,6 +100,7 @@ class ChapterPauseMenu extends Phaser.Scene {
     this.render();
   }
   private chooseSave(): void {
+    acknowledgeGameInterruption(this.config.owner.game);
     this.config.owner.scene.resume();
     this.scene.stop();
     this.config.owner.scene.start("TitleScene");
@@ -129,6 +130,7 @@ class ChapterPauseMenu extends Phaser.Scene {
     this.render();
   }
   private resume(): void {
+    acknowledgeGameInterruption(this.config.owner.game);
     void this.config.store.flush().catch(() => { /* owner displays retry status */ });
     this.config.owner.scene.resume();
     this.scene.stop();
@@ -136,6 +138,7 @@ class ChapterPauseMenu extends Phaser.Scene {
   private async leave(): Promise<void> {
     const token = this.run.token();
     const { owner, onLeave, store } = this.config;
+    acknowledgeGameInterruption(owner.game);
     this.busy = true;
     this.message.setText("Saving…");
     try {
@@ -187,6 +190,11 @@ export function installChapterMenu(scene: Phaser.Scene, options: ChapterMenuOpti
   // Visibility changes are a separate Phaser event: hiding a tab does not
   // guarantee window blur. Return to an explicit pause, never live combat.
   scene.game.events.on(Phaser.Core.Events.HIDDEN, onInterruption);
+  // Loader completion can call create() while the tab is still hidden, or an
+  // awaited Title save can navigate after the original interruption is over.
+  // CREATE follows Phaser's final RUNNING status, so an immediate pause sticks.
+  const afterCreate = () => { if (needsInterruptionPause(scene.game)) onInterruption(); };
+  scene.events.once(Phaser.Scenes.Events.CREATE, afterCreate);
   const hint = scene.add.text(1880, 28, "Esc · pause", {
     fontFamily: SERIF, fontSize: "21px", color: UI_CSS.cream,
     backgroundColor: "#111724", padding: { x: 12, y: 8 },
@@ -218,6 +226,7 @@ export function installChapterMenu(scene: Phaser.Scene, options: ChapterMenuOpti
     scene.game.events.off(Phaser.Core.Events.BLUR, onInterruption);
     scene.game.events.off(Phaser.Core.Events.HIDDEN, onInterruption);
     disposeTweenClock();
+    scene.events.off(Phaser.Scenes.Events.CREATE, afterCreate);
     scene.events.off(Phaser.Scenes.Events.POST_UPDATE, updateHint);
     hint.destroy();
     status.destroy();

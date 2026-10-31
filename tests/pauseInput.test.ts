@@ -4,6 +4,10 @@ import { createRequire } from "node:module";
 import ts from "typescript";
 import { navigationAction } from "../src/game/ui/navigationPolicy";
 import { decideBeatGate } from "../src/game/beatGate";
+import { acknowledgeGameInterruption, installGameInterruptionTracker, needsInterruptionPause } from "../src/game/sceneInterruption";
+import { SceneRunGuard } from "../src/game/sceneRunGuard";
+import { parseDevTarget } from "../src/game/devUnlock";
+import { titleCheckpoint, titleHomecoming } from "../src/game/titleResume";
 import { assert, assertEqual, suite } from "./_assert";
 
 function source(path: string) {
@@ -29,12 +33,18 @@ const keyDeclaration = find(create, (node): node is ts.VariableDeclaration =>
   ts.isVariableDeclaration(node) && node.name.getText(pauseSource) === "onKey");
 const bindPauseKey = compile(`function bind() { return ${keyDeclaration.initializer!.getText(pauseSource)}; }`, "bind", { ROW_COUNT: 7 });
 const resume = pauseClass.members.find(member => member.name?.getText(pauseSource) === "resume")!;
-const Pause = compile(`class Pause { ${resume.getText(pauseSource)} }`, "Pause");
+const leave = pauseClass.members.find(member => member.name?.getText(pauseSource) === "leave")!;
+const chooseSave = pauseClass.members.find(member => member.name?.getText(pauseSource) === "chooseSave")!;
+class TestCloudSaveError extends Error {}
+class TestSaveConflictError extends Error {}
+const Pause = compile(`class Pause { ${resume.getText(pauseSource)} ${leave.getText(pauseSource)} ${chooseSave.getText(pauseSource)} }`, "Pause", {
+  acknowledgeGameInterruption, CloudSaveError: TestCloudSaveError, SaveConflictError: TestSaveConflictError, rememberLocalSaveNotice() {},
+});
 const install = pauseSource.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "installChapterMenu")!;
 const installMenu = compile(install.getText(pauseSource).replace(/^export /, ""), "installChapterMenu", {
-  installPresentation() {}, installTweenPauseClock: () => () => {}, navigationAction, localSaveNotice: () => null,
+  installPresentation() {}, installTweenPauseClock: () => () => {}, needsInterruptionPause, navigationAction, localSaveNotice: () => null,
   KEY: "ChapterPauseMenu", ChapterPauseMenu: class {}, SERIF: "serif", UI_CSS: {},
-  Phaser: { Core: { Events: { BLUR: "blur", HIDDEN: "hidden" } }, Scenes: { Events: { POST_UPDATE: "postupdate" } } },
+  Phaser: { Core: { Events: { BLUR: "blur", HIDDEN: "hidden" } }, Scenes: { Events: { POST_UPDATE: "postupdate", CREATE: "create" } } },
 });
 const bellSource = source("../src/scenes/SunkenBellScene.ts");
 const bellClass = bellSource.statements.find(ts.isClassDeclaration)!;
@@ -67,6 +77,60 @@ const systemPause = phaserMethod("../node_modules/phaser/src/scene/Systems.js", 
 const pluginPause = phaserMethod("../node_modules/phaser/src/scene/ScenePlugin.js", "pause");
 const pluginLaunch = phaserMethod("../node_modules/phaser/src/scene/ScenePlugin.js", "launch");
 const queueOp = phaserMethod("../node_modules/phaser/src/scene/SceneManager.js", "queueOp");
+const managerCreate = phaserMethod("../node_modules/phaser/src/scene/SceneManager.js", "create", {
+  Events: { CREATE: "create", TRANSITION_START: "transitionstart" }, CONST: sceneConstants,
+});
+const managerLoadComplete = phaserMethod("../node_modules/phaser/src/scene/SceneManager.js", "loadComplete");
+const mainSource = source("../src/main.ts");
+const preBoot = find(mainSource, (node): node is ts.PropertyAssignment => ts.isPropertyAssignment(node) && node.name.getText(mainSource) === "preBoot");
+const bootTracker = compile(`const boot = ${preBoot.initializer.getText(mainSource)};`, "boot", { installGameInterruptionTracker });
+const titleSource = source("../src/scenes/TitleScene.ts");
+const titleClass = titleSource.statements.find(ts.isClassDeclaration)!;
+const titleTransition = titleClass.members.find(member => member.name?.getText(titleSource) === "beginTransition")!;
+const Title = compile(`class Title { ${titleTransition.getText(titleSource)} }`, "Title", {
+  parseDevTarget, titleCheckpoint, titleHomecoming, location: { search: "" },
+  Phaser: { Cameras: { Scene2D: { Events: { FADE_OUT_COMPLETE: "fade" } } } },
+});
+const hubSource = source("../src/scenes/PortalChamberScene.ts");
+const hubClass = hubSource.statements.find(ts.isClassDeclaration)!;
+const hubCreate = hubClass.members.find(member => member.name?.getText(hubSource) === "create")!;
+const FreshHub = compile(`class Hub { ${hubCreate.getText(hubSource)} }`, "Hub", {
+  assetLoadBlocked: () => false,
+  installChapterMenu() { throw new Error("A redirect cannot install an orphan chapter menu"); },
+});
+
+function loadingChapter(game: any) {
+  const events = new EventEmitter();
+  const settings = { key: "WinterMountainScene", status: sceneConstants.LOADING, active: true, isTransition: false };
+  const launches: Array<{ key: string; data: any }> = [];
+  let flushes = 0;
+  const owner: any = {
+    game, events, time: { addEvent: () => ({ remove() {} }) }, add: { text: (_x: number, _y: number, value: string) => text(value) },
+    sys: { settings, events, getStatus: () => settings.status, pause: systemPause },
+    scene: { get: () => ({}), isActive: (key?: string) => key === "ChapterPauseMenu" ? false : settings.active,
+      launch(key: string, data: any) { launches.push({ key, data }); }, bringToTop() {}, stop() {},
+    },
+    create() {
+      this.menu = installMenu(this, { hasClaim: () => false, onLeave() {},
+        store: { getLastError: () => null, flush() { flushes++; return Promise.resolve(); } },
+      });
+    },
+  };
+  const manager = { create: managerCreate, loadComplete: managerLoadComplete };
+  return { owner, settings, events, launches, get flushes() { return flushes; },
+    finishLoading() { manager.loadComplete({ scene: owner }); },
+  };
+}
+
+function withHidden(hidden: boolean, work: () => void): void {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "document");
+  Object.defineProperty(globalThis, "document", { configurable: true, value: { hidden } });
+  try { work(); }
+  finally {
+    if (descriptor) Object.defineProperty(globalThis, "document", descriptor);
+    else delete (globalThis as unknown as { document?: Document }).document;
+  }
+}
 
 function text(value = "") {
   return { text: value, updates: 0, setOrigin() { return this; }, setDepth() { return this; }, setVisible() { return this; },
@@ -171,6 +235,119 @@ await suite("pause interruption: installed Phaser queuing cannot delay the freez
   f.menu.destroy();
 });
 
+await suite("pause interruption: artwork finishing after an earlier hide pauses at the installed engine CREATE boundary", () => {
+  for (const hiddenAtCompletion of [true, false]) withHidden(hiddenAtCompletion, () => {
+    const game: any = { events: new EventEmitter(), loop: { inFocus: true }, hasFocus: false };
+    bootTracker(game);
+    game.events.emit("hidden"); game.events.emit("blur");
+    // Focus may already have returned by the time a slow loader completes.
+    game.events.emit("visible"); game.events.emit("focus");
+    const f = loadingChapter(game);
+    f.finishLoading();
+    assertEqual([f.settings.status, f.settings.active], [sceneConstants.PAUSED, false], "CREATE runs after Phaser's final RUNNING assignment, so the pause persists");
+    assertEqual(f.launches.map(launch => launch.key), ["ChapterPauseMenu"], "the scene missed no earlier interruption and opens exactly one pause");
+    assertEqual(f.flushes, 1, "late creation preserves the ordinary interruption save flush");
+    assertEqual(f.events.listenerCount("create"), 0, "the one-shot creation check releases itself");
+    f.owner.menu.destroy(); game.events.emit("destroy");
+  });
+  withHidden(false, () => {
+    const game: any = { events: new EventEmitter(), loop: { inFocus: true }, hasFocus: false };
+    bootTracker(game);
+    const f = loadingChapter(game);
+    f.finishLoading();
+    assertEqual([f.settings.status, f.settings.active, f.launches.length], [sceneConstants.RUNNING, true, 0], "Game.hasFocus's false startup default cannot pause an uninterrupted focused journey");
+    f.owner.menu.destroy(); game.events.emit("destroy");
+  });
+  for (const cause of ["already-hidden", "already-blurred"]) withHidden(cause === "already-hidden", () => {
+    const game: any = { events: new EventEmitter(), loop: { inFocus: cause !== "already-blurred" } };
+    const f = loadingChapter(game);
+    f.finishLoading();
+    assertEqual([f.settings.active, f.launches.length], [false, 1], "current visibility and loop focus also protect a scene without a prior event");
+    f.owner.menu.destroy();
+  });
+});
+
+await suite("pause interruption: a real Title save await cannot lose its earlier interruption when the next scene loads visibly", async () => {
+  const game: any = { events: new EventEmitter(), loop: { inFocus: true } };
+  bootTracker(game);
+  const chapter = loadingChapter(game);
+  const run = new SceneRunGuard(); run.begin();
+  const timers: Array<() => void> = [], entered: string[] = [];
+  let resolve!: (value: unknown) => void;
+  const title = new Title();
+  Object.assign(title, { run, storePromise: new Promise(done => { resolve = done; }),
+    playTitleDepartureWake() {},
+    time: { delayedCall(_ms: number, next: () => void) { timers.push(next); } },
+    cameras: { main: { fadeOut() {}, once(_event: string, next: () => void) { timers.push(next); } } },
+    scene: { start(key: string) { entered.push(key); chapter.finishLoading(); } },
+  });
+  const transition = title.beginTransition();
+  game.events.emit("blur"); game.events.emit("hidden");
+  game.events.emit("visible"); game.events.emit("focus");
+  resolve({ get: () => ({ typewriterAwakened: true, realms: {}, checkpoint: { scene: "WinterMountainScene", step: "wave", data: {} } }) });
+  await transition;
+  while (timers.length) timers.shift()!();
+  assertEqual(entered, ["WinterMountainScene"], "the actual Title method still chooses the same saved encounter");
+  assertEqual([chapter.settings.active, chapter.launches.length], [false, 1], "returning before the promise settled cannot expose live combat");
+  chapter.owner.menu.destroy(); game.events.emit("destroy");
+});
+
+await suite("pause interruption: the actual fresh hub redirect cannot leave a pause overlay owned by its stopped scene", () => {
+  const game: any = { events: new EventEmitter(), loop: { inFocus: true } };
+  bootTracker(game); game.events.emit("hidden"); game.events.emit("focus");
+  const events = new EventEmitter();
+  const queued: Array<{ key: string; data: any }> = [];
+  const hub = new FreshHub();
+  Object.assign(hub, { game, events, store: { get: () => ({ typewriterAwakened: false }) },
+    sys: { settings: { status: sceneConstants.LOADING, active: true, isTransition: false }, events },
+    scene: { start(key: string, data: any) { queued.push({ key, data }); } },
+  });
+  const manager = { create: managerCreate, loadComplete: managerLoadComplete };
+  manager.loadComplete({ scene: hub });
+  assertEqual(queued.map(operation => operation.key), ["OpeningScene"], "a fresh hub creates only its original Opening redirect");
+  assertEqual(events.listenerCount("create"), 0, "the transient hub owns no deferred pause guard");
+  const opening = loadingChapter(game);
+  opening.settings.key = "OpeningScene";
+  opening.finishLoading();
+  assertEqual([opening.settings.active, opening.launches.length], [false, 1], "the actual destination inherits exactly one pending pause");
+  assertEqual(opening.launches[0].data.owner, opening.owner, "the pause belongs to the live Opening, never the redirected hub");
+  opening.owner.menu.destroy(); game.events.emit("destroy");
+});
+
+await suite("pause interruption: deliberate actions acknowledge before saving so a later blur survives the awaited leave", async () => {
+  const game: any = { events: new EventEmitter(), loop: { inFocus: true } };
+  bootTracker(game); game.events.emit("hidden");
+  const f = fixture();
+  f.owner.game = game;
+  f.pause.resume();
+  assert(!needsInterruptionPause(game), "ordinary Resume acknowledges the pending interruption");
+  game.events.emit("blur");
+  const run = new SceneRunGuard(); run.begin();
+  let resolve!: () => void;
+  const pending = new Promise<void>(done => { resolve = done; });
+  let entered = 0;
+  Object.assign(f.pause, { run, message: { setText() {} }, config: { owner: f.owner,
+    store: { flush: () => pending }, onLeave() { entered++; },
+  } });
+  const leaving = f.pause.leave();
+  assert(!needsInterruptionPause(game), "Leave acknowledges at the deliberate action before awaiting its write");
+  game.events.emit("hidden"); game.events.emit("visible"); game.events.emit("focus");
+  resolve(); await leaving;
+  assertEqual(entered, 1, "the existing durable leave completes once");
+  assert(needsInterruptionPause(game), "a new interruption during the save cannot be acknowledged by the later completion");
+  const next = loadingChapter(game); next.finishLoading();
+  assertEqual([next.settings.active, next.launches.length], [false, 1], "the next scene respects the interruption that happened during saving");
+  next.owner.menu.destroy();
+  const interrupted = fixture();
+  interrupted.owner.game = game;
+  let titleStarts = 0;
+  interrupted.owner.scene.start = () => titleStarts++;
+  interrupted.pause.chooseSave();
+  assertEqual(titleStarts, 1, "the explicit choose-save action still opens Title");
+  assert(!needsInterruptionPause(game), "choosing a save also acknowledges the action deliberately");
+  f.menu.destroy(); interrupted.menu.destroy(); game.events.emit("destroy");
+});
+
 await suite("pause hint: follows the actual next Escape action and releases its scene listener", () => {
   const f = fixture();
   const hint = f.texts[0]!;
@@ -188,6 +365,7 @@ await suite("pause hint: follows the actual next Escape action and releases its 
   assertEqual(hint.text, "Esc · pause", "release restores the normal pause hint");
   f.sceneEvents.emit("shutdown");
   assertEqual(f.sceneEvents.listenerCount("postupdate"), 0, "scene shutdown removes the hint listener");
+  assertEqual(f.sceneEvents.listenerCount("create"), 0, "shutdown also removes an unconsumed creation-time interruption guard");
   f.menu.destroy();
   f.state.claim = true;
   f.sceneEvents.emit("postupdate");

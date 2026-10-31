@@ -283,6 +283,12 @@ export class PortalChamberScene extends Phaser.Scene {
 
   create(): void {
     if (assetLoadBlocked(this)) return;
+    // This transient redirect owns no UI or pause overlay. The Opening will
+    // inherit any pending interruption when its artwork has finished loading.
+    if (!this.store.get().typewriterAwakened) {
+      this.scene.start("OpeningScene", { store: this.store });
+      return;
+    }
     this.chapterMenu = installChapterMenu(this, {
       store: this.store,
       hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),
@@ -291,12 +297,6 @@ export class PortalChamberScene extends Phaser.Scene {
       leaveLabel: "Save & return to title",
       leaveHint: "Your journey is saved. Continue from the title to resume your latest saved place.",
     });
-    // Redirect first-time players to the opening cinematic.
-    if (!this.store.get().typewriterAwakened) {
-      this.scene.start("OpeningScene", { store: this.store });
-      return;
-    }
-
     if (!this.anims.exists("portal-spin")) {
       this.anims.create({
         key: "portal-spin",

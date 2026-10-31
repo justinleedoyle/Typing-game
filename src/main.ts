@@ -14,6 +14,7 @@ import { TitleScene } from "./scenes/TitleScene";
 import { WinterMountainScene } from "./scenes/WinterMountainScene";
 import { ensureGameFonts } from "./game/fonts";
 import { installKeyboardQueueDrain } from "./game/keyboardQueue";
+import { installGameInterruptionTracker } from "./game/sceneInterruption";
 import { desktopBridge } from "./game/desktopBridge";
 import { installDesktopLifecycle } from "./game/desktopBackend";
 import { showRecoveryDialog, type RecoveryDialog } from "./game/ui/recoveryDialog";
@@ -102,6 +103,7 @@ async function startGame(): Promise<void> {
     return;
   }
   game = new Phaser.Game({
+  callbacks: { preBoot: current => { installGameInterruptionTracker(current); } },
   type: Phaser.AUTO,
   parent: "app",
   backgroundColor: "#0b0a0f",

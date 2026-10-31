@@ -1,0 +1,209 @@
+import { readFileSync } from "node:fs";
+import { inflateSync } from "node:zlib";
+import ts from "typescript";
+import { assert, assertClose, assertEqual, suite } from "./_assert";
+import { forgePassageIndex } from "../src/game/forgeCheckpoint";
+
+// Execute the production passage/reward/transfer and lifecycle methods. Only
+// drawing, word presentation and the decorative tween clock are inert.
+const url = new URL("../src/scenes/ClockworkForgeScene.ts", import.meta.url);
+const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
+const owner = source.statements.find(ts.isClassDeclaration)!;
+const names = ["init", "startFornBranch", "startCabalBranch", "runPassageChain", "showFornEmptyHands", "showForgeKeepsake", "clearForgeKeepsake", "afterFork1", "startAct3"];
+const constants = source.statements.filter(ts.isVariableStatement).flatMap(statement => statement.declarationList.declarations
+  .filter(declaration => ["FORN_PASSAGES", "CABAL_PASSAGES", "FLOOR_Y", "GOLEM_SPRITE_HEIGHT", "FOUNDRY_GROUND_Y"].includes(declaration.name.getText(source)))
+  .map(declaration => `const ${declaration.getText(source)};`)).join("\n");
+let shutdown: ts.ArrowFunction | undefined;
+function findShutdown(node: ts.Node): void {
+  if (ts.isCallExpression(node) && node.expression.getText(source) === "this.events.once" &&
+      node.arguments[0]?.getText(source).endsWith(".SHUTDOWN") && ts.isArrowFunction(node.arguments[1])) shutdown = node.arguments[1];
+  ts.forEachChild(node, findShutdown);
+}
+findShutdown(owner.members.find(member => member.name?.getText(source) === "create")!);
+assert(shutdown, "the actual Forge scene installs lifecycle cleanup");
+const code = ts.transpileModule(`${constants}\nclass Forge {
+  ${names.map(name => owner.members.find(member => member.name?.getText(source) === name)!.getText(source)).join("\n")}
+  shutdownFixture() ${shutdown!.body.getText(source)}
+}`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+const noop = () => {};
+const hammer = readFileSync(new URL("../art/relics/bellows-hammer.png", import.meta.url));
+const dimensions = { width: hammer.readUInt32BE(16), height: hammer.readUInt32BE(20) };
+const fornDimensions = Object.fromEntries([["forn", "../art/forge/forn.png"], ["forn-empty-hands", "../art/forge/forn-empty-hands.png"]].map(([key, path]) => {
+  const png = readFileSync(new URL(path, import.meta.url));
+  assertEqual([png[24], png[25]], [8, 6], "both Forn poses retain true RGBA8 transparency");
+  return [key, { width: png.readUInt32BE(16), height: png.readUInt32BE(20) }];
+}));
+function visibleVerticalBounds(path: string) {
+  const png = readFileSync(new URL(path, import.meta.url));
+  const width = png.readUInt32BE(16), height = png.readUInt32BE(20), chunks: Buffer[] = [];
+  for (let at = 8; at < png.length;) {
+    const length = png.readUInt32BE(at);
+    if (png.toString("ascii", at + 4, at + 8) === "IDAT") chunks.push(png.subarray(at + 8, at + 8 + length));
+    at += length + 12;
+  }
+  const raw = inflateSync(Buffer.concat(chunks)), stride = width * 4;
+  let previous = new Uint8Array(stride), at = 0, top = height, bottom = 0;
+  for (let y = 0; y < height; y++) {
+    const filter = raw[at++]!, row = new Uint8Array(stride);
+    for (let x = 0; x < stride; x++) {
+      const left = x >= 4 ? row[x - 4]! : 0, up = previous[x]!, diagonal = x >= 4 ? previous[x - 4]! : 0;
+      let predictor = 0;
+      if (filter === 1) predictor = left;
+      else if (filter === 2) predictor = up;
+      else if (filter === 3) predictor = Math.floor((left + up) / 2);
+      else if (filter === 4) {
+        const p = left + up - diagonal, a = Math.abs(p - left), b = Math.abs(p - up), c = Math.abs(p - diagonal);
+        predictor = a <= b && a <= c ? left : b <= c ? up : diagonal;
+      }
+      row[x] = (raw[at++]! + predictor) & 255;
+    }
+    for (let x = 3; x < stride; x += 4) if (row[x]! > 25) { top = Math.min(top, y); bottom = y + 1; break; }
+    previous = row;
+  }
+  return { top, bottom };
+}
+const originalBounds = visibleVerticalBounds("../art/forge/forn.png"), emptyBounds = visibleVerticalBounds("../art/forge/forn-empty-hands.png");
+
+function fixture(reduced = false) {
+  const images: any[] = [], tweens: any[] = [], targets: any[] = [], captions: string[] = [];
+  const save = { satchel: [] as string[], almanacLore: [] as string[], realms: {} as Record<string, any> };
+  let gate: (() => void) | undefined, word: any, boss = 0;
+  const frames = new Map(Object.entries(fornDimensions)), normalizations: any[] = [];
+  const textures = {
+    exists: (key: string) => frames.has(key) || key.startsWith("almanac-icon-"),
+    get: (key: string) => ({ getSourceImage: () => frames.get(key) }),
+    createCanvas(key: string, width: number, height: number) {
+      frames.set(key, { width, height });
+      const entry = { key, width, height, draws: [] as any[], refreshed: false };
+      normalizations.push(entry);
+      return { context: { drawImage(...args: any[]) { entry.draws.push(args); } }, refresh() { entry.refreshed = true; } };
+    },
+  };
+  const Forge = new Function("reducedMotion", "satchelIconFor", "applySceneActorLighting", "playWrenAction", "playWrenFocus", "playBodyImpact", "playActorAttention", "PALETTE_HEX", "resolveRealmFork", "resolveCompanionDecision", "forgePassageIndex", code + "; return Forge;")(
+    () => reduced, (id: string) => ({ key: `almanac-icon-${id}` }), (_scene: unknown, image: any) => { image.lit = true; },
+    noop, noop, noop, noop, { ember: 0xcd7445 }, () => null, () => null, forgePassageIndex,
+  );
+  const scene = new Forge();
+  const makeWord = (options: any) => { word = options; targets.push(options); return options; };
+  Object.assign(scene, {
+    store: { get: () => save, update: (edit: (state: typeof save) => void) => edit(save) },
+    scale: { width: 1920, height: 1080 }, wrenContainer: { x: 665, y: 866, scene: true }, wrenSprite: {},
+    textures,
+    add: { image(x: number, y: number, key: string) {
+      const image = { x, y, texture: { key }, ...dimensions, scene: true, scale: 1,
+        setDepth(value: number) { this.depth = value; return this; }, setScale(value: number) { this.scale = value; return this; },
+        destroy() { this.scene = false; },
+      } as any;
+      images.push(image); return image;
+    } },
+    tweens: { add(options: any) { tweens.push(options); return options; }, killTweensOf(item: any) { for (const tween of tweens) if (tween.targets === item) tween.cancelled = true; } },
+    commitFork: (_fork: string, choice: string) => choice,
+    checkpoint: noop, savedStageData: () => ({}), hasSavedPassage: () => false,
+    clearActiveTargets: noop, dismissForgeChoiceCue: noop, dismissBellowsWorkstation: noop, pulseForgeChoiceCue: noop,
+    showApprenticeSprite: noop, hideApprenticeSprite: noop, hideFornSprite: noop, approachForgeWork: noop,
+    band: { setObjective: noop }, setNarrator: (text: string) => captions.push(text),
+    readThen(next: () => void) { assert(!gate, "a native response never overwrites an unread card"); gate = next; },
+    forgePassageWordPosition: () => ({ x: 600, y: 440 }), makeFornWord: makeWord,
+    makeForgeChoiceWord: (_body: any, options: any) => makeWord(options), registerActiveTarget: noop,
+    playCommandGolemRiseCue: noop, cameras: { main: { shake: noop } }, narration: { say: noop },
+    startBossPhase1() { boss++; },
+    reading: { destroy() { gate = undefined; } }, typingInput: { reset: noop }, input: {},
+    releaseCatwalkCueWordAnchor: noop, dismissRevisitMemoryCue: noop, clearFornWordAnchors: noop,
+    clearForkChoiceWordAnchors: noop, clearForgeChoiceCues: noop, clearPeacefulGuards: noop,
+  });
+  scene.init({ store: scene.store });
+  const forn = { x: 400, y: 866, scene: true, texture: { key: "forn" }, ...fornDimensions.forn,
+    scaleX: 360 / fornDimensions.forn.height, scaleY: 360 / fornDimensions.forn.height, originX: .5, originY: 1,
+    setTexture(key: string) { this.texture.key = key; Object.assign(this, frames.get(key)); return this; },
+    destroy() { this.scene = false; },
+  };
+  scene.fornSprite = forn;
+  function continueReading() { assert(gate, "native Continue has a held card"); const next = gate!; gate = undefined; next(); }
+  function finishTween(tween: any) { if (tween.cancelled || !tween.targets.scene) return; for (const key of ["x", "y"]) if (typeof tween[key] === "number") tween.targets[key] = tween[key]; tween.onComplete?.(); }
+  function reachHandoff() {
+    scene.startFornBranch(); continueReading();
+    assertEqual(word.word, "work the bellows", "the first repair phrase stays exact"); word.onComplete(); continueReading();
+    assertEqual(word.word, "seal the seam", "the seam phrase stays exact"); word.onComplete(); continueReading();
+    assertEqual(word.word, "forn gives you his hammer", "the existing gift phrase owns the visual handoff");
+  }
+  return { scene, forn, normalizations, save, images, tweens, captions, targets, word: () => word, gate: () => gate, boss: () => boss,
+    continue: continueReading, finishTween, reachHandoff };
+}
+
+await suite("Forge Hammer: the existing gift phrase visibly transfers the preloaded painting before its held acknowledgment", () => {
+  for (const reduced of [false, true]) {
+    const f = fixture(reduced); f.reachHandoff();
+    assertEqual(f.images.length, 0, "earlier repair phrases cannot prematurely hand over the Hammer");
+    assertEqual(f.forn.texture.key, "forn", "the smith keeps his original hammer-bearing pose before the gift");
+    const originalFrame = [f.forn.x, f.forn.y, f.forn.width, f.forn.height, f.forn.scaleX, f.forn.scaleY, f.forn.originX, f.forn.originY];
+    f.word().onComplete();
+    assertEqual(f.images.length, 1, "the completed gift phrase creates the same existing Hammer painting");
+    const image = f.images[0], transfer = f.tweens[0];
+    assertEqual(image.texture.key, "almanac-icon-bellows-hammer", "world transfer reuses the actual satchel asset");
+    assert(image.lit, "the handoff retains its accepted Forge lighting");
+    assertClose(Math.max(image.width, image.height) * image.scale, 66, .001, "the accepted visible reward size is preserved");
+    assertEqual([image.x, image.y], reduced ? [703, 748] : [475, 676], "normal transfer begins at Forn; reduced motion places it in Wren's hand immediately");
+    assertEqual([transfer.x, transfer.y, transfer.duration], [703, 748, reduced ? 0 : 650], "the exact existing decorative destination and duration are preserved");
+    assert(f.captions.at(-1)!.includes("presses the hammer into your hands") && f.gate(), "the unchanged handoff acknowledgment and Continue are available immediately");
+    assertEqual(f.forn.texture.key, "forn-empty-hands-frame", "the single Hammer leaves Forn's painted glove at its existing handoff");
+    assert(f.forn.scene, "the empty-handed smith remains present for the repair response");
+    assertEqual([f.forn.x, f.forn.y, f.forn.width, f.forn.height, f.forn.scaleX, f.forn.scaleY, f.forn.originX, f.forn.originY], originalFrame,
+      "the alternate pose cannot move the smith, his boots, his size, or the frame used by existing tweens");
+    assertEqual([f.normalizations[0].width, f.normalizations[0].height, f.normalizations[0].refreshed], [509, 640, true], "the generated pose is normalized to the actual original frame once");
+    const [source, x, y, width, height] = f.normalizations[0].draws[0];
+    const fittedScale = height / source.height;
+    assertEqual([source, x, width], [fornDimensions["forn-empty-hands"], 0, 509], "the alternate retains Forn's exact original horizontal texture frame");
+    assertClose(y + emptyBounds.top * fittedScale, originalBounds.top, 0.00001, "the actual alpha-visible head stays at the original height");
+    assertClose(y + emptyBounds.bottom * fittedScale, originalBounds.bottom, 0.00001, "the actual alpha-visible boots keep the original floor contact");
+    assertEqual(f.save.satchel, [], "showing the Hammer does not move its actual reward earlier");
+    f.finishTween(transfer);
+    assertEqual([image.x, image.y], [703, 748], "the settled Hammer occupies the accepted hand position");
+    f.continue();
+    assertEqual(f.word().word, "the forge breathes again", "native Continue still reveals the original fourth phrase");
+    assertEqual(f.scene.keepsakeSprite, image, "the same Hammer remains visible while the final repair phrase is typed");
+    assertEqual(f.forn.texture.key, "forn-empty-hands-frame", "the smith cannot regain the gifted Hammer during the fourth phrase");
+    f.word().onComplete();
+    assertEqual(f.save.satchel, [], "the fourth held response still precedes the original reward callback");
+    f.continue();
+    assertEqual(f.save.satchel, ["bellows-hammer"], "the original afterFork1 callback grants its one reward");
+    assertEqual(f.save.almanacLore, ["forn-bellows-song"], "the original saved lore ID remains unchanged");
+    assertEqual([f.images.length, f.tweens.length], [1, 1], "the reward card retains the same Hammer without a duplicate handoff");
+    assert(f.gate(), "the reward card remains held for native Continue");
+    assert(f.captions.at(-1)!.includes("rests in your hands"), "the reward card describes the held Hammer while its inventory commit remains unchanged");
+    f.continue();
+    assert(!image.scene && !f.scene.keepsakeSprite && transfer.cancelled, "original boss entry stows the Hammer and cancels its owned tween");
+  }
+});
+
+await suite("Forge Hammer: fast Continue stays immediate and lifecycle cleanup cancels an unfinished transfer", () => {
+  for (const reduced of [false, true]) {
+    for (const exit of ["init", "shutdown", "boss"]) {
+      const f = fixture(reduced); f.reachHandoff(); f.word().onComplete();
+      const image = f.images[0], transfer = f.tweens[0];
+      if (exit === "boss") {
+        f.continue(); f.word().onComplete(); f.continue();
+        assertEqual(f.images.length, 1, "fast input cannot replace the in-flight Hammer at the reward card");
+        f.continue();
+      } else if (exit === "init") f.scene.init({ store: f.scene.store });
+      else f.scene.shutdownFixture();
+      assert(!image.scene && !f.scene.keepsakeSprite && transfer.cancelled, `${exit} clears the moving prop before the scene leaves`);
+      f.finishTween(transfer);
+      assert(!image.scene && !f.scene.keepsakeSprite, "a cancelled decorative transfer cannot restore a stale prop");
+      f.scene.clearForgeKeepsake();
+      assert(!f.scene.keepsakeSprite, "repeated cleanup is safe");
+    }
+  }
+});
+
+await suite("Forge Hammer: other passages and relic replacements retain their original presentation", () => {
+  const f = fixture(true);
+  f.scene.startCabalBranch(); f.continue();
+  for (let index = 0; index < 3; index++) { f.word().onComplete(); f.continue(); }
+  assertEqual(f.images, [], "the Hammer repair cannot introduce a gift into the apprentices' passages");
+  assertEqual(f.word().word, "the forge chokes and slows", "the unmodified opposite branch reaches its original fourth phrase");
+  f.scene.showForgeKeepsake("bellows-hammer", 475);
+  const first = f.images[0];
+  f.scene.showForgeKeepsake("master-key", 960);
+  assert(!first.scene && f.tweens[0].cancelled, "a later different relic safely replaces the former hand prop");
+  assertEqual(f.scene.keepsakeSprite.texture.key, "almanac-icon-master-key", "the second fork can still show its own original keepsake");
+});

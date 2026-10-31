@@ -14,10 +14,12 @@ import { SERIF } from "../palette";
 import { RELICS } from "../relics";
 import { satchelIconFor } from "./satchelIcons";
 import { UI_HEX } from "./uiTheme";
+import { ChapterReading } from "./chapterReading";
 
 /** Band height in design px (game is 1080 tall) — the bottom ~20%. */
 export const BAND_H = 220;
 const DEPTH = 1400;
+const STORY_H = 152;
 
 // ── layout (band-local: x = 0..width, y = 0..BAND_H) ──────────────────────────
 const MID_Y = BAND_H / 2;
@@ -74,6 +76,9 @@ export interface ConsoleBandNoticeOptions {
 }
 
 export interface ConsoleBandOptions {
+  /** Explicit scene activity. Combat retains the original full console; story
+   *  choices and traversal use quieter chrome. Omit to compact held cards only. */
+  activity?: () => "combat" | "story";
   /** Texture key for the speaker portrait shown in the nook (optional). */
   portraitKey?: string;
   /** Name shown under the portrait. */
@@ -173,9 +178,18 @@ export class ConsoleBand {
   readonly satchelAnchor: { x: number; y: number };
   private readonly scene: Phaser.Scene;
   private readonly container: Phaser.GameObjects.Container;
+  private readonly fullChrome: Phaser.GameObjects.Container;
+  private readonly storySurface: Phaser.GameObjects.Graphics;
+  private readonly activity?: ConsoleBandOptions["activity"];
+  private compact = false;
+  private readingActive = false;
+  private satchelHeading?: Phaser.GameObjects.Text;
+  private customSatchelHeading = false;
+  private readonly satchelFrames: Phaser.GameObjects.Graphics[] = [];
   private objectiveContainer!: Phaser.GameObjects.Container;
   private objectiveLabel!: Phaser.GameObjects.Text;
   private objectiveText!: Phaser.GameObjects.Text;
+  private objectiveBg!: Phaser.GameObjects.Graphics;
   private bandWidth = 0;
   private objectiveWidth = 0;
   private objectiveTextMaxWidth = 0;
@@ -183,6 +197,7 @@ export class ConsoleBand {
   private renderedReadoutKey = "";
   private noticeActive = false;
   private noticeTimer: Phaser.Time.TimerEvent | null = null;
+  private noticeGeneration = 0;
   private portraitImage?: Phaser.GameObjects.Image;
   private portraitFallback?: Phaser.GameObjects.Text;
   private portraitLabel?: Phaser.GameObjects.Text;
@@ -206,6 +221,15 @@ export class ConsoleBand {
       .container(0, top)
       .setScrollFactor(0)
       .setDepth(DEPTH);
+    this.activity = opts.activity;
+    this.fullChrome = scene.add.container(0, 0);
+    this.container.add(this.fullChrome);
+    this.storySurface = scene.add.graphics().setVisible(false);
+    this.storySurface.fillStyle(0x17120e, 0.96);
+    this.storySurface.fillRect(0, BAND_H - STORY_H, W, STORY_H);
+    this.storySurface.lineStyle(1, UI_HEX.brass, 0.3);
+    this.storySurface.lineBetween(0, BAND_H - STORY_H, W, BAND_H - STORY_H);
+    this.container.add(this.storySurface);
 
     const maxOneShots = Math.max(0, opts.maxOneShots ?? 3);
     const passiveIconIds = opts.passiveIconIds ?? [];
@@ -229,8 +253,37 @@ export class ConsoleBand {
       this.oneShotSlots.push({ x: ONESHOT_X0 + i * ONESHOT_DX, y: top + ONESHOT_Y });
     }
 
+    this.refreshPresentation();
+    scene.events.on(ChapterReading.STATE_CHANGED, this.refreshPresentation, this);
+    scene.events.on(Phaser.Scenes.Events.PRE_UPDATE, this.refreshPresentation, this);
+
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroy());
     scene.events.once(Phaser.Scenes.Events.DESTROY, () => this.destroy());
+  }
+
+  private refreshPresentation(): void {
+    const reading = ChapterReading.activeIn(this.scene);
+    const activity = this.activity?.();
+    const compact = activity !== "combat" && (activity === "story" || reading);
+    if (compact !== this.compact) {
+      this.compact = compact;
+      this.fullChrome.setVisible(!compact);
+      this.storySurface.setVisible(compact);
+      for (const frame of this.satchelFrames) frame.setVisible(!compact);
+      if (this.satchelHeading) {
+        this.satchelHeading.setVisible(!compact || this.customSatchelHeading);
+        this.satchelHeading.setY(compact ? 78 : SATCHEL_LABEL_Y);
+      }
+    }
+    this.readingActive = reading;
+    this.updateReadoutVisibility();
+  }
+
+  private updateReadoutVisibility(): void {
+    // The held card already supplies Continue and replay. Notices still explain
+    // a newly answering keepsake; the stored task returns at the playable beat.
+    this.objectiveContainer.setVisible(this.renderedReadoutKey !== "" &&
+      (!this.readingActive || this.noticeActive));
   }
 
   /** Small persistent "what now" line inside the console band. It keeps wave,
@@ -238,8 +291,18 @@ export class ConsoleBand {
    *  fast narration cards. */
   setObjective(text: string): void {
     const trimmed = text.trim();
+    const changed = trimmed !== this.objectiveValue;
     this.objectiveValue = trimmed;
-    if (this.noticeActive) return;
+    if (this.noticeActive) {
+      if (!changed) return;
+      // A new playable beat owns the task strip immediately. Its predecessor's
+      // relic notice must not hide the next instruction or return after a stale timer.
+      this.noticeGeneration += 1;
+      this.noticeTimer?.remove(false);
+      this.noticeTimer = null;
+      this.noticeActive = false;
+      this.clearAnsweringKeepsake();
+    }
     this.renderObjective("task", trimmed);
   }
 
@@ -253,10 +316,12 @@ export class ConsoleBand {
     const label = opts.label ?? "satchel";
     const colors = noticeColorsFor(label);
     this.noticeTimer?.remove(false);
+    const generation = ++this.noticeGeneration;
     this.noticeActive = true;
     this.renderObjective(label, trimmed, colors);
     this.playNoticeSatchelWake(label, opts.itemId);
     this.noticeTimer = this.scene.time.delayedCall(opts.durationMs ?? 1900, () => {
+      if (generation !== this.noticeGeneration) return;
       this.noticeActive = false;
       this.noticeTimer = null;
       this.clearAnsweringKeepsake();
@@ -287,6 +352,7 @@ export class ConsoleBand {
     this.objectiveLabel.setColor(colors.labelColor ?? "#a59b89");
     this.objectiveText.setColor(colors.textColor ?? "#f3ead2");
     this.fitObjectiveText(trimmed);
+    this.redrawObjectivePlate();
     this.objectiveContainer.setVisible(true);
     this.scene.tweens.killTweensOf(this.objectiveContainer);
     this.objectiveContainer.setAlpha(0.78);
@@ -298,6 +364,7 @@ export class ConsoleBand {
     });
     if (changed) this.playReadoutWake(label);
     this.renderedReadoutKey = readoutKey;
+    this.updateReadoutVisibility();
   }
 
   private fitObjectiveText(text: string): void {
@@ -330,7 +397,21 @@ export class ConsoleBand {
     );
   }
 
+  private redrawObjectivePlate(): void {
+    this.objectiveWidth = Math.min(
+      this.objectiveTextMaxWidth + OBJECTIVE_TEXT_X + 18,
+      Math.max(260, OBJECTIVE_TEXT_X + this.objectiveText.width + 18),
+    );
+    this.objectiveBg.clear().fillStyle(0x0f0c08, 0.52);
+    this.objectiveBg.fillRoundedRect(0, -OBJECTIVE_H / 2, this.objectiveWidth, OBJECTIVE_H, 7);
+    this.objectiveBg.lineStyle(1, UI_HEX.frame, 0.72);
+    this.objectiveBg.strokeRoundedRect(0, -OBJECTIVE_H / 2, this.objectiveWidth, OBJECTIVE_H, 7);
+  }
+
   private destroy(): void {
+    this.scene.events.off(ChapterReading.STATE_CHANGED, this.refreshPresentation, this);
+    this.scene.events.off(Phaser.Scenes.Events.PRE_UPDATE, this.refreshPresentation, this);
+    this.noticeGeneration += 1;
     this.noticeTimer?.remove(false);
     this.noticeTimer = null;
     if (this.container.active) this.container.destroy();
@@ -361,7 +442,7 @@ export class ConsoleBand {
         (PORTRAIT_H - 8) / img.height,
       );
       img.setScale(fit * 0.96);
-      this.container.add(img);
+      this.fullChrome.add(img);
       this.portraitImage = img;
       img.setAlpha(0.84);
       this.scene.tweens.add({
@@ -386,7 +467,7 @@ export class ConsoleBand {
         .setOrigin(0.5)
         .setAlpha(0.68);
       fallback.setScale(0.94);
-      this.container.add(fallback);
+      this.fullChrome.add(fallback);
       this.portraitFallback = fallback;
       this.scene.tweens.add({
         targets: fallback,
@@ -409,11 +490,11 @@ export class ConsoleBand {
           wordWrap: { width: PORTRAIT_LABEL_WRAP },
         })
         .setOrigin(0.5);
-      this.container.add(this.portraitLabel);
+      this.fullChrome.add(this.portraitLabel);
     }
     this.portraitLabel.setText(this.formatPortraitName(trimmedName));
-    if (this.portraitFallback) this.container.bringToTop(this.portraitFallback);
-    this.container.bringToTop(this.portraitLabel);
+    if (this.portraitFallback) this.fullChrome.bringToTop(this.portraitFallback);
+    this.fullChrome.bringToTop(this.portraitLabel);
     if (this.portraitInitialized) this.playPortraitWake();
     this.portraitInitialized = true;
     this.renderedPortraitKey = portraitKey;
@@ -506,7 +587,7 @@ export class ConsoleBand {
     g.fillRect(0, 0, W, 3);
     g.fillStyle(0x5a4a2c, 0.7);
     g.fillRect(0, 3, W, 2);
-    this.container.add(g);
+    this.fullChrome.add(g);
 
     // Brass corner brackets at the band's top corners.
     const b = scene.add.graphics();
@@ -514,7 +595,7 @@ export class ConsoleBand {
     const s = 12, m = 10;
     b.beginPath(); b.moveTo(m, m + s); b.lineTo(m, m); b.lineTo(m + s, m); b.strokePath();
     b.beginPath(); b.moveTo(W - m - s, m); b.lineTo(W - m, m); b.lineTo(W - m, m + s); b.strokePath();
-    this.container.add(b);
+    this.fullChrome.add(b);
   }
 
   private playBandEntryWake(): void {
@@ -528,7 +609,7 @@ export class ConsoleBand {
     rail.moveTo(PAD, MID_Y + 14);
     rail.lineTo(this.bandWidth - PAD, MID_Y + 14);
     rail.strokePath();
-    this.container.add(rail);
+    this.fullChrome.add(rail);
 
     const brackets = this.scene.add.graphics().setAlpha(0);
     brackets.lineStyle(2, UI_HEX.brass, 0.56);
@@ -544,7 +625,7 @@ export class ConsoleBand {
     brackets.lineTo(this.bandWidth - inset, inset);
     brackets.lineTo(this.bandWidth - inset, inset + size);
     brackets.strokePath();
-    this.container.add(brackets);
+    this.fullChrome.add(brackets);
 
     this.scene.tweens.add({
       targets: [rail, brackets],
@@ -566,7 +647,7 @@ export class ConsoleBand {
     frame.fillRoundedRect(x - PORTRAIT_W / 2, y - PORTRAIT_H / 2, PORTRAIT_W, PORTRAIT_H, 7);
     frame.lineStyle(2, UI_HEX.brass, 0.9);
     frame.strokeRoundedRect(x - PORTRAIT_W / 2, y - PORTRAIT_H / 2, PORTRAIT_W, PORTRAIT_H, 7);
-    this.container.add(frame);
+    this.fullChrome.add(frame);
   }
 
   private playPortraitWake(): void {
@@ -597,10 +678,10 @@ export class ConsoleBand {
       PORTRAIT_H + 4,
       8,
     );
-    this.container.add(frame);
-    if (this.portraitImage) this.container.bringToTop(this.portraitImage);
-    if (this.portraitFallback) this.container.bringToTop(this.portraitFallback);
-    if (this.portraitLabel) this.container.bringToTop(this.portraitLabel);
+    this.fullChrome.add(frame);
+    if (this.portraitImage) this.fullChrome.bringToTop(this.portraitImage);
+    if (this.portraitFallback) this.fullChrome.bringToTop(this.portraitFallback);
+    if (this.portraitLabel) this.fullChrome.bringToTop(this.portraitLabel);
 
     this.scene.tweens.add({
       targets: frame,
@@ -622,7 +703,7 @@ export class ConsoleBand {
     const divider = scene.add.graphics();
     divider.fillStyle(0x6e5a36, 0.45);
     divider.fillRect(DIVIDER_X, PAD, 1, BAND_H - PAD * 2);
-    this.container.add(divider);
+    this.fullChrome.add(divider);
 
     // Only relics with a loadable icon get a tile — no empty boxes for an id
     // whose art is missing or not yet preloaded; the row stays contiguous.
@@ -645,6 +726,8 @@ export class ConsoleBand {
         })
         .setOrigin(0, 0.5);
       this.container.add(label);
+      this.satchelHeading = label;
+      this.customSatchelHeading = trimmedLabel !== "satchel";
     }
     if (displayedCount > 0) {
       this.playSatchelRowWake(displayedCount);
@@ -661,6 +744,7 @@ export class ConsoleBand {
       tile.lineStyle(1, UI_HEX.frame, 0.9);
       tile.strokeRoundedRect(-TILE / 2, -TILE / 2, TILE, TILE, 5);
       iconContainer.add(tile);
+      this.satchelFrames.push(tile);
 
       const icon = satchelIconFor(id)!;
       const img = scene.add.image(0, 0, icon.key);
@@ -694,6 +778,7 @@ export class ConsoleBand {
       tile.fillStyle(UI_HEX.brass, 0.1);
       tile.fillRoundedRect(-TILE / 2 + 3, -TILE / 2 + 3, TILE - 6, TILE - 6, 4);
       overflowContainer.add(tile);
+      this.satchelFrames.push(tile);
 
       const count = scene.add
         .text(0, 0, `+${overflowCount}`, {
@@ -769,7 +854,7 @@ export class ConsoleBand {
     wake.moveTo(SATCHEL_X, TILE_Y + TILE / 2 + 10);
     wake.lineTo(SATCHEL_X + rowW, TILE_Y + TILE / 2 + 10);
     wake.strokePath();
-    this.container.add(wake);
+    this.fullChrome.add(wake);
 
     this.scene.tweens.add({
       targets: wake,
@@ -933,6 +1018,7 @@ export class ConsoleBand {
       .setVisible(false);
 
     const bg = scene.add.graphics();
+    this.objectiveBg = bg;
     bg.fillStyle(0x0f0c08, 0.52);
     bg.fillRoundedRect(0, -OBJECTIVE_H / 2, width, OBJECTIVE_H, 7);
     bg.lineStyle(1, UI_HEX.frame, 0.72);
@@ -969,7 +1055,7 @@ export class ConsoleBand {
     rail.fillRect(0, 0, this.bandWidth, 3);
     rail.fillStyle(color, notice ? 0.11 : 0.08);
     rail.fillRect(0, 3, this.bandWidth, 14);
-    this.container.add(rail);
+    this.fullChrome.add(rail);
 
     this.scene.tweens.add({
       targets: rail,
@@ -981,7 +1067,7 @@ export class ConsoleBand {
 
     const strip = this.scene.add
       .graphics()
-      .setPosition(OBJECTIVE_X, OBJECTIVE_Y)
+      .setPosition(0, 0)
       .setAlpha(0.62);
     strip.fillStyle(color, notice ? 0.12 : 0.08);
     strip.fillRoundedRect(
@@ -999,8 +1085,9 @@ export class ConsoleBand {
       OBJECTIVE_H + 6,
       8,
     );
-    this.container.add(strip);
-    this.container.bringToTop(this.objectiveContainer);
+    this.objectiveContainer.add(strip);
+    this.objectiveContainer.bringToTop(this.objectiveLabel);
+    this.objectiveContainer.bringToTop(this.objectiveText);
 
     this.scene.tweens.add({
       targets: strip,

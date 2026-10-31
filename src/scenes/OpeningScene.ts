@@ -1,8 +1,14 @@
+import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
 import Phaser from "phaser";
+import { applySceneActorLighting } from "../game/actorLighting";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
 import { NarrationManager } from "../game/narrationManager";
+import { OPENING_STEPS, openingStep, type OpeningStep } from "../game/chapterFlow";
+import { ChapterReading } from "../game/ui/chapterReading";
+import { installChapterMenu } from "../game/ui/pauseMenu";
+import { reducedMotion, reducedFlashes } from "../game/presentation";
 import { PALETTE_HEX } from "../game/palette";
 import type { SaveStore } from "../game/saveState";
 import { TypingInputController } from "../game/typingInput";
@@ -25,22 +31,27 @@ import { makeQuietLordSprite, preloadQuietLord } from "../game/quietLord";
 import { makeWrenSprite, preloadWren, setWrenPose } from "../game/wren";
 import runaSprite from "../../art/runa/runa-front.png";
 import siblingSprite from "../../art/sibling/sibling-front.png";
+import siblingEmptyHands from "../../art/sibling/sibling-empty-hands.png";
+import magnusSprite from "../../art/sibling/magnus-front.png";
 
 interface OpeningSceneData {
   store: SaveStore;
 }
 
-const IDENTITY_CHOICE_TARGET = { x: 790, y: 650 };
+const IDENTITY_CHOICE_TARGET = { x: 980, y: 650 };
 const IDENTITY_CARD_W = 230;
 const IDENTITY_CARD_H = 124;
 const IDENTITY_CARD_OFFSET_X = 150;
 const NAME_TARGET = { x: 910, y: 640 };
-const TYPEWRITER_TARGET = { x: 790, y: 700 };
+// Keep the name above the machine's visible right edge, clear of Runa.
+const TYPEWRITER_TARGET = { x: 650, y: 525 };
+// The painted keyboard is lower than its label; light and feedback belong here.
+const TYPEWRITER_SOURCE = { x: 600, y: 638 };
 const PORTAL_TARGET = { x: 1510, y: 610 };
 const STUDY_RESPONSE = {
   identity: { ...IDENTITY_CHOICE_TARGET, color: PALETTE_HEX.cream },
   name: { ...NAME_TARGET, color: PALETTE_HEX.cream },
-  typewriter: { ...TYPEWRITER_TARGET, color: PALETTE_HEX.brass },
+  typewriter: { ...TYPEWRITER_SOURCE, color: PALETTE_HEX.brass },
   portal: { ...PORTAL_TARGET, color: PALETTE_HEX.frost },
 } as const;
 type StudyResponsePoint = (typeof STUDY_RESPONSE)[keyof typeof STUDY_RESPONSE];
@@ -56,7 +67,7 @@ interface StudyTargetOptions {
   y: number;
   fontSize: number;
   response: StudyResponsePoint;
-  frame?: "banner" | null;
+  frame?: "banner" | "inscription" | null;
   onComplete: () => void;
 }
 
@@ -64,13 +75,19 @@ export class OpeningScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
+  private reading!: ChapterReading;
+  private chapterMenu?: ReturnType<typeof installChapterMenu>;
 
   // The Quiet Lord's first foreshadowing — faint silhouette during Beat 6.
   private quietLordSprite: Phaser.GameObjects.Image | null = null;
   private runaActor: Phaser.GameObjects.Container | null = null;
   private siblingActor: Phaser.GameObjects.Container | null = null;
+  private siblingPortrait: Phaser.GameObjects.Image | null = null;
   private openingWren: Phaser.GameObjects.Container | null = null;
+  private openingWrenSprite: Phaser.GameObjects.Image | null = null;
+  private openingDepartureStarted = false;
   private siblingKeepsake: Phaser.GameObjects.Graphics | null = null;
+  private carriedKeepsake: Phaser.GameObjects.Graphics | null = null;
   private studyTypingPulseTimes = new WeakMap<StudyResponsePoint, number>();
   private studyWordAnchorReleases: Array<() => void> = [];
   private identityChoiceCards: Phaser.GameObjects.Container[] = [];
@@ -89,12 +106,16 @@ export class OpeningScene extends Phaser.Scene {
   }
 
   init(data: OpeningSceneData): void {
+    this.clearCarriedKeepsake();
     this.store = data.store;
     // Stale sprite reference from a previous run; clear before Beat 6.
     this.quietLordSprite = null;
     this.runaActor = null;
     this.siblingActor = null;
+    this.siblingPortrait = null;
     this.openingWren = null;
+    this.openingWrenSprite = null;
+    this.openingDepartureStarted = false;
     this.siblingKeepsake = null;
     this.studyTypingPulseTimes = new WeakMap();
     this.studyWordAnchorReleases = [];
@@ -103,17 +124,29 @@ export class OpeningScene extends Phaser.Scene {
     // truly fresh save so Beat 2.5 will prompt.
     this.wrenGender = this.store.get().wrenGender;
     this.beat2_5Targets = [];
+    this.chapterMenu = undefined;
   }
 
   preload(): void {
+    beginAssetLoad(this);
     this.load.image("opening-backdrop", openingBackdrop);
     this.load.image("runa-sprite", runaSprite);
     this.load.image("sibling-sprite", siblingSprite);
+    this.load.image("sibling-empty-hands", siblingEmptyHands);
+    this.load.image("magnus-sprite", magnusSprite);
     preloadQuietLord(this);
     preloadWren(this);
   }
 
   create(): void {
+    if (assetLoadBlocked(this)) return;
+    this.chapterMenu = installChapterMenu(this, {
+      store: this.store,
+      hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),
+      onLeave: () => {
+        this.scene.start("TitleScene");
+      },
+    });
     const { width } = this.scale;
 
     // ── Painted study backdrop ───────────────────────────────────────────────
@@ -137,8 +170,8 @@ export class OpeningScene extends Phaser.Scene {
       maxDurationMs: 15000,
     });
     addLivingLight(this, {
-      x: 790,
-      y: 740,
+      x: TYPEWRITER_SOURCE.x,
+      y: TYPEWRITER_SOURCE.y,
       width: 250,
       height: 160,
       color: 0xf0ad58,
@@ -173,6 +206,7 @@ export class OpeningScene extends Phaser.Scene {
 
     // ── Narrator text ────────────────────────────────────────────────────────
     this.narration = new NarrationManager(this, {
+      store: this.store,
       y: 120,
       framed: true,
       onSpeak: (speakerName) => this.attendSpeaker(speakerName),
@@ -182,25 +216,57 @@ export class OpeningScene extends Phaser.Scene {
     this.typingInput = new TypingInputController(this.store);
     // No Wren in the opening study; miss feedback is camera-only.
     this.typingInput.setKeystrokeHooks({
-      onMiss: () => this.cameras.main.shake(80, 0.002),
+      onMiss: () => { if (!reducedMotion(this)) this.cameras.main.shake(80, 0.002); },
       onClaim: () => playClaim(),
     });
+    this.reading = new ChapterReading(this, 1000);
+
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.reading.destroy();
+      this.chapterMenu?.destroy();
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.clearStudyWordAnchors();
       this.clearIdentityChoiceCards();
+      this.clearCarriedKeepsake();
       this.siblingKeepsake = null;
+      this.siblingPortrait = null;
       this.openingWren = null;
+      this.openingWrenSprite = null;
     });
 
     // ── Beat sequence ────────────────────────────────────────────────────────
-    this.beat1();
+    this.resumeOpening();
+  }
+
+  private checkpoint(step: OpeningStep): void {
+    this.store.setCheckpoint({ scene: "OpeningScene", step, data: {} });
+  }
+
+  private readThen(next: () => void): void {
+    this.reading.show(next, () => this.narration.replay());
+  }
+
+  private resumeOpening(): void {
+    const saved = this.store.get().checkpoint;
+    const step = openingStep(saved?.scene === "OpeningScene" ? saved.step : undefined);
+    const index = OPENING_STEPS.indexOf(step);
+    if (index > 1) this.drawRuna();
+    if (index > 3) this.drawSibling();
+    const routes: Record<OpeningStep, () => void> = {
+      arrival: () => this.beat1(), runa: () => this.beat2(),
+      identity: () => this.beat2_5(), sibling: () => this.beat3(),
+      name: () => this.beat4(), typewriter: () => this.beat5(),
+      almanac: () => this.beat6(), "portal-wakes": () => this.beat7(),
+      "portal-name": () => this.beat8(), farewell: () => this.beat9(),
+      departure: () => this.beat10(),
+    };
+    routes[step]();
   }
 
   private startStudySourceWakes(): void {
-    const typewriter = this.add.container(TYPEWRITER_TARGET.x, TYPEWRITER_TARGET.y + 40);
+    const typewriter = this.add.container(TYPEWRITER_SOURCE.x, TYPEWRITER_SOURCE.y);
     addContainerWake(this, typewriter, {
       kind: "ember",
       intervalMs: 520,
@@ -233,11 +299,12 @@ export class OpeningScene extends Phaser.Scene {
 
   // ── Beats ──────────────────────────────────────────────────────────────────
 
-  /** Beat 1 — Narrator intro, 3 s delay, no input. */
+  /** Beat 1 — Narrator intro, held until the reader continues. */
   private beat1(): void {
+    this.checkpoint("arrival");
     this.narration.say("opening_beat1_intro");
     this.playStudyPrelude();
-    this.time.delayedCall(3000, () => this.beat2());
+    this.readThen(() => this.beat2());
   }
 
   private playStudyPrelude(): void {
@@ -264,16 +331,17 @@ export class OpeningScene extends Phaser.Scene {
     }
   }
 
-  /** Beat 2 — Runa descends the staircase (2 s). Branches forward: if Wren's
+  /** Beat 2 — Runa descends, then waits for the reader. If Wren's
    *  gender is already in saveState (revisit / New Game+), skip the identity
    *  prompt and go straight to the sibling appearance; otherwise route through
    *  Beat 2.5 to capture the choice. */
   private beat2(): void {
+    this.checkpoint("runa");
     this.narration.say("opening_beat2_runa_descends");
     this.drawRuna();
     const next = this.wrenGender === null ? () => this.beat2_5() : () => this.beat3();
-    // 2.8 s (was 2 s): the richer Runa-introduction caption needs room to read.
-    this.time.delayedCall(2800, () => next());
+    // Reading pace belongs to the player; continued/replayed lines do not alter identity.
+    this.readThen(next);
   }
 
   /** Beat 2.5 — §5.5.2 gender choice. Runa asks who Wren is; player types
@@ -281,6 +349,8 @@ export class OpeningScene extends Phaser.Scene {
    *  (sibling sprite, dialogue, farewell) branches correctly and so future
    *  revisits skip the prompt. */
   private beat2_5(): void {
+    if (this.wrenGender !== null) { this.beat3(); return; }
+    this.checkpoint("identity");
     this.setNarrator(
       "Before we begin, I should know who I am calling down into all of this. Type 'boy' or 'girl'.",
       "Runa",
@@ -301,6 +371,7 @@ export class OpeningScene extends Phaser.Scene {
       this.store.update((s) => {
         s.wrenGender = gender;
       });
+      this.checkpoint("sibling");
       playChime();
       this.playStudyPulse(STUDY_RESPONSE.identity);
       this.time.delayedCall(700, () => this.beat3());
@@ -334,10 +405,11 @@ export class OpeningScene extends Phaser.Scene {
     this.beat2_5Targets = [boy, girl];
   }
 
-  /** Beat 3 — Sibling appears in the doorway (2 s). Branches on wrenGender:
+  /** Beat 3 — Sibling appears and the reader controls the farewell pace. Branches on wrenGender:
    *  boy Wren → Saga (small, curious, drawing); girl Wren → Magnus (taller,
    *  half-amused, half-worried). Dialogue lines are spec-locked per §5.5.2. */
   private beat3(): void {
+    this.checkpoint("sibling");
     const isBoy = this.wrenGender === "boy";
     this.setNarrator(
       isBoy
@@ -346,11 +418,12 @@ export class OpeningScene extends Phaser.Scene {
       isBoy ? "Saga" : "Magnus",
     );
     this.drawSibling();
-    this.time.delayedCall(2000, () => this.beat4());
+    this.readThen(() => this.beat4());
   }
 
   /** Beat 4 — Type your name. */
   private beat4(): void {
+    this.checkpoint("name");
     this.narration.say("opening_beat4_type_name");
 
     const target = this.makeStudyTarget({
@@ -366,6 +439,7 @@ export class OpeningScene extends Phaser.Scene {
   }
 
   private onBeat4Complete(): void {
+    this.checkpoint("typewriter");
     playChime();
     this.playStudyPulse(STUDY_RESPONSE.name);
     this.time.delayedCall(500, () => this.beat5());
@@ -373,6 +447,7 @@ export class OpeningScene extends Phaser.Scene {
 
   /** Beat 5 — Type the typewriter's name. */
   private beat5(): void {
+    this.checkpoint("typewriter");
     this.narration.say("opening_beat5_type_typewriter");
 
     const target = this.makeStudyTarget({
@@ -388,21 +463,25 @@ export class OpeningScene extends Phaser.Scene {
   }
 
   private onBeat5Complete(): void {
+    this.checkpoint("almanac");
     playChime();
     this.playStudyPulse(STUDY_RESPONSE.typewriter);
     // Warm gold camera flash.
-    this.cameras.main.flash(320, 201, 161, 74); // PALETTE_HEX.brass split to r/g/b
+    if (!reducedFlashes(this)) this.cameras.main.flash(320, 201, 161, 74); // PALETTE_HEX.brass split to r/g/b
     this.time.delayedCall(400, () => this.beat6());
   }
 
   /** Beat 6 — The Almanac speech. Quiet Lord lingers visibly through the
    *  doorway so the player has time to notice him while reading the line. */
   private beat6(): void {
+    this.checkpoint("almanac");
     this.narration.say("opening_beat6_almanac_speech");
     this.fadeInQuietLord();
-    // Hold him at peak longer (2.4s) so he registers, then fade out cleanly.
-    this.time.delayedCall(4200, () => this.fadeOutQuietLord());
-    this.time.delayedCall(5400, () => this.beat7());
+    // The silhouette stays until the player has read the complete speech.
+    this.readThen(() => {
+      this.fadeOutQuietLord();
+      this.beat7();
+    });
   }
 
   /** First foreshadowing — a faint silhouette through the open doorway as
@@ -438,13 +517,15 @@ export class OpeningScene extends Phaser.Scene {
    *  portal, so the narrator beat sells the awakening on its own — no
    *  extra overlay circles. */
   private beat7(): void {
+    this.checkpoint("portal-wakes");
     this.narration.say("opening_beat7_portal_wakes");
     this.playStudyPulse(STUDY_RESPONSE.portal, { scale: 1.3, durationMs: 980 });
-    this.time.delayedCall(2400, () => this.beat8());
+    this.readThen(() => this.beat8());
   }
 
   /** Beat 8 — Type the portal name. */
   private beat8(): void {
+    this.checkpoint("portal-name");
     this.narration.say("opening_beat8_winter_woken");
 
     const target = this.makeStudyTarget({
@@ -468,6 +549,7 @@ export class OpeningScene extends Phaser.Scene {
   /** Beat 9 — Sibling farewell. Spec-locked dialogue per §5.5.2: Saga keeps
    *  the drawing line; Magnus says he'll be here, don't take long. */
   private beat9(): void {
+    this.checkpoint("farewell");
     const isBoy = this.wrenGender === "boy";
     this.setNarrator(
       isBoy
@@ -476,17 +558,20 @@ export class OpeningScene extends Phaser.Scene {
       isBoy ? "Saga" : "Magnus",
     );
     this.playSiblingFarewell();
-    this.time.delayedCall(2400, () => this.beat10());
+    this.readThen(() => this.beat10());
   }
 
   /** Beat 10 — Bridge to the Portal Chamber. Frames the hub as the next room
    *  Wren walks into, not a redundant second scene. */
   private beat10(): void {
+    this.checkpoint("departure");
+    this.receiveSiblingKeepsake(true);
     this.narration.say("opening_beat10_bridge_to_hub");
-    this.time.delayedCall(2400, () => {
+    this.readThen(() => {
       this.store.update((s) => {
         s.typewriterAwakened = true;
       });
+      this.store.clearCheckpoint();
       this.playOpeningPortalTravel();
       this.time.delayedCall(560, () => {
         this.cameras.main.fadeOut(700, 11, 10, 15);
@@ -573,9 +658,8 @@ export class OpeningScene extends Phaser.Scene {
     }
   }
 
-  /** Wren only enters the study's visible staging for the final crossing, so
-   * the player becomes the source of the portal handoff rather than a fade. */
-  private stageOpeningWrenDeparture(): Phaser.GameObjects.Container | null {
+  /** The same grounded Wren can receive Saga's drawing before crossing. */
+  private showOpeningWren(): Phaser.GameObjects.Container {
     if (this.openingWren?.scene) return this.openingWren;
 
     const actor = this.add.container(982, 936).setDepth(0).setAlpha(0);
@@ -583,14 +667,22 @@ export class OpeningScene extends Phaser.Scene {
     actor.add(addLocalGroundShadow(this, 92, 22, { y: 6, alpha: 0.3 }));
     actor.add(sprite);
     this.openingWren = actor;
+    this.openingWrenSprite = sprite;
 
     this.tweens.add({
       targets: actor,
       alpha: 0.96,
-      duration: 120,
+      duration: reducedMotion(this) ? 0 : 120,
       ease: "Sine.easeOut",
     });
-    setWrenPose(sprite, "walk");
+    return actor;
+  }
+
+  private stageOpeningWrenDeparture(): Phaser.GameObjects.Container | null {
+    const actor = this.showOpeningWren();
+    if (this.openingDepartureStarted) return actor;
+    this.openingDepartureStarted = true;
+    if (this.openingWrenSprite) setWrenPose(this.openingWrenSprite, "walk");
     this.tweens.add({
       targets: actor,
       x: PORTAL_TARGET.x - 20,
@@ -602,6 +694,45 @@ export class OpeningScene extends Phaser.Scene {
       ease: "Sine.easeIn",
     });
     return actor;
+  }
+
+  private receiveSiblingKeepsake(immediate = false): void {
+    if (this.wrenGender !== "boy") return;
+    const held = { x: 20, y: -112 };
+    if (this.carriedKeepsake?.scene) {
+      if (immediate || reducedMotion(this)) {
+        this.tweens.killTweensOf(this.carriedKeepsake);
+        this.carriedKeepsake.setPosition(held.x, held.y).setScale(1).setAlpha(0.92);
+      }
+      return;
+    }
+    const prop = this.siblingKeepsake;
+    if (!prop?.scene || !this.siblingActor?.scene || !this.siblingPortrait?.scene ||
+        !this.textures.exists("sibling-empty-hands")) return;
+    const world = prop.getWorldTransformMatrix().transformPoint(0, 0);
+    const wren = this.showOpeningWren();
+    const start = wren.getWorldTransformMatrix().applyInverse(world.x, world.y);
+    this.tweens.killTweensOf(prop);
+    this.siblingActor.remove(prop);
+    wren.add(prop);
+    this.siblingPortrait.setTexture("sibling-empty-hands");
+    this.siblingPortrait.setScale(260 / this.siblingPortrait.height);
+    this.siblingKeepsake = null;
+    this.carriedKeepsake = prop;
+    prop.setPosition(start.x, start.y).setScale(1).setAlpha(0.92);
+    if (immediate || reducedMotion(this)) {
+      prop.setPosition(held.x, held.y);
+      return;
+    }
+    this.tweens.add({ targets: prop, x: held.x, y: held.y, duration: 420, ease: "Sine.easeInOut" });
+  }
+
+  private clearCarriedKeepsake(): void {
+    if (this.carriedKeepsake?.scene) {
+      this.tweens?.killTweensOf(this.carriedKeepsake);
+      this.carriedKeepsake.destroy();
+    }
+    this.carriedKeepsake = null;
   }
 
   private playOpeningPortalFlecks(
@@ -642,6 +773,9 @@ export class OpeningScene extends Phaser.Scene {
   // ── Input ──────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
+    if (event.ctrlKey || event.metaKey) return;
+    if (this.chapterMenu?.handleKey(event)) return;
+    if (this.reading.handleKey(event)) return;
     if (event.key.length === 1 || event.key === " ") {
       playClack();
     }
@@ -668,7 +802,7 @@ export class OpeningScene extends Phaser.Scene {
       scale: 1.03,
       durationMs: 260,
     });
-    this.pulseSiblingKeepsake();
+    this.receiveSiblingKeepsake();
   }
 
   private pulseSiblingKeepsake(): void {
@@ -698,7 +832,7 @@ export class OpeningScene extends Phaser.Scene {
       y: opts.y,
       fontSize: opts.fontSize,
       outline: true,
-      frame: opts.frame === null ? undefined : opts.frame ?? "banner",
+      frame: opts.frame === null ? undefined : opts.frame ?? "inscription",
       onClaim: () => {
         this.playStudyClaimLine(opts.response, target);
         this.playStudyClaimPulse(opts.response);
@@ -842,6 +976,7 @@ export class OpeningScene extends Phaser.Scene {
         color: point.color,
         alpha: 0.13,
         depth: -2,
+        sourceOffsetY: point === STUDY_RESPONSE.typewriter ? 0 : -36,
         targetOffsetY: 24,
       },
     );
@@ -1002,6 +1137,7 @@ export class OpeningScene extends Phaser.Scene {
       .setOrigin(0.5, 1);
     // 420px tall — matches painted desk + chair proportions in this study.
     img.setScale(420 / img.height);
+    applySceneActorLighting(this, img);
     actor.add(img);
     this.tweens.add({
       targets: actor,
@@ -1018,10 +1154,8 @@ export class OpeningScene extends Phaser.Scene {
    *  ≈x=1521; the sprite sits at x=1180 so the doorway frame, the painted
    *  portal through it, and the Quiet Lord (Beat 6) all stay visible past it.
    *
-   *  The sprite asset is the same in both branches (Saga reference); Magnus
-   *  is rendered as a programmatic placeholder via cooler tint + larger
-   *  scale to read as the older sibling. Real Magnus art is locked open per
-   *  §5.5.12 pending parent's reference photo.
+   *  Saga and Magnus use distinct painted portraits: a little sister with a
+   *  drawing, or an older brother with his arms folded in the doorway.
    */
   private drawSibling(): void {
     const isBoy = this.wrenGender === "boy";
@@ -1042,25 +1176,19 @@ export class OpeningScene extends Phaser.Scene {
       durationMs: isBoy ? 880 : 980,
     });
 
-    const doorway = this.add.graphics().setPosition(isBoy ? 10 : -4, -142);
-    doorway.fillStyle(isBoy ? 0xeedec0 : 0x8fa4bc, isBoy ? 0.07 : 0.1);
-    doorway.fillEllipse(0, 0, isBoy ? 128 : 154, isBoy ? 248 : 290);
-    doorway.lineStyle(2, isBoy ? 0xc9a14a : 0x8fa4bc, isBoy ? 0.12 : 0.16);
-    doorway.strokeEllipse(0, 0, isBoy ? 104 : 126, isBoy ? 220 : 252);
-    actor.add(doorway);
-
+    // The room's actual lamplight and doorway light own the illumination;
+    // a body-sized halo would make the sibling read as a separate cutout.
     actor.add(addLocalGroundShadow(this, isBoy ? 110 : 136, 22, { y: 7, alpha: 0.28 }));
     const img = this.add
-      .image(0, 0, "sibling-sprite")
+      .image(0, 0, isBoy ? "sibling-sprite" : "magnus-sprite")
       .setOrigin(0.5, 1);
     // Magnus reads taller (older sibling) than Saga; both still sit below
     // doorway height so the painted portal stays legible past them.
     img.setScale((isBoy ? 260 : 300) / img.height);
-    // Tint multipliers soften the bright nightgown+pale skin against the
-    // dim study palette. Saga gets a warm cream cast (sits in lamplight);
-    // Magnus gets a cool blue-gray (reads as older + a beat more distant).
-    img.setTint(isBoy ? 0xbfb0a0 : 0xa0aebf);
+    // Both siblings share the study's light, just like Runa and Wren.
+    applySceneActorLighting(this, img);
     actor.add(img);
+    this.siblingPortrait = img;
 
     if (isBoy) {
       const drawing = this.add.graphics().setPosition(24, -116).setAlpha(0.92);
@@ -1075,10 +1203,6 @@ export class OpeningScene extends Phaser.Scene {
       actor.add(drawing);
       this.siblingKeepsake = drawing;
     } else {
-      const doorShadow = this.add.graphics().setPosition(-18, -130).setAlpha(0.68);
-      doorShadow.fillStyle(0x273241, 0.32);
-      doorShadow.fillRoundedRect(-42, -138, 84, 260, 34);
-      actor.addAt(doorShadow, 0);
       this.siblingKeepsake = null;
     }
 

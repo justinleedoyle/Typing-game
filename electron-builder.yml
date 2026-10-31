@@ -1,0 +1,20 @@
+appId: com.justindoyle.portalwrightsalmanac
+productName: Portalwrights Almanac
+directories:
+  output: release
+files:
+  - desktop-dist/**
+  - package.json
+  - '!desktop-dist/**/*.map'
+asar: true
+npmRebuild: false
+publish: null
+win:
+  executableName: Portalwrights Almanac
+  target:
+    - target: zip
+      arch: [x64]
+mac:
+  identity: null
+  target: dir
+artifactName: Portalwrights-Almanac-${version}-${os}-${arch}.${ext}

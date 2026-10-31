@@ -1,5 +1,8 @@
 node_modules
 dist
+desktop-dist
+release
+artifacts
 .env
 .env.local
 .DS_Store

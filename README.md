@@ -99,3 +99,22 @@ supabase/
 .github/workflows/
   deploy.yml                    Build + deploy to GitHub Pages on push to main
 ```
+
+
+## Desktop builds (internal review)
+
+Use Node24 (minimum22.12). `npm ci` installs the pinned tooling. The web build remains `npm run build`.
+
+- `npm run desktop:start` builds and opens the offline desktop edition. Electron45 downloads its runtime through the explicit `desktop:runtime` step.
+- `npm run desktop:pack -- --win --x64` creates `release/win-unpacked/Portalwrights Almanac.exe` on a Windows build host.
+- `npm run desktop:win` creates a Windows x64 ZIP for internal distribution. The whole unpacked folder belongs together; the EXE alone is not a distributable game.
+- `npm run desktop:pack -- --mac --arm64` creates the unsigned local Mac review app.
+- `node scripts/desktop-smoke.mjs --executable "release/win-unpacked/Portalwrights Almanac.exe" --output artifacts/desktop-smoke` runs disposable packaged Windows startup, fonts, synthetic keyboard pause/resume, normal close, relaunch and forced-termination checks. GitHub's Windows desktop workflow runs this against the actual executable and retains reports/screenshots.
+
+Desktop is an offline guest edition. It bundles its artwork, four Source Serif4 font faces and their OFL license; it does not open Google sign-in or make network requests. Browser/cloud data remains separate. Steam services remain separate from the desktop wrapper.
+
+To move browser progress, return to the title and choose **Move a journey · T**, then **Save a journey file · E**. Check that your browser downloaded the JSON file. In the desktop game, choose **Move a journey · T → Choose a journey file · I**, review both journeys, and explicitly choose **Import this journey · I**. Cancelling does not replace progress. Existing desktop data is archived before replacement; the source file and browser journey stay unchanged. Only playable journey exports are accepted; raw recovery files, newer formats, damaged files and unresolved save choices are refused. Native desktop export also lets you save a portable copy of the current journey. Offline guest import never writes an account or cloud save.
+
+Saves live under the OS user-data folder (`%APPDATA%/Portalwrights Almanac/journeys` on Windows), outside the install directory. The game reuses save validation, backups, conflicting-journey choices and unreadable-data recovery. Main-process writes flush a temporary file before atomic replacement. Normal close freezes gameplay and drains the current autosave; forced termination restores acknowledged progress, not every unflushed keystroke. Real Windows power-loss and physical keyboard/layout behavior still need target testing.
+
+The renderer has no Node access, uses a local custom protocol, rejects external navigation/network requests and exposes only scoped save operations. F11 toggles fullscreen; the native application menu is removed so Alt remains available to gameplay. Non-US AltGr/dead-key/IME behavior remains unverified. Packages are unsigned internal builds; no Steam submission, code signing or deployment is performed by these commands.

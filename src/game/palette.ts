@@ -22,4 +22,4 @@ export const PALETTE_HEX = {
 } as const;
 
 export const SERIF =
-  '"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif';
+  '"Source Serif 4", Georgia, serif';

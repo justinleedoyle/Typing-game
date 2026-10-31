@@ -1,3 +1,9 @@
+import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
+import { installChapterMenu } from "../game/ui/pauseMenu";
+import { rememberRealmFork, resolveRealmFork, resolveCompanionDecision, rememberCompanionDecision, type RealmFork } from "../game/realmChoices";
+import { ChapterReading } from "../game/ui/chapterReading";
+import { decorativeTween, reducedFlashes, reducedMotion } from "../game/presentation";
+import { applySceneActorLighting } from "../game/actorLighting";
 import Phaser from "phaser";
 import { type AmbientHandle, playAmbientSkyIsland } from "../audio/ambient";
 import { playChime } from "../audio/chime";
@@ -26,7 +32,8 @@ import {
   ONESHOT_SOUL_COST,
   resolveCombatLoadout,
 } from "../game/relicEffects";
-import type { SaveStore } from "../game/saveState";
+import type { SaveCheckpoint, SaveStore } from "../game/saveState";
+import type { SkyStep } from "../game/skyCheckpoint";
 import { TypingInputController } from "../game/typingInput";
 import {
   pickAdaptiveWords,
@@ -39,7 +46,6 @@ import { ConsoleBand } from "../game/ui/consoleBand";
 import { preloadSatchelIcons } from "../game/ui/satchelIcons";
 import {
   addAmbientDrift,
-  addBackdropDrift,
   addContainerWake,
   attachWordBodyAnchor,
   dismissCompanionCameo,
@@ -75,6 +81,13 @@ import skyIslandBackdrop from "../../art/references/sky-island-clean.png";
 import lanternSpiritSprite from "../../art/sky/lantern-spirit.png";
 import scholarSpiritSprite from "../../art/sky/scholar-spirit.png";
 import ettaSprite from "../../art/sky/etta.png";
+import ettaEmptySprite from "../../art/sky/etta-empty.png";
+import ettaVolumeSprite from "../../art/sky/etta-volume.png";
+import ettaShelfSprite from "../../art/sky/etta-shelf.png";
+import beaconBrazierSprite from "../../art/sky/beacon-brazier.png";
+import beaconFlameSprite from "../../art/sky/beacon-flame.png";
+import traversalStonesSprite from "../../art/sky/traversal-stones.png";
+import traversalLanternSprite from "../../art/sky/traversal-lantern.png";
 import runaPortrait from "../../art/runa/runa-front.png";
 import lanternMothSprite from "../../art/companions/lantern-moth.png";
 
@@ -102,6 +115,10 @@ const ETTA_SPRITE_HEIGHT = 280;
 const ETTA_SPRITE_X = 520;
 const ETTA_SPRITE_Y = 760;
 const ETTA_SPRITE_DEPTH = 50;
+// Keep choice plates above Etta's painted hood and book actions above Wren's.
+const ETTA_CHOICE_WORD_LIFT = ETTA_SPRITE_HEIGHT - 120 + 84;
+const ETTA_BOOK_WORD_Y = 500;
+const SEALED_SCROLL_Y = 480;
 const ETTA_RESTING_ALPHA = 0.9;
 const LIGHTER_SPRITE_HEIGHT = 188;
 const LIGHTER_SPRITE_X = 1288;
@@ -140,6 +157,10 @@ const SKY_WREN_STAGE_Y = 826;
 const SKY_BALANCE_CUE_Y = 776;
 const SKY_LANTERN_CUE_Y = 640;
 const SKY_STEPPING_CUE_Y = 788;
+const SKY_PATH_PAINTINGS = {
+  stones: { left: 36, top: 331, right: 1846, bottom: 639 },
+  lantern: { left: 244, top: 139, right: 873, bottom: 1241 },
+} as const;
 
 /** Lantern-Lighter typed conversation */
 const LIGHTER_LINE_1 =
@@ -208,15 +229,17 @@ export class SkyIslandScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
+  private reading!: ChapterReading;
+  private chapterMenu?: ReturnType<typeof installChapterMenu>;
   private band!: ConsoleBand;
   private spirits: LanternSpirit[] = [];
   private activeTargets: TextWordTarget[] = [];
   /** Temple scrolling-phrase banners currently in flight. */
   private activePhrases: ScrollingPhrase[] = [];
   private templePhrasesRemaining = 0;
-  /** Lantern light-beam graphics. Drawn on the first temple, destroyed in
-   *  scene shutdown — they persist across all five temples. */
-  private templeLanterns: Phaser.GameObjects.Graphics[] = [];
+  /** Reused crossing hazards, visible only while moving scroll gates are active. */
+  private templeLanterns: Phaser.GameObjects.Container[] = [];
+  private templeBeamsActive = false;
   private warmLightCueShown = false;
   private graceSaveNoticed = false;
 
@@ -236,11 +259,17 @@ export class SkyIslandScene extends Phaser.Scene {
   private ettaSprite: Phaser.GameObjects.Image | null = null;
   private ettaWordAnchors: WordBodyAnchorHandle[] = [];
   private ettaBookCue: Phaser.GameObjects.Container | null = null;
+  private ettaBookShelf: Phaser.GameObjects.Container | null = null;
+  private ettaBookGroundShadow: Phaser.GameObjects.Graphics | null = null;
+  private ettaBookMoving = false;
   private ettaBookWordAnchors: WordBodyAnchorHandle[] = [];
   private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
   private beaconFlameCue: Phaser.GameObjects.Container | null = null;
+  private heldBeaconSpark: Phaser.GameObjects.Image | null = null;
   private kindAnswerCue: Phaser.GameObjects.Container | null = null;
   private tetherThreadCue: Phaser.GameObjects.Container | null = null;
+  private fork2Scholar: Phaser.GameObjects.Container | null = null;
+  private fork2Tether: Phaser.GameObjects.Container | null = null;
   private companionChoice: "take" | "let-go" | null = null;
   private lanternMothCompanion: Phaser.GameObjects.Container | null = null;
   private lanternMothWordAnchors: WordBodyAnchorHandle[] = [];
@@ -277,17 +306,31 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private ambientHandle?: AmbientHandle;
   private revisit = false;
+  private resumeCheckpoint: SaveCheckpoint | null = null;
+  private usedOneShots: OffensiveOneShot[] = [];
+  private combatSatchel: string[] = [];
 
   constructor() {
     super("SkyIslandScene");
   }
 
   init(data: SkyIslandSceneData): void {
+    this.dismissPathCue(false);
     this.revisit = data.revisit === true;
     this.store = data.store;
+    const savedCheckpoint = this.store.get().checkpoint;
+    this.resumeCheckpoint = !this.revisit && !this.store.get().realms["sky-island"]?.cleared
+      && savedCheckpoint?.scene === "SkyIslandScene" ? savedCheckpoint : null;
+    const savedSatchel = this.resumeCheckpoint?.data.combatSatchel;
+    this.combatSatchel = this.revisit ? [] : typeof savedSatchel === "string"
+      ? savedSatchel.split(",").filter(Boolean) : [...this.store.get().satchel];
+    const spent = this.resumeCheckpoint?.data.usedOneShots;
+    this.usedOneShots = typeof spent === "string"
+      ? spent.split(",").filter((effect): effect is OffensiveOneShot => effect === "toll-strike" || effect === "jam-foe") : [];
     this.spirits = [];
     this.activeTargets = [];
     this.activePhrases = [];
+    this.templeBeamsActive = false;
     this.warmLightCueShown = false;
     this.graceSaveNoticed = false;
     this.oneShotInvoker = null;
@@ -300,18 +343,25 @@ export class SkyIslandScene extends Phaser.Scene {
     this.ambientLanterns = [];
     this.revisitMemoryCue = null;
     this.revisitMemoryWordAnchor = null;
-    this.fork1Choice = null;
-    this.fork2Choice = null;
-    this.ettaDone = false;
+    this.fork1Choice = resolveRealmFork("sky-island", "fork1", this.store.get().realms["sky-island"], this.store.get().satchel) as typeof this.fork1Choice;
+    this.fork2Choice = resolveRealmFork("sky-island", "fork2", this.store.get().realms["sky-island"], this.store.get().satchel) as typeof this.fork2Choice;
+    this.ettaDone = this.store.get().realms["sky-island"]?.choices.ettaHelped === "yes" || this.store.get().almanacLore.includes("scholar-ettas-last-volume");
     this.ettaSprite = null;
     this.ettaWordAnchors = [];
     this.ettaBookCue = null;
+    this.ettaBookShelf = null;
+    this.ettaBookGroundShadow = null;
+    this.ettaBookMoving = false;
     this.ettaBookWordAnchors = [];
     this.forkChoiceWordAnchors = [];
     this.beaconFlameCue = null;
+    this.heldBeaconSpark = null;
     this.kindAnswerCue = null;
     this.tetherThreadCue = null;
-    this.companionChoice = null;
+    this.fork2Scholar = null;
+    this.fork2Tether = null;
+    const companion = resolveCompanionDecision("sky-island", this.store.get().realms["sky-island"], this.store.get().satchel);
+    this.companionChoice = companion === "accepted" ? "take" : companion === "declined" ? "let-go" : null;
     this.lanternMothCompanion = null;
     this.lanternMothWordAnchors = [];
     this.bossContainer = null;
@@ -326,10 +376,18 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   preload(): void {
+    beginAssetLoad(this);
     this.load.image("sky-island-backdrop", skyIslandBackdrop);
     this.load.image("sky-lantern-spirit", lanternSpiritSprite);
     this.load.image("scholar-spirit", scholarSpiritSprite);
     this.load.image("etta", ettaSprite);
+    this.load.image("etta-empty", ettaEmptySprite);
+    this.load.image("etta-volume", ettaVolumeSprite);
+    this.load.image("etta-shelf", ettaShelfSprite);
+    this.load.image("sky-beacon-brazier", beaconBrazierSprite);
+    this.load.image("sky-beacon-flame", beaconFlameSprite);
+    this.load.image("sky-traversal-stones", traversalStonesSprite);
+    this.load.image("sky-traversal-lantern", traversalLanternSprite);
     this.load.image("sky-companion-lantern-moth", lanternMothSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
@@ -337,13 +395,19 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (assetLoadBlocked(this)) return;
+    this.chapterMenu = installChapterMenu(this, {
+      store: this.store,
+      hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),
+      onLeave: () => this.scene.start("PortalChamberScene", { store: this.store }),
+      leaveHint: "Your progress is saved here. Returning to the chamber resumes the current encounter or unfinished phrase.",
+    });
     this.cameras.main.fadeIn(600, 26, 16, 8);
-    const backdrop = this.add
+    this.add
       .image(0, 0, "sky-island-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
-    addBackdropDrift(this, backdrop, { durationMs: 17500, driftX: -2, driftY: -6 });
     addAmbientDrift(this, {
       kind: "mote",
       count: 38,
@@ -443,7 +507,7 @@ export class SkyIslandScene extends Phaser.Scene {
     // Tier 4 — a revisit is a free-passage replay (no combat) → neutral loadout.
     // Resolved before the band so the passive relic icons can populate it.
     this.combat = resolveCombatLoadout(
-      this.revisit ? [] : this.store.get().satchel,
+      this.combatSatchel,
       "sky-island",
     );
 
@@ -452,6 +516,11 @@ export class SkyIslandScene extends Phaser.Scene {
     // tiles ("always on"); the offensive one-shots drop in as charge cards. This
     // replaces the floating top-right HUD and the centered one-shot stack.
     this.band = new ConsoleBand(this, {
+      activity: () => (
+        this.templeBeamsActive
+        || this.spirits.some(spirit => !spirit.defeated)
+        || this.activePhrases.some(phrase => !phrase.isResolved())
+        || (Boolean(this.bossContainer?.scene) && this.activeTargets.some(target => !target.isComplete()))) ? "combat" : "story",
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,
@@ -464,13 +533,15 @@ export class SkyIslandScene extends Phaser.Scene {
       framed: true,
       onSpeak: (speakerName) => this.attendSpeaker(speakerName),
     });
+    this.reading = new ChapterReading(this, () => Math.max(316, this.narration.bottom() + 40));
 
     this.typingInput = new TypingInputController(this.store);
+    if (this.resumeCheckpoint) this.typingInput.getStats().restoreCheckpoint(this.resumeCheckpoint.data);
     this.typingInput.setKeystrokeHooks({
       onCorrect: () => bobWrenSprite(this.wrenSprite),
       onMiss: () => {
         flashWrenMiss(this.wrenSprite);
-        this.cameras.main.shake(80, 0.002);
+        if (!reducedMotion(this)) this.cameras.main.shake(80, 0.002);
       },
       onClaim: () => playClaim(),
     });
@@ -499,6 +570,7 @@ export class SkyIslandScene extends Phaser.Scene {
       scene: this,
       typingInput: this.typingInput,
       available: offensiveOneShots,
+      initialSpent: this.usedOneShots,
       cost: ONESHOT_SOUL_COST,
       getSoul: () => this.typingInput.getStats().getSoul(),
       spendSoul: (cost) => this.typingInput.getStats().spendSoul(cost),
@@ -511,14 +583,15 @@ export class SkyIslandScene extends Phaser.Scene {
     });
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
-    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.reading.destroy();
+      this.chapterMenu?.destroy();
       this.typingInput.reset();
       this.oneShotInvoker?.destroy();
       this.oneShotInvoker = null;
       this.bossRingTween?.stop();
       if (this.wrenContainer?.scene) this.tweens.killTweensOf(this.wrenContainer);
-      this.pathCue = null;
-      this.pathCueBeat = null;
+      this.dismissPathCue(false);
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.ambientHandle?.stop();
       this.clearAmbientLanterns();
@@ -541,7 +614,206 @@ export class SkyIslandScene extends Phaser.Scene {
       this.startRevisit();
       return;
     }
-    this.startAct1();
+    this.resumeSky();
+  }
+
+  /** Encounter checkpoints hold entry resources. Abandoning a live encounter
+   * restarts that encounter with its entry Soul and one-shot charges together. */
+  private checkpoint(step: SkyStep, data: SaveCheckpoint["data"] = {}): void {
+    if (this.revisit || this.store.get().realms["sky-island"]?.cleared) return;
+    this.store.setCheckpoint({ scene: "SkyIslandScene", step, data: {
+      ...this.typingInput.getStats().captureCheckpoint(),
+      combatSatchel: this.combatSatchel.join(","),
+      usedOneShots: [...new Set([...this.usedOneShots, ...(this.oneShotInvoker?.getSpent() ?? [])])].join(","), ...data,
+    } });
+  }
+
+  private savedStageData(step: SkyStep): SaveCheckpoint["data"] {
+    return this.resumeCheckpoint?.step === step ? this.resumeCheckpoint.data : {};
+  }
+
+  private resumeSky(): void {
+    const saved = this.resumeCheckpoint;
+    if (!saved) { this.startAct1(); return; }
+    const data = saved.data;
+    const index = typeof data.index === "number" && Number.isInteger(data.index) ? data.index : 0;
+    // The fresh scene's entrance tween must not move a reconstructed pose later.
+    this.tweens.killTweensOf(this.wrenContainer);
+    this.wrenContainer.setPosition(SKY_WREN_STAGE_X, SKY_WREN_STAGE_Y).setAlpha(1).setScale(1);
+    const kindnessSettled = this.fork2Choice === "answer-kindly" && (
+      (saved.step === "answer-kindly" && data.reading === true)
+      || saved.step === "moth" || saved.step === "moth-answer"
+      || saved.step === "true-name" || saved.step === "ending"
+    );
+    this.setAmbientLanternFieldAlpha(kindnessSettled ? 1 : 0.42, 0);
+    if (this.companionChoice === "take" && (saved.step === "true-name" || saved.step === "ending")) this.restoreMothPerch();
+    switch (saved.step) {
+      case "path": this.resumePath(Math.max(0, Math.min(PATH_BEATS.length - 1, index)), data.reading === true); break;
+      case "lighter": this.startLanternLighter(); break;
+      case "first-spirits":
+        this.templeIndex = -1;
+        if (data.reading === true) this.onFirstEncounterCleared();
+        else { this.firstSpiritsEmergeFromLanterns = true; this.showLanternLighter(); this.startFirstSpiritEncounterFixed(); }
+        break;
+      case "temple-intro": this.startAct2(); break;
+      case "temple":
+        this.templeIndex = Math.max(0, Math.min(TEMPLE_PHRASE_CONFIGS.length - 1, index));
+        if (this.templeIndex === SEALED_SCROLL_TEMPLE_IDX && data.reading === true) {
+          this.checkpoint("temple", { index: this.templeIndex, reading: true });
+          this.setNarrator("The scroll holds. The seal opens of its own accord.");
+          this.band.setObjective("Scroll unsealed. Press Enter or Space to continue.");
+          this.readThen(() => this.onTempleCleared());
+        } else this.startTemple(this.templeIndex);
+        break;
+      case "temple-cleared":
+        this.templeIndex = Math.max(0, Math.min(TEMPLE_PHRASE_CONFIGS.length - 1, index));
+        this.onTempleCleared(); break;
+      case "etta":
+        if (data.skipped === true) {
+          this.setNarrator("The scholar watches you go in silence.");
+          this.band.setObjective("Press Enter or Space to return to the lantern-lit path.");
+          this.readThen(() => this.startTemple(3));
+        } else this.startEttaEncounter(3);
+        break;
+      case "etta-book": this.resumeEttaBook(); break;
+      case "fork1": this.startFork1(); break;
+      case "help-etta": this.showFork1Cues(); this.startFork1HelpEtta(); break;
+      case "steal-flame": this.showFork1Cues(); this.startFork1StealFlame(); break;
+      case "boss-intro": this.startAct3(); break;
+      case "boss": this.resumeBoss(); break;
+      case "boss-defeated": this.onBossDefeated(); break;
+      case "fork2": this.startFork2(); break;
+      case "answer-kindly": this.showFork2Cues(); this.startFork2KindEnding(); break;
+      case "cut-tether": this.showFork2Cues(); this.startFork2CutTether(); break;
+      case "moth": this.startLanternMothGate(); break;
+      case "moth-answer": this.showMothAnswer(data.accepted === true, true); break;
+      case "true-name": this.startTrueNamePassage(); break;
+      case "ending": this.startEnding(); break;
+      default: this.startAct1();
+    }
+    if (this.ettaSprite?.scene) this.settleResumedActor(this.ettaSprite, ETTA_SPRITE_X, ETTA_SPRITE_Y, ETTA_RESTING_ALPHA);
+    if (this.lighterSprite?.scene) this.settleResumedActor(this.lighterSprite, LIGHTER_SPRITE_X, LIGHTER_SPRITE_Y, LIGHTER_RESTING_ALPHA);
+    addIdleBreath(this, this.wrenContainer, { dy: -5, durationMs: 2200 });
+  }
+
+  private settleResumedActor(sprite: Phaser.GameObjects.Image, x: number, y: number, alpha: number): void {
+    this.tweens.killTweensOf(sprite);
+    const shadow = sprite.getData?.("livingSceneShadow") as Phaser.GameObjects.Graphics | undefined;
+    if (shadow?.scene) { this.tweens.killTweensOf(shadow); shadow.setAlpha(alpha); }
+    sprite.setPosition(x, y).setAlpha(alpha);
+    addIdleBreath(this, sprite, { dy: -3, durationMs: 2500 });
+  }
+
+  private resumePath(index: number, reading: boolean): void {
+    this.setAmbientLanternFieldAlpha(0.12, 0);
+    const beat = PATH_BEATS[index]!;
+    this.showPathCue(beat);
+    // Reconstruct the completed action, never replay its entrance/walk/tilt.
+    const completed = reading ? index : index - 1;
+    const previous = completed >= 0 ? PATH_BEATS[completed] : undefined;
+    const center = this.scale.width / 2;
+    const positions = {
+      balance: { x: center - 204, y: SKY_BALANCE_CUE_Y + 56 },
+      lantern: { x: center - 70, y: SKY_LANTERN_CUE_Y + 92 },
+      stepping: { x: center + 182, y: SKY_STEPPING_CUE_Y + 38 },
+    };
+    const position = previous ? positions[previous] : { x: center - 128, y: SKY_BALANCE_CUE_Y + 60 };
+    this.wrenContainer.setPosition(position.x, position.y);
+    if (!reading) { this.runPathBeats(index); return; }
+    if (beat === "lantern") {
+      const image = this.pathCue?.getByName("path-lantern-body") as Phaser.GameObjects.Image | null;
+      if (image) { this.tweens.killTweensOf(image); image.setAngle(-22); }
+    }
+    this.checkpoint("path", { index, reading: true });
+    const responses = ["You steady your footing and move past the uneven stones.",
+      "You lift the lantern aside. Its flame stays lit as you pass.", "You step across the last stone and find firm footing."];
+    this.setNarrator(responses[index]!);
+    this.band.setObjective("Path crossed. Press Enter or Space to continue.");
+    this.readThen(() => this.runPathBeats(index + 1));
+  }
+
+  private resumeBoss(): void {
+    const data = this.savedStageData("boss");
+    this.bossContainer = this.drawScholarSpirit();
+    this.bossRingTween?.stop();
+    this.tweens.killTweensOf(this.bossContainer);
+    this.bossContainer.setPosition(this.scale.width / 2, 400).setAlpha(1).setScale(1);
+    const phase = data.phase === 2 || data.phase === 3 ? data.phase : 1;
+    if (data.reading === true && phase < 3) {
+      this.checkpoint("boss", { phase, reading: true });
+      this.setNarrator(phase === 1 ? "The spirit bows slightly. It is satisfied — for now."
+        : "The spirit's eyes shift colour. Something else stirs within it.");
+      this.band.setObjective(phase === 1 ? "First riddle answered. Press Enter or Space for the next question."
+        : "Second riddle answered. Press Enter or Space to continue.");
+      this.readThen(() => {
+        if (phase === 1) this.startBossPhase2();
+        else {
+          if (!this.quietLordFiredInPhase2) {
+            this.quietLordFiredInPhase2 = true;
+            this.store.update((s) => { const realm = s.realms["sky-island"]; if (realm) realm.quietLordFragmentRevealed = true; });
+            flashQuietLordFragment(this, { text: "Agai", x: this.bossContainer?.x ?? 960, y: 344 });
+          }
+          this.checkpoint("boss", { phase: 3 });
+          this.time.delayedCall(1600, () => this.startBossPhase3());
+        }
+      });
+    } else if (phase === 2) this.startBossPhase2();
+    else if (phase === 3) this.startBossPhase3();
+    else this.startBossPhase1();
+  }
+
+  private restoreEttaBookPose(stage: "carried" | "shelved"): void {
+    const cue = this.showEttaBookCue();
+    this.tweens.killTweensOf(cue);
+    this.ettaBookShelf?.setAlpha(1);
+    this.ettaBookGroundShadow?.setAlpha(0);
+    const position = stage === "carried"
+      ? { x: this.wrenContainer.x - 62, y: this.wrenContainer.y - 112 }
+      : { x: this.ettaBookShelf?.x ?? 1260, y: (this.ettaBookShelf?.y ?? 826) - 94 };
+    cue.setPosition(position.x, position.y).setAngle(stage === "carried" ? -8 : 0).setAlpha(1).setDepth(61);
+    this.ettaBookMoving = false;
+  }
+
+  private resumeEttaBook(): void {
+    const stage = this.savedStageData("etta-book").stage;
+    this.showEtta();
+    if (stage !== "carried" && stage !== "place" && stage !== "shelved") {
+      this.startEttaHelp(3); return;
+    }
+    this.restoreEttaBookPose(stage === "shelved" ? "shelved" : "carried");
+    const place = (): void => {
+      this.checkpoint("etta-book", { nextTemple: 3, stage: "place" });
+      this.band.setObjective(`Type ${ETTA_CHAIN_2} to set the book safely on its shelf.`);
+      const target = this.makeEttaBookWord({ scene: this, word: ETTA_CHAIN_2, x: 870, y: ETTA_BOOK_WORD_Y, fontSize: 38,
+        onAdvance: (cursor, length) => { if (cursor === length) this.ettaBookMoving = true; },
+        onComplete: () => {
+          playChime(); this.clearActiveTargets();
+          this.checkpoint("etta-book", { nextTemple: 3, stage: "shelved" });
+          this.band.setObjective("Setting the book on its shelf…");
+          this.moveEttaBook("shelved", () => this.finishRestoredEttaBook());
+        } });
+      this.registerActiveTarget(target);
+    };
+    if (stage === "shelved") this.finishRestoredEttaBook();
+    else if (stage === "place") place();
+    else {
+      this.setNarrator("The book is heavier than it looks. Old paper, dense with writing.");
+      this.band.setObjective("Book lifted. Press Enter or Space to continue.");
+      this.readThen(place);
+    }
+  }
+
+  private finishRestoredEttaBook(): void {
+    this.ettaDone = true;
+    this.store.update((s) => {
+      const realm = s.realms["sky-island"] ?? { cleared: false, choices: {} };
+      realm.choices.ettaHelped = "yes"; s.realms["sky-island"] = realm;
+      if (!s.almanacLore.includes("scholar-ettas-last-volume")) s.almanacLore.push("scholar-ettas-last-volume");
+    });
+    this.checkpoint("etta-book", { nextTemple: 3, stage: "shelved" });
+    this.setNarrator("Scholar Etta's Last Volume — a page appears in the Almanac.");
+    this.band.setObjective("Almanac memory earned. Press Enter or Space to return to the scroll trials.");
+    this.readThen(() => { this.hideEtta(); this.startTemple(3); });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -558,10 +830,10 @@ export class SkyIslandScene extends Phaser.Scene {
     let words: string[];
 
     if (choices["fork2"] === "cut-tether") {
-      narratorLine = "The island is higher now. You can barely see the lanterns from here.";
+      narratorLine = "The island is higher now. Its lanterns still burn in the open air.";
       words = ["the", "sky", "is", "wide", "and", "open"];
     } else if (choices["fork2"] === "answer-kindly") {
-      narratorLine = "The wind still circles where the island was. It hasn't found a new question.";
+      narratorLine = "The wind still circles the lit summit. It hasn't found a new question.";
       words = ["the", "lanterns", "hold", "the", "dark"];
     } else {
       narratorLine = "The lanterns are still burning. Someone is keeping them.";
@@ -570,7 +842,7 @@ export class SkyIslandScene extends Phaser.Scene {
 
     this.setNarrator(narratorLine);
     this.band.setObjective("Type the sky memory to return to the Almanac.");
-    this.time.delayedCall(2400, () => this.deliverRevisitPassage(words));
+    this.readThen(() => this.deliverRevisitPassage(words));
   }
 
   private deliverRevisitPassage(words: string[]): void {
@@ -739,6 +1011,8 @@ export class SkyIslandScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private startAct1(): void {
+    this.checkpoint("arrival");
+    this.band.setObjective("Follow the lantern-lit path. Press Enter or Space when ready.");
     this.narration.say("sky_intro_arrival");
     playPortalArrivalWake(this, this.wrenContainer, {
       kind: "mote",
@@ -746,8 +1020,11 @@ export class SkyIslandScene extends Phaser.Scene {
     });
     this.setAmbientLanternFieldAlpha(0.12, 520);
     this.showPathCue("balance");
+    const pathReadyAt = this.time.now + 780;
     this.time.delayedCall(780, () => this.stageWrenAtPathEntrance());
-    this.time.delayedCall(1500, () => this.runPathBeats(0));
+    this.readThen(() => this.time.delayedCall(
+      Math.max(0, pathReadyAt - this.time.now), () => this.runPathBeats(0),
+    ));
   }
 
   /** Three exploration beats: balance / lantern / stepping */
@@ -759,15 +1036,19 @@ export class SkyIslandScene extends Phaser.Scene {
       this.time.delayedCall(780, () => this.startLanternLighter());
       return;
     }
+    this.checkpoint("path", { index: idx, reading: false });
     const beat = PATH_BEATS[idx];
     const narrations: readonly string[] = [
-      "A narrow stone bridge arches between two floating rocks. Keep your balance.",
+      "Uneven stones line the edge of the terrace. Keep your balance.",
       "A paper lantern hangs right across the path, still lit. Lift it aside gently.",
-      "Stepping stones. The gaps are wide, the island hums below your feet.",
+      "A line of raised stones crosses the paving. Step carefully from stone to stone.",
     ];
-    if (idx === 0) {
-      this.band.setObjective("Type each path word to cross the floating stones.");
-    }
+    const responses: readonly string[] = [
+      "You steady your footing and move past the uneven stones.",
+      "You lift the lantern aside. Its flame stays lit as you pass.",
+      "You step across the last stone and find firm footing.",
+    ];
+    this.band.setObjective(`Type ${beat} to follow the lantern-lit path.`);
     this.showPathCue(beat);
     this.setNarrator(narrations[idx] ?? "");
     const wordPos = this.pathWordPosition(beat);
@@ -789,7 +1070,11 @@ export class SkyIslandScene extends Phaser.Scene {
         playWrenAction(this.wrenSprite);
         this.pulsePathCue(true);
         playChime();
-        this.time.delayedCall(600, () => this.runPathBeats(idx + 1));
+        this.clearActiveTargets();
+        this.checkpoint("path", { index: idx, reading: true });
+        this.setNarrator(responses[idx] ?? "");
+        this.band.setObjective("Path crossed. Press Enter or Space to continue.");
+        this.readThen(() => this.runPathBeats(idx + 1));
       },
     });
     this.registerActiveTarget(target);
@@ -806,10 +1091,11 @@ export class SkyIslandScene extends Phaser.Scene {
           : this.drawSteppingStonesCue();
     this.pathCue = cue;
     this.pathCueBeat = beat;
+    const alpha = beat === "balance" ? 0.97 : beat === "lantern" ? 0.98 : 0.96;
+    if (reducedMotion(this)) { cue.setAlpha(alpha); return; }
     this.tweens.add({
       targets: cue,
-      alpha: beat === "balance" ? 0.97 : beat === "lantern" ? 0.98 : 0.96,
-      y: beat === "balance" ? cue.y : cue.y - 8,
+      alpha,
       duration: 380,
       ease: "Sine.easeOut",
     });
@@ -903,97 +1189,19 @@ export class SkyIslandScene extends Phaser.Scene {
     });
   }
 
+  private drawPathStonePainting(x: number, bottomY: number, visibleWidth: number): Phaser.GameObjects.Image {
+    const image = this.add.image(x, bottomY, "sky-traversal-stones");
+    const bounds = SKY_PATH_PAINTINGS.stones;
+    image.setOrigin((bounds.left + bounds.right) / 2 / image.width, bounds.bottom / image.height);
+    image.setScale(visibleWidth / (bounds.right - bounds.left));
+    applySceneActorLighting(this, image);
+    return image;
+  }
+
   private drawBalanceBridgeCue(): Phaser.GameObjects.Container {
-    const c = this.add
-      .container(this.scale.width / 2 - 92, SKY_BALANCE_CUE_Y)
-      .setDepth(-1)
-      .setAlpha(0);
-    const stones = this.add.graphics().setAngle(-3);
-    const footholds = [
-      {
-        fill: 0x575342,
-        points: [
-          { x: -298, y: -26 },
-          { x: -276, y: -39 },
-          { x: -235, y: -37 },
-          { x: -214, y: -23 },
-          { x: -226, y: -7 },
-          { x: -268, y: -3 },
-          { x: -296, y: -12 },
-        ],
-      },
-      {
-        fill: 0x625c46,
-        points: [
-          { x: -220, y: -5 },
-          { x: -198, y: -18 },
-          { x: -157, y: -16 },
-          { x: -136, y: -2 },
-          { x: -148, y: 14 },
-          { x: -188, y: 18 },
-          { x: -216, y: 9 },
-        ],
-      },
-      {
-        fill: 0x6b6248,
-        points: [
-          { x: -143, y: 15 },
-          { x: -120, y: 2 },
-          { x: -79, y: 4 },
-          { x: -58, y: 19 },
-          { x: -70, y: 34 },
-          { x: -111, y: 37 },
-          { x: -139, y: 29 },
-        ],
-      },
-      {
-        fill: 0x5f5942,
-        points: [
-          { x: -66, y: 34 },
-          { x: -43, y: 21 },
-          { x: -3, y: 23 },
-          { x: 18, y: 38 },
-          { x: 6, y: 52 },
-          { x: -34, y: 55 },
-          { x: -62, y: 48 },
-        ],
-      },
-    ];
-
-    footholds.forEach((foothold, index) => {
-      const centerX =
-        foothold.points.reduce((sum, point) => sum + point.x, 0) / foothold.points.length;
-      const lowerY = Math.max(...foothold.points.map((point) => point.y));
-      stones.fillStyle(0x18130f, 0.24);
-      stones.fillEllipse(centerX + 2, lowerY + 6, 66, 11);
-      stones.fillStyle(foothold.fill, 0.96);
-      stones.lineStyle(1.5, 0x262119, 0.48);
-      stones.fillPoints(foothold.points, true);
-      stones.strokePoints(foothold.points, true);
-      stones.lineStyle(1.1, 0xb9aa72, 0.12);
-      stones.lineBetween(
-        foothold.points[1]!.x + 7,
-        foothold.points[1]!.y + 5,
-        foothold.points[2]!.x - 7,
-        foothold.points[2]!.y + 5,
-      );
-      stones.lineStyle(1.2, 0x211c16, 0.38);
-      stones.lineBetween(
-        centerX - 9,
-        foothold.points[1]!.y + 9,
-        centerX + (index % 2 === 0 ? 7 : 12),
-        lowerY - 4,
-      );
-    });
-
-    stones.fillStyle(0x7c744f, 0.42);
-    stones.fillEllipse(-275, -15, 18, 5);
-    stones.fillEllipse(-113, 25, 16, 4);
-    stones.fillEllipse(-28, 43, 13, 4);
-    stones.fillStyle(0x394326, 0.72);
-    stones.fillEllipse(-207, 4, 12, 5);
-    stones.fillEllipse(-84, 23, 10, 4);
-    c.add(stones);
+    const c = this.add.container(this.scale.width / 2 - 92, SKY_BALANCE_CUE_Y).setDepth(-1).setAlpha(0);
+    // Painted front edges extend below the unchanged boot/contact positions.
+    c.add(this.drawPathStonePainting(-140, 70, 320));
     return c;
   }
 
@@ -1004,14 +1212,6 @@ export class SkyIslandScene extends Phaser.Scene {
     cord.lineBetween(0, -250, 0, -55);
     cord.lineStyle(1.5, 0x9b7d57, 0.66);
     cord.lineBetween(0, -250, 0, -55);
-    cord.lineStyle(2.4, 0x6f4f2a, 0.72);
-    cord.lineBetween(-42, -55, 42, -55);
-    cord.lineStyle(1, 0xe2bb68, 0.54);
-    cord.lineBetween(-31, -51, 31, -51);
-    cord.fillStyle(0x3d2d20, 0.94);
-    cord.fillCircle(0, -55, 5);
-    cord.lineStyle(1.2, 0xc9a14a, 0.64);
-    cord.strokeCircle(0, -55, 4.5);
     c.add(cord);
 
     const glow = this.add.graphics();
@@ -1021,45 +1221,16 @@ export class SkyIslandScene extends Phaser.Scene {
     glow.fillEllipse(0, -7, 94, 100);
     c.add(glow);
 
-    const paper = this.add.graphics();
-    paper.fillStyle(0x332419, 0.88);
-    paper.fillEllipse(6, -8, 88, 108);
-    paper.fillStyle(0xb96f27, 0.96);
-    paper.fillEllipse(0, -12, 80, 102);
-    paper.fillStyle(0xe0a644, 0.88);
-    paper.fillEllipse(-2, -12, 58, 88);
-    paper.fillStyle(0xf4c96a, 0.5);
-    paper.fillEllipse(-6, -10, 28, 78);
-    paper.lineStyle(3, 0x4f321d, 0.9);
-    paper.strokeEllipse(0, -12, 80, 102);
-    paper.lineStyle(1.5, 0xffedb0, 0.72);
-    paper.strokeEllipse(-3, -13, 72, 94);
-    paper.lineStyle(1.5, 0x6a431e, 0.72);
-    paper.strokeEllipse(0, -36, 58, 18);
-    paper.strokeEllipse(0, -15, 70, 22);
-    paper.strokeEllipse(0, 8, 62, 18);
-    paper.lineStyle(1.4, 0x6a431e, 0.72);
-    paper.lineBetween(-26, -42, -20, 22);
-    paper.lineBetween(-12, -48, -9, 31);
-    paper.lineBetween(12, -48, 9, 31);
-    paper.lineBetween(26, -42, 20, 22);
-    paper.fillStyle(0x70431f, 0.98);
-    paper.fillRoundedRect(-21, -61, 42, 9, 5);
-    paper.fillRoundedRect(-22, 34, 44, 8, 5);
-    paper.lineStyle(1.3, 0xe6b660, 0.84);
-    paper.strokeRoundedRect(-21, -61, 42, 9, 5);
-    paper.strokeRoundedRect(-22, 34, 44, 8, 5);
-    paper.fillStyle(0xffe49b, 0.92);
-    paper.fillEllipse(0, -6, 18, 32);
-    paper.lineStyle(1.3, 0x5e3b21, 0.78);
-    paper.lineBetween(0, 42, 0, 67);
-    paper.fillStyle(0xd99c36, 0.94);
-    paper.fillCircle(0, 55, 3.5);
-    paper.fillEllipse(0, 68, 12, 7);
-    paper.setAngle(-1.2);
+    const paper = this.add.image(0, -55, "sky-traversal-lantern").setName("path-lantern-body");
+    const bounds = SKY_PATH_PAINTINGS.lantern;
+    // Pivot at the visible top eye, so its small sway cannot detach the cord.
+    paper.setOrigin((bounds.left + bounds.right) / 2 / paper.width, bounds.top / paper.height);
+    paper.setScale(136 / (bounds.bottom - bounds.top));
+    paper.setAngle(reducedMotion(this) ? 0 : -1.2);
+    applySceneActorLighting(this, paper);
     c.add(paper);
 
-    this.tweens.add({
+    decorativeTween(this, this.tweens.add({
       targets: glow,
       alpha: { from: 0.74, to: 1 },
       scaleX: 1.035,
@@ -1068,90 +1239,25 @@ export class SkyIslandScene extends Phaser.Scene {
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
-    });
-    this.tweens.add({
+    }));
+    decorativeTween(this, this.tweens.add({
       targets: paper,
       angle: 1.2,
       duration: 2100,
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
+    }));
+    c.once(Phaser.GameObjects.Events.DESTROY, () => {
+      this.tweens.killTweensOf(glow);
+      this.tweens.killTweensOf(paper);
     });
     return c;
   }
 
   private drawSteppingStonesCue(): Phaser.GameObjects.Container {
     const c = this.add.container(this.scale.width / 2 + 36, SKY_STEPPING_CUE_Y).setDepth(-1).setAlpha(0);
-    const stones = this.add.graphics();
-    const stoneSpecs = [
-      {
-        x: -132,
-        y: 18,
-        tint: 0x69654d,
-        points: [
-          { x: -44, y: -5 }, { x: -29, y: -16 }, { x: 20, y: -18 },
-          { x: 43, y: -7 }, { x: 36, y: 8 }, { x: -8, y: 13 }, { x: -40, y: 7 },
-        ],
-      },
-      {
-        x: -54,
-        y: -4,
-        tint: 0x756d51,
-        points: [
-          { x: -46, y: -5 }, { x: -25, y: -19 }, { x: 24, y: -17 },
-          { x: 48, y: -4 }, { x: 37, y: 10 }, { x: -15, y: 13 }, { x: -42, y: 6 },
-        ],
-      },
-      {
-        x: 34,
-        y: 12,
-        tint: 0x666248,
-        points: [
-          { x: -42, y: -6 }, { x: -22, y: -17 }, { x: 22, y: -15 },
-          { x: 42, y: -3 }, { x: 31, y: 11 }, { x: -12, y: 13 }, { x: -39, y: 5 },
-        ],
-      },
-      {
-        x: 116,
-        y: -12,
-        tint: 0x7f7454,
-        points: [
-          { x: -48, y: -5 }, { x: -29, y: -19 }, { x: 27, y: -18 },
-          { x: 49, y: -4 }, { x: 39, y: 11 }, { x: -15, y: 13 }, { x: -44, y: 6 },
-        ],
-      },
-      {
-        x: 204,
-        y: 3,
-        tint: 0x897b59,
-        points: [
-          { x: -54, y: -6 }, { x: -31, y: -21 }, { x: 32, y: -19 },
-          { x: 56, y: -5 }, { x: 45, y: 13 }, { x: -18, y: 15 }, { x: -50, y: 7 },
-        ],
-      },
-    ];
-    stoneSpecs.forEach((stone, index) => {
-      const points = stone.points.map((point) => ({
-        x: stone.x + point.x,
-        y: stone.y + point.y,
-      }));
-      const shadow = points.map((point) => ({ x: point.x + 4, y: point.y + 9 }));
-
-      stones.fillStyle(0x2b261d, index === stoneSpecs.length - 1 ? 0.62 : 0.5);
-      stones.fillPoints(shadow, true);
-      stones.fillStyle(stone.tint, 0.98);
-      stones.fillPoints(points, true);
-      stones.lineStyle(1.8, 0x29251d, 0.68);
-      stones.strokePoints(points, true);
-      stones.lineStyle(1.2, 0xd3c38e, index === stoneSpecs.length - 1 ? 0.42 : 0.3);
-      stones.lineBetween(stone.x - 27, stone.y - 8, stone.x + 20, stone.y - 10);
-      stones.lineStyle(1.15, 0x373226, 0.58);
-      stones.lineBetween(stone.x - 6, stone.y - 10, stone.x + 3, stone.y - 2);
-      stones.lineBetween(stone.x + 3, stone.y - 2, stone.x + (index % 2 === 0 ? 13 : 9), stone.y + 5);
-      stones.fillStyle(0x4c5835, 0.72);
-      stones.fillEllipse(stone.x - 23, stone.y - 8, 13, 5);
-    });
-    c.add(stones);
+    c.add(this.drawPathStonePainting(42, 56, 440));
     return c;
   }
 
@@ -1173,11 +1279,8 @@ export class SkyIslandScene extends Phaser.Scene {
       });
       return;
     }
+    if (completion) this.liftPathLanternAside();
     const sourceOffset = this.pathCueSourceOffset();
-    playActorAttention(this, this.pathCue, {
-      scale: completion ? 1.035 : 1.018,
-      durationMs: completion ? 260 : 180,
-    });
     playBodyImpact(this, this.pathCue, {
       kind: "mote",
       color: PALETTE_HEX.brass,
@@ -1188,6 +1291,16 @@ export class SkyIslandScene extends Phaser.Scene {
       count: completion ? 9 : 5,
       durationMs: completion ? 460 : 260,
     });
+  }
+
+  private liftPathLanternAside(): void {
+    if (this.pathCueBeat !== "lantern" || !this.pathCue?.scene) return;
+    const paper = this.pathCue.getByName("path-lantern-body") as Phaser.GameObjects.Image | null;
+    if (!paper?.scene) return;
+    this.tweens.killTweensOf(paper);
+    // Rotate the body about its attached eye; the rope and word stay fixed.
+    if (reducedMotion(this)) { paper.setAngle(-22); return; }
+    this.tweens.add({ targets: paper, angle: -22, duration: 420, ease: "Sine.easeOut" });
   }
 
   private dismissPathCue(animate = true): void {
@@ -1201,14 +1314,13 @@ export class SkyIslandScene extends Phaser.Scene {
     this.pathCue = null;
     this.pathCueBeat = null;
     this.tweens.killTweensOf(cue);
-    if (!animate) {
+    if (!animate || reducedMotion(this)) {
       cue.destroy();
       return;
     }
     this.tweens.add({
       targets: cue,
       alpha: 0,
-      y: cue.y - 20,
       duration: 260,
       ease: "Sine.easeIn",
       onComplete: () => cue.destroy(),
@@ -1218,48 +1330,44 @@ export class SkyIslandScene extends Phaser.Scene {
   // ─── Lantern-Lighter NPC ──────────────────────────────────────────────────
 
   private startLanternLighter(): void {
+    const resume = this.savedStageData("lighter") ?? {};
+    const initial = typeof resume.stage === "number" && Number.isInteger(resume.stage)
+      ? Math.max(0, Math.min(5, resume.stage)) : 0;
     this.band.setObjective("Answer the Lantern-Lighter before the spirits wake.");
     this.showLanternLighter();
-    this.narration.say("sky_lantern_lighter_intro");
-    this.time.delayedCall(2000, () => {
-      this.setNarrator(LIGHTER_LINE_1, "Lantern-Lighter");
-      this.time.delayedCall(600, () => {
+    const advance = (stage: number): void => {
+      this.checkpoint("lighter", { stage });
+      if (stage === 5) { this.onLighterConvoComplete(); return; }
+      if (stage === 2) {
         const replyPos = this.lighterReplyWordPosition();
         const t = this.makeLighterReplyWord({
-          scene: this,
-          word: WREN_RESPONSE,
-          x: replyPos.x,
-          y: replyPos.y,
-          fontSize: 36,
+          scene: this, word: WREN_RESPONSE, x: replyPos.x, y: replyPos.y, fontSize: 36,
           onClaim: () => playWrenFocus(this.wrenSprite),
-          onComplete: () => {
-            playWrenAction(this.wrenSprite);
-            playChime();
-            this.clearActiveTargets();
-            this.setNarrator(LIGHTER_LINE_2, "Lantern-Lighter");
-            this.time.delayedCall(3200, () => {
-              this.setNarrator(LIGHTER_LINE_3, "Lantern-Lighter");
-              this.time.delayedCall(2800, () => this.onLighterConvoComplete());
-            });
-          },
+          onComplete: () => { playWrenAction(this.wrenSprite); playChime(); this.clearActiveTargets(); advance(3); },
         });
         this.registerActiveTarget(t);
-      });
-    });
+        return;
+      }
+      if (stage === 0) this.narration.say("sky_lantern_lighter_intro");
+      else this.setNarrator(stage === 1 ? LIGHTER_LINE_1 : stage === 3 ? LIGHTER_LINE_2 : LIGHTER_LINE_3, "Lantern-Lighter");
+      this.readThen(() => advance(stage + 1));
+    };
+    advance(initial);
   }
 
   private onLighterConvoComplete(): void {
+    this.checkpoint("lighter", { stage: 5 });
     this.store.update((s) => {
       if (!s.almanacLore.includes("the-lantern-lighters-vigil")) {
         s.almanacLore.push("the-lantern-lighters-vigil");
       }
     });
     this.setNarrator(
-      "The Lantern-Lighter raises its light toward the tower path. Its lanterns flare, and pale shapes answer from within.",
+      "The Lantern-Lighter's glow brightens. Nearby lanterns flare, and pale shapes stir inside them.",
       "Lantern-Lighter",
     );
     this.playLighterWarningHandoff();
-    this.time.delayedCall(2000, () => this.startFirstSpiritEncounterFixed());
+    this.readThen(() => this.startFirstSpiritEncounterFixed());
   }
 
   /** The Lantern-Lighter's warning becomes the physical source of the first wave. */
@@ -1308,13 +1416,14 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private beginFirstSpiritEncounter(): void {
+    this.checkpoint("first-spirits");
     // Wave-start bookend — same audio + shake pattern as the temple waves so
     // the first spirit encounter lands with the same weight.
     playWaveSting();
-    this.cameras.main.shake(220, 0.005);
+    if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseSkyWave({ y: 710, ringWidth: 980, ringHeight: 160 });
 
-    this.setNarrator("Two lantern-spirits drift from the tower path, pale and unhurried.");
+    this.setNarrator("Two lantern-spirits drift down from the hanging lights, pale and unhurried.");
     this.band.setObjective("Clear the lantern-spirits before they reach Wren.");
     const words = pickAdaptiveWords(
       filterWordsByLength(SKY_ISLAND_WORD_BANK, 6, 8),
@@ -1348,8 +1457,10 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private onFirstEncounterCleared(): void {
+    this.checkpoint("first-spirits", { reading: true });
     this.setNarrator("Each lantern blooms as the spirit fades — the glow blooms wide and then rests.");
-    this.time.delayedCall(2000, () => this.startAct2());
+    this.band.setObjective("Lantern-spirits cleared. Press Enter or Space to continue.");
+    this.readThen(() => this.startAct2());
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1357,11 +1468,15 @@ export class SkyIslandScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private startAct2(): void {
+    this.checkpoint("temple-intro");
     this.templeIndex = 0;
-    this.startTemple(0);
+    this.setNarrator("The lantern beams hide untyped letters behind dots (·). Read ahead, then type the original letters and spaces as each scroll moves. Finish before it leaves the path.");
+    this.band.setObjective("Read ahead. A dot hides the original letter; keep typing the phrase, including spaces.");
+    this.readThen(() => this.startTemple(0));
   }
 
   private startTemple(idx: number): void {
+    this.checkpoint("temple", { index: idx });
     this.templeIndex = idx;
     const cfg = TEMPLE_PHRASE_CONFIGS[idx];
     if (!cfg) return;
@@ -1369,19 +1484,16 @@ export class SkyIslandScene extends Phaser.Scene {
     // Wave-start bookend — audio sting + screen shake so each temple feels
     // like an event, not just "more text appears."
     playWaveSting();
-    this.cameras.main.shake(220, 0.005);
+    if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseSkyWave();
-
-    if (this.templeLanterns.length === 0) {
-      this.drawTempleLanterns();
-    }
-    this.maybePlayWarmLightCue();
 
     // The middle temple is the sealed-scroll no-miss test — a different stake.
     if (idx === SEALED_SCROLL_TEMPLE_IDX) {
       this.startSealedScrollTemple();
       return;
     }
+    this.setTempleBeamsActive(true);
+    this.maybePlayWarmLightCue();
 
     // §5.5.10 — a lantern's inscription flickers between two readings, one
     // beautiful, one his. Fires on the second temple so the player has just
@@ -1403,17 +1515,17 @@ export class SkyIslandScene extends Phaser.Scene {
     }
 
     const templeNames = [
-      "The first gate. The lantern-beams eat the words you haven't typed yet — read ahead, and type before the light reaches them.",
+      "The first gate. Read ahead before the lantern beams hide the untyped letters.",
       "The second gate. Two scrolls now, on different winds. Read both; save what you can.",
-      "The third chamber. Two scrolls at once now.", // unused — idx 2 is the sealed scroll
-      "The fourth chamber. Three scrolls, and the beams are hungry. Triage.",
-      "The fifth and final chamber. They fly, three at once. Type before they leave you.",
+      "The third scroll trial. Two scrolls at once now.", // unused — idx 2 is the sealed scroll
+      "The fourth scroll trial. Three scrolls, and the beams are hungry. Triage.",
+      "The fifth and final scroll trial. They fly, three at once. Type before they leave you.",
     ];
     this.setNarrator(templeNames[idx] ?? "");
     this.band.setObjective(
       cfg.count === 1
-        ? "Finish the moving scroll before it leaves the path."
-        : `Triage ${cfg.count} moving scrolls before they leave the path.`,
+        ? "Type original letters and spaces; dots hide letters. Finish before the scroll leaves."
+        : `Clear ${cfg.count} moving scrolls. Type original letters and spaces; dots hide letters.`,
     );
 
     // Pick `cfg.count` distinct phrases from the long-phrase bank.
@@ -1480,6 +1592,8 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private quietLordIntrusionAnchor(): { x: number; y: number } {
+    // Gate two's 90px scar fits below both scrolls and above Wren's idle breath.
+    const y = 525;
     let threat: ScrollingPhrase | null = null;
     for (const phrase of this.activePhrases) {
       if (phrase.isResolved()) continue;
@@ -1488,10 +1602,10 @@ export class SkyIslandScene extends Phaser.Scene {
       }
     }
 
-    if (!threat) return { x: this.scale.width / 2, y: 380 };
+    if (!threat) return { x: this.scale.width / 2, y };
     return {
       x: Phaser.Math.Clamp(threat.getX(), 340, this.scale.width - 340),
-      y: Phaser.Math.Clamp(threat.getY(), 280, this.scale.height - 360),
+      y,
     };
   }
 
@@ -1502,7 +1616,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private onPhraseResolved(success: boolean): void {
     if (!success) {
       playWrenHurt(this.wrenSprite, { knockX: 0 });
-      this.cameras.main.shake(180, 0.004);
+      if (!reducedMotion(this)) this.cameras.main.shake(180, 0.004);
       this.typingInput.getStats().record(false);
     }
     this.templePhrasesRemaining -= 1;
@@ -1544,6 +1658,9 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private onTempleCleared(): void {
+    this.checkpoint("temple-cleared", { index: this.templeIndex });
+    this.setTempleBeamsActive(false);
+    this.activePhrases = [];
     const nextIdx = this.templeIndex + 1;
 
     // Between Temple 3 and 4: Scholar Etta side encounter
@@ -1572,17 +1689,21 @@ export class SkyIslandScene extends Phaser.Scene {
    *  on ANY wrong key, in every difficulty. The precision counterpart to the
    *  speed-stake scrolling temples. */
   private startSealedScrollTemple(): void {
+    this.setTempleBeamsActive(false);
+    const graceHint = this.combat.gracePool > 0
+      ? ` Your keepsakes can preserve your place through ${this.combat.gracePool} ${this.combat.gracePool === 1 ? "slip" : "slips"}.`
+      : "";
     this.setNarrator(
-      "A sealed scroll, pinned in still air. No haste here — but no mistakes. One slip and it reseals.",
+      "A sealed scroll, pinned in still air. There is no timer. Type every letter and space. A wrong key reseals it from the start; Backspace lets you correct a letter." + graceHint,
     );
-    this.band.setObjective("Type the sealed scroll with no mistakes.");
+    this.band.setObjective("Copy the whole scroll, including spaces. No timer; Backspace corrects; mistakes reseal it.");
     // No scrolling banners this temple — clear the blur-driven list.
     this.activePhrases = [];
     this.templePhrasesRemaining = 0;
 
-    this.time.delayedCall(1600, () => {
+    this.readThen(() => {
       const cx = this.scale.width / 2;
-      const cy = 720;
+      const cy = SEALED_SCROLL_Y;
       const seal = this.drawSealedScroll(cx, cy);
       const target = this.makeWord({
         scene: this,
@@ -1608,8 +1729,10 @@ export class SkyIslandScene extends Phaser.Scene {
             ease: "Sine.easeOut",
             onComplete: () => seal.destroy(),
           });
+          this.checkpoint("temple", { index: SEALED_SCROLL_TEMPLE_IDX, reading: true });
           this.setNarrator("The scroll holds. The seal opens of its own accord.");
-          this.time.delayedCall(1400, () => this.onTempleCleared());
+          this.band.setObjective("Scroll unsealed. Press Enter or Space to continue.");
+          this.readThen(() => this.onTempleCleared());
         },
       });
       // Tier 4 — feed the grace pool (Master Key / Lock-Bar / Golem Heart /
@@ -1685,7 +1808,7 @@ export class SkyIslandScene extends Phaser.Scene {
   /** Wax-red flash + shake when the sealed scroll reseals (a miss). The target's
    *  resetOnMiss has already wiped the typed progress; this is the cue. */
   private flashScrollReseal(seal: Phaser.GameObjects.Container): void {
-    this.cameras.main.shake(120, 0.003);
+    if (!reducedMotion(this)) this.cameras.main.shake(120, 0.003);
     // Reset any in-flight flash so a flurry of misses can't strand the alpha.
     this.tweens.killTweensOf(seal);
     seal.setAlpha(1);
@@ -1854,6 +1977,7 @@ export class SkyIslandScene extends Phaser.Scene {
   ): void {
     const target = targets[0];
     if (!target) return;
+    if (!this.usedOneShots.includes(effect)) this.usedOneShots.push(effect);
     if (effect === "toll-strike") {
       this.playOneShotSourceLine(
         effect,
@@ -1862,7 +1986,7 @@ export class SkyIslandScene extends Phaser.Scene {
         PALETTE_HEX.ember,
       );
       playBellToll();
-      this.cameras.main.shake(160, 0.004);
+      if (!reducedMotion(this)) this.cameras.main.shake(160, 0.004);
       target.strike();
     } else if (effect === "jam-foe") {
       this.playOneShotSourceLine(
@@ -1918,15 +2042,20 @@ export class SkyIslandScene extends Phaser.Scene {
   // ─── Scholar Etta side encounter ─────────────────────────────────────────
 
   private startEttaEncounter(nextTempleIdx: number): void {
+    this.checkpoint("etta", { nextTemple: nextTempleIdx });
+    this.setTempleBeamsActive(false);
+    this.band.setObjective("Meet the scholar. Press Enter or Space to listen.");
     this.setNarrator(
-      "A side chamber off the temple path. A spirit scholar crouches over a single unburned book.",
+      "Beside the terrace path, a scholar-spirit stands holding a single unburned book.",
     );
     this.showEtta();
-    this.time.delayedCall(2000, () => {
+    this.readThen(() => {
       this.setNarrator(ETTA_LINE, "Etta");
-      this.time.delayedCall(600, () => {
+      this.readThen(() => {
+        this.band.setObjective("Choose whether to help Etta with her book or keep moving.");
         const helpPos = this.skyOwnedWordPosition(this.ettaSprite, -120, ETTA_HELP_TRIGGER, {
           side: "left",
+          lift: ETTA_CHOICE_WORD_LIFT,
         });
         const helpTarget = this.makeEttaWord({
           scene: this,
@@ -1947,6 +2076,7 @@ export class SkyIslandScene extends Phaser.Scene {
         // will just fail to claim — but we also offer a "skip" word
         const skipPos = this.skyOwnedWordPosition(this.ettaSprite, -120, "keep moving", {
           side: "right",
+          lift: ETTA_CHOICE_WORD_LIFT,
         });
         const skipTarget = this.makeEttaWord({
           scene: this,
@@ -1961,8 +2091,10 @@ export class SkyIslandScene extends Phaser.Scene {
             });
             this.clearActiveTargets();
             this.hideEtta();
+            this.checkpoint("etta", { nextTemple: nextTempleIdx, skipped: true });
             this.setNarrator("The scholar watches you go in silence.");
-            this.time.delayedCall(1600, () => this.startTemple(nextTempleIdx));
+            this.band.setObjective("Press Enter or Space to return to the lantern-lit path.");
+            this.readThen(() => this.startTemple(nextTempleIdx));
           },
         });
         this.registerActiveTarget(helpTarget, skipTarget);
@@ -1971,55 +2103,76 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private startEttaHelp(nextTempleIdx: number): void {
+    const resumeStage = this.savedStageData("etta-book").stage;
+    this.checkpoint("etta-book", { nextTemple: nextTempleIdx, stage: resumeStage === "lift" ? "lift" : "intro" });
+    this.band.setObjective("Help Etta with the book. Press Enter or Space to begin.");
     this.setNarrator("You approach the book. Scholar Etta holds her breath.");
-    this.time.delayedCall(1200, () => {
+    const begin = (): void => {
+      this.checkpoint("etta-book", { nextTemple: nextTempleIdx, stage: "lift" });
+      this.band.setObjective(`Type ${ETTA_CHAIN_1} to lift Etta's book.`);
       const bookCue = this.showEttaBookCue();
+      // Both answers keep their clear lane while the physical book changes hands.
+      const wordX = bookCue.x + 110;
       const liftTarget = this.makeEttaBookWord({
         scene: this,
         word: ETTA_CHAIN_1,
-        x: bookCue.x + 110,
-        y: bookCue.y - 132,
+        x: wordX,
+        y: ETTA_BOOK_WORD_Y,
         fontSize: 38,
+        onAdvance: (cursor, length) => { if (cursor === length) this.ettaBookMoving = true; },
         onComplete: () => {
           playChime();
-          playActorAttention(this, this.ettaSprite, {
-            tint: PALETTE_HEX.brass,
-          });
           this.clearActiveTargets();
-          this.setNarrator("The book is heavier than it looks. Old paper, dense with writing.");
-          this.time.delayedCall(1400, () => {
-            const placeTarget = this.makeEttaBookWord({
-              scene: this,
-              word: ETTA_CHAIN_2,
-              x: bookCue.x + 110,
-              y: bookCue.y - 132,
-              fontSize: 38,
-              onComplete: () => {
-                playChime();
-                playActorAttention(this, this.ettaSprite, {
-                  tint: PALETTE_HEX.brass,
-                });
-                this.clearActiveTargets();
-                this.ettaDone = true;
-                this.store.update((s) => {
-                  if (!s.almanacLore.includes("scholar-ettas-last-volume")) {
-                    s.almanacLore.push("scholar-ettas-last-volume");
-                  }
-                });
-                this.setNarrator(
-                  "Scholar Etta's Last Volume — a page appears in the Almanac.",
-                );
-                this.clearEttaBookCue(true);
-                this.hideEtta();
-                this.time.delayedCall(2200, () => this.startTemple(nextTempleIdx));
-              },
+          this.checkpoint("etta-book", { nextTemple: nextTempleIdx, stage: "carried" });
+          this.band.setObjective("Lifting the book…");
+          this.moveEttaBook("carried", () => {
+            playActorAttention(this, this.ettaSprite, { tint: PALETTE_HEX.brass });
+            this.setNarrator("The book is heavier than it looks. Old paper, dense with writing.");
+            this.band.setObjective("Book lifted. Press Enter or Space to continue.");
+            this.readThen(() => {
+              this.checkpoint("etta-book", { nextTemple: nextTempleIdx, stage: "place" });
+              this.band.setObjective(`Type ${ETTA_CHAIN_2} to set the book safely on its shelf.`);
+              const placeTarget = this.makeEttaBookWord({
+                scene: this,
+                word: ETTA_CHAIN_2,
+                x: wordX,
+                y: ETTA_BOOK_WORD_Y,
+                fontSize: 38,
+                onAdvance: (cursor, length) => { if (cursor === length) this.ettaBookMoving = true; },
+                onComplete: () => {
+                  playChime();
+                  this.clearActiveTargets();
+                  this.checkpoint("etta-book", { nextTemple: nextTempleIdx, stage: "shelved" });
+                  this.band.setObjective("Setting the book on its shelf…");
+                  this.moveEttaBook("shelved", () => {
+                    playActorAttention(this, this.ettaSprite, { tint: PALETTE_HEX.brass });
+                    this.ettaDone = true;
+                    this.store.update((s) => {
+                      const realm = s.realms["sky-island"] ?? { cleared: false, choices: {} };
+                      realm.choices.ettaHelped = "yes";
+                      s.realms["sky-island"] = realm;
+                      if (!s.almanacLore.includes("scholar-ettas-last-volume")) {
+                        s.almanacLore.push("scholar-ettas-last-volume");
+                      }
+                    });
+                    this.setNarrator("Scholar Etta's Last Volume — a page appears in the Almanac.");
+                    this.band.setObjective("Almanac memory earned. Press Enter or Space to return to the scroll trials.");
+                    // Keep the placed book and Etta visible while the player reads.
+                    this.readThen(() => {
+                      this.hideEtta();
+                      this.startTemple(nextTempleIdx);
+                    });
+                  });
+                },
+              });
+              this.registerActiveTarget(placeTarget);
             });
-            this.registerActiveTarget(placeTarget);
           });
         },
       });
       this.registerActiveTarget(liftTarget);
-    });
+    };
+    if (resumeStage === "lift") begin(); else this.readThen(begin);
   }
 
   /** Fade Scholar Etta in on the platform. Visual only — additive, and safe to
@@ -2063,53 +2216,59 @@ export class SkyIslandScene extends Phaser.Scene {
   private showEttaBookCue(): Phaser.GameObjects.Container {
     if (this.ettaBookCue?.scene) return this.ettaBookCue;
 
-    const c = this.add.container(760, 806).setDepth(43).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 150, 20, { y: 16, alpha: 0.18 }));
+    // The one volume now exists as a movable prop, rather than also being
+    // painted into Etta's arms throughout the lift and placement.
+    const etta = this.ettaSprite;
+    if (etta?.scene) {
+      etta.setTexture("etta-empty");
+      etta.setScale(ETTA_SPRITE_HEIGHT / etta.height);
+    }
 
-    const g = this.add.graphics();
-    g.fillStyle(0x2d2119, 0.84);
-    g.fillRoundedRect(-62, -30, 124, 42, 8);
-    g.fillStyle(0x5f4731, 0.94);
-    g.fillRoundedRect(-56, -42, 112, 58, 8);
-    g.lineStyle(2, PALETTE_HEX.brass, 0.52);
-    g.strokeRoundedRect(-56, -42, 112, 58, 8);
-    g.lineStyle(1.5, 0xf3ead2, 0.34);
-    g.lineBetween(0, -38, 0, 12);
-    g.lineBetween(-42, -22, -10, -18);
-    g.lineBetween(10, -18, 42, -22);
-    g.fillStyle(PALETTE_HEX.brass, 0.42);
-    g.fillCircle(0, -12, 8);
-    g.fillStyle(0xf3ead2, 0.18);
-    g.fillEllipse(-26, -17, 34, 8);
-    g.fillEllipse(28, -17, 34, 8);
-    c.add(g);
+    const shelf = this.add.container(1260, 826).setDepth(42).setAlpha(0);
+    shelf.add(addLocalGroundShadow(this, 218, 24, { y: 5, alpha: 0.2 }));
+    const rack = this.add.image(0, 0, "etta-shelf").setOrigin(0.5, 0.885);
+    rack.setDisplaySize(260, 260 * rack.height / rack.width);
+    applySceneActorLighting(this, rack);
+    shelf.add(rack);
+    this.ettaBookShelf = shelf;
 
-    addContainerWake(this, c, {
-      kind: "mote",
-      intervalMs: 420,
-      spreadX: 34,
-      spreadY: 12,
-      offsetY: -34,
-      alpha: 0.22,
-      size: 3.2,
-      depth: 42,
-      driftY: -42,
-      durationMs: 980,
-    });
-
-    this.tweens.add({
-      targets: c,
-      alpha: 0.9,
-      y: 788,
-      duration: 620,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (c.scene) addIdleBreath(this, c, { dy: -3, durationMs: 2400 });
-      },
-    });
-
+    const shadow = addLocalGroundShadow(this, 134, 18, { alpha: 0.2 });
+    shadow.setPosition(760, 828).setDepth(42);
+    this.ettaBookGroundShadow = shadow;
+    const c = this.add.container(760, 826).setDepth(43).setAlpha(0);
+    const book = this.add.image(0, 0, "etta-volume").setOrigin(0.5, 0.88);
+    book.setDisplaySize(176, 176 * book.height / book.width);
+    applySceneActorLighting(this, book);
+    c.add(book);
     this.ettaBookCue = c;
+    this.tweens.add({ targets: [shelf, c], alpha: 1, duration: 420, ease: "Sine.easeOut" });
     return c;
+  }
+
+  private moveEttaBook(state: "carried" | "shelved", onDone: () => void): void {
+    const cue = this.ettaBookCue;
+    if (!cue?.scene) { this.ettaBookMoving = false; onDone(); return; }
+    this.ettaBookMoving = true;
+    this.tweens.killTweensOf(cue);
+    cue.setDepth(61).setAlpha(1);
+    this.ettaBookShelf?.setAlpha(1);
+    this.ettaBookGroundShadow?.setAlpha(0);
+    const shelf = this.ettaBookShelf;
+    const end = state === "carried"
+      ? { x: this.wrenContainer.x - 62, y: this.wrenContainer.y - 112, angle: -8 }
+      : { x: shelf?.x ?? 1260, y: (shelf?.y ?? 826) - 94, angle: 0 };
+    const finish = (): void => {
+      // Leaving or restarting the scene invalidates an unfinished prop action.
+      if (this.ettaBookCue !== cue || !cue.scene) return;
+      this.ettaBookMoving = false;
+      onDone();
+    };
+    if (reducedMotion(this)) {
+      cue.setPosition(end.x, end.y).setAngle(end.angle);
+      finish();
+      return;
+    }
+    this.tweens.add({ targets: cue, ...end, duration: 520, ease: "Sine.easeInOut", onComplete: finish });
   }
 
   private pulseEttaBookCue(complete = false): void {
@@ -2132,35 +2291,37 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private clearEttaBookCue(fade = false): void {
     this.clearEttaBookWordAnchors();
-    const cue = this.ettaBookCue;
+    const props = [this.ettaBookCue, this.ettaBookShelf];
     this.ettaBookCue = null;
-    if (!cue?.scene) return;
-    this.tweens.killTweensOf(cue);
-    if (!fade) {
-      cue.destroy();
-      return;
+    this.ettaBookShelf = null;
+    this.ettaBookMoving = false;
+    this.ettaBookGroundShadow?.destroy();
+    this.ettaBookGroundShadow = null;
+    for (const prop of props) {
+      if (!prop?.scene) continue;
+      this.tweens.killTweensOf(prop);
+      if (!fade) { prop.destroy(); continue; }
+      this.tweens.add({
+        targets: prop, alpha: 0, duration: 420, ease: "Sine.easeIn",
+        onComplete: () => { if (prop.scene) prop.destroy(); },
+      });
     }
-    this.tweens.add({
-      targets: cue,
-      y: cue.y - 14,
-      alpha: 0,
-      duration: 520,
-      ease: "Sine.easeIn",
-      onComplete: () => {
-        if (cue.scene) cue.destroy();
-      },
-    });
   }
 
   // ─── Fork 1 — Library Tower ──────────────────────────────────────────────
 
   private startFork1(): void {
+    this.checkpoint("fork1");
+    this.setTempleBeamsActive(false);
     this.narration.say("sky_fork1_intro");
     this.band.setObjective("Choose whether to help Etta or take the flame.");
     this.showFork1Cues();
+    if (this.fork1Choice === "help-etta") { this.startFork1HelpEtta(); return; }
+    if (this.fork1Choice === "steal-flame") { this.startFork1StealFlame(); return; }
 
     const helpPos = this.skyOwnedWordPosition(this.ettaSprite, -120, "help scholar etta", {
       side: "left",
+      lift: ETTA_CHOICE_WORD_LIFT,
     });
     const helpTarget = this.makeEttaWord({
       scene: this,
@@ -2195,39 +2356,59 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private startFork1HelpEtta(): void {
+    this.fork1Choice = this.commitFork("fork1", "help-etta") as typeof this.fork1Choice;
+    if (this.fork1Choice !== "help-etta") { this.startFork1StealFlame(); return; }
+    const resume = this.savedStageData("help-etta") ?? {};
+    const helpedBefore = typeof resume.helpedBefore === "boolean" ? resume.helpedBefore : this.ettaDone;
+    this.checkpoint("help-etta", { ...resume, helpedBefore });
     this.fadeOutForkCue(this.beaconFlameCue);
     this.beaconFlameCue = null;
-    if (!this.ettaDone) {
-      // Formal commit to the etta path if side encounter was skipped
-      this.store.update((s) => {
-        if (!s.almanacLore.includes("scholar-ettas-last-volume")) {
-          s.almanacLore.push("scholar-ettas-last-volume");
-        }
-      });
-    }
     this.showEtta();
-    this.setNarrator("You carry her books to the shelves. The beacon brightens.");
-    this.time.delayedCall(1800, () => {
+    if (helpedBefore) this.restoreEttaBookPose("shelved");
+    else this.showEttaBookCue();
+    this.band.setObjective("Etta welcomes your help. Press Enter or Space to continue.");
+    this.setNarrator(helpedBefore
+      ? "Etta remembers the book you placed for her. She offers her ledger; the beacon brightens."
+      : "Etta asks you to carry her last unburned book to its shelf.");
+    const begin = (): void => {
       this.runPassageChain(
-        ["carry her books", "the shelves hold them", "etta thanks you quietly", "the beacon brightens"],
-        [
-          "One by one the shelves fill up.",
-          "Scholar Etta traces a title with one finger.",
-          "She says nothing, but the lanterns flicker warmly.",
-          "The great beacon above brightens. It was watching.",
+        helpedBefore ? ["etta thanks you quietly", "the beacon brightens"]
+          : ["carry her book", "the shelf holds it", "etta thanks you quietly", "the beacon brightens"],
+        helpedBefore ? ["Scholar Etta smiles at the volume on its shelf.", "The beacon brightens. It was watching."] : [
+          "The book is heavier than it looks. Old paper, dense with writing.",
+          "The last volume rests safely on its shelf.",
+          "Etta smiles, and the lanterns flicker warmly.",
+          "The beacon brightens. It was watching.",
         ],
         () => {
+          this.ettaDone = true;
+          this.store.update(s => {
+            const realm = s.realms["sky-island"] ?? { cleared: false, choices: {} };
+            realm.choices.ettaHelped = "yes";
+            s.realms["sky-island"] = realm;
+            if (!s.almanacLore.includes("scholar-ettas-last-volume")) s.almanacLore.push("scholar-ettas-last-volume");
+          });
           this.hideEtta();
           this.startAct3();
         },
+        helpedBefore ? undefined : {
+          body: undefined,
+          onPhraseComplete: (index) => this.restoreEttaBookPose(index === 0 ? "carried" : "shelved"),
+        }, "help-etta", { helpedBefore },
       );
-    });
+    };
+    if (typeof resume.index === "number") begin(); else this.readThen(begin);
   }
 
   private startFork1StealFlame(): void {
+    this.fork1Choice = this.commitFork("fork1", "steal-flame") as typeof this.fork1Choice;
+    if (this.fork1Choice !== "steal-flame") { this.startFork1HelpEtta(); return; }
+    const resume = this.savedStageData("steal-flame") ?? {};
+    this.checkpoint("steal-flame", resume);
     this.hideEtta();
-    this.setNarrator("You reach into the beacon and close your hand around the flame.");
-    this.time.delayedCall(1800, () => {
+    this.band.setObjective("Take a spark from the beacon. Press Enter or Space to begin.");
+    this.setNarrator("Inside the beacon, a small curl of flame waits for your hand.");
+    const begin = (): void => {
       this.runPassageChain(
         ["reach for the flame", "the beacon dims slightly", "the spark is yours", "the island notices"],
         [
@@ -2237,13 +2418,22 @@ export class SkyIslandScene extends Phaser.Scene {
           "Something shifts in the air. The summit calls louder.",
         ],
         () => {
+          this.clearHeldBeaconSpark();
           this.fadeOutForkCue(this.beaconFlameCue);
           this.beaconFlameCue = null;
           this.startAct3();
         },
-        { body: this.beaconFlameCue, sourceOffsetY: -76 },
+        {
+          body: this.beaconFlameCue, sourceOffsetY: -76, side: "right",
+          onPhraseComplete: (index) => {
+            if (index === 1) this.dimBeaconFlameVisual();
+            if (index === 2) this.takeBeaconSparkVisual();
+          },
+        },
+        "steal-flame",
       );
-    });
+    };
+    if (typeof resume.index === "number") begin(); else this.readThen(begin);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2251,22 +2441,26 @@ export class SkyIslandScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private startAct3(): void {
+    this.checkpoint("boss-intro");
+    this.setTempleBeamsActive(false);
     this.clearActiveTargets();
     this.narration.say("sky_scholar_spirit_rise");
+    this.band.setObjective("Meet the Scholar-Spirit. Press Enter or Space when ready.");
     this.bossContainer = this.drawScholarSpirit();
-    this.time.delayedCall(2400, () => this.startBossPhase1());
+    this.readThen(() => this.startBossPhase1());
   }
 
   private startBossPhase1(): void {
+    this.checkpoint("boss", { phase: 1 });
     // Boss-phase bookend — audio sting + shake so each riddle phase lands
     // with the same event-weight as a wave.
     playWaveSting();
-    this.cameras.main.shake(220, 0.005);
+    if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseSkyWave({ y: 560, ringWidth: 820, ringHeight: 190, count: 14 });
     this.playScholarStagePulse();
     this.setNarrator(RIDDLE_1_DISPLAY, "Scholar-Spirit");
-    this.band.setObjective("Answer the Scholar-Spirit's riddle.");
-    this.time.delayedCall(1200, () => {
+    this.band.setObjective("Read the riddle, then type the answer shown, including spaces. Take your time.");
+    this.readThen(() => {
       const pos = this.scholarBossWordPosition(BOSS_PHASE1_ANSWER);
       const target = this.makeScholarBossWord({
         scene: this,
@@ -2278,8 +2472,10 @@ export class SkyIslandScene extends Phaser.Scene {
           playChime();
           this.clearActiveTargets();
           this.tweenBossBow();
+          this.checkpoint("boss", { phase: 1, reading: true });
           this.setNarrator("The spirit bows slightly. It is satisfied — for now.");
-          this.time.delayedCall(2000, () => this.startBossPhase2());
+          this.band.setObjective("First riddle answered. Press Enter or Space for the next question.");
+          this.readThen(() => this.startBossPhase2());
         },
       });
       this.registerActiveTarget(target);
@@ -2287,13 +2483,14 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private startBossPhase2(): void {
+    this.checkpoint("boss", { phase: 2 });
     playWaveSting();
-    this.cameras.main.shake(220, 0.005);
+    if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseSkyWave({ y: 560, ringWidth: 820, ringHeight: 190, count: 14 });
     this.playScholarStagePulse(true);
     this.setNarrator(RIDDLE_2_DISPLAY, "Scholar-Spirit");
-    this.band.setObjective("Answer the second riddle.");
-    this.time.delayedCall(1200, () => {
+    this.band.setObjective("Read the second riddle, then type the answer shown, including spaces. Take your time.");
+    this.readThen(() => {
       const pos = this.scholarBossWordPosition(BOSS_PHASE2_ANSWER);
       const target = this.makeScholarBossWord({
         scene: this,
@@ -2305,8 +2502,10 @@ export class SkyIslandScene extends Phaser.Scene {
           playChime();
           this.clearActiveTargets();
           this.flashBossEyes();
+          this.checkpoint("boss", { phase: 2, reading: true });
           this.setNarrator("The spirit's eyes shift colour. Something else stirs within it.");
-          this.time.delayedCall(1800, () => {
+          this.band.setObjective("Second riddle answered. Press Enter or Space to continue.");
+          this.readThen(() => {
             if (!this.quietLordFiredInPhase2) {
               this.quietLordFiredInPhase2 = true;
               this.store.update((s) => {
@@ -2321,6 +2520,7 @@ export class SkyIslandScene extends Phaser.Scene {
                   : this.scale.height / 2 - 40,
               });
             }
+            this.checkpoint("boss", { phase: 3 });
             this.time.delayedCall(1600, () => this.startBossPhase3());
           });
         },
@@ -2330,18 +2530,20 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private startBossPhase3(): void {
+    this.checkpoint("boss", { phase: 3 });
     playWaveSting();
-    this.cameras.main.shake(220, 0.005);
+    if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseSkyWave({ y: 560, ringWidth: 820, ringHeight: 190, count: 14 });
     this.playScholarStagePulse(true);
     this.setNarrator(RIDDLE_3_DISPLAY, "Scholar-Spirit");
-    this.band.setObjective("Type the final answer before the spirit fades.");
-    this.time.delayedCall(1400, () => {
+    this.band.setObjective("Type the answer shown. The spirit fades as you complete it; there is no timer.");
+    this.readThen(() => {
       // Track typed characters to progressively dim the spirit as the
       // sentence fills in — mirrors the per-word alpha from the old sequential
       // runner but driven by cursor position at quarter-sentence milestones.
       const totalChars = BOSS_PHASE3_ANSWER.length;
       let lastFadeBand = 0;
+      let fadeTween: Phaser.Tweens.Tween | null = null;
       const pos = this.scholarBossWordPosition(BOSS_PHASE3_ANSWER);
       const target = this.makeScholarBossWord({
         scene: this,
@@ -2350,24 +2552,24 @@ export class SkyIslandScene extends Phaser.Scene {
         y: pos.y,
         fontSize: 44,
         onComplete: () => {
+          fadeTween?.stop();
           playChime();
           this.clearActiveTargets();
           this.onBossDefeated();
         },
       });
 
-      // Wrap advance() to trigger alpha fades at 25 %, 50 %, 75 %, and 100 %
-      // of the sentence typed — preserves the "spirit fades as Wren answers" feel.
-      const originalAdvance = target.advance.bind(target);
-      target.advance = () => {
-        originalAdvance();
+      // Fading follows the actual answer, including Backspace and the existing
+      // difficulty reset. A restarted answer must not leave a nearly gone spirit.
+      const syncSpiritFade = () => {
         if (this.bossContainer) {
           const typed = totalChars - target.remaining().length;
           const band = Math.floor((typed / totalChars) * 4); // 0-4
-          if (band > lastFadeBand) {
+          if (band !== lastFadeBand) {
             lastFadeBand = band;
             const targetAlpha = Math.max(0.1, 1 - band * 0.22);
-            this.tweens.add({
+            fadeTween?.stop();
+            fadeTween = this.tweens.add({
               targets: this.bossContainer,
               alpha: targetAlpha,
               duration: 400,
@@ -2376,6 +2578,18 @@ export class SkyIslandScene extends Phaser.Scene {
           }
         }
       };
+      const originalAdvance = target.advance.bind(target);
+      target.advance = () => { originalAdvance(); syncSpiritFade(); };
+      const originalReverse = target.reverse.bind(target);
+      target.reverse = () => {
+        const reversed = originalReverse();
+        syncSpiritFade();
+        return reversed;
+      };
+      const originalReset = target.resetCursor.bind(target);
+      target.resetCursor = () => { originalReset(); syncSpiritFade(); };
+      const originalRelease = target.onRelease.bind(target);
+      target.onRelease = () => { originalRelease(); syncSpiritFade(); };
 
       this.registerActiveTarget(target);
     });
@@ -2393,6 +2607,7 @@ export class SkyIslandScene extends Phaser.Scene {
   }
 
   private onBossDefeated(): void {
+    this.checkpoint("boss-defeated");
     // Dissolve the boss into floating lanterns
     if (this.bossContainer) {
       this.bossRingTween?.stop();
@@ -2436,21 +2651,26 @@ export class SkyIslandScene extends Phaser.Scene {
 
     this.time.delayedCall(800, () => {
       this.narration.say("sky_scholar_spirit_defeated");
-      this.time.delayedCall(3000, () => this.startFork2());
+      this.band.setObjective("The riddles are answered. Press Enter or Space to continue.");
+      this.readThen(() => this.startFork2());
     });
   }
 
   // ─── Fork 2 — After the Boss ─────────────────────────────────────────────
 
   private startFork2(): void {
-    this.setNarrator("The summit is quiet. Two choices remain.");
+    this.checkpoint("fork2");
+    this.setTempleBeamsActive(false);
+    this.setNarrator("A thin tether still binds the fading Scholar-Spirit to the beacon. Answer kindly to leave a remembered phrase, or cut the tether and free its wind.");
     this.band.setObjective("Choose how to answer the tethered spirit.");
     this.showFork2Cues();
+    if (this.fork2Choice === "answer-kindly") { this.startFork2KindEnding(); return; }
+    if (this.fork2Choice === "cut-tether") { this.startFork2CutTether(); return; }
 
-    const kindPos = this.skyOwnedWordPosition(this.kindAnswerCue, -56, "answer kindly", {
+    const kindPos = this.skyOwnedWordPosition(this.fork2Scholar, -42, "answer kindly", {
       side: "left",
     });
-    const kindTarget = this.makeSkyForkWord(this.kindAnswerCue, {
+    const kindTarget = this.makeSkyForkWord(this.fork2Scholar, {
       scene: this,
       word: "answer kindly",
       x: kindPos.x,
@@ -2462,11 +2682,11 @@ export class SkyIslandScene extends Phaser.Scene {
         this.fork2Choice = "answer-kindly";
         this.startFork2KindEnding();
       },
-    }, -56);
-    const tetherPos = this.skyOwnedWordPosition(this.tetherThreadCue, -58, "cut the tether", {
+    }, -42);
+    const tetherPos = this.skyOwnedWordPosition(this.beaconFlameCue, -95, "cut the tether", {
       side: "right",
     });
-    const tetherTarget = this.makeSkyForkWord(this.tetherThreadCue, {
+    const tetherTarget = this.makeSkyForkWord(this.beaconFlameCue, {
       scene: this,
       word: "cut the tether",
       x: tetherPos.x,
@@ -2478,45 +2698,52 @@ export class SkyIslandScene extends Phaser.Scene {
         this.fork2Choice = "cut-tether";
         this.startFork2CutTether();
       },
-    }, -58);
+    }, -95);
     this.registerActiveTarget(kindTarget, tetherTarget);
   }
 
   private startFork2KindEnding(): void {
+    this.fork2Choice = this.commitFork("fork2", "answer-kindly") as typeof this.fork2Choice;
+    if (this.fork2Choice !== "answer-kindly") { this.startFork2CutTether(); return; }
+    const resume = this.savedStageData("answer-kindly") ?? {};
+    this.checkpoint("answer-kindly", resume);
     this.fadeOutForkCue(this.tetherThreadCue);
     this.tetherThreadCue = null;
+    this.band.setObjective("Answer the spirit kindly. Press Enter or Space to continue.");
     this.setNarrator("You speak to what remains of the spirit.");
-    this.time.delayedCall(1400, () => {
-      const pos = this.skyOwnedWordPosition(
-        this.kindAnswerCue,
-        -56,
-        "you kept the light",
-        { side: "right" },
-      );
-      const t = this.makeSkyForkWord(this.kindAnswerCue, {
-        scene: this,
-        word: "you kept the light",
-        x: pos.x,
-        y: pos.y,
-        fontSize: 36,
-        onComplete: () => {
-          playChime();
-          this.clearActiveTargets();
-          this.setNarrator("The lanterns around the summit brighten. The island breathes.");
-          this.fadeOutForkCue(this.kindAnswerCue);
-          this.kindAnswerCue = null;
-          this.time.delayedCall(2200, () => this.startLanternMothGate());
-        },
-      }, -56);
-      this.registerActiveTarget(t);
-    });
+    const response = (): void => {
+      this.checkpoint("answer-kindly", { reading: true });
+      this.releaseFork2Spirit(resume.reading === true);
+      this.setAmbientLanternFieldAlpha(1, resume.reading === true ? 0 : 640);
+      this.setNarrator("The lanterns across the terrace brighten. The island breathes.");
+      this.band.setObjective("The spirit heard you. Press Enter or Space to continue.");
+      this.fadeOutForkCue(this.kindAnswerCue); this.kindAnswerCue = null;
+      this.readThen(() => this.startLanternMothGate());
+    };
+    if (resume.reading === true) { response(); return; }
+    const begin = (): void => {
+      this.checkpoint("answer-kindly", { typing: true });
+      this.band.setObjective("Type you kept the light to answer the spirit.");
+      const pos = this.skyOwnedWordPosition(this.fork2Scholar, -42, "you kept the light", { side: "left" });
+      const target = this.makeSkyForkWord(this.fork2Scholar, {
+        scene: this, word: "you kept the light", x: pos.x, y: pos.y, fontSize: 36,
+        onComplete: () => { playChime(); this.clearActiveTargets(); response(); },
+      }, -42);
+      this.registerActiveTarget(target);
+    };
+    if (resume.typing === true) begin(); else this.readThen(begin);
   }
 
   private startFork2CutTether(): void {
+    this.fork2Choice = this.commitFork("fork2", "cut-tether") as typeof this.fork2Choice;
+    if (this.fork2Choice !== "cut-tether") { this.startFork2KindEnding(); return; }
+    const resume = this.savedStageData("cut-tether") ?? {};
+    this.checkpoint("cut-tether", resume);
     this.fadeOutForkCue(this.kindAnswerCue);
     this.kindAnswerCue = null;
+    this.band.setObjective("Free the tethered wind. Press Enter or Space to begin.");
     this.setNarrator("You find the thread that binds the spirit to the beacon.");
-    this.time.delayedCall(1400, () => {
+    const begin = (): void => {
       this.runPassageChain(
         ["pull the thread", "the tether falls"],
         [
@@ -2528,21 +2755,35 @@ export class SkyIslandScene extends Phaser.Scene {
           this.tetherThreadCue = null;
           this.startLanternMothGate();
         },
-        { body: this.tetherThreadCue, sourceOffsetY: -58 },
+        {
+          body: this.beaconFlameCue, sourceOffsetY: -95, side: "right",
+          onPhraseComplete: (index) => {
+            if (index === 1) this.releaseFork2Spirit(resume.reading === true && resume.index === 1);
+          },
+        }, "cut-tether",
       );
-    });
+    };
+    if (typeof resume.index === "number") begin(); else this.readThen(begin);
   }
 
   // ─── Lantern-moth companion gate ─────────────────────────────────────────
 
   private startLanternMothGate(): void {
+    this.checkpoint("moth");
+    this.fadeOutForkCue(this.beaconFlameCue);
+    this.beaconFlameCue = null;
+    if (resolveCompanionDecision("sky-island", this.store.get().realms["sky-island"], this.store.get().satchel)) {
+      this.startTrueNamePassage(); return;
+    }
     // Single condition: fork1 was help-etta
     if (this.fork1Choice === "help-etta") {
+      this.band.setObjective("A lantern-moth approaches. Press Enter or Space to meet her.");
       this.setNarrator(
         "A lantern-moth drifts down from the beacon's height, wings lit like paper.",
       );
       this.showLanternMothCompanion();
-      this.time.delayedCall(1200, () => {
+      this.readThen(() => {
+        this.band.setObjective("Choose whether the lantern-moth travels with you or stays here.");
         const takePos = this.skyOwnedWordPosition(
           this.lanternMothCompanion,
           -54,
@@ -2564,17 +2805,26 @@ export class SkyIslandScene extends Phaser.Scene {
           fontSize: 32,
           onComplete: () => {
             this.clearActiveTargets();
-            this.companionChoice = "take";
+            let accepted = false;
             this.store.update((s) => {
-              if (!s.satchel.includes("lantern-moth")) {
+              accepted = rememberCompanionDecision(s, "sky-island", "accepted") === "accepted";
+              if (accepted && !s.satchel.includes("lantern-moth")) {
                 s.satchel.push("lantern-moth");
               }
             });
-            this.setNarrator(
-              "The moth lands on your wrist, wings folding. She is coming with you.",
-            );
-            this.pulseLanternMothCompanion();
-            this.time.delayedCall(2400, () => this.startTrueNamePassage());
+            this.companionChoice = accepted ? "take" : "let-go";
+            if (!accepted) { this.startTrueNamePassage(); return; }
+            this.checkpoint("moth-answer", { accepted: true });
+            this.setNarrator("At your invitation, the moth drifts closer.");
+            this.band.setObjective("The lantern-moth comes closer.");
+            this.settleLanternMothOnWren(() => {
+              this.setNarrator(
+                "The moth settles on your wrist. She is coming with you.",
+              );
+              this.band.setObjective("Lantern-Moth joined you. Press Enter or Space to continue.");
+              this.pulseLanternMothCompanion();
+              this.readThen(() => this.startTrueNamePassage());
+            });
           },
         });
         const letGoTarget = this.makeLanternMothWord({
@@ -2587,11 +2837,14 @@ export class SkyIslandScene extends Phaser.Scene {
           onComplete: () => {
             this.clearActiveTargets();
             this.companionChoice = "let-go";
+            this.store.update(s => { rememberCompanionDecision(s, "sky-island", "declined"); });
+            this.checkpoint("moth-answer", { accepted: false });
             this.setNarrator(
               "She rises again into the golden air, wings a bright smear against the dusk.",
             );
+            this.band.setObjective("The moth remains on the island. Press Enter or Space to continue.");
             this.dismissLanternMothCompanion(1270, 500);
-            this.time.delayedCall(2000, () => this.startTrueNamePassage());
+            this.readThen(() => this.startTrueNamePassage());
           },
         });
         this.registerActiveTarget(takeTarget, letGoTarget);
@@ -2600,6 +2853,32 @@ export class SkyIslandScene extends Phaser.Scene {
       // Gate not met — no near-miss (single condition, as specified)
       this.startTrueNamePassage();
     }
+  }
+
+  private showMothAnswer(accepted: boolean, restored = false): void {
+    const decision = resolveCompanionDecision("sky-island", this.store.get().realms["sky-island"], this.store.get().satchel);
+    accepted = decision ? decision === "accepted" : accepted;
+    this.companionChoice = accepted ? "take" : "let-go";
+    this.checkpoint("moth-answer", { accepted });
+    if (accepted) {
+      this.showLanternMothCompanion();
+      if (restored) this.restoreMothPerch();
+      this.setNarrator("The moth settles on your wrist. She is coming with you.");
+      this.band.setObjective("Lantern-Moth joined you. Press Enter or Space to continue.");
+    } else {
+      this.setNarrator("She rises again into the golden air, wings a bright smear against the dusk.");
+      this.band.setObjective("The moth remains on the island. Press Enter or Space to continue.");
+    }
+    this.readThen(() => this.startTrueNamePassage());
+  }
+
+  private restoreMothPerch(): void {
+    this.showLanternMothCompanion();
+    const moth = this.lanternMothCompanion;
+    if (!moth?.scene) return;
+    this.tweens.killTweensOf(moth);
+    moth.getAt<Phaser.GameObjects.Graphics>(0)?.setVisible(false);
+    moth.setPosition(this.wrenContainer.x + 49, this.wrenContainer.y - 58).setScale(36 / 104).setAlpha(1);
   }
 
   private showLanternMothCompanion(): void {
@@ -2631,6 +2910,32 @@ export class SkyIslandScene extends Phaser.Scene {
     });
   }
 
+  private settleLanternMothOnWren(onLanded: () => void): void {
+    const moth = this.lanternMothCompanion;
+    if (!moth?.scene) { onLanded(); return; }
+    this.tweens.killTweensOf(moth);
+    moth.setScale(1);
+    moth.getAt<Phaser.GameObjects.Graphics>(0)?.setVisible(false);
+    const wrist = { x: this.wrenContainer.x + 49, y: this.wrenContainer.y - 58 };
+    // The 104px hovering cameo becomes a small, uniformly scaled wrist companion.
+    const perchedScale = 36 / 104;
+    if (reducedMotion(this)) {
+      moth.setPosition(wrist.x, wrist.y).setScale(perchedScale).setAlpha(1);
+      onLanded();
+      return;
+    }
+    this.tweens.add({
+      targets: moth,
+      ...wrist,
+      scaleX: perchedScale,
+      scaleY: perchedScale,
+      alpha: 1,
+      duration: 640,
+      ease: "Sine.easeInOut",
+      onComplete: onLanded,
+    });
+  }
+
   private pulseLanternMothCompanion(): void {
     playActorAttention(this, this.lanternMothCompanion, {
       scale: 1.045,
@@ -2651,9 +2956,12 @@ export class SkyIslandScene extends Phaser.Scene {
   // ─── True-name passage ────────────────────────────────────────────────────
 
   private startTrueNamePassage(): void {
+    this.checkpoint("true-name");
     this.clearActiveTargets();
     this.narration.say("sky_truename_intro");
-    this.time.delayedCall(1800, () => {
+    this.band.setObjective("Read the island's final passage. Press Enter or Space to begin.");
+    this.readThen(() => {
+      this.band.setObjective("Type the island's full passage, including spaces and punctuation.");
       const sealY = this.scale.height / 2 + 104;
       const seal = stageTrueNameSeal(this, {
         color: PALETTE_HEX.brass,
@@ -2715,6 +3023,8 @@ export class SkyIslandScene extends Phaser.Scene {
               s.almanacLore.push("the-sky-true-name");
             }
           });
+          this.checkpoint("ending");
+          this.band.setObjective("The island's name is sealed. Return to the portal.");
           this.time.delayedCall(800, () => this.startEnding());
         },
       });
@@ -2738,18 +3048,18 @@ export class SkyIslandScene extends Phaser.Scene {
   // ─── Ending ───────────────────────────────────────────────────────────────
 
   private startEnding(): void {
+    this.setTempleBeamsActive(false);
     this.clearActiveTargets();
     this.narration.say("sky_almanac_stamp");
+    this.band.setObjective("Keepsakes collected. Press Enter or Space to return to the chamber.");
 
     this.store.update((s) => {
-      s.realms["sky-island"] = {
-        cleared: true,
-        choices: {
-          fork1: this.fork1Choice ?? "none",
-          fork2: this.fork2Choice ?? "none",
-          companion: this.companionChoice ?? "none",
-        },
-      };
+      if (this.fork1Choice) rememberRealmFork(s, "sky-island", "fork1", this.fork1Choice);
+      if (this.fork2Choice) rememberRealmFork(s, "sky-island", "fork2", this.fork2Choice);
+      if (this.companionChoice) rememberCompanionDecision(s, "sky-island", this.companionChoice === "take" ? "accepted" : "declined");
+      const realm = s.realms["sky-island"] ?? { cleared: false, choices: {} };
+      realm.cleared = true;
+      s.realms["sky-island"] = realm;
 
       const fork1Relic =
         this.fork1Choice === "help-etta" ? "ettas-ledger" : "beacon-spark";
@@ -2767,7 +3077,12 @@ export class SkyIslandScene extends Phaser.Scene {
       }
     });
 
-    this.showAlmanacStamp(() => {
+    if (!this.revisit && this.store.get().checkpoint?.scene === "SkyIslandScene") this.store.clearCheckpoint();
+
+    const firstKeepsake = this.fork1Choice === "help-etta" ? "Etta's Ledger" : "Beacon Spark";
+    const secondKeepsake = this.fork2Choice === "answer-kindly" ? "Wind Phrase" : "Tether Cord and Untethered Wind";
+    this.band.setObjective(`Collected ${firstKeepsake} and ${secondKeepsake}. Press Enter or Space to return.`);
+    this.readThen(() => this.showAlmanacStamp(() => {
       playRealmReturnDeparture(this, this.wrenContainer, {
         kind: "mote",
         color: PALETTE_HEX.brass,
@@ -2782,7 +3097,17 @@ export class SkyIslandScene extends Phaser.Scene {
           }),
         );
       });
-    });
+    }));
+  }
+
+  private readThen(next: () => void): void {
+    this.reading.show(next, () => this.narration.replay());
+  }
+
+  private commitFork(fork: RealmFork, requested: string): string {
+    let chosen = requested;
+    this.store.update(s => { chosen = rememberRealmFork(s, "sky-island", fork, requested); });
+    return chosen;
   }
 
   private showAlmanacStamp(onDone: () => void): void {
@@ -3081,10 +3406,13 @@ export class SkyIslandScene extends Phaser.Scene {
 
     if (this.spirits.every((s) => s.defeated)) {
       this.spirits = [];
+      // The bloom is presentation time: leaving during it must keep the wave cleared.
       if (this.templeIndex === -1) {
         // First encounter
+        this.checkpoint("first-spirits", { reading: true });
         this.time.delayedCall(1600, () => this.onFirstEncounterCleared());
       } else {
+        this.checkpoint("temple-cleared", { index: this.templeIndex });
         this.time.delayedCall(1600, () => this.onTempleCleared());
       }
     }
@@ -3093,7 +3421,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private spiritReachesWren(spirit: LanternSpirit): void {
     // Gentle flash — no wave reset
     this.playSpiritHitWrenCue(spirit);
-    this.cameras.main.flash(300, 26, 16, 8, false);
+    if (!reducedFlashes(this)) this.cameras.main.flash(300, 26, 16, 8, false);
     playWrenHurt(this.wrenSprite, { knockX: 0 });
     playDamageThud();
     flashDamageVignette(this);
@@ -3177,6 +3505,13 @@ export class SkyIslandScene extends Phaser.Scene {
     const width = this.scale.width;
     const height = this.scale.height;
     if (!body?.scene) return { x: width / 2, y: height / 2 };
+    if (this.fork2Tether?.scene && (body === this.fork2Scholar || body === this.beaconFlameCue)) {
+      // The aftermath commands belong to the painted spirit and the thread's
+      // masonry endpoint, with a clear shared lane above Wren's hood.
+      return { x: body.x, y: 530 };
+    }
+    const physicalSource = body.getData?.("sky-source-offset-y");
+    if (typeof physicalSource === "number") sourceOffsetY = physicalSource;
 
     const long = word.length > 16;
     const side =
@@ -3198,20 +3533,41 @@ export class SkyIslandScene extends Phaser.Scene {
     owner?: {
       body: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined;
       sourceOffsetY?: number;
+      side?: "left" | "right";
+      onPhraseComplete?: (index: number) => void;
     },
+    checkpointStep?: SkyStep,
+    checkpointData: SaveCheckpoint["data"] = {},
   ): void {
-    let step = 0;
+    const resume = checkpointStep ? this.savedStageData(checkpointStep) ?? {} : {};
+    let step = typeof resume.index === "number" && Number.isInteger(resume.index)
+      ? Math.max(0, Math.min(passages.length - 1, resume.index)) : 0;
+    let held = resume.reading === true;
+    if (checkpointStep && this.resumeCheckpoint?.step === checkpointStep) this.resumeCheckpoint = null;
+    // Completed physical consequences are stable poses, not animations.
+    for (let previous = 0; previous < step; previous++) owner?.onPhraseComplete?.(previous);
 
     const advance = (): void => {
       if (step >= passages.length) {
-        this.time.delayedCall(1400, onDone);
+        onDone();
         return;
       }
+      if (held) {
+        held = false;
+        owner?.onPhraseComplete?.(step);
+        if (checkpointStep) this.checkpoint(checkpointStep, { ...checkpointData, index: step, reading: true });
+        this.setNarrator(narratorLines[step] ?? "");
+        this.band.setObjective("Phrase complete. Press Enter or Space to continue.");
+        this.readThen(() => { step += 1; advance(); });
+        return;
+      }
+      if (checkpointStep) this.checkpoint(checkpointStep, { ...checkpointData, index: step, reading: false });
       const word = passages[step] ?? "";
+      this.band.setObjective(`Type the shown phrase (${step + 1}/${passages.length}), including spaces and punctuation.`);
       const hasExplicitOwner = Boolean(owner?.body?.scene);
       const ownerBody = hasExplicitOwner ? owner?.body : this.ettaSprite;
       const sourceOffsetY = hasExplicitOwner ? (owner?.sourceOffsetY ?? -48) : -120;
-      const pos = this.skyOwnedWordPosition(ownerBody, sourceOffsetY, word);
+      const pos = this.skyOwnedWordPosition(ownerBody, sourceOffsetY, word, { side: owner?.side });
       const opts: TextWordTargetOptions = {
         scene: this,
         word,
@@ -3234,9 +3590,18 @@ export class SkyIslandScene extends Phaser.Scene {
             count: 7,
             depth: 58,
           });
-          step += 1;
-          this.setNarrator(narratorLines[step - 1] ?? "");
-          this.time.delayedCall(1400, advance);
+          this.clearActiveTargets();
+          owner?.onPhraseComplete?.(step);
+          const line = narratorLines[step] ?? "";
+          if (checkpointStep) this.checkpoint(checkpointStep, { ...checkpointData, index: step, reading: true });
+          if (line) {
+            this.setNarrator(line);
+            this.band.setObjective("Phrase complete. Press Enter or Space to continue.");
+            this.readThen(() => { step += 1; advance(); });
+          } else {
+            step += 1;
+            advance();
+          }
         },
       };
       const target = owner?.body?.scene
@@ -3272,11 +3637,15 @@ export class SkyIslandScene extends Phaser.Scene {
   // ─── Input ────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
-    // Ctrl+Shift+P: toggle purist mode from inside the realm.
     if (isPuristToggleKey(event)) {
+      event.preventDefault();
       togglePuristMode(this, this.store);
       return;
     }
+    if (event.ctrlKey || event.metaKey) return;
+    if (this.chapterMenu?.handleKey(event)) return;
+    if (this.reading.handleKey(event)) return;
+    if (this.ettaBookMoving) { event.preventDefault(); return; }
     if (event.key.length === 1 || event.key === " ") playClack();
     this.typingInput.handleChar(event.key);
   }
@@ -3346,6 +3715,7 @@ export class SkyIslandScene extends Phaser.Scene {
     const onComplete = opts.onComplete;
     return new TextWordTarget({
       outline: true,
+      depth: 70,
       ...opts,
       onClaim: (mods) => {
         if (opts.frame === "banner") playWrenFocus(this.wrenSprite);
@@ -3410,9 +3780,9 @@ export class SkyIslandScene extends Phaser.Scene {
           cue.y + sourceOffset.y,
           { color: PALETTE_HEX.brass, depth: 58 },
         );
-        playActorAttention(this, feedbackBody, {
+        if (groundedBeat) playActorAttention(this, feedbackBody, {
           tint: PALETTE_HEX.brass,
-          scale: groundedBeat ? 1.012 : 1.022,
+          scale: 1.012,
           durationMs: 180,
         });
         onClaim?.(mods);
@@ -3733,6 +4103,9 @@ export class SkyIslandScene extends Phaser.Scene {
   ): TextWordTarget {
     if (!body?.scene) return this.makeWord(opts);
 
+    const physicalSource = body.getData?.("sky-source-offset-y");
+    if (typeof physicalSource === "number") sourceOffsetY = physicalSource;
+    const feedbackBody = body === this.beaconFlameCue ? this.wrenContainer : body;
     const onClaim = opts.onClaim;
     const onAdvance = opts.onAdvance;
     const onComplete = opts.onComplete;
@@ -3757,7 +4130,7 @@ export class SkyIslandScene extends Phaser.Scene {
           body.y + sourceOffsetY,
           { color: PALETTE_HEX.brass, depth: 58 },
         );
-        playActorAttention(this, body, {
+        playActorAttention(this, feedbackBody, {
           tint: PALETTE_HEX.brass,
           scale: 1.022,
           durationMs: 180,
@@ -3819,78 +4192,137 @@ export class SkyIslandScene extends Phaser.Scene {
     if (!this.tetherThreadCue?.scene) {
       this.tetherThreadCue = this.createTetherThreadCue();
     }
+    // These story props outlive either choice marker and the old boss fade.
+    if (!this.fork2Scholar?.scene) {
+      const c = this.add.container(776, 710).setDepth(42).setAlpha(0);
+      c.add(addLocalGroundShadow(this, 116, 14, { y: 86, alpha: 0.08 }));
+      const spirit = this.add.image(0, 0, "scholar-spirit").setName("fading-scholar");
+      spirit.setScale(SCHOLAR_SPIRIT_HEIGHT / spirit.height);
+      c.add(spirit);
+      this.fork2Scholar = c;
+      this.tweens.add({ targets: c, alpha: 0.68, duration: 640, ease: "Sine.easeOut" });
+    }
+    if (!this.beaconFlameCue?.scene) {
+      this.beaconFlameCue = this.createBeaconFlameCue().setPosition(1140, 792);
+      if (this.fork1Choice === "steal-flame") {
+        this.beaconFlameCue.getByName("beacon-spark")?.destroy();
+        const light = this.beaconFlameCue.getByName("beacon-light");
+        if (light?.scene) { this.tweens.killTweensOf(light); light.destroy(); }
+        this.beaconFlameCue.setActive(false);
+      }
+    }
+    // In this aftermath the thread, rather than the earlier flame, is the
+    // physical source for claim lines and per-letter feedback.
+    this.beaconFlameCue.setData("sky-source-offset-y", -95);
+    if (!this.fork2Tether?.scene) {
+      const c = this.add.container(0, 0).setDepth(41).setAlpha(0);
+      const from = new Phaser.Math.Vector2(this.fork2Scholar.x + 40, this.fork2Scholar.y);
+      const to = new Phaser.Math.Vector2(this.beaconFlameCue.x, this.beaconFlameCue.y - 95);
+      const curve = new Phaser.Curves.CubicBezier(from,
+        new Phaser.Math.Vector2(from.x + 54, 450), new Phaser.Math.Vector2(to.x - 90, 450), to);
+      const thread = this.add.graphics();
+      thread.lineStyle(2.5, 0xffe4a8, 0.84);
+      thread.strokePoints(curve.getPoints(40));
+      c.add(thread);
+      this.fork2Tether = c;
+      this.tweens.add({ targets: c, alpha: 0.72, duration: 640, ease: "Sine.easeOut" });
+    }
+  }
+
+  private releaseFork2Spirit(immediate = false): void {
+    const props = [this.fork2Scholar, this.fork2Tether];
+    this.fork2Scholar = null;
+    this.fork2Tether = null;
+    for (const prop of props) {
+      if (!prop?.scene) continue;
+      if (immediate) { this.tweens.killTweensOf(prop); prop.destroy(); }
+      else this.fadeOutForkCue(prop);
+    }
   }
 
   private createBeaconFlameCue(): Phaser.GameObjects.Container {
+    // The terrace and its masonry share a fixed contact point. Only the light
+    // changes; the physical beacon never rises, breathes or scales on claim.
     const c = this.add.container(1320, 792).setDepth(42).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 126, 18, { y: 14, alpha: 0.18 }));
-    const g = this.add.graphics();
-    g.fillStyle(0x3b3025, 0.82);
-    g.fillRoundedRect(-44, -38, 88, 46, 12);
-    g.lineStyle(2, PALETTE_HEX.brass, 0.42);
-    g.strokeRoundedRect(-44, -38, 88, 46, 12);
-    g.fillStyle(PALETTE_HEX.brass, 0.78);
-    g.fillTriangle(0, -126, -24, -62, 22, -62);
-    g.fillStyle(0xfff0a8, 0.58);
-    g.fillTriangle(4, -110, -12, -68, 18, -68);
-    g.lineStyle(2, 0xffd989, 0.38);
-    g.strokeEllipse(0, -78, 86, 54);
-    g.strokeEllipse(0, -78, 118, 76);
-    c.add(g);
+    c.setData("sky-source-offset-y", -190);
+    c.add(addLocalGroundShadow(this, 142, 18, { y: 4, alpha: 0.2 }));
+    const brazier = this.add.image(0, 0, "sky-beacon-brazier").setName("beacon-brazier");
+    this.fitBeaconPainting(brazier, 180, "brazier");
+    c.add(brazier);
+    const light = addLivingLight(this, {
+      x: 0, y: -190, width: 132, height: 144,
+      color: 0xefbd63, alpha: 0.12, depth: 42, durationMs: 2200, scale: 1.02,
+    }).setName("beacon-light");
+    c.add(light);
+    const flame = this.add.image(0, -168, "sky-beacon-flame").setName("beacon-spark");
+    this.fitBeaconPainting(flame, 70, "flame");
+    c.add(flame);
     addContainerWake(this, c, {
-      kind: "mote",
-      intervalMs: 430,
-      spreadX: 34,
-      spreadY: 20,
-      offsetY: -72,
-      alpha: 0.26,
-      size: 4,
-      depth: 41,
-      driftY: -50,
-      durationMs: 1300,
+      kind: "mote", intervalMs: 430, spreadX: 22, spreadY: 16,
+      offsetY: -190, alpha: 0.2, size: 3, depth: 41, driftY: -50, durationMs: 1300,
     });
-    this.tweens.add({
-      targets: c,
-      y: 770,
-      alpha: 0.92,
-      duration: 680,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (!c.scene) return;
-        addIdleBreath(this, c, { dy: -4, durationMs: 2500 });
-      },
-    });
+    this.tweens.add({ targets: c, alpha: 1, duration: 680, ease: "Sine.easeOut" });
     return c;
+  }
+
+  /** Fit the painted silhouette, including its real bottom contact, not padding. */
+  private fitBeaconPainting(image: Phaser.GameObjects.Image, height: number, kind: "brazier" | "flame"): void {
+    // Visible alpha bounds (>10%); faint matte-edge pixels do not define
+    // masonry contact or inflate the height of the little curl of fire.
+    const bounds = kind === "brazier"
+      ? { x: 199, y: 150, width: 865, height: 1040 }
+      : { x: 341, y: 102, width: 499, height: 1136 };
+    image.setOrigin((bounds.x + bounds.width / 2) / image.width, (bounds.y + bounds.height) / image.height);
+    image.setScale(height / bounds.height);
+  }
+
+  private dimBeaconFlameVisual(): void {
+    const cue = this.beaconFlameCue;
+    if (!cue?.scene) return;
+    const flame = cue.getByName("beacon-spark") as Phaser.GameObjects.Image | null;
+    const light = cue.getByName("beacon-light") as Phaser.GameObjects.Graphics | null;
+    flame?.setAlpha(0.62);
+    if (light?.scene) {
+      this.tweens.killTweensOf(light);
+      light.setAlpha(0.045);
+    }
+  }
+
+  private takeBeaconSparkVisual(): void {
+    const cue = this.beaconFlameCue;
+    if (!cue?.scene || cue.getData?.("beacon-spark-taken")) return;
+    cue.setData?.("beacon-spark-taken", true);
+    // Keep the empty fixture as the final phrase's owner, and move its light
+    // into the story's received state synchronously before the held response.
+    cue.getByName("beacon-spark")?.destroy();
+    cue.setActive(false);
+    this.showHeldBeaconSpark(cue);
+  }
+
+  private showHeldBeaconSpark(cue: Phaser.GameObjects.Container): void {
+    const light = cue.getByName("beacon-light");
+    if (light?.scene) {
+      this.tweens.killTweensOf(light);
+      light.destroy();
+    }
+    this.clearHeldBeaconSpark();
+    // Keep the received curl outside the cloak and readable at a 1250px
+    // viewport. Its tip stays below the hood; the base meets the hand area.
+    const flame = this.add.image(this.wrenContainer.x + 64, this.wrenContainer.y - 96, "sky-beacon-flame").setDepth(43);
+    this.fitBeaconPainting(flame, 56, "flame");
+    this.heldBeaconSpark = flame;
+  }
+
+  private clearHeldBeaconSpark(): void {
+    const spark = this.heldBeaconSpark;
+    this.heldBeaconSpark = null;
+    if (!spark?.scene) return;
+    this.tweens.killTweensOf(spark);
+    spark.destroy();
   }
 
   private createKindAnswerCue(): Phaser.GameObjects.Container {
     const c = this.add.container(700, 798).setDepth(42).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 134, 18, { y: 14, alpha: 0.18 }));
-    const g = this.add.graphics();
-    g.fillStyle(0x2c241b, 0.76);
-    g.fillRoundedRect(-54, -46, 108, 54, 14);
-    g.lineStyle(2, PALETTE_HEX.brass, 0.38);
-    g.strokeRoundedRect(-54, -46, 108, 54, 14);
-    g.lineStyle(2, 0xffe2a0, 0.42);
-    g.lineBetween(-30, -21, 30, -21);
-    g.lineBetween(-24, -6, 24, -6);
-    g.fillStyle(0xffd989, 0.58);
-    g.fillCircle(0, -80, 16);
-    g.lineStyle(2, 0xffd989, 0.28);
-    g.strokeCircle(0, -80, 32);
-    c.add(g);
-    addContainerWake(this, c, {
-      kind: "mote",
-      intervalMs: 480,
-      spreadX: 34,
-      spreadY: 16,
-      offsetY: -54,
-      alpha: 0.22,
-      size: 3.5,
-      depth: 41,
-      driftY: -44,
-      durationMs: 1250,
-    });
     this.tweens.add({
       targets: c,
       y: 778,
@@ -3907,36 +4339,6 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private createTetherThreadCue(): Phaser.GameObjects.Container {
     const c = this.add.container(1220, 798).setDepth(42).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 132, 18, { y: 14, alpha: 0.18 }));
-    const g = this.add.graphics();
-    g.lineStyle(3, PALETTE_HEX.brass, 0.42);
-    g.beginPath();
-    g.moveTo(-52, -28);
-    g.lineTo(-16, -72);
-    g.lineTo(18, -38);
-    g.lineTo(54, -92);
-    g.strokePath();
-    g.fillStyle(0x3f3120, 0.86);
-    g.fillCircle(-52, -28, 9);
-    g.fillCircle(54, -92, 10);
-    g.fillStyle(0xffe4a8, 0.62);
-    g.fillCircle(-16, -72, 6);
-    g.fillCircle(18, -38, 6);
-    g.lineStyle(1, 0xffe4a8, 0.24);
-    g.strokeEllipse(0, -58, 130, 78);
-    c.add(g);
-    addContainerWake(this, c, {
-      kind: "mote",
-      intervalMs: 500,
-      spreadX: 38,
-      spreadY: 20,
-      offsetY: -50,
-      alpha: 0.24,
-      size: 3.5,
-      depth: 41,
-      driftY: -42,
-      durationMs: 1250,
-    });
     this.tweens.add({
       targets: c,
       y: 778,
@@ -3959,7 +4361,7 @@ export class SkyIslandScene extends Phaser.Scene {
     this.tweens.killTweensOf(cue);
     this.tweens.add({
       targets: cue,
-      y: cue.y + (opts.riseY ?? -18),
+      y: cue === this.beaconFlameCue ? cue.y : cue.y + (opts.riseY ?? -18),
       alpha: 0,
       duration: opts.durationMs ?? 540,
       ease: "Sine.easeIn",
@@ -3971,7 +4373,8 @@ export class SkyIslandScene extends Phaser.Scene {
 
   private clearSkyForkCues(): void {
     this.clearForkChoiceWordAnchors();
-    for (const cue of [this.beaconFlameCue, this.kindAnswerCue, this.tetherThreadCue]) {
+    this.clearHeldBeaconSpark();
+    for (const cue of [this.beaconFlameCue, this.kindAnswerCue, this.tetherThreadCue, this.fork2Scholar, this.fork2Tether]) {
       if (!cue?.scene) continue;
       this.tweens.killTweensOf(cue);
       cue.destroy();
@@ -3979,6 +4382,8 @@ export class SkyIslandScene extends Phaser.Scene {
     this.beaconFlameCue = null;
     this.kindAnswerCue = null;
     this.tetherThreadCue = null;
+    this.fork2Scholar = null;
+    this.fork2Tether = null;
   }
 
   private makeLanternMothWord(opts: TextWordTargetOptions): TextWordTarget {
@@ -4187,7 +4592,7 @@ export class SkyIslandScene extends Phaser.Scene {
   /** Phaser update tick. Drives per-frame lantern blur on active phrases —
    *  alpha drops as a banner enters a lantern's beam, restores between. */
   update(): void {
-    if (this.activePhrases.length === 0) return;
+    if (!this.templeBeamsActive || this.activePhrases.length === 0) return;
     // Tier 4 — warm-light (Firefly Lantern / Beacon Spark / Pelt) softens the
     // lantern blur that eats untyped letters, capped at 33% so the read-ahead
     // hazard still bites. 1 − 0 = full blur with no such relic.
@@ -4200,93 +4605,123 @@ export class SkyIslandScene extends Phaser.Scene {
     }
   }
 
+  private setTempleBeamsActive(active: boolean): void {
+    this.templeBeamsActive = active;
+    if (active && this.templeLanterns.length === 0) this.drawTempleLanterns();
+    for (const lantern of this.templeLanterns) lantern.setVisible(active);
+    if (!active) {
+      for (const phrase of this.activePhrases) phrase.setBlur(0);
+    }
+  }
+
   /** Three vertical light beams that obscure phrases passing through them.
-   *  Drawn once for the entire 5-temple sequence; the SHUTDOWN hook cleans up.
+   *  Reused for moving gates, hidden for sealed scrolls and story scenes.
+   *  The SHUTDOWN hook cleans up.
    *  Beam alpha is intentionally readable but soft — the player should see the
    *  zone, but the beams shouldn't compete with the phrase banners they obscure. */
   private drawTempleLanterns(): void {
+    const rig = this.add.container(0, 0).setDepth(15);
+    const cord = this.add.graphics();
+    // These points belong to the painted left and right timber posts in the
+    // fixed1920px scene. One sagging cord supports all three trial lanterns.
+    const left = { x: 465, y: 200 };
+    const right = { x: 1720, y: 150 };
+    const cordY = (x: number): number => {
+      const t = (x - left.x) / (right.x - left.x);
+      return (1 - t) ** 2 * left.y + 2 * (1 - t) * t * 235 + t ** 2 * right.y;
+    };
+    const strokeCord = (width: number, color: number, alpha: number) => {
+      cord.lineStyle(width, color, alpha);
+      cord.beginPath();
+      for (let i = 0; i <= 32; i++) {
+        const x = left.x + (right.x - left.x) * i / 32;
+        if (i === 0) cord.moveTo(x, cordY(x));
+        else cord.lineTo(x, cordY(x));
+      }
+      cord.strokePath();
+    };
+    strokeCord(3, 0x382d24, 0.8);
+    strokeCord(1.2, 0xb4956b, 0.55);
+    rig.add(cord);
+
     for (const x of LANTERN_BLUR_XS) {
-      const g = this.add.graphics().setDepth(15);
+      const g = this.add.graphics();
       const beamTop = 220;
       const beamBottom = 660;
-      const halfWidth = LANTERN_BLUR_RADIUS;
-      // Outer halo — soft amber wash across the full blur radius
-      g.fillStyle(0xf5c842, 0.12);
-      g.fillRect(x - halfWidth, beamTop, halfWidth * 2, beamBottom - beamTop);
-      // Inner brighter core — narrower column for the "you're in the zone" cue
-      g.fillStyle(0xfdedb0, 0.18);
-      g.fillRect(x - 36, beamTop, 72, beamBottom - beamTop);
-      // Lantern body at the top of the beam
-      g.fillStyle(0xd49020, 0.85);
-      g.fillEllipse(x, beamTop + 20, 40, 54);
-      g.fillStyle(0xfdedb0, 0.95);
-      g.fillEllipse(x, beamTop + 20, 18, 24);
-      // Hanging string
-      g.lineStyle(1.5, 0x8a7060, 0.85);
-      g.beginPath();
-      g.moveTo(x, beamTop - 30);
-      g.lineTo(x, beamTop);
-      g.strokePath();
-      // Gentle pulse — the beam breathes so it doesn't feel like dead UI
-      this.tweens.add({
+      // Nested low-opacity washes feather the same blur footprint rather than
+      // drawing a hard translucent panel over the painting. Works in Canvas too.
+      for (let i = 0; i < 8; i++) {
+        const halfWidth = LANTERN_BLUR_RADIUS * (1 - i / 8);
+        const insetY = i * 3;
+        g.fillStyle(0xf5d596, 0.022);
+        g.fillRoundedRect(x - halfWidth, beamTop + insetY,
+          halfWidth * 2, beamBottom - beamTop - insetY * 2, Math.min(14, halfWidth / 2));
+      }
+      g.fillStyle(0xffedc0, 0.06);
+      g.fillRoundedRect(x - 36, beamTop + 24, 72, beamBottom - beamTop - 48, 12);
+      rig.add(g);
+
+      const eyeY = beamTop - 8;
+      cord.lineStyle(2.6, 0x382d24, 0.82);
+      cord.lineBetween(x, cordY(x), x, eyeY);
+      cord.lineStyle(1, 0xb4956b, 0.6);
+      cord.lineBetween(x, cordY(x), x, eyeY);
+      const paper = this.add.image(x, eyeY, "sky-traversal-lantern");
+      const bounds = SKY_PATH_PAINTINGS.lantern;
+      paper.setOrigin((bounds.left + bounds.right) / 2 / paper.width, bounds.top / paper.height);
+      paper.setScale(66 / (bounds.bottom - bounds.top));
+      applySceneActorLighting(this, paper);
+      rig.add(paper);
+
+      // The light breathes; the painted cage and its support stay solid.
+      decorativeTween(this, this.tweens.add({
         targets: g,
         alpha: { from: 0.85, to: 1 },
         duration: 2200 + Math.random() * 600,
         yoyo: true,
         repeat: -1,
         ease: "Sine.easeInOut",
-      });
-      this.templeLanterns.push(g);
+      }));
     }
+    this.templeLanterns.push(rig);
   }
 
   private drawAmbientLanterns(): void {
     this.clearAmbientLanterns();
-    // Decorative background lanterns hanging at various heights. These stay
-    // behind the active path cue so the opener does not read as scattered UI.
+    // Warm blooms belong to the lanterns already painted into the fixed vista.
+    // Coordinates use that painting's 1672×941 frame, so its cords and solid
+    // lanterns remain untouched while their light can answer the story.
     const lanternPositions = [
-      { x: 240, y: 420 },
-      { x: 480, y: 360 },
-      { x: 720, y: 440 },
-      { x: 960, y: 320 },
-      { x: 1200, y: 400 },
-      { x: 1440, y: 360 },
-      { x: 1680, y: 440 },
-      { x: 380, y: 540 },
-      { x: 840, y: 500 },
-      { x: 1100, y: 520 },
-      { x: 1540, y: 480 },
+      { x: 460, y: 267, width: 26, height: 44 },
+      { x: 528, y: 336, width: 20, height: 30 },
+      { x: 593, y: 341, width: 14, height: 25 },
+      { x: 717, y: 344, width: 14, height: 25 },
+      { x: 766, y: 337, width: 18, height: 30 },
+      { x: 817, y: 316, width: 14, height: 25 },
+      { x: 904, y: 329, width: 20, height: 34 },
+      { x: 947, y: 328, width: 14, height: 26 },
+      { x: 992, y: 335, width: 18, height: 32 },
+      { x: 1023, y: 330, width: 14, height: 25 },
+      { x: 1130, y: 321, width: 18, height: 32 },
+      { x: 1190, y: 316, width: 28, height: 44 },
+      { x: 1314, y: 309, width: 24, height: 40 },
+      { x: 1424, y: 233, width: 48, height: 78 },
+      { x: 1438, y: 331, width: 28, height: 42 },
     ];
 
-    lanternPositions.forEach(({ x, y }) => {
+    const scaleX = this.scale.width / 1672;
+    const scaleY = this.scale.height / 941;
+    lanternPositions.forEach(({ x, y, width, height }) => {
       const g = this.add.graphics().setDepth(-4).setAlpha(0.42);
-      // Hanging string
-      g.lineStyle(1, 0x8a7060, 0.34);
-      g.beginPath();
-      g.moveTo(x, y - 36);
-      g.lineTo(x, y - 10);
-      g.strokePath();
-      // Glow halo
-      g.fillStyle(0xf5c842, 0.045);
-      g.fillEllipse(x, y, 56, 58);
-      // Lantern body
-      g.fillStyle(0xd49020, 0.3);
-      g.fillRoundedRect(x - 10, y - 15, 20, 30, 9);
-      g.lineStyle(1.4, 0xfdedb0, 0.24);
-      g.strokeRoundedRect(x - 10, y - 15, 20, 30, 9);
-      g.fillStyle(0xfdedb0, 0.42);
-      g.fillEllipse(x, y, 8, 13);
-
-      // Gentle idle drift
-      this.tweens.add({
-        targets: g,
-        y: { from: 0, to: -6 },
-        duration: 1400 + Math.random() * 600,
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.easeInOut",
-        delay: Math.random() * 1000,
-      });
+      for (const bloom of [
+        { size: 3, alpha: 0.035, color: 0xffc65a },
+        { size: 2, alpha: 0.07, color: 0xffd378 },
+        { size: 1.2, alpha: 0.13, color: 0xffe9a3 },
+        { size: 0.65, alpha: 0.22, color: 0xfff4c3 },
+      ]) {
+        g.fillStyle(bloom.color, bloom.alpha);
+        g.fillEllipse(x * scaleX, y * scaleY, width * scaleX * bloom.size, height * scaleY * bloom.size);
+      }
       this.ambientLanterns.push(g);
     });
   }
@@ -4294,6 +4729,11 @@ export class SkyIslandScene extends Phaser.Scene {
   private setAmbientLanternFieldAlpha(alpha: number, durationMs: number): void {
     const lanterns = this.ambientLanterns.filter((g) => g.scene);
     if (lanterns.length === 0) return;
+    for (const lantern of lanterns) this.tweens.killTweensOf(lantern);
+    if (durationMs <= 0 || reducedMotion(this)) {
+      for (const lantern of lanterns) lantern.setAlpha(alpha);
+      return;
+    }
     this.tweens.add({
       targets: lanterns,
       alpha,

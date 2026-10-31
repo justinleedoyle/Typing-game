@@ -93,6 +93,9 @@ export interface MovingWordEnemyConfig {
   idleBobMs?: number;
   /** The word floats this far above the body's y. Default −90 (Forge −100, Wood −80). */
   anchorOffsetY?: number;
+  /** Optional stable horizontal word lane. Bodies still advance normally; the
+   * tether connects them to this readable answer instead of converging labels. */
+  wordAnchorX?: number;
   /** Body fade-up distance and duration on defeat. Defaults −50 / 480. */
   defeatRiseY?: number;
   defeatMs?: number;
@@ -237,6 +240,8 @@ export class MovingWordEnemy {
     config.scene.tweens.add({
       targets: config.container,
       x: config.restX,
+      // North/south arrivals must land before their live distance is measured.
+      y: config.restY,
       alpha: this.restAlpha,
       duration: this.entranceMs,
       delay: this.entranceDelayMs,
@@ -313,11 +318,11 @@ export class MovingWordEnemy {
       duration: retreatMs,
       ease: "Sine.easeOut",
       onUpdate: () => {
-        this.wordTarget?.setAnchorX(c.x);
+        this.wordTarget?.setAnchorX(this.cfg.wordAnchorX ?? c.x);
         this.wordTarget?.setAnchorY(c.y + this.anchorOffsetY);
       },
       onComplete: () => {
-        this.wordTarget?.setAnchorX(c.x);
+        this.wordTarget?.setAnchorX(this.cfg.wordAnchorX ?? c.x);
         this.wordTarget?.setAnchorY(c.y + this.anchorOffsetY);
         this.cfg.scene.time.delayedCall(pauseMs, () => {
           if (this.defeated || !this.waveActive()) return;
@@ -431,8 +436,11 @@ export class MovingWordEnemy {
     const target = new TextWordTarget({
       scene: this.cfg.scene,
       word: this.cfg.word,
-      x: this.cfg.container.x,
+      x: this.cfg.wordAnchorX ?? this.cfg.container.x,
       y: this.cfg.restY + this.anchorOffsetY,
+      // The body advances through Wren's silhouette. Keep its answer above
+      // world actors/tethers, while the console and pause UI retain their layers.
+      depth: 70,
       fontSize: this.cfg.fontSize ?? 32,
       burstColor: this.cfg.burstColor ?? PALETTE_HEX.brass,
       caseSensitive: this.cfg.caseSensitive,
@@ -487,7 +495,7 @@ export class MovingWordEnemy {
       this.cfg.scene,
       from.x,
       from.y,
-      this.cfg.container.x,
+      this.cfg.wordAnchorX ?? this.cfg.container.x,
       this.cfg.container.y + this.anchorOffsetY,
       { color: this.cfg.claimLineColor },
     );
@@ -633,7 +641,7 @@ export class MovingWordEnemy {
         if (this.cfg.verticalOffset) {
           container.y = this.cfg.verticalOffset(this.cfg.restY, tween.progress);
         }
-        this.wordTarget.setAnchorX(container.x);
+        this.wordTarget.setAnchorX(this.cfg.wordAnchorX ?? container.x);
         // Track the body's y ONLY when the advance itself drives it — a weave
         // (Winter circler) or a diagonal close (Wood). For a straight horizontal
         // advance the word holds its attach-time y, so it doesn't ride the idle
@@ -727,6 +735,10 @@ export class MovingWordEnemy {
   }
 
   private reachWren(): void {
+    // A fully typed word is already safe while its exit animation finishes.
+    // Its completion callback will defeat this body; contact during that
+    // short animation must not charge a hit or replace its completed target.
+    if (this.wordTarget?.isComplete()) return;
     // The hit feel runs FIRST — it may end the wave (a Winter candle loss tears
     // every enemy down via dismiss()). If it did, stop here: the scene owns
     // teardown and there's nothing to knock back. Otherwise drop the timed-out

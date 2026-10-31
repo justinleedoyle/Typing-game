@@ -12,6 +12,8 @@ import Phaser from "phaser";
 import { getRunaLine } from "../audio/runaLines";
 import { PALETTE, SERIF } from "./palette";
 import { UI_CSS, UI_HEX } from "./ui/uiTheme";
+import type { SaveStore } from "./saveState";
+import { PRESENTATION_CHANGED } from "./presentation";
 
 const DEFAULT_Y = 150;
 const DEFAULT_WORD_WRAP = 1400;
@@ -23,8 +25,11 @@ const DEFAULT_SPEAKER_NAME = "Runa";
 const SPEAKER_TAB_MIN_W = 86;
 const SPEAKER_TAB_PAD_X = 30;
 const SPEAKER_TAB_SIDE_PAD = 56;
+const SPEAKER_TAB_BODY_GAP = 6;
 
 interface NarrationConfig {
+  /** Chapter accessibility preferences, opt in for finished chapters. */
+  store?: SaveStore;
   /** Vertical position of the caption. Defaults to 150; Winter Mountain
    *  uses 160, Sunken Bell uses 120, GreatBattle uses 90. */
   y?: number;
@@ -66,12 +71,17 @@ export class NarrationManager {
   private cardW = 0;
   private cardH = 0;
   private renderedLineKey = "";
+  private currentSpeaker: string | null = null;
+  private readonly store?: SaveStore;
+  private readonly preferredY: number;
+  private readonly maxSpeakerTabWidth: number;
   private readonly onSpeak?: (speakerName: string | null, text: string) => void;
 
   constructor(
     private readonly scene: Phaser.Scene,
     config: NarrationConfig = {},
   ) {
+    this.store = config.store;
     this.framed = config.framed === true;
     this.defaultSpeakerName = config.speakerName === undefined
       ? DEFAULT_SPEAKER_NAME
@@ -79,6 +89,11 @@ export class NarrationManager {
     this.onSpeak = config.onSpeak;
     const cx = scene.scale.width / 2;
     const cy = config.y ?? DEFAULT_Y;
+    this.preferredY = cy;
+    this.maxSpeakerTabWidth = Math.max(SPEAKER_TAB_MIN_W, Math.min(
+      config.wordWrapWidth ?? FRAMED_WORD_WRAP,
+      scene.scale.width - 96,
+    ));
 
     if (this.framed) {
       // Card: dark ink text on a parchment plate, sized to each line in sayRaw.
@@ -128,6 +143,10 @@ export class NarrationManager {
       if (config.depth !== undefined) this.text.setDepth(config.depth);
     }
 
+    const apply = () => this.applyPreferences();
+    scene.events.on(PRESENTATION_CHANGED, apply);
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(PRESENTATION_CHANGED, apply));
+    this.applyPreferences();
     const root = this.container ?? this.text;
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => root.destroy());
     scene.events.once(Phaser.Scenes.Events.DESTROY, () => root.destroy());
@@ -148,6 +167,8 @@ export class NarrationManager {
     const h = Math.max(56, this.text.height + CARD_PAD_Y * 2);
     this.cardW = w;
     this.cardH = h;
+    // Long/large captions must leave room for the speaker tab above the card.
+    this.container?.setY(Math.max(this.preferredY, h / 2 + 52));
     this.cardBg.clear();
     this.cardBg.fillStyle(UI_HEX.parchment, 0.96);
     this.cardBg.fillRoundedRect(-w / 2, -h / 2, w, h, 10);
@@ -167,7 +188,7 @@ export class NarrationManager {
       const tabW = Math.max(SPEAKER_TAB_MIN_W, this.speakerText.width + SPEAKER_TAB_PAD_X);
       const tabH = Math.max(28, this.speakerText.height + 10);
       const tabX = -w / 2 + 28;
-      const tabY = -h / 2 - tabH / 2 + 5;
+      const tabY = -h / 2 + CARD_PAD_Y - SPEAKER_TAB_BODY_GAP - tabH;
       this.speakerBg.clear();
       this.speakerBg.fillStyle(UI_HEX.frame, 0.98);
       this.speakerBg.fillRoundedRect(tabX, tabY, tabW, tabH, 6);
@@ -187,18 +208,28 @@ export class NarrationManager {
     }
     const label = this.formatSpeakerName(name);
     this.speakerText
-      .setFontSize(label.includes("\n") ? 14 : 17)
+      .setFontSize(17)
       .setText(label)
       .setVisible(true);
+    // Measure one readable line rather than inserting a name break into a
+    // short ribbon. Bound exceptional labels to the caption's normal width.
+    const maxTextWidth = this.maxSpeakerTabWidth - SPEAKER_TAB_PAD_X;
+    if (this.speakerText.width > maxTextWidth) {
+      let lo = 0;
+      let hi = label.length;
+      while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2);
+        this.speakerText.setText(`${label.slice(0, mid).trimEnd()}…`);
+        if (this.speakerText.width <= maxTextWidth) lo = mid;
+        else hi = mid - 1;
+      }
+      this.speakerText.setText(`${label.slice(0, lo).trimEnd()}…`);
+    }
     this.speakerBg.setVisible(true);
   }
 
   private formatSpeakerName(name: string): string {
-    if (name.length <= 12) return name;
-    if (name.includes("-")) return name.replace("-", "-\n");
-    const words = name.split(/\s+/);
-    if (words.length > 1) return `${words[0]}\n${words.slice(1).join(" ")}`;
-    return name;
+    return name.replace(/\s+/g, " ").trim();
   }
 
   /** Render a canonical Runa line by ID. Falls back to sayRaw() if the ID is
@@ -231,20 +262,34 @@ export class NarrationManager {
       : opts.speakerName;
     const lineKey = `${speakerName ?? ""}\n${text}`;
     const changed = lineKey !== this.renderedLineKey;
+    this.applyPreferences();
+    this.currentSpeaker = speakerName;
     this.text.setText(text);
     if (this.framed) this.setSpeaker(speakerName);
     if (this.framed) this.redrawCard();
     if (text) this.onSpeak?.(speakerName, text);
     const root = this.container ?? this.text;
+    this.scene.tweens.killTweensOf(root);
     root.setAlpha(0);
-    if (this.framed && changed) this.playCardWake();
+    if (this.framed && changed && !this.store?.get().reducedMotion) this.playCardWake();
     this.renderedLineKey = lineKey;
     this.scene.tweens.add({
       targets: root,
       alpha: 1,
-      duration: FADE_DURATION_MS,
+      duration: this.store?.get().reducedMotion ? 0 : FADE_DURATION_MS,
       ease: "Sine.easeOut",
     });
+  }
+
+  /** Presentation only: no story callbacks or checkpoint/reward changes. */
+  replay(): void {
+    if (this.text.text) this.sayRaw(this.text.text, { speakerName: this.currentSpeaker });
+  }
+
+  private applyPreferences(): void {
+    const large = this.store?.get().textScale === "large";
+    this.text.setFontSize(large ? (this.framed ? 37 : 40) : (this.framed ? 30 : 32));
+    if (this.framed && this.text.text) this.redrawCard();
   }
 
   /** Clear the caption immediately (no fade). */
@@ -284,6 +329,11 @@ export class NarrationManager {
         },
       });
     });
+  }
+
+  /** Bottom edge in design pixels, for positioning an explicit reading hint. */
+  bottom(): number {
+    return this.container ? this.container.y + this.cardH / 2 : this.text.y + this.text.height / 2;
   }
 
   /** Current visible caption — used by scenes that gate logic on "is the

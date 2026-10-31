@@ -1,16 +1,15 @@
 // Bridge an on-screen keyboard into the rest of the game on touch devices.
 //
 // Phaser's keyboard plugin listens for native `keydown` events on `window`.
-// Mobile browsers never fire those for character keys unless a text input is
-// focused, and there's no text input in the game itself -- the canvas takes
+// Mobile browsers do not reliably fire those for character keys, and there's
+// no text input in the game itself -- the canvas takes
 // `keydown` straight off the OS keyboard on desktop, which doesn't exist on
 // a phone.
 //
 // Trick: keep a hidden, always-empty <input> in the DOM. Tap on the canvas
 // focuses it, which pops the on-screen keyboard up. For every character the
-// user types, synthesize a `KeyboardEvent('keydown')` on `window` with the
-// matching `key` -- Phaser's pipeline picks it up unchanged, every scene's
-// onKeyDown handler runs the same code path it does on desktop.
+// user types without a matching native keydown, synthesize a keydown on window.
+// Phaser's pipeline picks it up unchanged, so every scene uses the desktop path.
 
 const isTouchDevice = (): boolean =>
   "ontouchstart" in window || navigator.maxTouchPoints > 0;
@@ -51,21 +50,36 @@ export function installMobileKeyboardBridge(): void {
     );
   };
 
+  // A hardware keyboard (and some software keyboards) sends both keydown and
+  // input while this field is focused. The native key already bubbles to
+  // Phaser; synthesize only text that did not arrive through that same key.
+  let nativeKey: string | null = null;
+  input.addEventListener("keydown", (event) => {
+    nativeKey = !event.isComposing && !event.ctrlKey && !event.metaKey &&
+      (event.key.length === 1 || event.key === "Enter") ? event.key : null;
+  });
+  input.addEventListener("keyup", (event) => {
+    if (event.key === nativeKey) nativeKey = null;
+  });
+  input.addEventListener("blur", () => { nativeKey = null; });
+
   // `input` events fire reliably on iOS Safari and Android Chrome for every
   // composed character. `keydown` does not (autocorrect, swipe-typing, etc.).
   input.addEventListener("input", (e) => {
     const ie = e as InputEvent;
+    const precedingKey = nativeKey;
+    nativeKey = null;
     // Always clear so the field never accumulates -- otherwise iOS would
     // start trying to autocorrect and re-emit the whole word on next tap.
     input.value = "";
 
     if (ie.inputType === "insertLineBreak") {
-      dispatchKey("Enter");
+      if (precedingKey !== "Enter") dispatchKey("Enter");
       return;
     }
 
     const data = ie.data;
-    if (!data) return;
+    if (!data || data === precedingKey) return;
     for (const ch of data) {
       dispatchKey(ch);
     }

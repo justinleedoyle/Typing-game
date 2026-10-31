@@ -1,3 +1,9 @@
+import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
+import { installChapterMenu } from "../game/ui/pauseMenu";
+import { applySceneActorLighting } from "../game/actorLighting";
+import { rememberRealmFork, resolveRealmFork, resolveCompanionDecision, rememberCompanionDecision, type RealmFork } from "../game/realmChoices";
+import { ChapterReading } from "../game/ui/chapterReading";
+import { reducedFlashes, reducedMotion } from "../game/presentation";
 import Phaser from "phaser";
 import { type AmbientHandle, playAmbientWood } from "../audio/ambient";
 import { playChime } from "../audio/chime";
@@ -27,7 +33,8 @@ import {
 } from "../game/oneShotInvocation";
 import { OneShotInvoker, type OneShotThreat } from "../game/oneShotInvoker";
 import { tripMostAdvancedFoe } from "../game/companionTrip";
-import type { SaveStore } from "../game/saveState";
+import type { SaveStore, SaveCheckpoint } from "../game/saveState";
+import { WOOD_STEPS, woodStep, woodIndex, type WoodStep } from "../game/woodCheckpoint";
 import { TypingInputController } from "../game/typingInput";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import {
@@ -40,7 +47,6 @@ import {
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import {
   addAmbientDrift,
-  addBackdropDrift,
   addContainerWake,
   attachWordBodyAnchor,
   dismissCompanionCameo,
@@ -75,9 +81,15 @@ import { showAlmanacStampCard } from "../game/ui/almanacStamp";
 import hauntedWoodBackdrop from "../../art/references/haunted-wood-clean.png";
 import woodGhostSprite from "../../art/wood/ghost.png";
 import ghostKingSprite from "../../art/wood/ghost-king.png";
+import rootThroneSprite from "../../art/wood/root-throne.png";
 import runaPortrait from "../../art/runa/runa-front.png";
 import wispCatSprite from "../../art/companions/wisp-cat.png";
 import snowFoxSprite from "../../art/companions/snow-fox.png";
+import groveFireSprite from "../../art/effects/grove-fire.png";
+import boneFluteSprite from "../../art/relics/bone-flute.png";
+import ashVialSprite from "../../art/relics/ash-vial.png";
+import offeringShrineSprite from "../../art/wood/offering-shrine.png";
+import fluteHollowSprite from "../../art/wood/flute-hollow.png";
 
 interface HauntedWoodSceneData {
   store: SaveStore;
@@ -102,7 +114,9 @@ const WOOD_NORTH_GHOST_REST_Y = 340;
 const WOOD_SOUTH_GHOST_REST_Y = 792;
 const WOOD_SIDE_GHOST_REST_Y = 704;
 const WOOD_SIDE_GHOST_STEP_Y = 46;
+const WOOD_BRANCH_WORD_Y = 500;
 const GHOST_KNOCKBACK_PAUSE_MS = 1800;
+const WARD_INPUT_HINT = "At · use the approach mark: above . / below ! / left , / right ?; type the other letters.";
 
 // Ghost advance durations (ms). Words with punctuation chars are faster.
 const GHOST_ADVANCE_SLOW = 18000;
@@ -142,8 +156,14 @@ function hasPunctuation(word: string): boolean {
 
 export class HauntedWoodScene extends Phaser.Scene {
   private store!: SaveStore;
+  private resumeCheckpoint: SaveCheckpoint | null = null;
+  private checkpointStep: WoodStep = "arrival";
+  private combatSatchel: string[] = [];
+  private usedOneShots: OffensiveOneShot[] = [];
   private typingInput!: TypingInputController;
   private narration!: NarrationManager;
+  private reading!: ChapterReading;
+  private chapterMenu?: ReturnType<typeof installChapterMenu>;
   private band!: ConsoleBand;
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
@@ -180,9 +200,16 @@ export class HauntedWoodScene extends Phaser.Scene {
   private oneShotInvoker: OneShotInvoker<MovingWordEnemy> | null = null;
 
   private mistTimer: Phaser.Time.TimerEvent | null = null;
+  private wardPracticeActive = false;
+  private wardPracticeBody: Phaser.GameObjects.Container | null = null;
+  private wardPracticeTarget: TextWordTarget | null = null;
+  private wardPracticeGeneration = 0;
   private shrineFigure: Phaser.GameObjects.Container | null = null;
   private offeringCue: Phaser.GameObjects.Container | null = null;
   private boneFluteCue: Phaser.GameObjects.Container | null = null;
+  private boneFluteProp: Phaser.GameObjects.Image | null = null;
+  private heldWoodRelic: Phaser.GameObjects.Image | null = null;
+  private fluteHandoffPending = false;
   private groveLightCue: Phaser.GameObjects.Container | null = null;
   private forkChoiceWordAnchors: WordBodyAnchorHandle[] = [];
   private pathCue: Phaser.GameObjects.Container | null = null;
@@ -211,17 +238,33 @@ export class HauntedWoodScene extends Phaser.Scene {
   init(data: HauntedWoodSceneData): void {
     this.revisit = data.revisit === true;
     this.store = data.store;
+    const saved = this.store.get();
+    this.resumeCheckpoint = !this.revisit && !saved.realms["haunted-wood"]?.cleared
+      && saved.checkpoint?.scene === "HauntedWoodScene" ? saved.checkpoint : null;
+    this.checkpointStep = woodStep(this.resumeCheckpoint?.step);
+    this.combatSatchel = typeof this.resumeCheckpoint?.data.combatSatchel === "string"
+      ? this.resumeCheckpoint.data.combatSatchel.split(",").filter(Boolean) : [...saved.satchel];
+    this.usedOneShots = typeof this.resumeCheckpoint?.data.spentOneShots === "string"
+      ? this.resumeCheckpoint.data.spentOneShots.split(",").filter((effect): effect is OffensiveOneShot => ["toll-strike", "bind-beat", "jam-foe"].includes(effect)) : [];
     this.ghosts = [];
     this.activeTargets = [];
     this.oneShotInvoker = null;
     this.onWaveCleared = null;
-    this.fork1Choice = null;
-    this.fork2Choice = null;
-    this.companionChoice = null;
+    this.fork1Choice = resolveRealmFork("haunted-wood", "fork1", this.store.get().realms["haunted-wood"], this.store.get().satchel) as typeof this.fork1Choice;
+    this.fork2Choice = resolveRealmFork("haunted-wood", "fork2", this.store.get().realms["haunted-wood"], this.store.get().satchel) as typeof this.fork2Choice;
+    const companion = resolveCompanionDecision("haunted-wood", this.store.get().realms["haunted-wood"], this.store.get().satchel);
+    this.companionChoice = companion === "accepted" ? "call" : companion === "declined" ? "leave" : null;
     this.mistTimer = null;
+    this.wardPracticeActive = false;
+    this.wardPracticeBody = null;
+    this.wardPracticeTarget = null;
+    this.wardPracticeGeneration += 1;
     this.shrineFigure = null;
     this.offeringCue = null;
     this.boneFluteCue = null;
+    this.boneFluteProp = null;
+    this.heldWoodRelic = null;
+    this.fluteHandoffPending = false;
     this.groveLightCue = null;
     this.forkChoiceWordAnchors = [];
     this.snowFoxTripNoticed = false;
@@ -243,24 +286,38 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   preload(): void {
+    beginAssetLoad(this);
     this.load.image("haunted-wood-backdrop", hauntedWoodBackdrop);
     this.load.image("wood-ghost", woodGhostSprite);
     this.load.image("ghost-king", ghostKingSprite);
+    this.load.image("wood-root-throne", rootThroneSprite);
     this.load.image("wood-companion-wisp-cat", wispCatSprite);
     this.load.image("wood-companion-snow-fox", snowFoxSprite);
+    this.load.image("wood-grove-fire", groveFireSprite);
+    this.load.image("wood-bone-flute", boneFluteSprite);
+    this.load.image("wood-ash-vial", ashVialSprite);
+    this.load.image("wood-offering-shrine", offeringShrineSprite);
+    this.load.image("wood-flute-hollow", fluteHollowSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
     preloadWren(this);
   }
 
   create(): void {
+    if (assetLoadBlocked(this)) return;
+    this.chapterMenu = installChapterMenu(this, {
+      store: this.store,
+      hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),
+      onLeave: () => this.scene.start("PortalChamberScene", { store: this.store }),
+      leaveHint: "Your progress is saved. Returning resumes this part of the journey; an unfinished encounter restarts from its entry state.",
+    });
     this.cameras.main.fadeIn(600, 14, 18, 14);
-    const backdrop = this.add
+    // The painted floor and its rooted props share one fixed physical frame.
+    this.add
       .image(0, 0, "haunted-wood-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
-    addBackdropDrift(this, backdrop, { durationMs: 20000, driftX: -4, driftY: -3 });
     this.ambientMistFields.push(
       addAmbientDrift(this, {
         kind: "mist",
@@ -360,7 +417,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     // Resolved here (before the band) so the console band can show the passive
     // relic icons. Wood is the richest satchel; neutral on a revisit.
     this.combat = resolveCombatLoadout(
-      this.revisit ? [] : this.store.get().satchel,
+      this.revisit ? [] : this.combatSatchel,
       "haunted-wood",
     );
 
@@ -368,6 +425,10 @@ export class HauntedWoodScene extends Phaser.Scene {
     // a vision overlay (not a bottom meter), so the satchel zone shows the passive
     // relic icon tiles; the offensive one-shots drop into the band's charge cards.
     this.band = new ConsoleBand(this, {
+      activity: () => (
+        this.wardPracticeActive
+        || this.ghosts.some(ghost => !ghost.isDefeated())
+        || (["capstone", "final1", "final2"].includes(this.checkpointStep) && this.activeTargets.some(target => !target.isComplete()))) ? "combat" : "story",
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,
@@ -380,11 +441,13 @@ export class HauntedWoodScene extends Phaser.Scene {
       framed: true,
       onSpeak: (speakerName) => this.attendSpeaker(speakerName),
     });
+    this.reading = new ChapterReading(this, () => Math.max(316, this.narration.bottom() + 40));
 
     this.typingInput = new TypingInputController(this.store);
     this.typingInput.setKeystrokeHooks({
       onCorrect: () => bobWrenSprite(this.wrenSprite),
       onMiss: () => {
+        if (this.wardPracticeActive) return;
         // forgive-wave-miss (Shrine-Token): spare the first miss of a wave its
         // flinch. Dormant on a forward run (Shrine-Token is earned here, at the
         // end), wired for consistency + revisit-combat forward-compat.
@@ -395,7 +458,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           return;
         }
         flashWrenMiss(this.wrenSprite);
-        this.cameras.main.shake(80, 0.002);
+        if (!reducedMotion(this)) this.cameras.main.shake(80, 0.002);
       },
       onClaim: () => playClaim(),
     });
@@ -424,20 +487,25 @@ export class HauntedWoodScene extends Phaser.Scene {
       scene: this,
       typingInput: this.typingInput,
       available: offensiveOneShots,
+      initialSpent: this.usedOneShots,
       cost: ONESHOT_SOUL_COST,
       getSoul: () => this.typingInput.getStats().getSoul(),
       spendSoul: (cost) => this.typingInput.getStats().spendSoul(cost),
       getThreats: () => this.liveGhostThreats(),
       applyEffect: (effect, targets) => this.applyOneShot(effect, targets),
       isActive: () =>
-        this.ghosts.length > 0 && this.ghosts.some((g) => !g.isDefeated()),
+        !this.wardPracticeActive && this.ghosts.length > 0 && this.ghosts.some((g) => !g.isDefeated()),
       announce: (text) => this.band.showNotice(text, { label: "one-shot" }),
       slots: band.oneShotSlots,
       compact: true,
     });
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
-    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.wardPracticeActive = false;
+      this.clearWardPracticeVisual();
+      this.reading.destroy();
+      this.chapterMenu?.destroy();
       this.typingInput.reset();
       this.oneShotInvoker?.destroy();
       this.oneShotInvoker = null;
@@ -466,7 +534,111 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.startRevisit();
       return;
     }
-    this.startArrival();
+    if (this.resumeCheckpoint) {
+      this.typingInput.getStats().restoreCheckpoint(this.resumeCheckpoint.data);
+      this.resumeWood(this.resumeCheckpoint);
+    } else this.startArrival();
+  }
+
+  private checkpoint(step: WoodStep, data: SaveCheckpoint["data"] = {}): void {
+    if (this.revisit || this.store.get().realms["haunted-wood"]?.cleared) return;
+    this.checkpointStep = step;
+    const stats = this.typingInput.getStats().captureCheckpoint();
+    this.store.update(state => {
+      state.realms["haunted-wood"] ??= { cleared: false, choices: {} };
+      state.checkpoint = { scene: "HauntedWoodScene", step, data: {
+        ...stats, combatSatchel: this.combatSatchel.join(","),
+        spentOneShots: this.usedOneShots.join(","), ...data,
+      } };
+    });
+  }
+
+  /** Rebuild the actors and grounded props before presenting the saved beat. */
+  private resumeWood(checkpoint: SaveCheckpoint): void {
+    const step = woodStep(checkpoint.step);
+    const index = woodIndex(checkpoint.data.index, 100);
+    const response = checkpoint.data.response === true;
+    const begun = checkpoint.data.begun === true;
+    const at = WOOD_STEPS.indexOf(step);
+    if (step !== "arrival") {
+      this.tweens.killTweensOf(this.wrenContainer);
+      this.wrenContainer.setPosition(WREN_X, WREN_Y).setScale(1).setAlpha(1);
+    }
+    if (at >= WOOD_STEPS.indexOf("inga")) {
+      this.drawInga(INGA_FOREGROUND.x, INGA_FOREGROUND.y);
+      if (at >= WOOD_STEPS.indexOf("act2") &&
+        !(this.fork1Choice === "offering" && at >= WOOD_STEPS.indexOf("offering-reward"))) this.stageIngaAtTreeLine();
+    }
+    if (at >= WOOD_STEPS.indexOf("fork1") && step !== "fork1") this.drawShrine();
+    if (["offering", "flute", "flute-reward"].includes(step)) this.showFork1Cues();
+    if (at >= WOOD_STEPS.indexOf("fork2")) {
+      this.drawGhostKing(at < WOOD_STEPS.indexOf("sealed"));
+      if (this.fork2Choice === "force" && step !== "fork2" && at < WOOD_STEPS.indexOf("sealed")) this.igniteGroveLightCue();
+    }
+    if (step === "path" || step === "inga") this.setAmbientMistFieldAlpha(0.2, 0);
+    if (at >= WOOD_STEPS.indexOf("ward")) this.ensureCompassDrawn();
+    if (at >= WOOD_STEPS.indexOf("act2")) {
+      this.setAmbientMistFieldAlpha(0.78, 0);
+      if (at < WOOD_STEPS.indexOf("fork1")) this.startWoodMist();
+    }
+    const routes: Record<WoodStep, () => void> = {
+      arrival: () => this.startArrival(),
+      path: () => {
+        if (!response && index > 0) {
+          this.showPathCue(Math.min(index - 1, 2));
+          const previous = this.pathWrenPosition(Math.min(index - 1, 2));
+          this.wrenContainer.setPosition(previous.x, previous.y);
+        } else if (!response) this.stageWrenAtPathEntrance();
+        this.startPathExploration(index, response);
+      },
+      inga: () => this.startIngaNPC(index),
+      act2: () => this.startAct2(),
+      "ward-intro": () => this.startCrossroads1(),
+      ward: () => this.startWardPractice(index, response),
+      crossroads1: () => this.beginCrossroads1(),
+      "crossroads1-cleared": () => this.onCrossroads1Cleared(),
+      "crossroads2-intro": () => this.startCrossroads2(),
+      crossroads2: () => this.beginCrossroads2(),
+      "crossroads3-intro": () => this.startCrossroads3(),
+      crossroads3: () => this.beginCrossroads3(),
+      fork1: () => this.startFork1(),
+      offering: () => this.startFork1Offering(index, response, begun),
+      "offering-reward": () => this.finishOffering(),
+      "inga-name": () => this.startIngaNameReveal(),
+      "inga-name-answer": () => this.finishIngaName(),
+      flute: () => this.startFork1BoneFlute(index, response, begun),
+      "flute-reward": () => {
+        this.fadeOutForkCue(this.offeringCue);
+        this.offeringCue = null;
+        this.settleBoneFluteInHand(() => this.finishFlute());
+      },
+      act3: () => this.startAct3(),
+      fork2: () => this.startFork2(),
+      bargain: () => this.startFork2Bargain(index, response, begun),
+      "bargain-reward": () => this.finishBargain(),
+      force: () => this.startFork2Force(),
+      "boss-intro": () => this.startBossFight(),
+      "boss-a": () => this.spawnBossWaveA(),
+      "boss-a-cleared": () => this.onBossWaveACleared(),
+      "boss-b": () => this.spawnBossWaveB(),
+      "boss-b-cleared": () => this.onBossWaveBCleared(),
+      capstone: () => this.startBossCapstone(index, begun),
+      "capstone-answer": () => this.finishCapstone(),
+      "final-intro": () => this.startFinalPassage(),
+      final1: () => this.deliverFinalPassage(index),
+      final2: () => this.deliverFinalSecondPassage(index),
+      sealed: () => this.onFinalPassageComplete(),
+      "cat-gate": () => this.startWispCatGate(),
+      "cat-answer": () => this.finishCatChoice(),
+    };
+    routes[step]();
+  }
+
+  private startWoodMist(): void {
+    this.setAmbientMistFieldAlpha(0.78, 900);
+    if (this.mistTimer) return;
+    this.mistTimer = this.time.addEvent({ delay: MIST_INTERVAL_MS,
+      callback: this.triggerMistRoll, callbackScope: this, loop: true });
   }
 
   // ─── Revisit mode ────────────────────────────────────────────────────────
@@ -493,7 +665,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
     this.setNarrator(narratorLine);
     this.band.setObjective("Type the wood memory to return to the Almanac.");
-    this.time.delayedCall(2400, () => this.deliverRevisitPassage(words));
+    this.readThen(() => this.deliverRevisitPassage(words));
   }
 
   private deliverRevisitPassage(words: string[]): void {
@@ -604,7 +776,11 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private revisitMemoryWordPosition(idx: number, total: number): { x: number; y: number } {
     const cue = this.revisitMemoryCuePosition(idx, total);
-    return { x: cue.x, y: cue.y - 110 };
+    // Long middle answers such as "remembered" must clear Wren's hood.
+    const y = Math.abs(cue.x - this.wrenContainer.x) < 160
+      ? Math.min(cue.y - 110, this.wrenContainer.y - 280)
+      : cue.y - 110;
+    return { x: cue.x, y };
   }
 
   private attachRevisitMemoryWordAnchor(target: TextWordTarget): void {
@@ -673,6 +849,8 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Act 1 — Into the Wood ────────────────────────────────────────────────
 
   private startArrival(): void {
+    this.checkpoint("arrival");
+    this.band.setObjective("Follow the path toward the lantern. Press Enter or Space when ready.");
     this.narration.say("wood_intro_arrival");
     playPortalArrivalWake(this, this.wrenContainer, {
       kind: "mist",
@@ -680,18 +858,33 @@ export class HauntedWoodScene extends Phaser.Scene {
     });
     this.setAmbientMistFieldAlpha(0.2, 520);
     this.showPathCue(0);
+    const pathReadyAt = this.time.now + 760;
     this.time.delayedCall(760, () => this.stageWrenAtPathEntrance());
-    this.time.delayedCall(1700, () => this.startPathExploration());
+    this.readThen(() => this.time.delayedCall(
+      Math.max(0, pathReadyAt - this.time.now), () => this.startPathExploration(),
+    ));
   }
 
-  private startPathExploration(): void {
+  private startPathExploration(index = 0, response = false): void {
     // Three sequential single-word beats: step, → hush. → wait?
     const beats = [
-      { word: "step,", narrator: "The path is narrow. Old roots clutch the ground." },
-      { word: "hush.", narrator: "Something listens from the canopy." },
-      { word: "wait?", narrator: "A lantern post. Someone is standing beside it." },
+      {
+        word: "step,",
+        prompt: "The path is narrow. Step over the old roots clutching the ground.",
+        narrator: "You step over the roots and find firm ground beyond them.",
+      },
+      {
+        word: "hush.",
+        prompt: "Something listens from the canopy. Keep quiet as you pass.",
+        narrator: "You fall quiet. The branches settle above you.",
+      },
+      {
+        word: "wait?",
+        prompt: "A small lantern glows farther down the path. Wait before you go closer.",
+        narrator: "You stop by the light. Something stirs beyond the trees.",
+      },
     ];
-    let i = 0;
+    let i = woodIndex(index, beats.length);
     const advance = (): void => {
       if (i >= beats.length) {
         this.dismissPathCue();
@@ -701,10 +894,10 @@ export class HauntedWoodScene extends Phaser.Scene {
       }
       const beat = beats[i];
       if (!beat) return;
-      if (i === 0) {
-        this.band.setObjective("Type the path words to reach the lantern in the trees.");
-      }
+      this.checkpoint("path", { index: i });
+      this.band.setObjective(`Type ${beat.word} including its punctuation to follow the path.`);
       this.showPathCue(i);
+      this.setNarrator(beat.prompt);
       const wordPos = this.pathWordPosition(i);
       const target = this.makeWord({
         scene: this,
@@ -726,15 +919,24 @@ export class HauntedWoodScene extends Phaser.Scene {
           this.pulsePathCue(true);
           playChime();
           this.clearActiveTargets();
+          this.checkpoint("path", { index: i, response: true });
           this.setNarrator(beat.narrator);
+          this.band.setObjective("Path cleared. Press Enter or Space to continue.");
           i += 1;
-          this.time.delayedCall(1600, advance);
+          this.readThen(advance);
         },
       });
       this.attachPathCueWordAnchor(i, target);
       this.registerActiveTarget(target);
     };
-    advance();
+    if (response && beats[i]) {
+      this.showPathCue(i);
+      const position = this.pathWrenPosition(i);
+      this.wrenContainer.setPosition(position.x, position.y);
+      this.setNarrator(beats[i]!.narrator);
+      this.band.setObjective("Path cleared. Press Enter or Space to continue.");
+      this.readThen(() => { i += 1; advance(); });
+    } else advance();
   }
 
   private pathWordPosition(idx: number): { x: number; y: number } {
@@ -1054,9 +1256,10 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   // ─── Act 1 — Inga NPC ────────────────────────────────────────────────────
 
-  private startIngaNPC(): void {
-    this.band.setObjective("Answer Inga and follow her toward the shrine.");
-    this.drawInga(INGA_FOREGROUND.x, INGA_FOREGROUND.y);
+  private startIngaNPC(phase = 0): void {
+    this.checkpoint("inga", { index: phase });
+    this.band.setObjective("Answer the lost ghost and follow her toward the shrine.");
+    if (!this.ingaFigure?.scene) this.drawInga(INGA_FOREGROUND.x, INGA_FOREGROUND.y);
 
     this.store.update((s) => {
       if (!s.almanacLore.includes("the-crossroads-ghost")) {
@@ -1065,8 +1268,9 @@ export class HauntedWoodScene extends Phaser.Scene {
     });
 
     // Inga speaks
-    this.setNarrator("i don't know my name.", "Inga");
-    this.time.delayedCall(1800, () => {
+    this.setNarrator("i don't know my name.", "Lost ghost");
+    const reply = (): void => {
+      this.checkpoint("inga", { index: 1 });
       // Wren types a reply
       const pos = this.ownerPassageWordPosition(this.ingaFigure, -62);
       const reply = this.makeIngaWord({
@@ -1077,32 +1281,33 @@ export class HauntedWoodScene extends Phaser.Scene {
         fontSize: 36,
         onComplete: () => {
           this.clearActiveTargets();
+          this.checkpoint("inga", { index: 2 });
           this.setNarrator(
             "the shrine knows. the shrine keeper might tell you.",
-            "Inga",
+            "Lost ghost",
           );
           this.pulseShrine();
-          this.time.delayedCall(2400, () => this.startAct2());
+          this.readThen(() => this.startAct2());
         },
       });
       this.registerActiveTarget(reply);
-    });
+    };
+    if (phase >= 2) {
+      this.setNarrator("the shrine knows. the shrine keeper might tell you.", "Lost ghost");
+      this.readThen(() => this.startAct2());
+    } else if (phase === 1) reply();
+    else this.readThen(reply);
   }
 
   // ─── Act 2 — Through the Wood ─────────────────────────────────────────────
 
   private startAct2(): void {
+    this.checkpoint("act2");
     this.stageIngaAtTreeLine();
-    this.setAmbientMistFieldAlpha(0.78, 900);
+    this.startWoodMist();
     this.setNarrator("The crossroads. Shapes drift between the trees.");
-    // Schedule first mist roll during Act 2
-    this.mistTimer = this.time.addEvent({
-      delay: MIST_INTERVAL_MS,
-      callback: this.triggerMistRoll,
-      callbackScope: this,
-      loop: true,
-    });
-    this.time.delayedCall(1200, () => this.startCrossroads1());
+    this.band.setObjective("Press Enter or Space to learn the ward marks.");
+    this.readThen(() => this.startCrossroads1());
   }
 
   /** Keep Inga present at the crossroads without leaving her as a combat prop. */
@@ -1184,27 +1389,122 @@ export class HauntedWoodScene extends Phaser.Scene {
   // Encounter 1: 3 ghosts — west, east, north. Introduces 3 of 4 directions
   // gently so the player can learn each punctuation glyph in turn.
   private startCrossroads1(): void {
+    this.checkpoint("ward-intro");
+    this.wardPracticeActive = true;
+    if (this.mistTimer) this.mistTimer.paused = true;
+    this.narration.say("wood_crossroads1_intro");
+    this.band.setObjective(WARD_INPUT_HINT);
     // Tier 4 — announce the relic loadout once before the realm's first combat,
     // then begin. Empty loadout (incl. revisits) passes straight through.
+    this.readThen(() => this.startWardPractice());
+  }
+
+  /** Four waiting spirits rehearse the compass, one mark at a time. They use
+   * the real body/word rendering and controller, without an enemy deadline. */
+  private startWardPractice(index = 0, response = false): void {
+    index = woodIndex(index, 4);
+    this.checkpoint("ward", { index, response });
+    const directions: readonly WoodDirection[] = ["north", "south", "west", "east"];
+    const direction = directions[index];
+    if (!direction) { this.finishWardPractice(); return; }
+    this.clearWardPracticeVisual();
+    this.clearActiveTargets();
+    this.ghosts = [];
+    this.wardPracticeActive = true;
+    if (this.mistTimer) this.mistTimer.paused = true;
+    this.ensureCompassDrawn();
+    const teaching = {
+      north: { side: "above", name: "period", mark: ".", compass: 0 },
+      south: { side: "below", name: "exclamation mark", mark: "!", compass: 1 },
+      west: { side: "the left", name: "comma", mark: ",", compass: 3 },
+      east: { side: "the right", name: "question mark", mark: "?", compass: 2 },
+    }[direction];
+    this.compassGlyphs.forEach((glyph, i) => glyph.setAlpha(i === teaching.compass ? 1 : 0.4));
+    if (response) {
+      this.setNarrator(`The ${teaching.name} wards the spirit from ${teaching.side}. It fades back into the trees.`);
+      this.band.setObjective(index === directions.length - 1
+        ? "All four marks practiced. Press Enter or Space to meet the crossroads spirits."
+        : "Mark practiced. Press Enter or Space for the next direction.");
+      this.readThen(() => index === directions.length - 1 ? this.finishWardPractice() : this.startWardPractice(index + 1));
+      return;
+    }
+    const word = woodWardWord("howl", direction);
+    const article = teaching.name === "exclamation mark" ? "an" : "a";
+    this.setNarrator(`A spirit comes from ${teaching.side}. Put ${article} ${teaching.name} (${teaching.mark}) in its hidden dot: ${word}. This spirit will wait.`);
+    this.band.setObjective(`Practice ${index + 1}/4: type ${word}. No deadline; a wrong key simply waits.`);
+    const position = this.spawnPositionFor(direction, 0);
+    const body = this.add.container(position.startX, position.startY).setAlpha(0.6);
+    this.drawGhostInto(body, true);
+    this.wardPracticeBody = body;
+    const generation = this.wardPracticeGeneration;
+    this.tweens.add({
+      targets: body, x: position.restX, y: position.restY,
+      duration: reducedMotion(this) ? 0 : 900, ease: "Sine.easeOut",
+      onComplete: () => {
+        if (!this.wardPracticeActive || this.wardPracticeGeneration !== generation || this.wardPracticeBody !== body) return;
+        const target = this.makeWord({
+          scene: this, word, x: position.restX,
+          y: Math.max(this.narration.bottom() + 48, position.restY - 92),
+          fontSize: 38, maskMarks: true,
+          onComplete: () => {
+            if (!this.wardPracticeActive || this.wardPracticeTarget !== target) return;
+            this.clearWardPracticeVisual();
+            playChime();
+            this.checkpoint("ward", { index, response: true });
+            this.setNarrator(`The ${teaching.name} wards the spirit from ${teaching.side}. It fades back into the trees.`);
+            this.band.setObjective(index === directions.length - 1
+              ? "All four marks practiced. Press Enter or Space to meet the crossroads spirits."
+              : "Mark practiced. Press Enter or Space for the next direction.");
+            this.readThen(() => index === directions.length - 1
+              ? this.finishWardPractice() : this.startWardPractice(index + 1));
+          },
+        });
+        this.wardPracticeTarget = target;
+        this.registerActiveTarget(target);
+      },
+    });
+  }
+
+  private clearWardPracticeVisual(): void {
+    this.wardPracticeGeneration += 1;
+    if (this.wardPracticeTarget) {
+      const target = this.wardPracticeTarget;
+      this.typingInput.unregister(target);
+      target.destroy();
+      this.activeTargets = this.activeTargets.filter((value) => value !== target);
+      this.wardPracticeTarget = null;
+    }
+    if (this.wardPracticeBody?.scene) {
+      this.tweens.killTweensOf(this.wardPracticeBody);
+      this.wardPracticeBody.destroy();
+    }
+    this.wardPracticeBody = null;
+  }
+
+  private finishWardPractice(): void {
+    this.clearWardPracticeVisual();
+    this.wardPracticeActive = false;
+    this.compassGlyphs.forEach((glyph) => glyph.setAlpha(0.5));
     this.announceCombatLoadout(() => this.beginCrossroads1());
   }
 
   private beginCrossroads1(): void {
+    this.checkpoint("crossroads1");
+    this.wardPracticeActive = false;
+    if (this.mistTimer) this.mistTimer.paused = false;
     playWaveSting();
-    this.cameras.main.shake(220, 0.005);
+    if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseWoodWave();
-    this.band.setObjective("Use the compass marks to clear each warded word.");
+    this.band.setObjective(WARD_INPUT_HINT);
 
     const directions: WoodDirection[] = ["west", "east", "north"];
     this.ghosts = [];
     this.onWaveCleared = () => this.onCrossroads1Cleared();
     this.spawnGhostsByDirection(directions, 300);
-    this.time.delayedCall(200, () =>
-      this.narration.say("wood_crossroads1_intro"),
-    );
   }
 
   private onCrossroads1Cleared(): void {
+    this.checkpoint("crossroads1-cleared");
     // Almanac lore page 3 — the punctuation warding lesson, stamped after
     // Wren has cleared the first four-direction crossroads.
     this.store.update((s) => {
@@ -1218,11 +1518,18 @@ export class HauntedWoodScene extends Phaser.Scene {
   // Encounter 2: 4 ghosts from all four compass directions. First time
   // the player sees south, completing the punctuation set.
   private startCrossroads2(): void {
+    this.checkpoint("crossroads2-intro");
     this.narration.say("wood_crossroads2_intro");
+    this.band.setObjective("First crossroads cleared. Press Enter or Space to meet the next spirits.");
+    this.readThen(() => this.beginCrossroads2());
+  }
+
+  private beginCrossroads2(): void {
+    this.checkpoint("crossroads2");
     playWaveSting();
-    this.cameras.main.shake(220, 0.005);
+    if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseWoodWave();
-    this.band.setObjective("Watch all four compass marks through the mist.");
+    this.band.setObjective(WARD_INPUT_HINT);
 
     const directions: WoodDirection[] = ["north", "south", "east", "west"];
     this.ghosts = [];
@@ -1250,19 +1557,9 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private quietLordIntrusionAnchor(): { x: number; y: number } {
-    let threat: MovingWordEnemy | null = null;
-    for (const ghost of this.ghosts) {
-      if (ghost.isDefeated() || !ghost.container.scene) continue;
-      if (!threat || ghost.advanceProgress() > threat.advanceProgress()) {
-        threat = ghost;
-      }
-    }
-
-    if (!threat) return { x: this.scale.width / 2, y: 420 };
-    return {
-      x: Phaser.Math.Clamp(threat.container.x, 260, this.scale.width - 260),
-      y: Phaser.Math.Clamp(threat.container.y - 130, 280, this.scale.height - 360),
-    };
+    // Narration yields this lane before a live wave. Keeping the scar here
+    // avoids the north ghost's word at248 and the side ghosts' moving labels.
+    return { x: this.scale.width / 2, y: 120 };
   }
 
   private onCrossroads2Cleared(): void {
@@ -1273,11 +1570,18 @@ export class HauntedWoodScene extends Phaser.Scene {
   // tests that the player can handle multiple of the same punctuation in
   // a row without panicking.
   private startCrossroads3(): void {
+    this.checkpoint("crossroads3-intro");
     this.setNarrator("Older things stir. They come in pairs now.");
+    this.band.setObjective("Second crossroads cleared. Press Enter or Space to meet the paired spirits.");
+    this.readThen(() => this.beginCrossroads3());
+  }
+
+  private beginCrossroads3(): void {
+    this.checkpoint("crossroads3");
     playWaveSting();
-    this.cameras.main.shake(220, 0.005);
+    if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseWoodWave();
-    this.band.setObjective("Handle paired directions before the mist closes.");
+    this.band.setObjective(WARD_INPUT_HINT);
 
     const directions: WoodDirection[] = ["north", "north", "east", "west"];
     this.ghosts = [];
@@ -1292,6 +1596,9 @@ export class HauntedWoodScene extends Phaser.Scene {
     directions: readonly WoodDirection[],
     delayStepMs: number,
   ): void {
+    // Story remains readable at its gate, then makes room for overhead wards.
+    // The compass punctuation guide stays in the console throughout combat.
+    this.narration.clear();
     const slotCounts: Record<WoodDirection, number> = {
       north: 0,
       south: 0,
@@ -1333,10 +1640,13 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Fork 1 — The Crossroads Shrine ──────────────────────────────────────
 
   private startFork1(): void {
+    this.checkpoint("fork1");
     this.drawShrine();
     this.narration.say("wood_fork1_intro");
     this.band.setObjective("Choose an offering or the bone-flute.");
     this.showFork1Cues();
+    if (this.fork1Choice === "offering") { this.startFork1Offering(); return; }
+    if (this.fork1Choice === "bone-flute") { this.startFork1BoneFlute(); return; }
 
     const offeringPos = this.ownerPassageWordPosition(this.offeringCue, -42, {
       side: "left",
@@ -1375,11 +1685,15 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   // ─── Fork 1A — Offering ───────────────────────────────────────────────────
 
-  private startFork1Offering(): void {
+  private startFork1Offering(index = 0, response = false, begun = false): void {
+    this.fork1Choice = this.commitFork("fork1", "offering") as typeof this.fork1Choice;
+    if (this.fork1Choice !== "offering") { this.startFork1BoneFlute(); return; }
     this.fadeOutForkCue(this.boneFluteCue);
     this.boneFluteCue = null;
-    this.setNarrator("Wren steps to the bowl and speaks.");
-    this.time.delayedCall(1200, () => {
+    this.checkpoint("offering", { index, response, begun });
+    this.setNarrator("The bowl waits for a word of remembrance.");
+    this.band.setObjective("Honor the lost at the shrine. Press Enter or Space to begin.");
+    const begin = (): void => {
       this.runPassageChain(
         [
           {
@@ -1388,28 +1702,19 @@ export class HauntedWoodScene extends Phaser.Scene {
           },
         ],
         () => {
-          // Shrine glows — award ally + relic
-          this.pulseShrine();
-          this.store.update((s) => {
-            if (!s.satchel.includes("shrine-token")) {
-              s.satchel.push("shrine-token");
-            }
-          });
-          playChime();
-          this.cameras.main.flash(400, 200, 220, 180, false);
-          this.setNarrator("Inga stirs. The shrine keeper whispers a name.");
-          this.returnIngaToForeground();
-          this.fadeOutForkCue(this.offeringCue);
-          this.offeringCue = null;
-          this.time.delayedCall(2000, () => this.startIngaNameReveal());
+          this.finishOffering();
         },
-        { body: this.offeringCue, sourceOffsetY: -42 },
+        { body: this.offeringCue, sourceOffsetY: -42, side: "left", checkpoint: "offering", index, response },
       );
-    });
+    };
+    if (begun) begin(); else this.readThen(begin);
   }
 
+
   private startIngaNameReveal(): void {
+    this.checkpoint("inga-name");
     this.setNarrator("Her name. Type it back to her.");
+    this.band.setObjective("Type inga to return the lost ghost's name to her.");
     const pos = this.ownerPassageWordPosition(this.ingaFigure, -62);
     const target = this.makeIngaWord({
       scene: this,
@@ -1420,14 +1725,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       onComplete: () => {
         this.clearActiveTargets();
         playChime();
-        this.store.update((s) => {
-          if (!s.almanacLore.includes("ingas-name")) {
-            s.almanacLore.push("ingas-name");
-          }
-        });
-        this.setNarrator("She looks at her hands. 'Oh,' she says. 'Oh.'");
-        this.attendInga();
-        this.time.delayedCall(2400, () => this.startAct3());
+        this.finishIngaName();
       },
     });
     this.registerActiveTarget(target);
@@ -1435,37 +1733,106 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   // ─── Fork 1B — Bone-Flute ─────────────────────────────────────────────────
 
-  private startFork1BoneFlute(): void {
+  private startFork1BoneFlute(index = 0, response = false, begun = false): void {
+    this.fork1Choice = this.commitFork("fork1", "bone-flute") as typeof this.fork1Choice;
+    if (this.fork1Choice !== "bone-flute") { this.startFork1Offering(); return; }
     this.fadeOutForkCue(this.offeringCue);
     this.offeringCue = null;
+    this.checkpoint("flute", { index, response, begun });
     this.setNarrator("The bone-flute is cold inside the stone hollow.");
-    this.time.delayedCall(1200, () => {
+    this.band.setObjective("Take the bone-flute. Press Enter or Space to begin.");
+    const begin = (): void => {
       this.runPassageChain(
         [
           { word: "reach in", narrator: "Your fingers close around it." },
-          { word: "take it", narrator: "The flute is cold. It makes no sound. The ghosts grow restless." },
+          {
+            word: "take it",
+            narrator: "The flute is cold. It makes no sound. The ghosts grow restless.",
+            beforeResponse: (onSettled) => this.settleBoneFluteInHand(onSettled),
+          },
         ],
         () => {
-          this.store.update((s) => {
-            if (!s.satchel.includes("bone-flute")) {
-              s.satchel.push("bone-flute");
-            }
-          });
-          playChime();
-          this.fadeOutForkCue(this.boneFluteCue);
-          this.boneFluteCue = null;
-          this.time.delayedCall(1600, () => this.startAct3());
+          this.finishFlute();
         },
-        { body: this.boneFluteCue, sourceOffsetY: -62 },
+        { body: this.boneFluteCue, sourceOffsetY: -62, checkpoint: "flute", index, response },
       );
-    });
+    };
+    if (begun) begin(); else this.readThen(begin);
   }
+
 
   // ─── Act 3 — The Ghost-King's Hall ────────────────────────────────────────
 
+  private finishOffering(): void {
+    this.checkpoint("offering-reward");
+    // Shrine glows — award ally + relic
+    this.pulseShrine();
+    this.store.update((s) => {
+      if (!s.satchel.includes("shrine-token")) {
+        s.satchel.push("shrine-token");
+      }
+    });
+    playChime();
+    if (!reducedFlashes(this)) this.cameras.main.flash(400, 200, 220, 180, false);
+    this.setNarrator("The lost ghost stirs. The shrine keeper whispers a name: Inga.");
+    this.band.setObjective("Shrine Token collected. Press Enter or Space to listen to the remembered name.");
+    this.returnIngaToForeground();
+    this.fadeOutForkCue(this.offeringCue);
+    this.offeringCue = null;
+    this.readThen(() => this.startIngaNameReveal());
+  }
+
+  private finishFlute(): void {
+    this.checkpoint("flute-reward");
+    this.store.update((s) => {
+      if (!s.satchel.includes("bone-flute")) {
+        s.satchel.push("bone-flute");
+      }
+    });
+    playChime();
+    this.fadeOutForkCue(this.boneFluteCue);
+    this.boneFluteCue = null;
+    this.setNarrator("The Bone-Flute joins your satchel. Restless whispers follow you beyond the shrine. The lost ghost still waits by the trees, her name unfound.");
+    this.band.setObjective("Bone-Flute collected. Press Enter or Space to continue into the wood.");
+    this.readThen(() => {
+      this.clearHeldWoodRelic();
+      this.startAct3();
+    });
+  }
+
+  private finishBargain(): void {
+    this.checkpoint("bargain-reward");
+    // Award bargain ally + relic
+    this.store.update((s) => {
+      if (!s.satchel.includes("ghost-kings-promise")) {
+        s.satchel.push("ghost-kings-promise");
+      }
+    });
+    playChime();
+    this.attendGhostKing();
+    this.setNarrator("The Ghost-King gives his promise. His test still waits among the roots.");
+    this.band.setObjective("Ghost-King's Promise collected. Press Enter or Space to face his test.");
+    this.readThen(() => this.startBossFight());
+  }
+
+  private finishIngaName(): void {
+    this.checkpoint("inga-name-answer");
+    this.store.update((s) => {
+      if (!s.almanacLore.includes("ingas-name")) {
+        s.almanacLore.push("ingas-name");
+      }
+    });
+    this.setNarrator("She looks at her hands. 'Oh,' she says. 'Oh.'", "Inga");
+    this.band.setObjective("Inga remembers. Press Enter or Space to continue.");
+    this.attendInga();
+    this.readThen(() => this.startAct3());
+  }
+
   private startAct3(): void {
+    this.checkpoint("act3");
     this.narration.say("wood_ghost_king_rise");
-    this.time.delayedCall(2200, () => {
+    this.band.setObjective("Approach the root-throne. Press Enter or Space when ready.");
+    this.readThen(() => {
       this.drawGhostKing();
       this.time.delayedCall(1200, () => this.startFork2());
     });
@@ -1474,12 +1841,15 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Fork 2 — Dialogue/Bargain ────────────────────────────────────────────
 
   private startFork2(): void {
+    this.checkpoint("fork2");
     this.setNarrator(
-      "The Ghost-King speaks in silence. You may bargain — or simply light the grove.",
+      "The Ghost-King guards these lost spirits. Ask him to remember who he is, or light his grove; fire will wake its restless dead.",
     );
     this.attendGhostKing();
     this.band.setObjective("Choose a bargain or light the grove.");
     this.showFork2Cues();
+    if (this.fork2Choice === "bargain") { this.startFork2Bargain(); return; }
+    if (this.fork2Choice === "force") { this.startFork2Force(); return; }
 
     const bargainPos = this.ownerPassageWordPosition(this.ghostKingBody, -30, {
       side: "left",
@@ -1511,14 +1881,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       onComplete: () => {
         this.clearActiveTargets();
         this.fork2Choice = "force";
-        // §5.5.5 Fork 2B — burn the grove → award Ash-Vial relic
-        this.store.update((s) => {
-          if (!s.satchel.includes("ash-vial")) s.satchel.push("ash-vial");
-        });
-        this.attendGhostKing();
-        this.fadeOutForkCue(this.groveLightCue);
-        this.groveLightCue = null;
-        this.startBossFight();
+        this.startFork2Force();
       },
     }, -58);
     this.registerActiveTarget(bargainTarget, forceTarget);
@@ -1526,12 +1889,16 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   // ─── Fork 2A — Bargain ────────────────────────────────────────────────────
 
-  private startFork2Bargain(): void {
+  private startFork2Bargain(index = 0, response = false, begun = false): void {
+    this.fork2Choice = this.commitFork("fork2", "bargain") as typeof this.fork2Choice;
+    if (this.fork2Choice !== "bargain") { this.startFork2Force(); return; }
     this.fadeOutForkCue(this.groveLightCue);
     this.groveLightCue = null;
+    this.checkpoint("bargain", { index, response, begun });
     this.setNarrator("The Ghost-King pauses. He turns to face you fully.");
+    this.band.setObjective("Speak to the Ghost-King. Press Enter or Space to begin the bargain.");
     this.attendGhostKing();
-    this.time.delayedCall(1600, () => {
+    const begin = (): void => {
       this.runPassageChain(
         [
           {
@@ -1548,39 +1915,55 @@ export class HauntedWoodScene extends Phaser.Scene {
           },
         ],
         () => {
-          // Award bargain ally + relic
-          this.store.update((s) => {
-            if (!s.satchel.includes("ghost-kings-promise")) {
-              s.satchel.push("ghost-kings-promise");
-            }
-          });
-          playChime();
-          this.attendGhostKing();
-          this.time.delayedCall(1400, () => this.startBossFight());
+          this.finishBargain();
         },
         {
           body: this.ghostKingBody,
           sourceOffsetY: -30,
           ghostKing: true,
           side: "left",
+          checkpoint: "bargain", index, response,
         },
       );
-    });
+    };
+    if (begun) begin(); else this.readThen(begin);
   }
+
 
   // ─── Boss Fight — two waves ────────────────────────────────────────────────
 
+  private startFork2Force(): void {
+    this.fork2Choice = this.commitFork("fork2", "force") as typeof this.fork2Choice;
+    if (this.fork2Choice !== "force") { this.startFork2Bargain(); return; }
+    this.checkpoint("force");
+    this.store.update(s => { if (!s.satchel.includes("ash-vial")) s.satchel.push("ash-vial"); });
+    this.attendGhostKing();
+    this.igniteGroveLightCue();
+    this.showGatheredAshVial();
+    this.setNarrator("The grove flares. You gather a vial of ash as the Ghost-King turns toward the fire.");
+    this.band.setObjective("Ash Vial collected. Press Enter or Space to face what the fire wakes.");
+    this.readThen(() => {
+      this.clearHeldWoodRelic();
+      this.startBossFight();
+    });
+  }
+
   private startBossFight(): void {
-    this.setNarrator("Then prove it.", "Ghost-King");
+    this.checkpoint("boss-intro");
+    this.setNarrator(this.fork2Choice === "force"
+      ? "You bring fire to my grove. Then face what it wakes."
+      : "Then prove it.", "Ghost-King");
     this.playGhostKingStagePulse();
-    this.band.setObjective("Survive the Ghost-King's warded waves.");
+    this.band.setObjective("Read the Ghost-King's challenge. Press Enter or Space to face the spirits.");
     this.ghosts = [];
-    this.time.delayedCall(800, () => this.spawnBossWaveA());
+    this.readThen(() => this.time.delayedCall(800, () => this.spawnBossWaveA()));
   }
 
   private spawnBossWaveA(): void {
+    this.checkpoint("boss-a");
+    this.band.setObjective(WARD_INPUT_HINT);
     playWaveSting();
-    this.cameras.main.shake(220, 0.005);
+    if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseWoodWave({ y: 650, ringWidth: 900, ringHeight: 210, count: 14 });
     // Wave A: three directions, slower spawn pace. The player should still
     // recognize the learned punctuation-direction mapping from Act 2.
@@ -1591,16 +1974,19 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private onBossWaveACleared(): void {
+    this.checkpoint("boss-a-cleared");
     this.setNarrator("The first wave fades. More rise.");
+    this.band.setObjective("First warding wave cleared. Press Enter or Space for the next wave.");
     this.attendGhostKing();
-    this.time.delayedCall(1200, () => this.spawnBossWaveB());
+    this.readThen(() => this.time.delayedCall(1200, () => this.spawnBossWaveB()));
   }
 
   private spawnBossWaveB(): void {
+    this.checkpoint("boss-b");
     playWaveSting();
-    this.cameras.main.shake(220, 0.005);
+    if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseWoodWave({ y: 650, ringWidth: 900, ringHeight: 210, count: 14 });
-    this.band.setObjective("South-heavy wards rise from below.");
+    this.band.setObjective(WARD_INPUT_HINT);
     // Wave B: south-heavy attack — two from below + one from above. Reads
     // as the Ghost-King's hall rising up against Wren.
     const directions: WoodDirection[] = ["south", "south", "north"];
@@ -1610,9 +1996,11 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private onBossWaveBCleared(): void {
-    this.setNarrator("The hall goes still. The Ghost-King rises fully.");
+    this.checkpoint("boss-b-cleared");
+    this.setNarrator("The clearing goes still. The Ghost-King rises fully.");
+    this.band.setObjective("Warding waves cleared. Press Enter or Space for the Ghost-King's final words.");
     this.attendGhostKing();
-    this.time.delayedCall(2200, () => this.startBossCapstone());
+    this.readThen(() => this.startBossCapstone());
   }
 
   // ─── Boss Phase 2 — Every-Punctuation Capstone ────────────────────────────
@@ -1622,8 +2010,9 @@ export class HauntedWoodScene extends Phaser.Scene {
   // (. , ? !) plus the two reserved (; :) that the player sees here for the
   // first time. Per §5.5.8 this is the boss's phase 2.
 
-  private startBossCapstone(): void {
-    this.band.setObjective("Type every punctuation mark in his final words.");
+  private startBossCapstone(index = 0, begun = false): void {
+    this.checkpoint("capstone", { index, begun });
+    this.band.setObjective("Read the final warning. Press Enter or Space to begin his words.");
     this.playGhostKingStagePulse(true);
     const dimOverlay = this.add.graphics().setDepth(40).fillStyle(0x000000, 0.4);
     dimOverlay.fillRect(0, 0, this.scale.width, this.scale.height);
@@ -1632,7 +2021,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
     this.narration.say("wood_ghost_king_phase2");
     this.attendGhostKing();
-    this.time.delayedCall(1800, () => {
+    const begin = (): void => {
       const passage = [
         "stop!",
         "who",
@@ -1646,52 +2035,66 @@ export class HauntedWoodScene extends Phaser.Scene {
         "remember.",
       ];
       this.runWordByWordPassage(passage, () => {
-        this.setNarrator("His voice fades. The mist closes around the throne.");
-        // Almanac lore page 4 — the Ghost-King's true name, stamped after
-        // his every-punctuation capstone resolves.
-        this.store.update((s) => {
-          if (!s.almanacLore.includes("ghost-kings-true-name")) {
-            s.almanacLore.push("ghost-kings-true-name");
-          }
-        });
         this.tweens.add({
           targets: dimOverlay,
           alpha: 0,
           duration: 700,
           onComplete: () => dimOverlay.destroy(),
         });
-        this.time.delayedCall(1600, () => this.startFinalPassage());
-      });
+        this.finishCapstone();
+      }, "capstone", index);
+    };
+    if (begun) begin(); else this.readThen(begin);
+  }
+
+  private finishCapstone(): void {
+    this.checkpoint("capstone-answer");
+    this.setNarrator("His voice fades. The mist closes around the throne.");
+    this.band.setObjective("His last words are heard. Press Enter or Space to continue.");
+    // Almanac lore page 4 — the Ghost-King's true name, stamped after
+    // his every-punctuation capstone resolves.
+    this.store.update((s) => {
+      if (!s.almanacLore.includes("ghost-kings-true-name")) {
+        s.almanacLore.push("ghost-kings-true-name");
+      }
     });
+    this.readThen(() => this.startFinalPassage());
   }
 
   // ─── Realm Seal — True-Name Passage ───────────────────────────────────────
 
   private startFinalPassage(): void {
+    this.checkpoint("final-intro");
     this.narration.say("wood_truename_intro");
+    this.band.setObjective("Read the wood's final passage. Press Enter or Space to begin.");
     this.attendGhostKing();
-    const passage1 = ["we", "are", "remembered.", "we", "are", "quiet."];
-    const passage2 = ["but", "we", "are", "not", "silent."];
+    this.readThen(() => this.deliverFinalPassage());
+  }
 
-    this.runWordByWordPassage(passage1, () => {
-      this.time.delayedCall(800, () => {
-        this.runWordByWordPassage(passage2, () => {
-          this.onFinalPassageComplete();
-        });
-      });
-    });
+  private deliverFinalPassage(index = 0): void {
+    this.runWordByWordPassage(["we", "are", "remembered.", "we", "are", "quiet."], () => {
+      this.checkpoint("final2", { index: 0 });
+      this.time.delayedCall(800, () => this.deliverFinalSecondPassage());
+    }, "final1", index);
+  }
+
+  private deliverFinalSecondPassage(index = 0): void {
+    this.runWordByWordPassage(["but", "we", "are", "not", "silent."],
+      () => this.onFinalPassageComplete(), "final2", index);
   }
 
   /** Present words in sequence: one TextWordTarget at a time. */
-  private runWordByWordPassage(words: string[], onDone: () => void): void {
-    let idx = 0;
+  private runWordByWordPassage(words: string[], onDone: () => void, step: WoodStep, index = 0): void {
+    let idx = woodIndex(index, words.length);
     const advance = (): void => {
+      this.checkpoint(step, { index: idx, begun: true });
       if (idx >= words.length) {
         onDone();
         return;
       }
       const word = words[idx];
       if (word === undefined) return;
+      this.band.setObjective(`Type the shown word (${idx + 1}/${words.length}), including punctuation. No spaces between prompts.`);
       const wordPos = this.ownerPassageWordPosition(this.ghostKingBody, -30, {
         side: "left",
       });
@@ -1713,6 +2116,7 @@ export class HauntedWoodScene extends Phaser.Scene {
             depth: 58,
           });
           idx += 1;
+          this.checkpoint(step, { index: idx, begun: true });
           this.clearActiveTargets();
           this.time.delayedCall(160, advance);
         },
@@ -1723,14 +2127,18 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private onFinalPassageComplete(): void {
+    this.checkpoint("sealed");
     this.clearActiveTargets();
+    this.fadeOutForkCue(this.groveLightCue, { durationMs: 800 });
+    this.groveLightCue = null;
+    this.band.setObjective("The wood's name is sealed. Read its final memory.");
     const ghostKing = this.ghostKingBody;
     const fragmentX = ghostKing?.scene ? ghostKing.x : this.scale.width / 2;
     const fragmentY = ghostKing?.scene
       ? Phaser.Math.Clamp(ghostKing.y - 92, 260, this.scale.height - 360)
       : this.scale.height / 2 - 40;
     // Ghost-King dissolves
-    this.cameras.main.flash(500, 220, 230, 210, false);
+    if (!reducedFlashes(this)) this.cameras.main.flash(500, 220, 230, 210, false);
     this.fadeGhostKingBody();
     this.narration.say("wood_ghost_king_defeated");
     // Almanac lore page 5 — the Wood's true name, stamped when the realm's
@@ -1756,11 +2164,11 @@ export class HauntedWoodScene extends Phaser.Scene {
           x: fragmentX,
           y: fragmentY,
           onDone: () => {
-            this.time.delayedCall(600, () => this.startWispCatGate());
+            this.readThen(() => this.startWispCatGate());
           },
         });
       } else {
-        this.time.delayedCall(600, () => this.startWispCatGate());
+        this.readThen(() => this.startWispCatGate());
       }
     });
   }
@@ -1768,6 +2176,10 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Wisp-cat companion gate ──────────────────────────────────────────────
 
   private startWispCatGate(): void {
+    this.checkpoint("cat-gate");
+    if (resolveCompanionDecision("haunted-wood", this.store.get().realms["haunted-wood"], this.store.get().satchel)) {
+      this.startEnding(); return;
+    }
     if (this.fork2Choice !== "bargain") {
       // Gate not met — skip straight to ending
       this.time.delayedCall(400, () => this.startEnding());
@@ -1777,8 +2189,10 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.setNarrator(
       "A small cat made of pale light watches from the root-throne. She flicks one ear.",
     );
+    this.band.setObjective("A wisp-cat watches. Press Enter or Space to meet her.");
     this.showWispCatCompanion();
-    this.time.delayedCall(1600, () => {
+    this.readThen(() => {
+      this.band.setObjective("Choose whether to call the wisp-cat or leave her in the clearing.");
       const callPos = this.ownerPassageWordPosition(this.wispCatCompanion, -58, {
         side: "left",
       });
@@ -1794,16 +2208,16 @@ export class HauntedWoodScene extends Phaser.Scene {
         frame: "banner",
         onComplete: () => {
           this.clearActiveTargets();
-          this.companionChoice = "call";
+          let accepted = false;
           this.store.update((s) => {
-            if (!s.satchel.includes("wisp-cat")) {
+            accepted = rememberCompanionDecision(s, "haunted-wood", "accepted") === "accepted";
+            if (accepted && !s.satchel.includes("wisp-cat")) {
               s.satchel.push("wisp-cat");
             }
           });
-          playChime();
-          this.setNarrator("She trots to you and curls against your satchel, glowing.");
-          this.pulseWispCatCompanion();
-          this.time.delayedCall(1800, () => this.startEnding());
+          this.companionChoice = accepted ? "call" : "leave";
+          if (!accepted) { this.startEnding(); return; }
+          this.finishCatChoice();
         },
       });
       const leaveTarget = this.makeWispCatWord({
@@ -1816,12 +2230,55 @@ export class HauntedWoodScene extends Phaser.Scene {
         onComplete: () => {
           this.clearActiveTargets();
           this.companionChoice = "leave";
-          this.setNarrator("She watches you go. Her light stays in the clearing.");
-          this.dismissWispCatCompanion(1450, 740);
-          this.time.delayedCall(1800, () => this.startEnding());
+          this.store.update(s => { rememberCompanionDecision(s, "haunted-wood", "declined"); });
+          this.finishCatChoice();
         },
       });
       this.registerActiveTarget(callTarget, leaveTarget);
+    });
+  }
+
+  private finishCatChoice(): void {
+    this.checkpoint("cat-answer");
+    this.showWispCatCompanion();
+    if (this.companionChoice === "call") {
+      playChime();
+      this.setNarrator("At your call, the wisp-cat comes closer.");
+      this.band.setObjective("The wisp-cat comes closer.");
+      this.settleWispCatByWren(() => {
+        this.setNarrator("She stands beside you, glowing softly at your feet.");
+        this.band.setObjective("Wisp-Cat joined you. Press Enter or Space to continue.");
+        this.pulseWispCatCompanion();
+        this.readThen(() => this.startEnding());
+      });
+    } else {
+      this.setNarrator("She watches you go. Her light stays in the clearing.");
+      this.band.setObjective("The wisp-cat stays in the clearing. Press Enter or Space to continue.");
+      this.dismissWispCatCompanion(1450, 740);
+      this.readThen(() => this.startEnding());
+    }
+  }
+
+  private settleWispCatByWren(onSettled: () => void): void {
+    const cat = this.wispCatCompanion;
+    if (!cat?.scene) { onSettled(); return; }
+    // Stop the throne entrance/idle so it cannot pull her back after joining.
+    // Her standing art keeps its ground shadow and the same feet origin as Wren.
+    this.tweens.killTweensOf(cat);
+    cat.setScale(1);
+    const beside = { x: this.wrenContainer.x + 136, y: this.wrenContainer.y };
+    if (reducedMotion(this)) {
+      cat.setPosition(beside.x, beside.y).setAlpha(1);
+      onSettled();
+      return;
+    }
+    this.tweens.add({
+      targets: cat,
+      ...beside,
+      alpha: 1,
+      duration: 640,
+      ease: "Sine.easeInOut",
+      onComplete: onSettled,
     });
   }
 
@@ -1871,19 +2328,19 @@ export class HauntedWoodScene extends Phaser.Scene {
   private startEnding(): void {
     this.clearActiveTargets();
     this.narration.say("wood_almanac_stamp");
+    this.band.setObjective("Wood journey complete. Press Enter or Space to return to the chamber.");
 
     this.store.update((s) => {
-      s.realms["haunted-wood"] = {
-        cleared: true,
-        choices: {
-          fork1: this.fork1Choice ?? "offering",
-          fork2: this.fork2Choice ?? "bargain",
-          companion: this.companionChoice ?? "none",
-        },
-      };
+      if (this.fork1Choice) rememberRealmFork(s, "haunted-wood", "fork1", this.fork1Choice);
+      if (this.fork2Choice) rememberRealmFork(s, "haunted-wood", "fork2", this.fork2Choice);
+      if (this.companionChoice) rememberCompanionDecision(s, "haunted-wood", this.companionChoice === "call" ? "accepted" : "declined");
+      const realm = s.realms["haunted-wood"] ?? { cleared: false, choices: {} };
+      realm.cleared = true;
+      s.realms["haunted-wood"] = realm;
+      if (!this.revisit && s.checkpoint?.scene === "HauntedWoodScene") s.checkpoint = null;
     });
 
-    this.showAlmanacStamp(() => {
+    this.readThen(() => this.showAlmanacStamp(() => {
       playRealmReturnDeparture(this, this.wrenContainer, {
         kind: "mist",
         color: PALETTE_HEX.moss,
@@ -1900,7 +2357,17 @@ export class HauntedWoodScene extends Phaser.Scene {
           },
         );
       });
-    });
+    }));
+  }
+
+  private readThen(next: () => void): void {
+    this.reading.show(next, () => this.narration.replay());
+  }
+
+  private commitFork(fork: RealmFork, requested: string): string {
+    let chosen = requested;
+    this.store.update(s => { chosen = rememberRealmFork(s, "haunted-wood", fork, requested); });
+    return chosen;
   }
 
   private showAlmanacStamp(onDone: () => void): void {
@@ -2003,7 +2470,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           sourceRadius: 32,
           targetRadius: 36,
         });
-        this.cameras.main.shake(180, 0.004);
+        if (!reducedMotion(this)) this.cameras.main.shake(180, 0.004);
         playWrenHurt(this.wrenSprite, { knockX: 0 });
         playDamageThud();
         flashDamageVignette(this);
@@ -2132,12 +2599,19 @@ export class HauntedWoodScene extends Phaser.Scene {
     const onCleared = this.onWaveCleared;
     this.ghosts = [];
     this.onWaveCleared = null;
+    const next: Partial<Record<WoodStep, WoodStep>> = {
+      crossroads1: "crossroads1-cleared", crossroads2: "crossroads3-intro", crossroads3: "fork1",
+      "boss-a": "boss-a-cleared", "boss-b": "boss-b-cleared",
+    };
+    const boundary = next[this.checkpointStep];
+    if (boundary) this.checkpoint(boundary);
     if (onCleared) this.time.delayedCall(1000, onCleared);
   }
 
   // ─── Mist roll mechanic ───────────────────────────────────────────────────
 
   private triggerMistRoll(): void {
+    if (this.wardPracticeActive) return;
     // Tier 4 — mist-clear (Wind-Phrase): the mist still rolls (ambiance) but
     // never blinds. warm-light (Firefly / Beacon / Pelt): the blind is shorter,
     // capped. Both bounded so the realm's signature mist still reads as a hazard.
@@ -2212,16 +2686,31 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Passage-chain helper ─────────────────────────────────────────────────
 
   private runPassageChain(
-    steps: Array<{ word: string; narrator: string }>,
+    steps: Array<{
+      word: string;
+      narrator: string;
+      beforeResponse?: (onSettled: () => void) => void;
+    }>,
     onDone: () => void,
     owner?: {
       body?: Phaser.GameObjects.Container | Phaser.GameObjects.Image | null | undefined;
       sourceOffsetY?: number;
       ghostKing?: boolean;
       side?: "left" | "right";
+      checkpoint?: WoodStep;
+      index?: number;
+      response?: boolean;
     },
   ): void {
-    let idx = 0;
+    let idx = woodIndex(owner?.index, steps.length);
+    const respond = (): void => {
+      const step = steps[idx];
+      if (!step) { onDone(); return; }
+      if (owner?.checkpoint) this.checkpoint(owner.checkpoint, { index: idx, response: true, begun: true });
+      this.setNarrator(step.narrator);
+      this.band.setObjective("Phrase complete. Press Enter or Space to continue.");
+      this.readThen(() => { idx += 1; advance(); });
+    };
     const advance = (): void => {
       if (idx >= steps.length) {
         onDone();
@@ -2229,6 +2718,8 @@ export class HauntedWoodScene extends Phaser.Scene {
       }
       const step = steps[idx];
       if (!step) return;
+      if (owner?.checkpoint) this.checkpoint(owner.checkpoint, { index: idx, begun: true });
+      this.band.setObjective(`Type the shown phrase (${idx + 1}/${steps.length}), including spaces and punctuation.`);
       const ownerWordPos = owner?.body?.scene
         ? this.ownerPassageWordPosition(owner.body, owner.sourceOffsetY, {
             side: owner.side,
@@ -2238,9 +2729,16 @@ export class HauntedWoodScene extends Phaser.Scene {
         scene: this,
         word: step.word,
         x: ownerWordPos?.x ?? this.scale.width / 2,
-        y: ownerWordPos?.y ?? this.scale.height - 340,
+        // A ground prop owns the phrase directly above its visible silhouette.
+        // Unowned passages keep the original high lane above Wren.
+        y: ownerWordPos?.y ?? WOOD_BRANCH_WORD_Y,
         fontSize: 36,
         onClaim: () => playWrenFocus(this.wrenSprite),
+        onAdvance: (cursor, wordLength) => {
+          // Completion fades the target before its callback runs. Protect that
+          // interval too, so an early Continue cannot become a typing miss.
+          if (step.beforeResponse && cursor === wordLength) this.fluteHandoffPending = true;
+        },
         onComplete: () => {
           playChime();
           playWrenAction(this.wrenSprite);
@@ -2252,10 +2750,10 @@ export class HauntedWoodScene extends Phaser.Scene {
             count: 7,
             depth: 58,
           });
-          idx += 1;
           this.clearActiveTargets();
-          if (step.narrator) this.setNarrator(step.narrator);
-          this.time.delayedCall(1400, advance);
+          if (owner?.checkpoint) this.checkpoint(owner.checkpoint, { index: idx, response: true, begun: true });
+          if (step.beforeResponse) step.beforeResponse(respond);
+          else respond();
         },
       };
       const target = owner?.ghostKing
@@ -2265,7 +2763,10 @@ export class HauntedWoodScene extends Phaser.Scene {
           : this.makeWord(opts);
       this.registerActiveTarget(target);
     };
-    advance();
+    if (owner?.response && steps[idx]) {
+      const step = steps[idx]!;
+      if (step.beforeResponse) step.beforeResponse(respond); else respond();
+    } else advance();
   }
 
   private ownerPassageWordPosition(
@@ -2277,6 +2778,14 @@ export class HauntedWoodScene extends Phaser.Scene {
     const side =
       opts.side === "left" ? -1 : opts.side === "right" ? 1 : body.x < this.scale.width / 2 ? 1 : -1;
     const x = Math.max(330, Math.min(this.scale.width - 330, body.x + side * 185));
+    if (body === this.groveLightCue && !body.getData?.("grove-ignited")) {
+      return { x: 520, y: WOOD_BRANCH_WORD_Y };
+    }
+    if (body === this.offeringCue || body === this.boneFluteCue) {
+      // These low, rooted props flank Wren. Center the command over the
+      // bowl/hollow rather than displacing it toward an unrelated tree.
+      return { x: body.x, y: body.y - 200 };
+    }
     const y = Math.max(330, Math.min(this.scale.height - 360, body.y + sourceOffsetY - 92));
     return { x, y };
   }
@@ -2284,9 +2793,21 @@ export class HauntedWoodScene extends Phaser.Scene {
   // ─── Input ────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
-    // Ctrl+Shift+P: toggle purist mode.
     if (isPuristToggleKey(event)) {
+      event.preventDefault();
       togglePuristMode(this, this.store);
+      return;
+    }
+    if (event.ctrlKey || event.metaKey) return;
+    if (this.chapterMenu?.handleKey(event)) return;
+    if (this.reading.handleKey(event)) return;
+    if (this.fluteHandoffPending) {
+      event.preventDefault();
+      return;
+    }
+    if (this.wardPracticeActive && event.key.length === 1 &&
+      event.key.toLowerCase() !== this.wardPracticeTarget?.remaining()[0]) {
+      this.band.setObjective("Practice: use the shown direction's mark at the dot. The spirit will wait.");
       return;
     }
     if (event.key.length === 1 || event.key === " ") {
@@ -2305,6 +2826,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     const onComplete = opts.onComplete;
     return new TextWordTarget({
       outline: true,
+      depth: 70,
       ...opts,
       onClaim: (mods) => {
         if (opts.frame === "banner") playWrenFocus(this.wrenSprite);
@@ -2520,11 +3042,13 @@ export class HauntedWoodScene extends Phaser.Scene {
           body.y + sourceOffsetY,
           { color: PALETTE_HEX.moss, depth: 58 },
         );
-        playActorAttention(this, body, {
-          tint: PALETTE_HEX.moss,
-          scale: 1.024,
-          durationMs: 180,
-        });
+        if (!body.getData?.("rooted-wood-prop")) {
+          playActorAttention(this, body, {
+            tint: PALETTE_HEX.moss,
+            scale: 1.024,
+            durationMs: 180,
+          });
+        }
         onClaim?.(mods);
       },
       onAdvance: (cursor, wordLength) => {
@@ -2583,148 +3107,158 @@ export class HauntedWoodScene extends Phaser.Scene {
     }
   }
 
-  private createOfferingCue(): Phaser.GameObjects.Container {
-    const c = this.add.container(690, 812).setDepth(42).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 122, 18, { y: 12, alpha: 0.2 }));
-
-    const g = this.add.graphics();
-    g.fillStyle(0x181510, 0.88);
-    g.fillEllipse(0, -24, 72, 24);
-    g.fillStyle(0x4c3e2c, 0.88);
-    g.fillEllipse(0, -30, 60, 18);
-    g.fillStyle(0xd7ded8, 0.34);
-    g.fillEllipse(0, -34, 38, 10);
-    g.fillStyle(PALETTE_HEX.moss, 0.6);
-    g.fillCircle(-20, -52, 6);
-    g.fillCircle(0, -60, 5);
-    g.fillCircle(22, -50, 6);
-    g.lineStyle(2, 0xd7ded8, 0.28);
-    g.strokeEllipse(0, -42, 104, 56);
-    c.add(g);
-
+  /** Solid stone/roots stay planted; only mist and the entrance alpha move. */
+  private createRootedWoodProp(
+    x: number,
+    texture: "wood-offering-shrine" | "wood-flute-hollow",
+    width: number,
+    mistOffsetY: number,
+    entranceMs: number,
+  ): Phaser.GameObjects.Container {
+    const c = this.add.container(x, 812).setDepth(42)
+      .setData("rooted-wood-prop", true).setAlpha(reducedMotion(this) ? 1 : 0);
+    c.add(addLocalGroundShadow(this, width * 0.86, 18, { y: 4, alpha: 0.24 }));
+    this.addRootedWoodPainting(c, texture, width);
     addContainerWake(this, c, {
-      kind: "mist",
-      intervalMs: 540,
-      spreadX: 34,
-      spreadY: 16,
-      offsetY: -38,
-      alpha: 0.2,
-      size: 4,
-      depth: 41,
-      driftX: 30,
-      driftY: -30,
-      durationMs: 1400,
+      kind: "mist", intervalMs: 540, spreadX: 34, spreadY: 16,
+      offsetY: mistOffsetY, alpha: 0.18, size: 4, depth: 41,
+      driftX: 30, driftY: -30, durationMs: 1400,
     });
-
-    this.tweens.add({
-      targets: c,
-      y: 792,
-      alpha: 0.9,
-      duration: 640,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (!c.scene) return;
-        addIdleBreath(this, c, { dy: -3, durationMs: 2700 });
-      },
+    if (!reducedMotion(this)) this.tweens.add({
+      targets: c, alpha: 1, duration: entranceMs, ease: "Sine.easeOut",
     });
     return c;
+  }
+
+  private addRootedWoodPainting(
+    owner: Phaser.GameObjects.Container,
+    texture: "wood-offering-shrine" | "wood-flute-hollow",
+    width: number,
+  ): Phaser.GameObjects.Image {
+    const image = this.add.image(0, 0, texture);
+    // Measured solid alpha footprints of the accepted cutouts; transparent
+    // export margins never become a floating floor or shrink the world prop.
+    const footprint = texture === "wood-offering-shrine"
+      ? { left: 20, right: 1428, bottom: 907 }
+      : { left: 27, right: 1516, bottom: 991 };
+    image.setOrigin((footprint.left + footprint.right) / 2 / image.width,
+      footprint.bottom / image.height);
+    image.setScale(width / (footprint.right - footprint.left));
+    applySceneActorLighting(this, image);
+    owner.add(image);
+    return image;
+  }
+
+  private createOfferingCue(): Phaser.GameObjects.Container {
+    return this.createRootedWoodProp(690, "wood-offering-shrine", 230, -72, 640);
   }
 
   private createBoneFluteCue(): Phaser.GameObjects.Container {
-    const c = this.add.container(1230, 812).setDepth(42).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 128, 18, { y: 12, alpha: 0.2 }));
-
-    const g = this.add.graphics();
-    g.fillStyle(0x1c2019, 0.88);
-    g.fillRoundedRect(-58, -38, 116, 34, 12);
-    g.lineStyle(2, 0xd7ded8, 0.22);
-    g.strokeRoundedRect(-58, -38, 116, 34, 12);
-    g.lineStyle(7, 0xd7ded8, 0.8);
-    g.lineBetween(-46, -60, 48, -88);
-    g.lineStyle(3, 0x6f725c, 0.58);
-    g.lineBetween(-46, -60, 48, -88);
-    g.fillStyle(0x1f241d, 0.9);
-    for (const p of [-24, 4, 30]) {
-      g.fillCircle(p, -67 - (p + 24) * 0.3, 4);
-    }
-    g.lineStyle(2, PALETTE_HEX.moss, 0.28);
-    g.strokeEllipse(0, -74, 132, 58);
-    c.add(g);
-
-    addContainerWake(this, c, {
-      kind: "mist",
-      intervalMs: 560,
-      spreadX: 36,
-      spreadY: 18,
-      offsetY: -54,
-      alpha: 0.18,
-      size: 4,
-      depth: 41,
-      driftX: 32,
-      driftY: -28,
-      durationMs: 1350,
-    });
-
-    this.tweens.add({
-      targets: c,
-      y: 790,
-      alpha: 0.9,
-      duration: 660,
-      ease: "Sine.easeOut",
-      onComplete: () => {
-        if (!c.scene) return;
-        addIdleBreath(this, c, { dy: -4, durationMs: 2500 });
-      },
-    });
+    const c = this.createRootedWoodProp(1230, "wood-flute-hollow", 260, -74, 660);
+    const flute = this.add.image(0, -74, "wood-bone-flute");
+    flute.setScale(104 / flute.height);
+    applySceneActorLighting(this, flute);
+    c.add(flute);
+    this.boneFluteProp = flute;
     return c;
   }
 
-  private createGroveLightCue(): Phaser.GameObjects.Container {
-    const c = this.add.container(1210, 790).setDepth(42).setAlpha(0);
-    c.add(addLocalGroundShadow(this, 136, 18, { y: 12, alpha: 0.2 }));
-
-    const g = this.add.graphics();
-    g.lineStyle(4, 0x342b1e, 0.78);
-    g.lineBetween(-28, -10, -28, -92);
-    g.lineBetween(30, -10, 30, -88);
-    g.fillStyle(0x1d160f, 0.8);
-    g.fillRoundedRect(-48, -88, 96, 42, 12);
-    g.lineStyle(2, PALETTE_HEX.moss, 0.34);
-    g.strokeRoundedRect(-48, -88, 96, 42, 12);
-    g.fillStyle(0xc9a14a, 0.5);
-    g.fillEllipse(0, -66, 46, 24);
-    g.fillStyle(0xf0d78a, 0.72);
-    g.fillEllipse(0, -70, 18, 30);
-    g.lineStyle(2, 0xf0d78a, 0.28);
-    g.strokeEllipse(0, -68, 128, 72);
-    c.add(g);
-
-    addContainerWake(this, c, {
-      kind: "mist",
-      intervalMs: 520,
-      spreadX: 34,
-      spreadY: 18,
-      offsetY: -58,
-      alpha: 0.2,
-      size: 4,
-      depth: 41,
-      driftX: 28,
-      driftY: -36,
-      durationMs: 1300,
-    });
-
+  /** Leave the hollow empty before describing the flute in Wren's fingers. */
+  private settleBoneFluteInHand(onSettled: () => void): void {
+    const flute = this.boneFluteProp;
+    if (!flute?.scene) {
+      this.fluteHandoffPending = false;
+      onSettled();
+      return;
+    }
+    this.clearHeldWoodRelic();
+    const world = flute.getWorldTransformMatrix();
+    this.boneFluteCue?.remove(flute);
+    this.add.existing(flute);
+    flute.setPosition(world.tx, world.ty).setDepth(43).setAlpha(1);
+    flute.setScale(86 / flute.height);
+    this.boneFluteProp = null;
+    this.heldWoodRelic = flute;
+    const hand = { x: this.wrenContainer.x + 52, y: this.wrenContainer.y - 96 };
+    if (reducedMotion(this)) {
+      flute.setPosition(hand.x, hand.y);
+      onSettled();
+      return;
+    }
+    this.fluteHandoffPending = true;
+    this.band.setObjective("Taking the flute…");
     this.tweens.add({
-      targets: c,
-      y: 770,
-      alpha: 0.88,
-      duration: 680,
-      ease: "Sine.easeOut",
+      targets: flute,
+      ...hand,
+      duration: 520,
+      ease: "Sine.easeInOut",
       onComplete: () => {
-        if (!c.scene) return;
-        addIdleBreath(this, c, { dy: -3, durationMs: 2500 });
+        if (!flute.scene) return;
+        this.fluteHandoffPending = false;
+        onSettled();
       },
     });
-    return c;
+  }
+
+  private showGatheredAshVial(): void {
+    this.clearHeldWoodRelic();
+    const vial = this.add.image(this.wrenContainer.x + 52, this.wrenContainer.y - 96, "wood-ash-vial");
+    vial.setScale(62 / vial.height).setDepth(43);
+    applySceneActorLighting(this, vial);
+    this.heldWoodRelic = vial;
+  }
+
+  private clearHeldWoodRelic(): void {
+    this.fluteHandoffPending = false;
+    const relic = this.heldWoodRelic;
+    this.heldWoodRelic = null;
+    if (!relic?.scene) return;
+    this.tweens.killTweensOf(relic);
+    relic.destroy();
+  }
+
+  private createGroveLightCue(): Phaser.GameObjects.Container {
+    return this.createRootedWoodProp(560, "wood-offering-shrine", 230, -72, 680);
+  }
+
+  /** Keep the chosen fire visible while the king answers what it has woken. */
+  private igniteGroveLightCue(): void {
+    const cue = this.groveLightCue ?? this.createGroveLightCue();
+    this.groveLightCue = cue;
+    if (cue.getData("grove-ignited")) return;
+    cue.setData("grove-ignited", true);
+    this.tweens.killTweensOf(cue);
+    // Keep the consequence on the far-left foreground, outside the spirits'
+    // resting lanes. Their containers use depth0, so the fire stays behind
+    // them while its words and the king remain fully visible.
+    cue.x = this.scale.width * 0.06;
+    cue.y = 770;
+    cue.setDepth(-0.5).setAlpha(1).setScale(1);
+
+    // The lit choice becomes a small painted fire planted on the grove floor;
+    // replace the unlit bowl without changing its gameplay/cleanup owner.
+    cue.removeAll(true);
+    cue.add(addLocalGroundShadow(this, 174, 22, { y: 4, alpha: 0.28 }));
+    const fire = this.add.image(0, 4, "wood-grove-fire").setOrigin(0.5, 1);
+    fire.setScale(196 / fire.height);
+    cue.add(fire);
+
+    const warmth = addLivingLight(this, {
+      x: cue.x, y: cue.y - 64, width: 820, height: 420,
+      color: 0xe77d32, alpha: 0.44, depth: -2,
+      durationMs: 1900, scale: 1.04,
+    });
+    cue.once(Phaser.GameObjects.Events.DESTROY, () => {
+      if (warmth.scene) warmth.destroy();
+    });
+    if (!reducedMotion(this)) {
+      addContainerWake(this, cue, {
+        kind: "ember", color: 0xf2a04b, intervalMs: 230,
+        offsetY: -108, spreadX: 42, spreadY: 24,
+        alpha: 0.32, size: 3.5, depth: -0.5, driftY: -70,
+        durationMs: 1100,
+      });
+    }
   }
 
   private fadeOutForkCue(
@@ -2735,7 +3269,8 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.tweens.killTweensOf(cue);
     this.tweens.add({
       targets: cue,
-      y: cue.y + (opts.riseY ?? 18),
+      ...(cue.getData("rooted-wood-prop") && !cue.getData("grove-ignited")
+        ? {} : { y: cue.y + (opts.riseY ?? 18) }),
       alpha: 0,
       duration: opts.durationMs ?? 540,
       ease: "Sine.easeIn",
@@ -2747,6 +3282,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private clearWoodForkCues(): void {
     this.clearForkChoiceWordAnchors();
+    this.clearHeldWoodRelic();
     for (const cue of [this.offeringCue, this.boneFluteCue, this.groveLightCue]) {
       if (!cue?.scene) continue;
       this.tweens.killTweensOf(cue);
@@ -2754,6 +3290,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     }
     this.offeringCue = null;
     this.boneFluteCue = null;
+    this.boneFluteProp = null;
     this.groveLightCue = null;
   }
 
@@ -2835,7 +3372,7 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private attendSpeaker(speakerName: string | null): void {
     this.setBandSpeaker(speakerName);
-    if (speakerName === "Inga") {
+    if (speakerName === "Inga" || speakerName === "Lost ghost") {
       this.attendInga();
     } else if (speakerName === "Ghost-King") {
       this.attendGhostKing();
@@ -2847,8 +3384,8 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.band.setPortrait("band-portrait-runa", "Runa");
     } else if (speakerName === "Ghost-King") {
       this.band.setPortrait("ghost-king", "Ghost-King");
-    } else if (speakerName === "Inga") {
-      this.band.setPortrait("wood-ghost", "Inga");
+    } else if (speakerName === "Inga" || speakerName === "Lost ghost") {
+      this.band.setPortrait("wood-ghost", speakerName);
     } else {
       this.band.setPortrait(undefined, speakerName);
     }
@@ -2887,10 +3424,6 @@ export class HauntedWoodScene extends Phaser.Scene {
 
   private pulseShrine(): void {
     if (!this.shrineFigure?.scene) return;
-    playActorAttention(this, this.shrineFigure, {
-      scale: 1.018,
-      durationMs: 280,
-    });
     playBodyImpact(this, this.shrineFigure, {
       kind: "mist",
       color: 0xd7ded8,
@@ -2948,6 +3481,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     effect: OffensiveOneShot,
     targets: readonly MovingWordEnemy[],
   ): void {
+    if (!this.usedOneShots.includes(effect)) this.usedOneShots.push(effect);
     if (effect === "toll-strike") {
       const t = targets[0];
       if (!t || t.isDefeated()) return;
@@ -2972,7 +3506,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         count: 16,
         radius: 60,
       });
-      this.cameras.main.shake(160, 0.004);
+      if (!reducedMotion(this)) this.cameras.main.shake(160, 0.004);
       t.defeat();
     } else if (effect === "jam-foe") {
       const t = targets[0];
@@ -2996,7 +3530,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       t.freeze();
     } else if (effect === "bind-beat") {
       playWaveSting();
-      this.cameras.main.shake(220, 0.004);
+      if (!reducedMotion(this)) this.cameras.main.shake(220, 0.004);
       for (const g of targets) {
         if (!g.isDefeated()) {
           this.playOneShotSourceLine(
@@ -3243,7 +3777,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   private drawShrine(): void {
     const sx = 960;
     const sy = 810;
-    const c = this.add.container(sx, sy + 12).setDepth(-1).setAlpha(0);
+    const c = this.add.container(sx, sy).setDepth(-1).setAlpha(0);
     this.shrineFigure = c;
 
     c.add(addLocalGroundShadow(this, 150, 18, { y: 14, alpha: 0.18 }));
@@ -3255,34 +3789,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     glow.fillEllipse(0, 14, 138, 44);
     c.add(glow);
 
-    const stone = this.add.graphics();
-    stone.fillStyle(0x171f18, 0.36);
-    stone.fillRoundedRect(-72, -4, 144, 18, 6);
-    stone.fillStyle(0x263028, 1);
-    stone.fillRoundedRect(-44, -58, 88, 58, 6);
-    stone.fillStyle(0x303a31, 1);
-    stone.fillRoundedRect(-56, -68, 112, 14, 5);
-    stone.fillStyle(0x202820, 1);
-    stone.fillRoundedRect(-60, 0, 120, 12, 5);
-    stone.fillStyle(0x495248, 0.8);
-    stone.fillRoundedRect(-38, -54, 32, 12, 4);
-    stone.fillRoundedRect(8, -50, 28, 14, 4);
-    stone.fillStyle(0x394238, 0.86);
-    stone.fillRoundedRect(-30, -34, 60, 20, 5);
-    stone.lineStyle(2, 0x6f725c, 0.22);
-    stone.lineBetween(-26, -54, -38, -8);
-    stone.lineBetween(18, -50, 34, -12);
-    stone.lineBetween(-56, -68, 56, -68);
-    c.add(stone);
-
-    const bowl = this.add.graphics().setPosition(0, -70);
-    bowl.fillStyle(0x181510, 0.9);
-    bowl.fillEllipse(0, 9, 56, 18);
-    bowl.fillStyle(0x4c3e2c, 0.9);
-    bowl.fillEllipse(0, 4, 46, 14);
-    bowl.fillStyle(0xeec870, 0.26);
-    bowl.fillEllipse(0, 2, 30, 8);
-    c.add(bowl);
+    this.addRootedWoodPainting(c, "wood-offering-shrine", 180);
 
     const flame = this.add.graphics().setPosition(0, -82);
     flame.fillStyle(0xd4a040, 0.55);
@@ -3341,10 +3848,8 @@ export class HauntedWoodScene extends Phaser.Scene {
     this.tweens.add({
       targets: c,
       alpha: 1,
-      y: sy,
       duration: 480,
       ease: "Sine.easeOut",
-      onComplete: () => addIdleBreath(this, c, { dy: -2, durationMs: 4200 }),
     });
   }
 
@@ -3442,22 +3947,19 @@ export class HauntedWoodScene extends Phaser.Scene {
     });
   }
 
-  private drawGhostKing(): void {
+  private drawGhostKing(withKing = true): void {
     const gkx = 1400;
     const gky = 560;
-    const rootBase = this.makeGhostKingRootBase(gkx, gky + 212);
+    const rootBase = this.makeGhostKingRootBase(gkx, gky + 270);
 
-    // Root throne — kept as graphics (the painted sprite is just the king).
-    const throne = this.add.graphics();
-    throne.setAlpha(0);
-    throne.fillStyle(0x1e1208, 1);
-    for (const rx of [-80, -50, -20, 20, 50, 80]) {
-      const rh = 60 + Math.abs(rx) * 0.4;
-      throne.fillRect(gkx + rx - 6, gky + 180, 12, rh);
+    // The empty painted roots sit behind the unchanged, hovering king figure.
+    const throne = this.drawGhostKingRootThrone(gkx, gky + 170).setAlpha(0);
+
+    if (!withKing) {
+      throne.setAlpha(1);
+      rootBase.setAlpha(1);
+      return;
     }
-    // Throne seat slab
-    throne.fillStyle(0x282018, 1);
-    throne.fillRect(gkx - 100, gky + 170, 200, 20);
 
     // Ghost-King figure — painted sprite replaces the old translucent body +
     // head + crown + eye graphics. Scaled to the procedural figure height (crown
@@ -3479,6 +3981,14 @@ export class HauntedWoodScene extends Phaser.Scene {
         this.playGhostKingStagePulse();
       },
     });
+  }
+
+  private drawGhostKingRootThrone(x: number, y: number): Phaser.GameObjects.Image {
+    // Preserve the original root envelope and ground contact. The transparent
+    // center leaves the existing king visible, hovering just above the seat.
+    const throne = this.add.image(x, y + 120, "wood-root-throne").setOrigin(0.5, 1);
+    throne.setScale(360 / throne.width);
+    return throne;
   }
 
   private makeGhostKingRootBase(x: number, y: number): Phaser.GameObjects.Container {

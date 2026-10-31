@@ -1,3 +1,10 @@
+import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
+import { installChapterMenu } from "../game/ui/pauseMenu";
+import { checkpointIndex } from "../game/chapterFlow";
+import { forgePassageIndex, forgeStep, type ForgeStep } from "../game/forgeCheckpoint";
+import { rememberRealmFork, resolveRealmFork, resolveCompanionDecision, rememberCompanionDecision, type RealmFork } from "../game/realmChoices";
+import { ChapterReading } from "../game/ui/chapterReading";
+import { decorativeTween, reducedFlashes, reducedMotion } from "../game/presentation";
 import Phaser from "phaser";
 import { type AmbientHandle, playAmbientForge } from "../audio/ambient";
 import { playChime } from "../audio/chime";
@@ -28,19 +35,19 @@ import {
   resolveCombatLoadout,
 } from "../game/relicEffects";
 import {
+  OFFENSIVE_ONE_SHOTS,
   isOffensiveOneShot,
   type OffensiveOneShot,
 } from "../game/oneShotInvocation";
 import { OneShotInvoker, type OneShotThreat } from "../game/oneShotInvoker";
 import { tripMostAdvancedFoe } from "../game/companionTrip";
-import type { SaveStore } from "../game/saveState";
+import type { SaveCheckpoint, SaveStore } from "../game/saveState";
 import { SPELL_COST } from "../game/sessionStats";
 import { type ClaimMods, TypingInputController } from "../game/typingInput";
 import { WaveDirector } from "../game/waveDirector";
 import { MovingWordEnemy } from "../game/movingWordEnemy";
 import {
   addAmbientDrift,
-  addBackdropDrift,
   addContainerWake,
   addIdleBreath,
   attachWordBodyAnchor,
@@ -79,11 +86,18 @@ import {
 } from "../game/wren";
 import { showAlmanacStampCard } from "../game/ui/almanacStamp";
 import { ConsoleBand } from "../game/ui/consoleBand";
-import { preloadSatchelIcons } from "../game/ui/satchelIcons";
+import { preloadSatchelIcons, satchelIconFor } from "../game/ui/satchelIcons";
+import { applySceneActorLighting, restoreSceneActorLighting } from "../game/actorLighting";
 import forgeBackdrop from "../../art/references/clockwork-forge-clean.png";
 import forgeGolemSprite from "../../art/forge/golem.png";
 import forgeCommandGolemSprite from "../../art/forge/command-golem.png";
+import forgeBellowsWorkstation from "../../art/forge/bellows-workstation.png";
+import forgeValveWorkstation from "../../art/forge/valve-workstation.png";
+import forgeCommandConsole from "../../art/forge/command-console.png";
 import fornSprite from "../../art/forge/forn.png";
+import fornEmptyHandsSprite from "../../art/forge/forn-empty-hands.png";
+import gregorSprite from "../../art/forge/gregor.png";
+import apprenticeSprite from "../../art/forge/apprentice.png";
 import runaPortrait from "../../art/runa/runa-front.png";
 import brassSongbirdSprite from "../../art/companions/brass-songbird.png";
 import snowFoxSprite from "../../art/companions/snow-fox.png";
@@ -124,17 +138,23 @@ const GOLEM_ADVANCE_MS = 15000;
 // procedural body height, but the living-scene pass needs the painted automaton
 // to carry more of the threat against the foundry floor. The boss is drawn
 // inside a ×1.8 container, so its on-screen height is
-// COMMAND_GOLEM_SPRITE_HEIGHT × 1.8. Tune on live.
+// COMMAND_GOLEM_SPRITE_HEIGHT × COMMAND_GOLEM_SCALE. Tune on live.
 const GOLEM_SPRITE_HEIGHT = 172;
 const COMMAND_GOLEM_SPRITE_HEIGHT = 150;
+const COMMAND_GOLEM_SCALE = 2.4;
+// FLOOR_Y is the centered golems' body lane. Feet-origin actors need the
+// painted boot line, half a regular golem below that center.
+const FOUNDRY_GROUND_Y = FLOOR_Y + GOLEM_SPRITE_HEIGHT / 2;
 const CATWALK_SURFACE_Y = CATWALK_Y + 20;
 const TUTORIAL_GOLEM_GROUND_Y = GOLEM_SPRITE_HEIGHT / 2 + 6;
 const TUTORIAL_GOLEM_Y = CATWALK_SURFACE_Y - TUTORIAL_GOLEM_GROUND_Y;
 
 // Smith Forn's standing portrait — a believable character height (px). He's a
 // narration NPC, so this only affects his on-screen figure, not any hit/word
-// anchor. Tune on live. Placed left-third, feet near FLOOR_Y.
+// anchor. Placed left-third, feet on the foundry ground line.
 const FORN_SPRITE_HEIGHT = 360;
+const GREGOR_SPRITE_HEIGHT = 300;
+const APPRENTICE_SPRITE_HEIGHT = 310;
 
 /** Spawn slots on the foundry floor — same pattern as WinterMountainScene. */
 const FLOOR_SLOTS = [
@@ -147,9 +167,14 @@ const FLOOR_SLOTS = [
 /** Act 1: catwalk obstacle words */
 const CATWALK_WORDS = ["step", "duck", "grip"] as const;
 const CATWALK_NARRATIONS = [
-  "A loose grate rattles under your boot. You test each step.",
-  "A steam jet blasts from a pipe overhead. You duck just in time.",
-  "The railing shakes violently. You grip the iron and hold on.",
+  "A loose grate rattles under your boot. Step carefully across it.",
+  "A steam jet blasts from a pipe overhead. Duck beneath it.",
+  "The railing shakes violently. Grip the iron before moving on.",
+] as const;
+const CATWALK_RESPONSES = [
+  "You cross the loose grate without losing your footing.",
+  "You duck beneath the pipe as steam hisses overhead.",
+  "Your grip steadies you. Gregor's station is just ahead.",
 ] as const;
 
 /** Fork 1 passage chains */
@@ -178,8 +203,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private typingInput!: TypingInputController;
   private director!: WaveDirector;
   private narration!: NarrationManager;
+  private reading!: ChapterReading;
+  private chapterMenu?: ReturnType<typeof installChapterMenu>;
   private band!: ConsoleBand;
   private golems: MovingWordEnemy[] = [];
+  /** Silent subjects of the peaceful final order; never enter combat/input. */
+  private peacefulGuards: StaticGolem[] = [];
   private activeTargets: TextWordTarget[] = [];
   private bossWordAnchors: WordBodyAnchorHandle[] = [];
   private tutorialWordAnchors: WordBodyAnchorHandle[] = [];
@@ -194,10 +223,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private revisitMemoryCue: Phaser.GameObjects.Container | null = null;
   private revisitMemoryWordAnchor: WordBodyAnchorHandle | null = null;
   private apprenticeCue: Phaser.GameObjects.Container | null = null;
+  private bellowsWorkstation: Phaser.GameObjects.Container | null = null;
   private standDownCue: Phaser.GameObjects.Container | null = null;
   private fightCue: Phaser.GameObjects.Container | null = null;
   /** Smith Forn's standing portrait — only on screen during the Fork 1 beat. */
   private fornSprite?: Phaser.GameObjects.Image;
+  /** Retired smith at the catwalk teaching station; distinct from Smith Forn. */
+  private gregorSprite?: Phaser.GameObjects.Image;
+  /** The apprentices' speaker stays beside their valve during the first fork. */
+  private apprenticeSprite?: Phaser.GameObjects.Image;
+  private keepsakeSprite?: Phaser.GameObjects.Image;
 
   private shiftHeld = false;
   private altHeld = false;
@@ -210,6 +245,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // cast site charges one shared, discounted price. Grace is gated OUT of the
   // Forge in the descriptor (no losable economy here).
   private combat: CombatLoadout = resolveCombatLoadout([], "clockwork-forge");
+  private combatSatchel: string[] = [];
   private spellCost = SPELL_COST;
   private waveForgivenessReady = false;
   private snowFoxTripNoticed = false;
@@ -218,6 +254,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // Forge that's toll-strike (bells-tongue, earned in the Bell on a force fork):
   // a charged "toll" word strikes the strongest live golem. Null until create().
   private oneShotInvoker: OneShotInvoker<MovingWordEnemy> | null = null;
+  private usedOneShots: OffensiveOneShot[] = [];
 
   /** Forge glow pools drawn on the floor. */
   private forgeGlowGraphics!: Phaser.GameObjects.Graphics;
@@ -233,6 +270,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private quietLordIntruded = false;
   private ambientHandle?: AmbientHandle;
   private revisit = false;
+  private resumeCheckpoint: SaveCheckpoint | null = null;
 
   constructor() {
     super("ClockworkForgeScene");
@@ -241,9 +279,21 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
   init(data: ForgeSceneData): void {
+    this.clearForgeKeepsake();
     this.revisit = data.revisit === true;
     this.store = data.store;
+    this.chapterMenu = undefined;
+    const savedCheckpoint = this.store.get().checkpoint;
+    this.resumeCheckpoint = !this.revisit && !this.store.get().realms["clockwork-forge"]?.cleared
+      && savedCheckpoint?.scene === "ClockworkForgeScene" ? savedCheckpoint : null;
+    const combatSatchel = this.resumeCheckpoint?.data.combatSatchel;
+    this.combatSatchel = typeof combatSatchel === "string"
+      ? combatSatchel.split(",").filter(Boolean) : [...this.store.get().satchel];
+    const spent = this.resumeCheckpoint?.data.spentOneShots;
+    this.usedOneShots = typeof spent === "string" ? spent.split(",").filter((effect): effect is OffensiveOneShot =>
+      (OFFENSIVE_ONE_SHOTS as readonly string[]).includes(effect)) : [];
     this.golems = [];
+    this.peacefulGuards = [];
     this.activeTargets = [];
     this.bossWordAnchors = [];
     this.tutorialWordAnchors = [];
@@ -256,16 +306,24 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.revisitMemoryCue = null;
     this.revisitMemoryWordAnchor = null;
     this.apprenticeCue = null;
+    this.bellowsWorkstation = null;
     this.standDownCue = null;
     this.fightCue = null;
+    this.gregorSprite = undefined;
+    this.fornSprite = undefined;
+    this.apprenticeSprite = undefined;
+    this.bossContainer = undefined!;
+    this.bossSprite = undefined!;
+    this.keepsakeSprite = undefined;
     this.oneShotInvoker = null;
     this.shiftHeld = false;
+    this.altHeld = false;
     this.waveActive = false;
     this.snowFoxTripNoticed = false;
     this.shrineForgivenessNoticed = false;
-    this.fork1Choice = null;
-    this.fork2Choice = null;
-    this.companionAwarded = false;
+    this.fork1Choice = resolveRealmFork("clockwork-forge", "fork1", this.store.get().realms["clockwork-forge"], this.store.get().satchel) as typeof this.fork1Choice;
+    this.fork2Choice = resolveRealmFork("clockwork-forge", "fork2", this.store.get().realms["clockwork-forge"], this.store.get().satchel) as typeof this.fork2Choice;
+    this.companionAwarded = resolveCompanionDecision("clockwork-forge", this.store.get().realms["clockwork-forge"], this.store.get().satchel) === "accepted";
     this.songbirdCompanion = null;
     this.songbirdWordAnchors = [];
     this.quietLordIntruded =
@@ -273,25 +331,42 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   preload(): void {
+    beginAssetLoad(this);
     this.load.image("forge-backdrop", forgeBackdrop);
     this.load.image("forge-golem", forgeGolemSprite);
     this.load.image("forge-command-golem", forgeCommandGolemSprite);
+    this.load.image("forge-bellows-workstation", forgeBellowsWorkstation);
+    this.load.image("forge-valve-workstation", forgeValveWorkstation);
+    this.load.image("forge-command-console", forgeCommandConsole);
     this.load.image("forn", fornSprite);
+    this.load.image("forn-empty-hands", fornEmptyHandsSprite);
+    this.load.image("forge-gregor", gregorSprite);
+    this.load.image("forge-apprentice", apprenticeSprite);
     this.load.image("forge-companion-songbird", brassSongbirdSprite);
     this.load.image("forge-companion-snow-fox", snowFoxSprite);
     this.load.image("band-portrait-runa", runaPortrait);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
+    preloadSatchelIcons(this, ["bellows-hammer", "sabotage-wrench", "master-key", "golem-heart"]);
     preloadWren(this);
   }
 
   create(): void {
+    if (assetLoadBlocked(this)) return;
+    this.chapterMenu = installChapterMenu(this, {
+      store: this.store,
+      hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),
+      onLeave: () => this.scene.start("PortalChamberScene", { store: this.store }),
+      leaveHint: this.revisit
+        ? "This memory can be replayed from the beginning. Your saved journey and collected keepsakes stay saved."
+        : "Your last completed beat is saved. Returning here restarts the current encounter or unfinished phrase; your choices and collected keepsakes stay saved.",
+    });
     this.cameras.main.fadeIn(600, 26, 16, 8);
-    const backdrop = this.add
+    this.add
       .image(0, 0, "forge-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
-    addBackdropDrift(this, backdrop, { durationMs: 15500, driftX: -5, driftY: -2 });
+    // The catwalk, floor and workstation pipes share one fixed painted room.
     addAmbientDrift(this, {
       kind: "ember",
       count: 44,
@@ -368,14 +443,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
       framed: true,
       onSpeak: (speakerName) => this.attendSpeaker(speakerName),
     });
+    this.reading = new ChapterReading(this, () => this.readingHintY());
 
     this.typingInput = new TypingInputController(this.store);
     this.director = new WaveDirector(this.typingInput.getStats());
+    if (this.resumeCheckpoint) this.typingInput.getStats().restoreCheckpoint(this.resumeCheckpoint.data);
 
     // Tier 4 — a revisit is a free-passage replay (no combat) → neutral loadout.
     // soul-thrift folds into one shared spellCost used at every cast site.
     this.combat = resolveCombatLoadout(
-      this.revisit ? [] : this.store.get().satchel,
+      this.revisit ? [] : this.combatSatchel,
       "clockwork-forge",
     );
     this.spellCost = Math.ceil(SPELL_COST * this.combat.soulThriftMult);
@@ -392,7 +469,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
           return;
         }
         flashWrenMiss(this.wrenSprite);
-        this.cameras.main.shake(80, 0.002);
+        if (!reducedMotion(this)) this.cameras.main.shake(80, 0.002);
       },
       onClaim: () => playClaim(),
     });
@@ -401,6 +478,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // tiles ("always on"); the offensive one-shots drop in as charge cards. This
     // replaces the floating top-right HUD and the centered one-shot stack.
     this.band = new ConsoleBand(this, {
+      activity: () => (
+        this.waveActive
+        || (Boolean(this.bossContainer?.scene) && this.activeTargets.some(target => !target.isComplete()))) ? "combat" : "story",
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,
@@ -445,6 +525,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       scene: this,
       typingInput: this.typingInput,
       available: offensiveOneShots,
+      initialSpent: offensiveOneShots.filter(effect => this.usedOneShots.includes(effect)),
       cost: ONESHOT_SOUL_COST,
       getSoul: () => this.typingInput.getStats().getSoul(),
       spendSoul: (cost) => this.typingInput.getStats().spendSoul(cost),
@@ -458,7 +539,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.input.keyboard?.on("keyup", this.onKeyUp, this);
-    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.reading.destroy();
+      this.chapterMenu?.destroy();
       this.typingInput.reset();
       this.oneShotInvoker?.destroy();
       this.oneShotInvoker = null;
@@ -473,8 +556,15 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.clearFornWordAnchors();
       this.clearForkChoiceWordAnchors();
       this.clearForgeChoiceCues(false);
+      this.dismissBellowsWorkstation(false);
+      this.clearPeacefulGuards();
       this.fornSprite?.destroy();
       this.fornSprite = undefined;
+      this.gregorSprite?.destroy();
+      this.gregorSprite = undefined;
+      this.apprenticeSprite?.destroy();
+      this.apprenticeSprite = undefined;
+      this.clearForgeKeepsake();
     });
 
     this.ambientHandle = playAmbientForge();
@@ -483,7 +573,115 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.startRevisit();
       return;
     }
-    this.startAct1Arrival();
+    this.resumeForge();
+  }
+
+  private checkpoint(step: ForgeStep, data: SaveCheckpoint["data"] = {}): void {
+    if (this.revisit || this.store.get().realms["clockwork-forge"]?.cleared) return;
+    this.store.setCheckpoint({ scene: "ClockworkForgeScene", step, data: {
+      ...this.typingInput.getStats().captureCheckpoint(), ...data,
+      spentOneShots: [...new Set([...this.usedOneShots, ...(this.oneShotInvoker?.getSpent() ?? [])])].join(","),
+      combatSatchel: this.combatSatchel.join(","),
+    } });
+  }
+
+  private savedStageData(step: ForgeStep): SaveCheckpoint["data"] {
+    return this.resumeCheckpoint?.step === step ? this.resumeCheckpoint.data : {};
+  }
+
+  private hasSavedPassage(step: ForgeStep, length: number): boolean {
+    const index = this.savedStageData(step).index;
+    return typeof index === "number" && Number.isInteger(index) && index >= 0 && index <= length;
+  }
+
+  private restoreForgeStage(step: ForgeStep, index: unknown): void {
+    if (step === "arrival") return;
+    const catwalk = ["catwalk", "catwalk-answer", "gregor", "gregor-lesson", "tutorial-move",
+      "tutorial-move-answer", "tutorial-command", "tutorial-command-answer", "tutorial-fight", "act2"].includes(step);
+    let x = this.scale.width / 2;
+    if (step === "catwalk" || step === "catwalk-answer") {
+      const beat = checkpointIndex(index, CATWALK_WORDS.length);
+      x = step === "catwalk-answer" ? this.catwalkWrenX(beat)
+        : beat === 0 ? this.catwalkEntranceWrenX() : this.catwalkWrenX(beat - 1);
+    } else if (!catwalk) {
+      x = step === "forn" || (step === "fork1-reward" && this.fork1Choice === "forn") ? 665
+        : step === "cabal" || (step === "fork1-reward" && this.fork1Choice === "cabal") ? 1100
+        : ["wave1", "forn-encounter", "wave2", "fork1"].includes(step) ? this.scale.width / 2
+        : this.scale.width / 2 - 100;
+      this.swapWrenFootingToFoundry();
+    }
+    this.tweens.killTweensOf(this.wrenContainer);
+    this.wrenContainer.setPosition(x, catwalk ? CATWALK_SURFACE_Y : FOUNDRY_GROUND_Y).setAlpha(1).setScale(1);
+    addIdleBreath(this, this.wrenContainer, { dy: catwalk ? -3 : -4, durationMs: catwalk ? 1900 : 2200 });
+    this.resetWrenToFront();
+    if (catwalk && !["catwalk", "catwalk-answer", "act2"].includes(step)) this.showGregorSprite();
+    if (step === "forn" || step === "cabal") {
+      this.showFornSprite();
+      this.showFork1ChoiceCues();
+    }
+    if (["peaceful", "peaceful-answer", "fight"].includes(step)) this.showFork2ChoiceCues();
+    if (this.companionAwarded && ["companion-gate", "true-name-intro", "true-name", "ending"].includes(step)) {
+      this.showSongbirdCompanion();
+      this.perchSongbirdOnWren(() => {}, true);
+    }
+  }
+
+  private resumeForge(): void {
+    const saved = this.resumeCheckpoint;
+    const step = forgeStep(saved?.step);
+    const index = saved?.data.index;
+    this.restoreForgeStage(step, index);
+    switch (step) {
+      case "catwalk": this.startCatwalkBeats(checkpointIndex(index, CATWALK_WORDS.length)); break;
+      case "catwalk-answer": {
+        const beat = checkpointIndex(index, CATWALK_WORDS.length);
+        this.showCatwalkCue(beat, this.catwalkCueX(beat));
+        this.showCatwalkAnswer(beat); break;
+      }
+      case "gregor": this.startGregorConversation(); break;
+      case "gregor-lesson": this.gregorStep2(); break;
+      case "tutorial-move": this.gregorTutorialMove(); break;
+      case "tutorial-move-answer": {
+        const golem = this.spawnStaticGolem(1340, TUTORIAL_GOLEM_Y, false, TUTORIAL_GOLEM_GROUND_Y);
+        this.showTutorialMoveAnswer(golem); break;
+      }
+      case "tutorial-command": this.gregorTutorialCommand(this.spawnStaticGolem(1340, TUTORIAL_GOLEM_Y, false, TUTORIAL_GOLEM_GROUND_Y)); break;
+      case "tutorial-command-answer": this.showTutorialCommandAnswer(this.spawnStaticGolem(1340, TUTORIAL_GOLEM_Y, false, TUTORIAL_GOLEM_GROUND_Y)); break;
+      case "tutorial-fight": this.startTutorialGolemFight(); break;
+      case "act2": this.startAct2(); break;
+      case "wave1": this.startWave1(); break;
+      case "forn-encounter": this.startFornEncounter(); break;
+      case "wave2": this.startWave2(); break;
+      case "fork1": this.startFork1(); break;
+      case "forn": this.startFornBranch(); break;
+      case "cabal": this.startCabalBranch(); break;
+      case "fork1-reward":
+        if (this.fork1Choice) this.afterFork1(this.fork1Choice, this.fork1Choice === "forn" ? "bellows-hammer" : "sabotage-wrench", true);
+        else this.startFork1();
+        break;
+      case "boss-intro": this.startAct3(); break;
+      case "boss1": this.startBossPhase1(checkpointIndex(index, BOSS_PHASE1_WORDS.length)); break;
+      case "boss2": this.spawnBossVisual(); this.startBossPhase2(checkpointIndex(index, BOSS_PHASE2_WORDS.length)); break;
+      case "boss3": this.spawnBossVisual(); this.flashGolemCommanded(this.bossSprite, true); this.startBossPhase3(checkpointIndex(index, 2)); break;
+      case "boss-defeated": this.bossDefeated(); break;
+      case "fork2": this.startFork2(); break;
+      case "peaceful": this.startFork2PeacefulBranch(); break;
+      case "peaceful-answer": this.showPeacefulGuards(); this.dismissForgeChoiceCue("fight"); this.showPeacefulOrderAnswer(saved?.data.spell === true); break;
+      case "fight": this.startFork2FightBranch(); break;
+      case "fight-answer": this.showFightAnswer(); break;
+      case "fork2-reward":
+        if (this.fork2Choice) this.afterFork2(this.fork2Choice, this.fork2Choice === "peaceful" ? "master-key" : "golem-heart", true);
+        else this.startFork2();
+        break;
+      case "companion-gate": this.startCompanionGate(); break;
+      case "companion-answer":
+        this.showSongbirdCompanion();
+        this.perchSongbirdOnWren(() => this.showSongbirdAnswer(), true); break;
+      case "true-name-intro": this.startTrueNamePassage(); break;
+      case "true-name": this.deliverTrueNamePassage(); break;
+      case "ending": this.startEnding(); break;
+      default: this.startAct1Arrival();
+    }
   }
 
   // ─── Revisit mode ────────────────────────────────────────────────────────────
@@ -495,25 +693,42 @@ export class ClockworkForgeScene extends Phaser.Scene {
       ringWidth: 148,
       ringHeight: 42,
     });
-    const choices = this.store.get().realms["clockwork-forge"]?.choices ?? {};
-    const ending = choices["ending"] ?? "";
+    const state = this.store.get();
+    const progress = state.realms["clockwork-forge"];
+    // Use the same precedence as chapter recovery: explicit forks outrank the
+    // historical combined ending and any stale keepsakes in an old satchel.
+    const first = resolveRealmFork("clockwork-forge", "fork1", progress, state.satchel);
+    const second = resolveRealmFork("clockwork-forge", "fork2", progress, state.satchel);
     let narratorLine: string;
     let words: string[];
 
-    if (ending.includes("peaceful")) {
-      narratorLine = "The Forge is quiet. Forn is still at the bellows.";
+    if (second === "peaceful") {
+      narratorLine = first === "forn"
+        ? "The repaired bellows breathe steadily. Forn is still at his work, and the last golems rest."
+        : first === "cabal"
+          ? "The apprentices keep the furnace low. The last golems still rest with lowered arms."
+          : "The Forge is quiet. Its last golems still rest with lowered arms.";
       words = ["iron", "holds", "the", "heat"];
-    } else if (ending.includes("fought")) {
-      narratorLine = "The golem-heart you took left a silence in the core furnace.";
+    } else if (second === "fought") {
+      const aftermath = "The Golem Heart you took left a silence in the furnace.";
+      narratorLine = first === "forn"
+        ? `The repaired bellows breathe steadily. ${aftermath}`
+        : first === "cabal"
+          ? `The apprentices keep the furnace low. ${aftermath}`
+          : aftermath;
       words = ["gears", "turn", "without", "orders"];
     } else {
-      narratorLine = "The Forge runs on its own now. It always did, really.";
+      narratorLine = first === "forn"
+        ? "The repaired bellows breathe steadily. The forge remembers your work."
+        : first === "cabal"
+          ? "The apprentices have kept their slower rhythm. The foundry is quieter now."
+          : "The foundry holds its old heat. The words you left here still linger.";
       words = ["the", "forge", "remembers", "everything"];
     }
 
     this.setNarrator(narratorLine);
     this.band.setObjective("Type the forge memory to return to the Almanac.");
-    this.time.delayedCall(2400, () => this.deliverRevisitPassage(words));
+    this.readThen(() => this.deliverRevisitPassage(words));
   }
 
   private deliverRevisitPassage(words: string[]): void {
@@ -688,6 +903,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── ACT 1 — Descent into the Forge ─────────────────────────────────────────
 
   private startAct1Arrival(): void {
+    this.checkpoint("arrival");
+    this.band.setObjective("Cross the catwalk to Gregor's station. Press Enter or Space when ready.");
     this.narration.say("forge_intro_arrival");
     playPortalArrivalWake(this, this.wrenContainer, {
       kind: "ember",
@@ -696,7 +913,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       ringHeight: 42,
     });
     this.showCatwalkCue(0, this.catwalkCueX(0));
-    this.time.delayedCall(1900, () => this.startCatwalkBeats(0));
+    this.readThen(() => this.startCatwalkBeats(0));
   }
 
   private startCatwalkBeats(idx: number): void {
@@ -708,13 +925,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
       });
       return;
     }
+    this.checkpoint("catwalk", { index: idx });
     const word = CATWALK_WORDS[idx];
     const narration = CATWALK_NARRATIONS[idx];
     const cueX = this.catwalkCueX(idx);
     const wordPos = this.catwalkWordPosition(idx);
-    if (idx === 0) {
-      this.band.setObjective("Type each catwalk word to reach Gregor's station.");
-    }
+    this.band.setObjective(`Type ${word} to pass this catwalk obstacle.`);
     this.showCatwalkCue(idx, cueX);
     this.setNarrator(narration);
     const target = this.makeWord({
@@ -737,17 +953,55 @@ export class ClockworkForgeScene extends Phaser.Scene {
         });
         this.releaseCatwalkCueWordAnchor();
         this.pulseCatwalkCue(true);
-        this.time.delayedCall(1400, () => this.startCatwalkBeats(idx + 1));
+        this.clearActiveTargets();
+        this.showCatwalkAnswer(idx);
       },
     });
     this.attachCatwalkCueWordAnchor(idx, target);
     this.registerActiveTarget(target);
   }
 
+  private showCatwalkAnswer(idx: number): void {
+    this.checkpoint("catwalk-answer", { index: idx });
+    this.setNarrator(CATWALK_RESPONSES[idx]);
+    this.band.setObjective("Obstacle cleared. Press Enter or Space to continue.");
+    this.readThen(() => this.startCatwalkBeats(idx + 1));
+  }
+
   // ─── Gregor tutorial ─────────────────────────────────────────────────────────
 
+  private showGregorSprite(): void {
+    if (this.gregorSprite?.scene) return;
+    // Left of Wren's reply and the training golem; feet share the catwalk surface.
+    const sprite = this.add.image(460, CATWALK_SURFACE_Y, "forge-gregor");
+    sprite.setOrigin(0.5, 1);
+    sprite.setScale(GREGOR_SPRITE_HEIGHT / sprite.height);
+    sprite.setDepth(6);
+    stageAnchoredSprite(this, sprite, {
+      shadowWidth: 88,
+      shadowHeight: 14,
+      shadowOffsetY: 5,
+      shadowAlpha: 0.3,
+      shadowDepth: 5.9,
+      entranceOffsetY: 10,
+      entranceMs: 620,
+      breathDy: -2,
+      breathMs: 2400,
+    });
+    this.gregorSprite = sprite;
+  }
+
+  private hideGregorSprite(): void {
+    const sprite = this.gregorSprite;
+    if (!sprite) return;
+    this.gregorSprite = undefined;
+    fadeOutStagedSprite(this, sprite, { durationMs: 460 });
+  }
+
   private startGregorConversation(): void {
+    this.checkpoint("gregor");
     this.clearActiveTargets();
+    this.showGregorSprite();
     this.band.setObjective("Answer Gregor and test lowercase against capitals.");
     this.setNarrator(
       "You hold it wrong. Typewriters are not hammers.",
@@ -794,15 +1048,17 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private gregorStep2(): void {
+    this.checkpoint("gregor-lesson");
     this.clearActiveTargets();
     this.setNarrator(
       "Lowercase moves them. CAPITALS command them. Try both.",
       "Old Gregor",
     );
-    this.time.delayedCall(2000, () => this.gregorTutorialMove());
+    this.readThen(() => this.gregorTutorialMove());
   }
 
   private gregorTutorialMove(): void {
+    this.checkpoint("tutorial-move");
     this.band.setObjective("Type turn to nudge the training golem.");
     this.setNarrator(
       "Type 'turn' — watch it.",
@@ -825,16 +1081,22 @@ export class ClockworkForgeScene extends Phaser.Scene {
       fontSize: 36,
       onComplete: () => {
         this.golemTurnHead(tutorialGolem);
-        this.setNarrator("The golem turns its head. It heard you.");
-        this.time.delayedCall(1800, () =>
-          this.gregorTutorialCommand(tutorialGolem),
-        );
+        this.clearActiveTargets();
+        this.showTutorialMoveAnswer(tutorialGolem);
       },
     });
     this.registerActiveTarget(target);
   }
 
+  private showTutorialMoveAnswer(tutorialGolem: StaticGolem): void {
+    this.checkpoint("tutorial-move-answer");
+    this.setNarrator("The golem turns its head. It heard you.");
+    this.band.setObjective("Lowercase tested. Press Enter or Space to continue.");
+    this.readThen(() => this.gregorTutorialCommand(tutorialGolem));
+  }
+
   private gregorTutorialCommand(tutorialGolem: StaticGolem): void {
+    this.checkpoint("tutorial-command");
     this.clearActiveTargets();
     this.band.setObjective("Hold Shift through TURN to command the golem.");
     this.setNarrator(
@@ -856,15 +1118,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
         this.setNarrator(
           "The golem snaps to attention. A command — not just a nudge.",
         );
-        this.time.delayedCall(1400, () =>
+        this.clearActiveTargets();
+        this.readThen(() =>
           this.gregorTutorialCommand(tutorialGolem),
         );
       },
       onSpellComplete: () => {
         this.golemCommandFlash(tutorialGolem);
-        this.setNarrator(
-          "The golem snaps to full attention. CAPITALS command. You understand now.",
-        );
         this.store.update((s) => {
           if (!s.satchel.includes("gregor-lore-learned")) {
             // Record lore acquisition in realm choices
@@ -876,21 +1136,31 @@ export class ClockworkForgeScene extends Phaser.Scene {
             s.realms["clockwork-forge"] = realm;
           }
         });
-        this.tweens.add({
-          targets: tutorialGolem.container,
-          alpha: 0,
-          duration: 500,
-          delay: 1800,
-          onComplete: () => tutorialGolem.container.destroy(),
-        });
-        this.time.delayedCall(2400, () => this.startTutorialGolemFight());
+        this.clearActiveTargets();
+        this.showTutorialCommandAnswer(tutorialGolem);
       },
     });
     this.registerActiveTarget(target);
   }
 
+  private showTutorialCommandAnswer(tutorialGolem: StaticGolem): void {
+    this.checkpoint("tutorial-command-answer");
+    this.tweens.add({
+      targets: tutorialGolem.container,
+      alpha: 0,
+      duration: 500,
+      delay: 1800,
+      onComplete: () => tutorialGolem.container.destroy(),
+    });
+    this.setNarrator("The golem snaps to full attention. CAPITALS command. You understand now.");
+    this.band.setObjective("Command tested. Press Enter or Space to continue.");
+    this.readThen(() => this.startTutorialGolemFight());
+  }
+
   private staticGolemWordPosition(golem: StaticGolem, word: string): { x: number; y: number } {
-    const side = golem.container.x < this.scale.width / 2 ? 1 : -1;
+    // The tutorial golem stands beside Wren on the catwalk. Keep its words on
+    // the outer side so neither native command crosses Wren's hood.
+    const side = golem.container.x < this.scale.width / 2 ? -1 : 1;
     const lateral = word.length > 8 ? 220 : 190;
     return {
       x: Phaser.Math.Clamp(golem.container.x + side * lateral, 330, this.scale.width - 330),
@@ -899,6 +1169,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private startTutorialGolemFight(): void {
+    this.checkpoint("tutorial-fight");
     // Tier 4 — announce the relic loadout once before the realm's first combat,
     // then begin. Empty loadout (incl. revisits) passes straight through.
     this.announceCombatLoadout(() => this.beginTutorialGolemFight());
@@ -931,6 +1202,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.golems.push(golem);
     this.beginCombatWave();
     this.time.delayedCall(800, () => this.watchForWaveClear(() => {
+      this.checkpoint("act2");
       this.time.delayedCall(800, () => this.startAct2());
     }));
   }
@@ -938,7 +1210,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── ACT 2 — Through the Foundry Floor ──────────────────────────────────────
 
   private startAct2(): void {
+    this.checkpoint("act2");
     this.clearActiveTargets();
+    this.hideGregorSprite();
     this.golems = [];
     this.waveActive = false;
     // Almanac lore pages 1 + 2 — Gregor's lesson is conclusively done, and
@@ -954,19 +1228,24 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.setNarrator(
       "You descend to the foundry floor. The heat is immense. Iron shapes move through the dark.",
     );
-    this.time.delayedCall(460, () => this.descendWrenToFoundry(() => {
-      this.time.delayedCall(260, () => this.startWave1());
-    }));
+    this.band.setObjective("Training complete. Press Enter or Space to descend to the foundry.");
+    this.readThen(() => {
+      this.band.setObjective("Training complete. Descending to the foundry.");
+      this.time.delayedCall(460, () => this.descendWrenToFoundry(() => {
+        this.time.delayedCall(260, () => this.startWave1());
+      }));
+    });
   }
 
   private startWave1(): void {
+    this.checkpoint("wave1");
     this.waveActive = true;
     this.golems = [];
     playWaveSting();
-    this.cameras.main.shake(220, 0.005);
+    if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseForgeWave();
     this.narration.say("forge_wave1_intro");
-    this.band.setObjective("Type each mixed-case command cleanly.");
+    this.band.setObjective("Match the letters exactly: hold Shift for CAPITALS; release it for lowercase.");
 
     // Tier 1 signature: every golem is a mixed-case command (lowercase head,
     // CAPITALIZED tail) — the brass only obeys when the capitals are typed with
@@ -992,6 +1271,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private startFornEncounter(): void {
+    this.checkpoint("forn-encounter");
     this.clearActiveTargets();
     this.golems = [];
     this.waveActive = false;
@@ -1000,14 +1280,15 @@ export class ClockworkForgeScene extends Phaser.Scene {
       "Runa",
     );
     this.band.setObjective("Reach Smith Forn through the moving foundry.");
-    this.time.delayedCall(2400, () => this.startWave2());
+    this.readThen(() => this.startWave2());
   }
 
   private startWave2(): void {
+    this.checkpoint("wave2");
     this.waveActive = true;
     this.golems = [];
     playWaveSting();
-    this.cameras.main.shake(220, 0.005);
+    if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseForgeWave();
     this.narration.say("forge_wave2_intro");
     this.band.setObjective("Use Shift for CAPITAL order fragments.");
@@ -1078,11 +1359,11 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   // ─── Fork 1 ──────────────────────────────────────────────────────────────────
 
-  /** Fade Smith Forn's standing portrait in on the foundry floor, left-third,
-   *  feet near FLOOR_Y. Narration NPC only — no word/hit anchor. Idempotent. */
+  /** Fade Smith Forn's standing portrait in on the foundry floor, left-third.
+   *  Narration NPC only — no word/hit anchor. Idempotent. */
   private showFornSprite(): void {
     if (this.fornSprite) return;
-    const sprite = this.add.image(400, FLOOR_Y, "forn");
+    const sprite = this.add.image(400, FOUNDRY_GROUND_Y, "forn");
     sprite.setOrigin(0.5, 1); // feet on the floor line
     sprite.setScale(FORN_SPRITE_HEIGHT / sprite.height);
     sprite.setDepth(40); // above backdrop (-100), below narration band (y≈150)
@@ -1112,10 +1393,75 @@ export class ClockworkForgeScene extends Phaser.Scene {
     });
   }
 
+  /** The gifted Hammer leaves the painted glove as the separate keepsake
+   * leaves Forn. Normalize the alternate to his original texture frame so
+   * the same origin, scale and already-running attention/idle tweens stay valid. */
+  private showFornEmptyHands(): void {
+    const sprite = this.fornSprite;
+    if (!sprite?.scene || !this.textures.exists("forn-empty-hands")) return;
+    const key = "forn-empty-hands-frame";
+    if (!this.textures.exists(key)) {
+      const original = this.textures.get("forn").getSourceImage() as HTMLImageElement;
+      const empty = this.textures.get("forn-empty-hands").getSourceImage() as HTMLImageElement;
+      const canvas = this.textures.createCanvas(key, original.width, original.height);
+      if (!canvas) return;
+      // Alpha-visible head/boot bounds: original[6,634), alternate[10,1387).
+      // Align the painted body as well as its canvas, so giving the Hammer
+      // cannot lift Forn's boots or alter his established displayed height.
+      const bodyScaleY = (634 - 6) / (1387 - 10);
+      canvas.context.drawImage(empty, 0, 6 - 10 * bodyScaleY,
+        original.width, empty.height * bodyScaleY);
+      canvas.refresh();
+    }
+    sprite.setTexture(key);
+  }
+
   private showFork1ChoiceCues(): void {
+    this.showApprenticeSprite();
+    if (!this.bellowsWorkstation?.scene) {
+      this.bellowsWorkstation = this.drawForgeWorkstation(800, FOUNDRY_GROUND_Y, "forge-bellows-workstation", 300);
+    }
     if (!this.apprenticeCue?.scene) {
       this.apprenticeCue = this.drawApprenticeCue(1280, FLOOR_Y + 4);
     }
+  }
+
+  private showApprenticeSprite(): void {
+    if (this.apprenticeSprite?.scene) return;
+    const sprite = this.add.image(1600, FOUNDRY_GROUND_Y, "forge-apprentice");
+    sprite.setOrigin(0.5, 1);
+    sprite.setScale(APPRENTICE_SPRITE_HEIGHT / sprite.height);
+    sprite.setFlipX(true);
+    sprite.setDepth(40);
+    stageAnchoredSprite(this, sprite, {
+      shadowWidth: 94,
+      shadowHeight: 18,
+      shadowOffsetY: 8,
+      shadowAlpha: 0.28,
+      shadowDepth: 39.9,
+      entranceOffsetY: 16,
+      entranceMs: 720,
+      breathDy: -3,
+      breathMs: 2100,
+    });
+    this.apprenticeSprite = sprite;
+  }
+
+  private hideApprenticeSprite(): void {
+    const sprite = this.apprenticeSprite;
+    if (!sprite) return;
+    this.apprenticeSprite = undefined;
+    fadeOutStagedSprite(this, sprite, { durationMs: 620, ease: "Sine.easeIn" });
+  }
+
+  /** Reuse the actor's painted face, with a readable head-and-shoulders frame. */
+  private ensureApprenticePortrait(): void {
+    if (this.textures.exists("forge-apprentice-portrait")) return;
+    const portrait = this.textures.createCanvas("forge-apprentice-portrait", 240, 288);
+    if (!portrait) return;
+    const source = this.textures.get("forge-apprentice").getSourceImage() as HTMLImageElement;
+    portrait.context.drawImage(source, 260, 0, 400, 480, 0, 0, 240, 288);
+    portrait.refresh();
   }
 
   private showFork2ChoiceCues(): void {
@@ -1127,148 +1473,86 @@ export class ClockworkForgeScene extends Phaser.Scene {
     }
   }
 
-  private drawApprenticeCue(x: number, y: number): Phaser.GameObjects.Container {
-    const c = this.add.container(x, y).setDepth(39);
-    c.add(addLocalGroundShadow(this, 148, 24, { y: 10, alpha: 0.28 }));
-
-    const g = this.add.graphics();
-    g.lineStyle(8, 0x1a120d, 0.98);
-    g.lineBetween(-76, -96, -76, 0);
-    g.lineBetween(56, -82, 56, 0);
-    g.lineStyle(3, 0x5a4632, 0.62);
-    g.lineBetween(-76, -94, 56, -82);
-    g.fillStyle(0x251711, 0.98);
-    g.fillRoundedRect(-108, -34, 216, 44, 9);
-    g.lineStyle(2, PALETTE_HEX.brass, 0.38);
-    g.strokeRoundedRect(-108, -34, 216, 44, 9);
-    g.fillStyle(0x120d0a, 0.98);
-    g.fillCircle(-28, -44, 34);
-    g.lineStyle(4, PALETTE_HEX.ember, 0.5);
-    g.strokeCircle(-28, -44, 25);
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      g.lineBetween(
-        -28,
-        -44,
-        -28 + Math.cos(a) * 24,
-        -44 + Math.sin(a) * 24,
-      );
+  /** Trim transparent canvas padding once, so the painted metal base — rather
+   * than the exported image bounds — rests on the foundry floor. */
+  private forgeWorkstationTexture(key: string): string {
+    const trimmedKey = `${key}-floor-trimmed`;
+    if (this.textures.exists(trimmedKey)) return trimmedKey;
+    const source = this.textures.get(key).getSourceImage() as HTMLImageElement;
+    const width = source.naturalWidth || source.width;
+    const height = source.naturalHeight || source.height;
+    if (!width || !height) return key;
+    const scan = document.createElement("canvas");
+    scan.width = width;
+    scan.height = height;
+    const context = scan.getContext("2d", { willReadFrequently: true });
+    if (!context) return key;
+    context.drawImage(source, 0, 0);
+    const pixels = context.getImageData(0, 0, width, height).data;
+    let left = width;
+    let top = height;
+    let right = -1;
+    let bottom = -1;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (pixels[(y * width + x) * 4 + 3] < 32) continue;
+        left = Math.min(left, x);
+        top = Math.min(top, y);
+        right = Math.max(right, x);
+        bottom = Math.max(bottom, y);
+      }
     }
-    g.lineStyle(7, 0x483322, 0.95);
-    g.lineBetween(20, -28, 92, -80);
-    g.lineStyle(3, PALETTE_HEX.brass, 0.7);
-    g.lineBetween(22, -30, 88, -78);
-    g.fillStyle(PALETTE_HEX.ember, 0.28);
-    g.fillCircle(74, -70, 8);
-    g.fillCircle(-64, -22, 6);
-    c.add(g);
+    if (right < left || bottom < top) return key;
+    const texture = this.textures.createCanvas(trimmedKey, right - left + 1, bottom - top + 1);
+    if (!texture) return key;
+    texture.context.drawImage(source, left, top, right - left + 1, bottom - top + 1,
+      0, 0, right - left + 1, bottom - top + 1);
+    texture.refresh();
+    return trimmedKey;
+  }
 
-    addContainerWake(this, c, {
-      kind: "ember",
-      intervalMs: 170,
-      spreadX: 44,
-      spreadY: 20,
-      offsetY: -46,
-      alpha: 0.34,
-      size: 3,
-      depth: 38,
-      driftY: -60,
-    });
-    stageContainerEntrance(this, c, {
-      entranceOffsetY: 16,
-      entranceMs: 620,
-      breathDy: -3,
-      breathMs: 2100,
-    });
+  /** Keep the old word-owner origin while the painted base sits at the same
+   * floor as Wren. This preserves every authored target position and tether. */
+  private drawForgeWorkstation(
+    x: number, ownerY: number, key: string, visibleWidth: number,
+  ): Phaser.GameObjects.Container {
+    const c = this.add.container(x, ownerY).setDepth(5);
+    const prop = this.add.image(0, FOUNDRY_GROUND_Y - ownerY, this.forgeWorkstationTexture(key));
+    prop.setOrigin(0.5, 1);
+    prop.setScale(visibleWidth / prop.width);
+    applySceneActorLighting(this, prop);
+    c.add(prop);
+    if (!reducedMotion(this)) {
+      c.setAlpha(0);
+      this.tweens.add({ targets: c, alpha: 1, duration: 420, ease: "Sine.easeOut" });
+    }
     return c;
+  }
+
+  private drawApprenticeCue(x: number, y: number): Phaser.GameObjects.Container {
+    return this.drawForgeWorkstation(x, y, "forge-valve-workstation", 250);
   }
 
   private drawStandDownCue(x: number, y: number): Phaser.GameObjects.Container {
-    const c = this.add.container(x, y).setDepth(39);
-    c.add(addLocalGroundShadow(this, 140, 22, { y: 10, alpha: 0.24 }));
-
-    const g = this.add.graphics();
-    g.fillStyle(0x1d1712, 0.96);
-    g.fillRoundedRect(-80, -38, 160, 48, 10);
-    g.lineStyle(2, PALETTE_HEX.brass, 0.55);
-    g.strokeRoundedRect(-80, -38, 160, 48, 10);
-    g.lineStyle(5, 0x5a4632, 0.82);
-    g.lineBetween(-54, -94, -22, -56);
-    g.lineBetween(54, -94, 22, -56);
-    g.lineStyle(4, PALETTE_HEX.brass, 0.5);
-    g.strokeCircle(0, -56, 38);
-    g.lineStyle(2, PALETTE_HEX.brass, 0.35);
-    g.strokeCircle(0, -56, 24);
-    g.fillStyle(PALETTE_HEX.brass, 0.18);
-    g.fillCircle(0, -56, 30);
-    g.fillStyle(0x0f0c09, 0.96);
-    g.fillRoundedRect(-38, -72, 76, 28, 6);
-    g.lineStyle(3, PALETTE_HEX.brass, 0.62);
-    g.lineBetween(-24, -58, 24, -58);
-    c.add(g);
-
-    addContainerWake(this, c, {
-      kind: "mote",
-      intervalMs: 230,
-      spreadX: 34,
-      spreadY: 16,
-      offsetY: -52,
-      color: PALETTE_HEX.brass,
-      alpha: 0.28,
-      size: 2.5,
-      depth: 38,
-      driftY: -44,
-    });
-    stageContainerEntrance(this, c, {
-      entranceOffsetY: 14,
-      entranceMs: 620,
-      breathDy: -2,
-      breathMs: 2200,
-    });
-    return c;
+    return this.drawForgeWorkstation(x, y, "forge-command-console", 210);
   }
 
   private drawFightCue(x: number, y: number): Phaser.GameObjects.Container {
-    const c = this.add.container(x, y).setDepth(39);
-    c.add(addLocalGroundShadow(this, 148, 24, { y: 10, alpha: 0.28 }));
+    // The choice belongs to the foundry and its actual guard-golems. A second
+    // floating weapon emblem adds no physical object to this room.
+    return this.add.container(x, y).setDepth(5);
+  }
 
-    const g = this.add.graphics();
-    g.fillStyle(0x1a110d, 0.98);
-    g.fillRoundedRect(-88, -34, 176, 44, 9);
-    g.lineStyle(2, PALETTE_HEX.ember, 0.46);
-    g.strokeRoundedRect(-88, -34, 176, 44, 9);
-    g.fillStyle(0x4b3825, 0.96);
-    g.fillRoundedRect(-48, -68, 96, 32, 7);
-    g.lineStyle(5, 0x120c08, 0.96);
-    g.lineBetween(-74, -18, -18, -94);
-    g.lineBetween(20, -94, 78, -18);
-    g.lineStyle(3, PALETTE_HEX.brass, 0.58);
-    g.lineBetween(-70, -20, -20, -90);
-    g.lineBetween(24, -90, 74, -20);
-    g.fillStyle(PALETTE_HEX.ember, 0.35);
-    g.fillCircle(-8, -86, 7);
-    g.fillCircle(52, -32, 6);
-    g.fillCircle(-62, -30, 5);
-    c.add(g);
-
-    addContainerWake(this, c, {
-      kind: "ember",
-      intervalMs: 135,
-      spreadX: 48,
-      spreadY: 22,
-      offsetY: -46,
-      alpha: 0.42,
-      size: 3.2,
-      depth: 38,
-      driftY: -72,
+  private dismissBellowsWorkstation(animate = true): void {
+    const workstation = this.bellowsWorkstation;
+    this.bellowsWorkstation = null;
+    if (!workstation?.scene) return;
+    this.tweens.killTweensOf(workstation);
+    if (!animate || reducedMotion(this)) { workstation.destroy(); return; }
+    this.tweens.add({
+      targets: workstation, alpha: 0, duration: 460, ease: "Sine.easeIn",
+      onComplete: () => { if (workstation.scene) workstation.destroy(); },
     });
-    stageContainerEntrance(this, c, {
-      entranceOffsetY: 14,
-      entranceMs: 620,
-      breathDy: -3,
-      breathMs: 1900,
-    });
-    return c;
   }
 
   private pulseForgeChoiceCue(
@@ -1276,11 +1560,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     color: number = PALETTE_HEX.ember,
   ): void {
     if (!cue?.scene) return;
-    playActorAttention(this, cue, {
-      scale: 1.035,
-      durationMs: 220,
-      tint: color,
-    });
+    // Machinery is bolted to the room; feedback never bobs or scales its base.
     playBodyImpact(this, cue, {
       kind: "ember",
       color,
@@ -1314,14 +1594,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
     if (!cue?.scene) return;
     this.tweens.killTweensOf(cue);
     for (const child of cue.list) this.tweens.killTweensOf(child);
-    if (!animate) {
+    if (!animate || reducedMotion(this)) {
       cue.destroy();
       return;
     }
     this.tweens.add({
       targets: cue,
       alpha: 0,
-      y: cue.y + 18,
       duration: 460,
       ease: "Sine.easeIn",
       onComplete: () => {
@@ -1337,6 +1616,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private startFork1(): void {
+    this.checkpoint("fork1");
     this.clearActiveTargets();
     this.golems = [];
     this.waveActive = false;
@@ -1344,15 +1624,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.band.setObjective("Choose Forn or the apprentices.");
     this.showFornSprite();
     this.showFork1ChoiceCues();
+    if (this.fork1Choice === "forn") { this.startFornBranch(); return; }
+    if (this.fork1Choice === "cabal") { this.startCabalBranch(); return; }
 
     const helpForn = this.makeFornWord({
       scene: this,
       word: "help smith forn",
-      ...this.forgeChoiceWordPosition(this.fornSprite, -128, "help smith forn", {
-        side: "right",
-        long: true,
-        lift: 92,
-      }),
+      ...this.forgeForkWordPosition("forn"),
       fontSize: 32,
       frame: "banner",
       onComplete: () => this.startFornBranch(),
@@ -1362,10 +1640,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       {
         scene: this,
         word: "join the apprentices",
-        ...this.forgeChoiceWordPosition(this.apprenticeCue, -68, "join the apprentices", {
-          side: "left",
-          long: true,
-        }),
+        ...this.forgeForkWordPosition("apprentices"),
         fontSize: 32,
         frame: "banner",
         onComplete: () => this.startCabalBranch(),
@@ -1376,14 +1651,20 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private startFornBranch(): void {
-    this.fork1Choice = "forn";
+    this.fork1Choice = this.commitFork("fork1", "forn") as typeof this.fork1Choice;
+    if (this.fork1Choice !== "forn") { this.startCabalBranch(); return; }
+    const resumedPassage = this.hasSavedPassage("forn", FORN_PASSAGES.length);
+    this.checkpoint("forn", resumedPassage ? this.savedStageData("forn") : { intro: true });
     this.clearActiveTargets();
     this.dismissForgeChoiceCue("apprentice");
+    this.hideApprenticeSprite();
+    this.approachForgeWork(665);
+    this.band.setObjective("Forn accepts your help. Press Enter or Space to begin the repair.");
     this.setNarrator(
       "Aye. I could use steady hands.",
       "Forn",
     );
-    this.time.delayedCall(1800, () => {
+    const repair = (): void => {
       this.runPassageChain(
         [...FORN_PASSAGES],
         [
@@ -1394,20 +1675,31 @@ export class ClockworkForgeScene extends Phaser.Scene {
         ],
         () => this.afterFork1("forn", "bellows-hammer"),
         "forn",
+        undefined,
+        "forn",
       );
-    });
+    };
+    if (resumedPassage) repair();
+    else this.readThen(repair);
   }
 
   private startCabalBranch(): void {
-    this.fork1Choice = "cabal";
+    this.fork1Choice = this.commitFork("fork1", "cabal") as typeof this.fork1Choice;
+    if (this.fork1Choice !== "cabal") { this.startFornBranch(); return; }
+    const resumedPassage = this.hasSavedPassage("cabal", CABAL_PASSAGES.length);
+    this.checkpoint("cabal", resumedPassage ? this.savedStageData("cabal") : { intro: true });
     this.clearActiveTargets();
+    this.dismissBellowsWorkstation();
     this.hideFornSprite();
+    this.showApprenticeSprite();
+    this.approachForgeWork(1100);
     this.pulseForgeChoiceCue(this.apprenticeCue);
+    this.band.setObjective("The apprentices accept your help. Press Enter or Space to begin.");
     this.setNarrator(
       "About time someone helped us.",
       "Apprentice",
     );
-    this.time.delayedCall(1800, () => {
+    const sabotage = (): void => {
       this.runPassageChain(
         [...CABAL_PASSAGES],
         [
@@ -1418,14 +1710,21 @@ export class ClockworkForgeScene extends Phaser.Scene {
         ],
         () => this.afterFork1("cabal", "sabotage-wrench"),
         "apprentices",
+        undefined,
+        "cabal",
       );
-    });
+    };
+    if (resumedPassage) sabotage();
+    else this.readThen(sabotage);
   }
 
-  private afterFork1(choice: "forn" | "cabal", relicId: string): void {
+  private afterFork1(choice: "forn" | "cabal", relicId: string, restored = false): void {
+    this.showForgeKeepsake(relicId, choice === "forn" ? 475 : 1450, restored);
     // The fork is resolved — the realm moves on to the boss; Forn leaves.
     this.hideFornSprite();
+    this.hideApprenticeSprite();
     this.dismissForgeChoiceCue("apprentice");
+    this.dismissBellowsWorkstation();
     // Almanac lore page 3 — Forn's hammer song OR the Apprentices' manifesto.
     // Mutually exclusive per fork branch.
     const lorePageId =
@@ -1444,19 +1743,28 @@ export class ClockworkForgeScene extends Phaser.Scene {
         s.almanacLore.push(lorePageId);
       }
     });
-    this.time.delayedCall(1200, () => this.startAct3());
+    this.checkpoint("fork1-reward");
+    this.setNarrator(choice === "forn"
+      ? "Forn's Bellows Hammer rests in your hands. The repaired bellows breathe steadily."
+      : "The apprentices' Sabotage Wrench rests in your hands. The foundry's fire burns lower.");
+    this.band.setObjective("Keepsake collected. Press Enter or Space to continue through the forge.");
+    this.readThen(() => this.startAct3());
   }
 
   // ─── ACT 3 — The Command-Golem ────────────────────────────────────────────────
 
   private startAct3(): void {
+    this.checkpoint("boss-intro");
+    this.clearForgeKeepsake();
     this.clearActiveTargets();
     this.golems = [];
     this.waveActive = false;
+    this.approachForgeWork(this.scale.width / 2 - 100);
     this.playCommandGolemRiseCue();
-    this.cameras.main.shake(300, 0.006);
+    if (!reducedMotion(this)) this.cameras.main.shake(300, 0.006);
     this.narration.say("forge_command_golem_rise");
-    this.time.delayedCall(2800, () => this.startBossPhase1());
+    this.band.setObjective("Read the Command-Golem's arrival. Press Enter or Space when ready.");
+    this.readThen(() => this.startBossPhase1());
   }
 
   // Boss sprite — kept so phase 2 can flash it "commanded" (brass).
@@ -1465,9 +1773,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private spawnBossVisual(): void {
     const cx = this.scale.width / 2 + 200;
-    const cy = FLOOR_Y - 10;
+    const cy = FOUNDRY_GROUND_Y - COMMAND_GOLEM_SPRITE_HEIGHT * COMMAND_GOLEM_SCALE / 2;
     this.bossContainer = this.add.container(cx, cy);
-    this.bossContainer.setScale(1.8);
+    this.bossContainer.setScale(COMMAND_GOLEM_SCALE);
     this.bossSprite = this.drawCommandGolemInto(this.bossContainer, false);
 
     this.bossContainer.setAlpha(0);
@@ -1510,22 +1818,24 @@ export class ClockworkForgeScene extends Phaser.Scene {
     });
   }
 
-  private startBossPhase1(): void {
+  private startBossPhase1(startIndex = 0): void {
+    this.checkpoint("boss1", { index: startIndex });
     this.spawnBossVisual();
     playWaveSting();
-    this.cameras.main.shake(220, 0.005);
+    if (!reducedMotion(this)) this.cameras.main.shake(220, 0.005);
     this.pulseForgeWave({ y: FLOOR_Y - 130, ringWidth: 980, ringHeight: 150, count: 16 });
     this.setNarrator(
       "The Command-Golem — massive, iron-crowned, its eye burning orange. Phase one begins.",
     );
     this.band.setObjective("Break the Command-Golem's first words.");
 
-    let phaseIdx = 0;
+    let phaseIdx = startIndex;
     const nextWord = (): void => {
       if (phaseIdx >= BOSS_PHASE1_WORDS.length) {
         this.time.delayedCall(1000, () => this.startBossPhase2());
         return;
       }
+      this.checkpoint("boss1", { index: phaseIdx });
       const word = BOSS_PHASE1_WORDS[phaseIdx];
       const target = this.makeCommandGolemWord({
         scene: this,
@@ -1535,15 +1845,17 @@ export class ClockworkForgeScene extends Phaser.Scene {
         fontSize: 38,
         onComplete: () => {
           playChime();
-          this.cameras.main.shake(120, 0.003);
+          if (!reducedMotion(this)) this.cameras.main.shake(120, 0.003);
           phaseIdx++;
+          this.checkpoint(phaseIdx >= BOSS_PHASE1_WORDS.length ? "boss2" : "boss1", { index: phaseIdx >= BOSS_PHASE1_WORDS.length ? 0 : phaseIdx });
           this.time.delayedCall(700, nextWord);
         },
         onSpellComplete: () => {
           playChime();
-          this.cameras.main.flash(200, 200, 120, 20);
-          this.cameras.main.shake(200, 0.005);
+          if (!reducedFlashes(this)) this.cameras.main.flash(200, 200, 120, 20);
+          if (!reducedMotion(this)) this.cameras.main.shake(200, 0.005);
           phaseIdx++;
+          this.checkpoint(phaseIdx >= BOSS_PHASE1_WORDS.length ? "boss2" : "boss1", { index: phaseIdx >= BOSS_PHASE1_WORDS.length ? 0 : phaseIdx });
           this.time.delayedCall(700, nextWord);
         },
       });
@@ -1552,7 +1864,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.time.delayedCall(1040, nextWord);
   }
 
-  private startBossPhase2(): void {
+  private startBossPhase2(startIndex = 0): void {
+    this.checkpoint("boss2", { index: startIndex });
     this.clearActiveTargets();
     // The Command-Golem is now under command — it glows brass for the rest of
     // the fight (persisted tint, no clear).
@@ -1562,12 +1875,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.narration.say("forge_command_golem_phase2");
     this.band.setObjective("Hold Shift through each all-caps command.");
 
-    let phaseIdx = 0;
+    let phaseIdx = startIndex;
     const nextWord = (): void => {
       if (phaseIdx >= BOSS_PHASE2_WORDS.length) {
         this.time.delayedCall(1000, () => this.startBossPhase3());
         return;
       }
+      this.checkpoint("boss2", { index: phaseIdx });
       const word = BOSS_PHASE2_WORDS[phaseIdx];
       const target = this.makeCommandGolemWord({
         scene: this,
@@ -1580,14 +1894,15 @@ export class ClockworkForgeScene extends Phaser.Scene {
         caseSensitive: true,
         onComplete: () => {
           playChime();
-          this.cameras.main.shake(140, 0.003);
+          if (!reducedMotion(this)) this.cameras.main.shake(140, 0.003);
           phaseIdx++;
+          this.checkpoint(phaseIdx >= BOSS_PHASE2_WORDS.length ? "boss3" : "boss2", { index: phaseIdx >= BOSS_PHASE2_WORDS.length ? 0 : phaseIdx });
           this.time.delayedCall(700, nextWord);
         },
         onSpellComplete: () => {
           // Camera flash — the command lands hard
-          this.cameras.main.flash(280, 220, 160, 20);
-          this.cameras.main.shake(280, 0.006);
+          if (!reducedFlashes(this)) this.cameras.main.flash(280, 220, 160, 20);
+          if (!reducedMotion(this)) this.cameras.main.shake(280, 0.006);
           playChime();
           // Golem staggers — brief displacement tween
           this.tweens.add({
@@ -1598,6 +1913,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
             ease: "Sine.easeOut",
           });
           phaseIdx++;
+          this.checkpoint(phaseIdx >= BOSS_PHASE2_WORDS.length ? "boss3" : "boss2", { index: phaseIdx >= BOSS_PHASE2_WORDS.length ? 0 : phaseIdx });
           this.time.delayedCall(900, nextWord);
         },
       });
@@ -1606,20 +1922,24 @@ export class ClockworkForgeScene extends Phaser.Scene {
     nextWord();
   }
 
-  private startBossPhase3(): void {
+  private startBossPhase3(startIndex = 0): void {
+    this.checkpoint("boss3", { index: startIndex });
     this.clearActiveTargets();
     this.playCommandGolemStagePulse(true);
     this.setNarrator(
-      "Its true name is a command turned on itself — half-spoken, half-SHOUTED. Type it as it reads.",
+      startIndex > 0 ? "The command rings through the forge. Once more — finish it."
+        : "Its true name is a command turned on itself — half-spoken, half-SHOUTED. Type it as it reads.",
     );
+    this.band.setObjective("Type stand in lowercase, then hold Shift for DOWN. Repeat the command twice.");
 
     // The Command-Golem's true name is ONE mixed-case phrase (canon §5.5.8):
     // "stand" lowercase into "DOWN" capitalized — a single mid-phrase Shift-
     // switch the player must land, not two separate tokens. Repeated twice;
     // the second completion fells the boss. caseSensitive starts lowercase, so
     // the claim never captures Shift → completion routes through onComplete.
-    let repeatCount = 0;
+    let repeatCount = startIndex;
     const runSequence = (): void => {
+      this.checkpoint("boss3", { index: repeatCount });
       const target = this.makeCommandGolemWord({
         scene: this,
         word: "stand DOWN",
@@ -1630,9 +1950,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
         burstColor: PALETTE_HEX.ember,
         onComplete: () => {
           playChime();
-          this.cameras.main.flash(300, 220, 160, 20);
-          this.cameras.main.shake(260, 0.006);
+          if (!reducedFlashes(this)) this.cameras.main.flash(300, 220, 160, 20);
+          if (!reducedMotion(this)) this.cameras.main.shake(260, 0.006);
           repeatCount++;
+          this.checkpoint(repeatCount >= 2 ? "boss-defeated" : "boss3", { index: repeatCount });
           if (repeatCount >= 2) {
             this.time.delayedCall(600, () => this.bossDefeated());
           } else {
@@ -1650,9 +1971,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private bossDefeated(): void {
+    this.checkpoint("boss-defeated");
     this.clearActiveTargets();
     // Boss falls
-    this.tweens.add({
+    if (this.bossContainer?.scene) this.tweens.add({
       targets: this.bossContainer,
       alpha: 0,
       y: this.bossContainer.y + 80,
@@ -1686,16 +2008,20 @@ export class ClockworkForgeScene extends Phaser.Scene {
     });
 
     this.narration.say("forge_command_golem_defeated");
-    this.time.delayedCall(3200, () => this.startFork2());
+    this.band.setObjective("Command-Golem defeated. Press Enter or Space to choose the forge's future.");
+    this.readThen(() => this.startFork2());
   }
 
   // ─── Fork 2 ──────────────────────────────────────────────────────────────────
 
   private startFork2(): void {
+    this.checkpoint("fork2");
     this.clearActiveTargets();
     this.showFork2ChoiceCues();
+    if (this.fork2Choice === "peaceful") { this.startFork2PeacefulBranch(); return; }
+    if (this.fork2Choice === "fought") { this.startFork2FightBranch(); return; }
     this.setNarrator(
-      "The Command-Golem lies still. What now? Type a choice.",
+      "Two guard-golems remain. Give them a peaceful order for the Master Key, or fight them for a Golem Heart.",
     );
     this.band.setObjective("Choose the final order for the forge.");
 
@@ -1739,11 +2065,15 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private startFork2PeacefulBranch(): void {
+    this.fork2Choice = this.commitFork("fork2", "peaceful") as typeof this.fork2Choice;
+    if (this.fork2Choice !== "peaceful") { this.startFork2FightBranch(); return; }
+    this.checkpoint("peaceful");
     this.clearActiveTargets();
+    this.showPeacefulGuards();
     this.dismissForgeChoiceCue("fight");
     this.pulseForgeChoiceCue(this.standDownCue);
     this.setNarrator(
-      "You raise the typewriter keys and give the final command.",
+      "Raise the keys. The remaining golems await your final command.",
     );
     this.band.setObjective("Type STAND DOWN with capitals.");
 
@@ -1760,13 +2090,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
         // The peaceful-branch finale demands the full capitalized order.
         caseSensitive: true,
         onComplete: () => {
-          this.setNarrator("The last golems lower their arms. The forge grows quiet.");
-          this.time.delayedCall(1800, () => this.afterFork2("peaceful", "master-key"));
+          this.clearActiveTargets();
+          this.showPeacefulOrderAnswer(false);
         },
         onSpellComplete: () => {
-          this.cameras.main.flash(350, 200, 180, 40);
-          this.setNarrator("The command rings out. Every golem in the forge stills at once.");
-          this.time.delayedCall(2000, () => this.afterFork2("peaceful", "master-key"));
+          this.clearActiveTargets();
+          if (!reducedFlashes(this)) this.cameras.main.flash(350, 200, 180, 40);
+          this.showPeacefulOrderAnswer(true);
         },
       },
       { color: PALETTE_HEX.brass, sourceOffsetY: -54 },
@@ -1774,7 +2104,18 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.registerActiveTarget(standDown);
   }
 
+  private showPeacefulOrderAnswer(spell: boolean): void {
+    this.checkpoint("peaceful-answer", { spell });
+    this.setNarrator(spell ? "The command rings out. Every golem in the forge stills at once."
+      : "The last golems lower their arms. The forge grows quiet.");
+    this.band.setObjective("Order obeyed. Press Enter or Space to collect the Master Key.");
+    this.readThen(() => this.afterFork2("peaceful", "master-key"));
+  }
+
   private startFork2FightBranch(): void {
+    this.fork2Choice = this.commitFork("fork2", "fought") as typeof this.fork2Choice;
+    if (this.fork2Choice !== "fought") { this.startFork2PeacefulBranch(); return; }
+    this.checkpoint("fight");
     this.clearActiveTargets();
     this.dismissForgeChoiceCue("standDown");
     this.pulseForgeChoiceCue(this.fightCue);
@@ -1812,14 +2153,20 @@ export class ClockworkForgeScene extends Phaser.Scene {
     this.watchForWaveClear(() => {
       this.waveActive = false;
       this.golems = [];
-      this.setNarrator("The last golem falls. The forge is yours.");
-      this.time.delayedCall(1600, () =>
-        this.afterFork2("fought", "golem-heart"),
-      );
+      this.showFightAnswer();
     });
   }
 
-  private afterFork2(choice: "peaceful" | "fought", relicId: string): void {
+  private showFightAnswer(): void {
+    this.checkpoint("fight-answer");
+    this.setNarrator("The last golem falls. The forge is yours.");
+    this.band.setObjective("Guards defeated. Press Enter or Space to collect the Golem Heart.");
+    this.readThen(() => this.afterFork2("fought", "golem-heart"));
+  }
+
+  private afterFork2(choice: "peaceful" | "fought", relicId: string, restored = false): void {
+    this.clearPeacefulGuards();
+    this.showForgeKeepsake(relicId, this.bossContainer?.x ?? 1160, restored);
     this.clearForgeChoiceCues();
     this.store.update((s) => {
       const realm = s.realms["clockwork-forge"] ?? {
@@ -1832,13 +2179,23 @@ export class ClockworkForgeScene extends Phaser.Scene {
         s.satchel.push(relicId);
       }
     });
-    this.time.delayedCall(1000, () => this.startCompanionGate());
+    this.checkpoint("fork2-reward");
+    this.setNarrator(choice === "peaceful"
+      ? "The Master Key rests in your hands. The forge's oldest lock will know it."
+      : "A Golem Heart rests in your hands, recovered from the fallen brass. It still remembers the command.");
+    this.band.setObjective("Keepsake collected. Press Enter or Space to continue.");
+    this.readThen(() => this.startCompanionGate());
   }
 
   // ─── Brass Songbird companion gate ────────────────────────────────────────────
 
   private startCompanionGate(): void {
+    this.checkpoint("companion-gate");
+    this.clearForgeKeepsake();
     this.clearActiveTargets();
+    if (resolveCompanionDecision("clockwork-forge", this.store.get().realms["clockwork-forge"], this.store.get().satchel)) {
+      this.startTrueNamePassage(); return;
+    }
     const fork1 = this.fork1Choice;
     const fork2 = this.fork2Choice;
     const fullGate = fork1 === "forn" && fork2 === "peaceful";
@@ -1847,6 +2204,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       (fork1 === "cabal" && fork2 === "peaceful");
 
     if (fullGate) {
+      this.band.setObjective("Choose whether to call the brass songbird or leave it in the forge.");
       this.setNarrator(
         "A small brass shape perches on a cooling pipe. It trills softly. Do you call to it?",
       );
@@ -1871,18 +2229,20 @@ export class ClockworkForgeScene extends Phaser.Scene {
         fontSize: 32,
         frame: "banner",
         onComplete: () => {
+          this.store.update(s => { rememberCompanionDecision(s, "clockwork-forge", "declined"); });
           this.dismissSongbirdCompanion(1320, 470);
           this.startTrueNamePassage();
         },
       });
       this.registerActiveTarget(whistle, leave);
     } else if (nearMiss) {
+      this.band.setObjective("The brass shape has gone. Press Enter or Space to continue.");
       this.setNarrator(
         "A flash of brass among the pipes — something small and bright — then it's gone.",
       );
       this.showSongbirdCompanion(1380, 470);
       this.time.delayedCall(900, () => this.dismissSongbirdCompanion(1450, 430));
-      this.time.delayedCall(2400, () => this.startTrueNamePassage());
+      this.readThen(() => this.startTrueNamePassage());
     } else {
       this.time.delayedCall(600, () => this.startTrueNamePassage());
     }
@@ -1890,8 +2250,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   private awardSongbird(): void {
     this.clearActiveTargets();
-    this.companionAwarded = true;
+    let accepted = false;
     this.store.update((s) => {
+      accepted = rememberCompanionDecision(s, "clockwork-forge", "accepted") === "accepted";
+      if (!accepted) return;
       if (!s.satchel.includes("brass-songbird")) {
         s.satchel.push("brass-songbird");
       }
@@ -1899,14 +2261,45 @@ export class ClockworkForgeScene extends Phaser.Scene {
         cleared: false,
         choices: {},
       };
-      realm.choices["companion"] = "songbird";
       s.realms["clockwork-forge"] = realm;
     });
-    this.setNarrator(
-      "The brass bird lands on your shoulder. It trills three notes — then goes still.",
-    );
+    this.companionAwarded = accepted;
+    if (!accepted) { this.startTrueNamePassage(); return; }
+    this.checkpoint("companion-answer");
+    this.setNarrator("At your whistle, the brass bird lifts from the pipe.");
+    this.band.setObjective("The brass songbird flies closer.");
+    this.perchSongbirdOnWren(() => this.showSongbirdAnswer());
+  }
+
+  private showSongbirdAnswer(): void {
+    this.checkpoint("companion-answer");
+    this.setNarrator("The brass bird lands on your shoulder. It trills three notes — then goes still.");
+    this.band.setObjective("Brass Songbird joined you. Press Enter or Space to continue.");
     this.pulseSongbirdCompanion();
-    this.time.delayedCall(2200, () => this.startTrueNamePassage());
+    this.readThen(() => this.startTrueNamePassage());
+  }
+
+  private perchSongbirdOnWren(onLanded: () => void, restored = false): void {
+    const bird = this.songbirdCompanion;
+    if (!bird?.scene) { onLanded(); return; }
+    // Stop the pipe's entrance/idle bob so it cannot pull the bird off its new perch.
+    this.tweens.killTweensOf(bird);
+    bird.setScale(1);
+    bird.getAt<Phaser.GameObjects.Graphics>(0)?.setVisible(false);
+    const shoulder = { x: this.wrenContainer.x + 52, y: this.wrenContainer.y - 148 };
+    if (restored || reducedMotion(this)) {
+      bird.setPosition(shoulder.x, shoulder.y).setAlpha(1);
+      onLanded();
+      return;
+    }
+    this.tweens.add({
+      targets: bird,
+      ...shoulder,
+      alpha: 1,
+      duration: 640,
+      ease: "Sine.easeInOut",
+      onComplete: onLanded,
+    });
   }
 
   private showSongbirdCompanion(startX = 1380, startY = 430): void {
@@ -1954,8 +2347,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── True-name passage + ending ──────────────────────────────────────────────
 
   private startTrueNamePassage(): void {
+    this.checkpoint("true-name-intro");
     this.clearActiveTargets();
     this.narration.say("forge_truename_intro");
+    this.band.setObjective("Read the forge's final passage. Press Enter or Space to begin.");
+    this.readThen(() => this.deliverTrueNamePassage());
+  }
+
+  private deliverTrueNamePassage(): void {
     const sealY = this.scale.height - 318;
     const seal = stageTrueNameSeal(this, {
       color: PALETTE_HEX.ember,
@@ -1979,13 +2378,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
           s.almanacLore.push("the-forge-true-name");
         }
       });
+      this.checkpoint("ending");
+      this.band.setObjective("The forge's name is sealed. Return to the portal.");
       this.time.delayedCall(1000, () => this.startEnding());
-    }, "none", seal);
+    }, "none", seal, "true-name");
   }
 
   private startEnding(): void {
     this.clearActiveTargets();
     this.setNarrator("You return to the portal. The Almanac stamps a new page.");
+    this.band.setObjective("Forge journey complete. Press Enter or Space to return to the chamber.");
 
     // Determine ending key for almanac lore
     const fork1 = this.fork1Choice ?? "forn";
@@ -1998,14 +2400,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
         choices: {},
       };
       realm.cleared = true;
-      realm.choices["ending"] = endingKey;
-      if (this.companionAwarded) {
-        realm.choices["companion"] = "songbird";
-      }
+      if (!realm.choices["ending"]) realm.choices["ending"] = endingKey;
       s.realms["clockwork-forge"] = realm;
+      if (this.companionAwarded) rememberCompanionDecision(s, "clockwork-forge", "accepted");
     });
+    if (!this.revisit && this.store.get().checkpoint?.scene === "ClockworkForgeScene") this.store.clearCheckpoint();
 
-    this.showAlmanacStamp(() => {
+    this.readThen(() => this.showAlmanacStamp(() => {
       playRealmReturnDeparture(this, this.wrenContainer, {
         kind: "ember",
         color: PALETTE_HEX.brass,
@@ -2022,7 +2423,26 @@ export class ClockworkForgeScene extends Phaser.Scene {
           },
         );
       });
-    });
+    }));
+  }
+
+  private readingHintY(): number {
+    const belowCaption = Math.max(316, this.narration.bottom() + 40);
+    // The catwalk puts Wren's hood in the usual reading lane. Its figures
+    // need the hint below their feet until the written descent has happened.
+    return (this.wrenContainer?.y ?? Infinity) <= CATWALK_SURFACE_Y + 12
+      ? Math.max(belowCaption, CATWALK_SURFACE_Y + 64)
+      : belowCaption;
+  }
+
+  private readThen(next: () => void): void {
+    this.reading.show(next, () => this.narration.replay());
+  }
+
+  private commitFork(fork: RealmFork, requested: string): string {
+    let chosen = requested;
+    this.store.update(s => { chosen = rememberRealmFork(s, "clockwork-forge", fork, requested); });
+    return chosen;
   }
 
   private showAlmanacStamp(onDone: () => void): void {
@@ -2035,12 +2455,32 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   // ─── Golem spawning ───────────────────────────────────────────────────────────
 
+  private showPeacefulGuards(): void {
+    if (this.peacefulGuards.length > 0) return;
+    // Outer lanes leave Wren, the order cue and its single word unobscured.
+    // FLOOR_Y is a body-center lane; the painted boots share Wren's floor at
+    // FOUNDRY_GROUND_Y. Unlike a combat enemy, these guards do not advance.
+    this.peacefulGuards = [340, 1580].map(x => {
+      const container = this.add.container(x, FLOOR_Y).setDepth(37);
+      const sprite = this.drawGolemInto(container, false);
+      return { container, sprite };
+    });
+  }
+
+  private clearPeacefulGuards(): void {
+    for (const guard of this.peacefulGuards) {
+      this.tweens.killTweensOf(guard.container);
+      guard.container.destroy();
+    }
+    this.peacefulGuards = [];
+  }
+
   /** Spawn a static (non-advancing) tutorial golem. Returns the golem object. */
   private spawnStaticGolem(
     x: number,
     y: number,
     _isBoss: boolean,
-    groundY = 16,
+    groundY = GOLEM_SPRITE_HEIGHT / 2 + 4,
   ): StaticGolem {
     const container = this.add.container(x, y);
     const sprite = this.drawGolemInto(container, false, groundY);
@@ -2058,7 +2498,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     word: string,
     advanceMs: number,
     isCapitalized: boolean,
-    groundY = 16,
+    groundY = GOLEM_SPRITE_HEIGHT / 2 + 4,
   ): MovingWordEnemy {
     const startX = x < this.scale.width / 2 ? -120 : this.scale.width + 120;
     const container = this.add.container(startX, y);
@@ -2093,6 +2533,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
       knockbackPauseMs: 1200,
       dangerRampStart: DANGER_RAMP_START,
       anchorOffsetY: -118,
+      // Floor commands keep their authored lanes as the golems converge.
+      // Gregor's solo catwalk training target still follows its body.
+      wordAnchorX: y === FLOOR_Y ? x : undefined,
       fontSize: 34,
       // Forge-fire burst on completion — an "ember bloom" rather than brass.
       burstColor: PALETTE_HEX.ember,
@@ -2125,7 +2568,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
           sourceRadius: 32,
           targetRadius: 36,
         });
-        this.cameras.main.shake(180, 0.004);
+        if (!reducedMotion(this)) this.cameras.main.shake(180, 0.004);
         playWrenHurt(this.wrenSprite, { knockX: 0 });
         playDamageThud();
         flashDamageVignette(this);
@@ -2222,13 +2665,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
     persist = false,
   ): void {
     sprite.setTint(PALETTE_HEX.brass);
-    if (!persist) this.time.delayedCall(220, () => sprite.clearTint());
+    if (!persist) this.time.delayedCall(220, () => restoreSceneActorLighting(sprite));
   }
 
   /** Visual "command" effect when the player uses Shift on a golem — the camera
    *  flash and the golem flaring brass before the body falls. */
   private commandEffect(sprite: Phaser.GameObjects.Image): void {
-    this.cameras.main.flash(180, 200, 140, 20);
+    if (!reducedFlashes(this)) this.cameras.main.flash(180, 200, 140, 20);
     this.flashGolemCommanded(sprite);
   }
 
@@ -2245,7 +2688,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
   /** Visual effect for full-command response. */
   private golemCommandFlash(golem: StaticGolem): void {
-    this.cameras.main.flash(200, 200, 140, 20);
+    if (!reducedFlashes(this)) this.cameras.main.flash(200, 200, 140, 20);
     this.flashGolemCommanded(golem.sprite);
     this.tweens.add({
       targets: golem.container,
@@ -2311,9 +2754,13 @@ export class ClockworkForgeScene extends Phaser.Scene {
 
     const lateral = long ? 220 : 180;
     const xInset = long ? 420 : 300;
+    const actorClearanceY = owner === "forn"
+      ? Math.min(this.wrenContainer.y - 300, body.y - FORN_SPRITE_HEIGHT - 64)
+      : this.wrenContainer.y - 300;
     return {
       x: Phaser.Math.Clamp(body.x + side * lateral, xInset, width - xInset),
-      y: Phaser.Math.Clamp(body.y + sourceOffsetY - lift, 280, height - 430),
+      y: Math.min(actorClearanceY,
+        Phaser.Math.Clamp(body.y + sourceOffsetY - lift, 280, height - 430)),
     };
   }
 
@@ -2340,20 +2787,95 @@ export class ClockworkForgeScene extends Phaser.Scene {
     };
   }
 
+  /** Each choice sits above its speaker, clear of all three silhouettes. */
+  private forgeForkWordPosition(owner: "forn" | "apprentices"): { x: number; y: number } {
+    return {
+      x: this.scale.width * (owner === "forn" ? 0.26 : 0.74),
+      y: Math.min(440, this.scale.height - 620),
+    };
+  }
+
+  private approachForgeWork(x: number): void {
+    const actor = this.wrenContainer;
+    if (!actor?.scene) return;
+    this.tweens.killTweensOf(actor);
+    if (reducedMotion(this)) { actor.x = x; return; }
+    setWrenPose(this.wrenSprite, "walk", x < actor.x);
+    this.tweens.add({
+      targets: actor, x, duration: 520, ease: "Sine.easeInOut",
+      onComplete: () => { if (this.wrenSprite?.scene) setWrenPose(this.wrenSprite, "front"); },
+    });
+  }
+
+  /** The same painted keepsake moves from its maker into Wren's hands. This
+   * flourish never gates Continue or owns reward/save progression. */
+  private showForgeKeepsake(id: string, fromX: number, restored = false): void {
+    const icon = satchelIconFor(id);
+    if (!icon || !this.textures.exists(icon.key)) return;
+    // Forn's phrase has already put this same hammer in Wren's hands. Keep it
+    // through the final repair phrase and reward card rather than handing it twice.
+    if (this.keepsakeSprite?.scene && this.keepsakeSprite.texture.key === icon.key) return;
+    this.clearForgeKeepsake();
+    const end = { x: this.wrenContainer.x + 38, y: this.wrenContainer.y - 118 };
+    const immediate = restored || reducedMotion(this);
+    const item = this.add.image(immediate ? end.x : fromX,
+      immediate ? end.y : FOUNDRY_GROUND_Y - 190, icon.key).setDepth(61);
+    item.setScale(66 / Math.max(item.width, item.height));
+    this.keepsakeSprite = item;
+    applySceneActorLighting(this, item);
+    this.tweens.add({
+      targets: item, ...end, duration: immediate ? 0 : 650,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  private clearForgeKeepsake(): void {
+    const item = this.keepsakeSprite;
+    this.keepsakeSprite = undefined;
+    if (!item?.scene) return;
+    this.tweens.killTweensOf(item);
+    item.destroy();
+  }
+
   private runPassageChain(
     passages: string[],
     narratorLines: string[],
     onDone: () => void,
     owner: ForgePassageOwner = "forn",
     trueNameSeal?: Phaser.GameObjects.Container,
+    checkpointStep?: ForgeStep,
   ): void {
-    let step = 0;
+    const resume = checkpointStep ? this.savedStageData(checkpointStep) : {};
+    let step = forgePassageIndex(resume.index, passages.length);
+    let resumeReading = resume.reading === true;
+    if (checkpointStep && this.resumeCheckpoint?.step === checkpointStep) this.resumeCheckpoint = null;
+    // The gift phrase owns the Hammer's visual transfer. Restore its settled
+    // hand position during its acknowledgment and all following repair beats.
+    if (owner === "forn" && (step > 2 || (step === 2 && resumeReading))) {
+      this.showFornEmptyHands();
+      this.showForgeKeepsake("bellows-hammer", 475, true);
+    }
+    if (!resumeReading && step > 0) {
+      const previousResponse = narratorLines[step - 1] ?? "";
+      if (previousResponse) this.setNarrator(previousResponse);
+    }
 
     const advance = (): void => {
       if (step >= passages.length) {
         onDone();
         return;
       }
+      if (resumeReading) {
+        resumeReading = false;
+        const line = narratorLines[step] ?? "";
+        if (line) {
+          this.setNarrator(line);
+          this.band.setObjective("Phrase complete. Press Enter or Space to continue.");
+          this.readThen(() => { step++; advance(); });
+        } else { step++; advance(); }
+        return;
+      }
+      if (checkpointStep) this.checkpoint(checkpointStep, { index: step, reading: false });
       const word = passages[step];
       // Skip empty narrator-only steps
       if (!word) {
@@ -2361,13 +2883,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
         advance();
         return;
       }
+      this.band.setObjective(`Type the shown phrase (${step + 1}/${passages.length}), including spaces and punctuation.`);
       let trueNameAnchor: WordBodyAnchorHandle | null = null;
       const releaseTrueNameAnchor = (): void => {
         trueNameAnchor?.destroy();
         trueNameAnchor = null;
       };
       const pos = trueNameSeal
-        ? { x: trueNameSeal.x, y: trueNameSeal.y - 118 }
+        ? { x: trueNameSeal.x, y: Math.min(trueNameSeal.y - 118, this.wrenContainer.y - 300) }
         : this.forgePassageWordPosition(owner, word);
       const opts: TextWordTargetOptions = {
         scene: this,
@@ -2403,6 +2926,16 @@ export class ClockworkForgeScene extends Phaser.Scene {
             ringRadius: 24,
           });
         },
+        onSettled: () => {
+          const line = narratorLines[step] ?? "";
+          if (checkpointStep) {
+            this.checkpoint(checkpointStep, { index: line ? step : step + 1, reading: !!line });
+            // A reload may precede the250ms autosave and320ms visual exit.
+            // Queue local durability now; existing save errors remain available
+            // through the store, and input never waits for optional cloud work.
+            void this.store.flush().catch(() => {});
+          }
+        },
         onComplete: () => {
           releaseTrueNameAnchor();
           playWrenAction(this.wrenSprite);
@@ -2429,9 +2962,20 @@ export class ClockworkForgeScene extends Phaser.Scene {
             depth: 58,
           });
           const line = narratorLines[step] ?? "";
+          if (checkpointStep) this.checkpoint(checkpointStep, { index: line ? step : step + 1, reading: !!line });
           step++;
-          if (line) this.setNarrator(line);
-          this.time.delayedCall(line ? 1400 : 400, advance);
+          this.clearActiveTargets();
+          if (owner === "forn" && word === FORN_PASSAGES[2]) {
+            this.showFornEmptyHands();
+            this.showForgeKeepsake("bellows-hammer", 475);
+          }
+          if (line) {
+            this.setNarrator(line);
+            this.band.setObjective("Phrase complete. Press Enter or Space to continue.");
+            this.readThen(advance);
+          } else {
+            this.time.delayedCall(400, advance);
+          }
         },
       };
       let target: TextWordTarget;
@@ -2529,7 +3073,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const steps = [
       { x: start.x + 118, y: start.y + 90 },
       { x: start.x + 38, y: start.y + 210 },
-      { x: this.scale.width / 2, y: FLOOR_Y },
+      { x: this.scale.width / 2, y: FOUNDRY_GROUND_Y },
     ];
 
     this.tweens.add({
@@ -2591,7 +3135,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const steps = [
       { x: start.x + 118, y: start.y + 96, width: 116 },
       { x: start.x + 38, y: start.y + 216, width: 126 },
-      { x: this.scale.width / 2, y: FLOOR_Y + 2, width: 148 },
+      { x: this.scale.width / 2, y: FOUNDRY_GROUND_Y + 2, width: 148 },
     ];
 
     g.lineStyle(3, 0x2b1a12, 0.68);
@@ -2978,11 +3522,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
   // ─── Input ────────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
-    // Ctrl+Shift+P: toggle purist mode from inside the realm.
     if (isPuristToggleKey(event)) {
+      event.preventDefault();
       togglePuristMode(this, this.store);
       return;
     }
+    if (event.ctrlKey || event.metaKey) return;
+    if (this.chapterMenu?.handleKey(event)) return;
+    if (this.reading.handleKey(event)) return;
     if (event.key === "Shift") {
       this.shiftHeld = true;
       return;
@@ -2996,6 +3543,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
     }
     if (event.key.length === 1 || event.key === " ") {
       playClack();
+    }
+    if (event.key.length === 1) {
+      this.shiftHeld = event.shiftKey;
+      this.altHeld = event.altKey;
     }
     this.typingInput.handleChar(event.key, {
       // Shift stays free: capitalized command golems are caseSensitive, so
@@ -3028,6 +3579,18 @@ export class ClockworkForgeScene extends Phaser.Scene {
         scale: 1.025,
         durationMs: 220,
       });
+    } else if (speakerName === "Old Gregor") {
+      playActorAttention(this, this.gregorSprite, {
+        tint: PALETTE_HEX.ember,
+        scale: 1.02,
+        durationMs: 220,
+      });
+    } else if (speakerName === "Apprentice") {
+      playActorAttention(this, this.apprenticeSprite, {
+        tint: PALETTE_HEX.ember,
+        scale: 1.02,
+        durationMs: 220,
+      });
     }
   }
 
@@ -3037,7 +3600,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
     } else if (speakerName === "Forn") {
       this.band.setPortrait("forn", "Forn");
     } else if (speakerName === "Old Gregor") {
-      this.band.setPortrait("forge-command-golem", "Old Gregor");
+      this.band.setPortrait("forge-gregor", "Old Gregor");
+    } else if (speakerName === "Apprentice") {
+      this.ensureApprenticePortrait();
+      this.band.setPortrait("forge-apprentice-portrait", "Apprentice");
     } else {
       this.band.setPortrait(undefined, speakerName);
     }
@@ -3261,13 +3827,15 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   /** Run an offensive one-shot's consequence. The invoker has already picked the
-   *  target(s), spent the Soul, and consumed the once-per-realm charge; the realm
+   *  target(s) and spent the Soul; record the charge before an effect can
+   *  synchronously advance to a saved boundary. The realm
    *  owns the kill/seize/freeze + VFX. The Forge only fires toll-strike forward;
    *  jam-foe / bind-beat arrive with the Sky / Wood migrations. */
   private applyOneShot(
     effect: OffensiveOneShot,
     targets: readonly MovingWordEnemy[],
   ): void {
+    if (!this.usedOneShots.includes(effect)) this.usedOneShots.push(effect);
     if (effect === "toll-strike") this.tollStrike(targets[0]);
   }
 
@@ -3318,7 +3886,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       count: 16,
       radius: 60,
     });
-    this.cameras.main.shake(160, 0.004);
+    if (!reducedMotion(this)) this.cameras.main.shake(160, 0.004);
     target.defeat();
   }
 
@@ -3330,6 +3898,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     const onComplete = opts.onComplete;
     return new TextWordTarget({
       outline: true,
+      depth: 70,
       ...opts,
       onClaim: (mods) => {
         if (opts.frame === "banner") playWrenFocus(this.wrenSprite);
@@ -3815,14 +4384,14 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private idleBob(c: Phaser.GameObjects.Container): void {
-    this.tweens.add({
+    decorativeTween(this, this.tweens.add({
       targets: c,
       y: { from: c.y, to: c.y - 5 },
       duration: 1100,
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
-    });
+    }));
   }
 
   // ─── Drawing ──────────────────────────────────────────────────────────────────
@@ -3987,43 +4556,45 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private drawGolemInto(
     c: Phaser.GameObjects.Container,
     _isBoss: boolean,
-    groundY = 16,
+    groundY = GOLEM_SPRITE_HEIGHT / 2 + 4,
   ): Phaser.GameObjects.Image {
     c.add(addLocalGroundShadow(this, 190, 34, { y: groundY, alpha: 0.46 }));
     c.add(this.makeGolemFoundryBase(false, groundY + 2));
     const sprite = this.add.image(0, 0, "forge-golem");
     sprite.setScale(GOLEM_SPRITE_HEIGHT / sprite.height);
+    applySceneActorLighting(this, sprite);
     c.add(sprite);
     return sprite;
   }
 
   /** Add the painted Command-Golem boss sprite (scaled to the procedural boss
-   *  height; the ×1.8 container scales it up on screen). Returns it so phase 2
+   *  height; the container scales it up on screen). Returns it so phase 2
    *  can flash it "commanded". */
   private drawCommandGolemInto(
     c: Phaser.GameObjects.Container,
     _isBoss: boolean,
   ): Phaser.GameObjects.Image {
-    c.add(addLocalGroundShadow(this, 164, 30, { y: 12, alpha: 0.46 }));
+    c.add(addLocalGroundShadow(this, 164, 30, { y: COMMAND_GOLEM_SPRITE_HEIGHT / 2 + 2, alpha: 0.46 }));
     c.add(this.makeGolemFoundryBase(true));
     const sprite = this.add.image(0, 0, "forge-command-golem");
     sprite.setScale(COMMAND_GOLEM_SPRITE_HEIGHT / sprite.height);
+    applySceneActorLighting(this, sprite);
     c.add(sprite);
     return sprite;
   }
 
   private makeGolemFoundryBase(
     isBoss: boolean,
-    emberY = isBoss ? 16 : 18,
+    emberY = (isBoss ? COMMAND_GOLEM_SPRITE_HEIGHT : GOLEM_SPRITE_HEIGHT) / 2 + 2,
   ): Phaser.GameObjects.Graphics {
-    const g = this.add.graphics();
     const width = isBoss ? 190 : 174;
-    g.fillStyle(0x090604, 0.22);
-    g.fillEllipse(0, emberY, width, isBoss ? 42 : 36);
-    g.fillStyle(PALETTE_HEX.ember, isBoss ? 0.16 : 0.14);
-    g.fillEllipse(0, emberY - 4, width * 0.72, isBoss ? 32 : 28);
-    g.lineStyle(2, PALETTE_HEX.brass, isBoss ? 0.28 : 0.22);
-    g.strokeEllipse(0, emberY - 3, width * 0.86, isBoss ? 36 : 31);
+    const g = addLocalGroundShadow(this, width, isBoss ? 42 : 36,
+      { y: emberY, color: 0x090604, alpha: 0.22 });
+    g.fillStyle(PALETTE_HEX.ember, isBoss ? 0.12 : 0.1);
+    g.fillEllipse(-width * 0.2, emberY - 4, width * 0.27, 9);
+    g.fillEllipse(width * 0.21, emberY - 1, width * 0.24, 7);
+    // Floor heat is a scattered reflection; an outlined oval reads as a disc
+    // floating underneath the heavy automaton.
     g.lineStyle(2, PALETTE_HEX.ember, isBoss ? 0.28 : 0.24);
     g.lineBetween(-width * 0.34, emberY - 8, -width * 0.12, emberY - 14);
     g.lineBetween(width * 0.06, emberY - 13, width * 0.32, emberY - 7);

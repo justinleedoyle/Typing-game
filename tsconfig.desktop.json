@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "types": ["node"], "noUnusedLocals": true, "noUnusedParameters": true },
+  "include": ["desktop", "src/game/saveState.ts", "src/game/desktopBridge.ts", "src/config.ts", "src/game/supabaseClient.ts", "src/vite-env.d.ts"]
+}

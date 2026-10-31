@@ -27,6 +27,8 @@ const SOURCE: Record<string, string> = {
 };
 const HURT_TIMER_KEY = "wrenHurtTimer";
 const pendingReactions = new WeakMap<Phaser.GameObjects.Image, () => boolean>();
+const heldProps = new WeakMap<Phaser.GameObjects.Image, Set<Phaser.GameObjects.Image>>();
+const heldPropCleanup = new WeakMap<Phaser.GameObjects.Image, () => void>();
 
 /** Keystrokes can interrupt a flourish before its tween completes. Restore its
  * resting pose first so the next reaction cannot inherit a raised walk frame. */
@@ -89,6 +91,67 @@ export function makeWrenCarryHands(scene: Phaser.Scene): Phaser.GameObjects.Cont
     hands.add(hand);
   }
   return hands;
+}
+
+/** A received small prop sits in front of the cloak, with only the original
+ * painted fingers over its grip. Cropping the full opaque sleeve would hide
+ * small keepsakes completely. All three layers share the sprite's transform. */
+export function attachWrenHeldProp(
+  scene: Phaser.Scene,
+  owner: Phaser.GameObjects.Container,
+  sprite: Phaser.GameObjects.Image,
+  prop: Phaser.GameObjects.Image,
+  point: { x: number; y: number },
+): void {
+  heldPropCleanup.get(prop)?.();
+  setWrenPose(sprite, "front");
+  const props = heldProps.get(sprite) ?? new Set<Phaser.GameObjects.Image>();
+  props.add(prop);
+  heldProps.set(sprite, props);
+  const hand = scene.add.image(0, 0, TEXTURE.front).setOrigin(0.5, 1);
+  // Source artwork is 449 x 789. These narrow regions contain the fingers,
+  // leaving the object silhouette readable above and below the contact.
+  const left = point.x < 0;
+  hand.setCrop((left ? 75 : 350) / 449 * hand.width, 565 / 789 * hand.height,
+    25 / 449 * hand.width, 30 / 789 * hand.height);
+  applySceneActorLighting(scene, hand);
+  owner.addAt(prop, owner.getIndex(sprite) + 1);
+  owner.addAt(hand, owner.getIndex(prop) + 1);
+  const restingScale = WREN_DISPLAY_HEIGHT / sprite.height;
+  const baseScaleX = prop.scaleX, baseScaleY = prop.scaleY, baseRotation = prop.rotation;
+  const sync = (): void => {
+    if (!sprite.scene || !prop.scene || !hand.scene) return;
+    const matrix = sprite.getLocalTransformMatrix();
+    const x = point.x / restingScale, y = point.y / restingScale;
+    prop.setPosition(matrix.a * x + matrix.c * y + matrix.tx,
+      matrix.b * x + matrix.d * y + matrix.ty);
+    prop.setScale(baseScaleX * sprite.scaleX / restingScale,
+      baseScaleY * sprite.scaleY / restingScale);
+    prop.setRotation(baseRotation + sprite.rotation);
+    hand.setPosition(sprite.x, sprite.y).setScale(sprite.scaleX, sprite.scaleY)
+      .setRotation(sprite.rotation);
+    hand.setAlpha(sprite.alpha);
+  };
+  let released = false;
+  const release = (): void => {
+    if (released) return;
+    released = true;
+    scene.events.off(Phaser.Scenes.Events.POST_UPDATE, sync);
+    scene.events.off(Phaser.Scenes.Events.SHUTDOWN, release);
+    prop.off(Phaser.GameObjects.Events.DESTROY, release);
+    props.delete(prop);
+    if (!props.size) heldProps.delete(sprite);
+    heldPropCleanup.delete(prop);
+    // Re-attaching during a typing squash must use the original art fit,
+    // rather than accumulating the previous frame's scaled prop dimensions.
+    if (prop.scene) prop.setScale(baseScaleX, baseScaleY).setRotation(baseRotation);
+    if (hand.scene) hand.destroy();
+  };
+  heldPropCleanup.set(prop, release);
+  scene.events.on(Phaser.Scenes.Events.POST_UPDATE, sync);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, release);
+  prop.once(Phaser.GameObjects.Events.DESTROY, release);
+  sync();
 }
 
 /**
@@ -163,7 +226,7 @@ export function playWrenAction(
   const originalScaleX = img.scaleX;
   const originalY = img.y;
   const scene = img.scene;
-  if (img.texture.key !== TEXTURE.carry) applyWrenPose(img, "cast", opts.faceLeft ?? originalScaleX < 0);
+  if (img.texture.key !== TEXTURE.carry && !heldProps.has(img)) applyWrenPose(img, "cast", opts.faceLeft ?? originalScaleX < 0);
   scene.tweens.add({
     targets: img,
     y: originalY - 8,
@@ -187,7 +250,7 @@ export function playWrenFocus(
   const originalY = img.y;
   const scene = img.scene;
   const faceLeft = opts.faceLeft ?? originalScaleX < 0;
-  if (img.texture.key !== TEXTURE.carry) applyWrenPose(img, "walk", faceLeft);
+  if (img.texture.key !== TEXTURE.carry && !heldProps.has(img)) applyWrenPose(img, "walk", faceLeft);
   scene.tweens.add({
     targets: img,
     x: originalX + (faceLeft ? -5 : 5),

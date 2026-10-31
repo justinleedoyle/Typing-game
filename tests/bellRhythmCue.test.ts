@@ -1,3 +1,4 @@
+import { attachWrenHeldPropFixture } from "./_wrenHeldProp";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { assert, assertEqual, suite } from "./_assert";
@@ -22,11 +23,11 @@ const code = ts.transpileModule(`${constants}\nclass Harness { static nave = NAV
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;
 const noop = () => {};
-const Harness = new Function("bellIndex", "reducedFlashes", "reducedMotion", "PALETTE_HEX", "Phaser",
+const Harness = new Function("attachWrenHeldProp", "bellIndex", "reducedFlashes", "reducedMotion", "PALETTE_HEX", "Phaser",
   "applySceneActorLighting", "playWrenFocus", "playWrenAction", "playBodyImpact", "playDamageThud", "BELL_BURST_COLOR",
   "setWrenPose", "isPuristToggleKey", "playClack", "satchelIconFor",
   `${code}; return Harness;`)(
-  bellIndex, (scene: { reducedFlashes: boolean }) => scene.reducedFlashes,
+  attachWrenHeldPropFixture, bellIndex, (scene: { reducedFlashes: boolean }) => scene.reducedFlashes,
   (scene: { reducedMotion: boolean }) => scene.reducedMotion,
   { frost: 0xabcdef, ember: 0xfedcba },
   { Math: { Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(value, max)) } },

@@ -1,3 +1,4 @@
+import { attachWrenHeldPropFixture } from "./_wrenHeldProp";
 import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import ts from "typescript";
@@ -81,6 +82,7 @@ function fixture(reduced = false) {
     };
   }
   const globals = {
+    attachWrenHeldProp: attachWrenHeldPropFixture,
     Phaser: { Math: { Clamp: (n: number, min: number, max: number) => Math.max(min, Math.min(max, n)),
       Vector2: class { constructor(public x: number, public y: number) {} } },
       Curves: { CubicBezier: class {
@@ -191,7 +193,7 @@ await suite("Sky stolen spark: original four phrases dim, take and hold painted 
         assertClose(bounds.bottom - bounds.top, 56, 0.1, "Wren holds a readable curl of the same painted fire");
         assertEqual([held.x, held.y], [46,-65], "the curl's fitted base meets the front palm in actor-local coordinates");
         assertEqual(held.parentContainer,f.s.wrenContainer,"the received spark shares Wren's actual breath and travel owner");
-        assert(f.s.wrenContainer.getIndex(held)<f.s.wrenContainer.getIndex(f.s.wrenSprite),"Wren's painted sleeve occludes the flame base instead of the curl covering the arm");
+        assert(f.s.wrenContainer.getIndex(held)>f.s.wrenContainer.getIndex(f.s.wrenSprite),"the small flame remains above the opaque cloak rather than disappearing behind it");
         assertClose(bounds.bottom,f.s.wrenContainer.y-65,.1,"the true alpha silhouette ends at the supported palm");
         const reviewScale = 1250 / f.s.scale.width;
         assert((bounds.bottom - bounds.top) * reviewScale >= 34 && (bounds.right - bounds.left) * reviewScale >= 15,

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
-import { assert, assertEqual, suite } from "./_assert";
+import { EventEmitter } from "node:events";
+import { assert, assertClose, assertEqual, suite } from "./_assert";
 import * as actorLighting from "../src/game/actorLighting";
 import { installPresentation, reducedMotion, reducedFlashes } from "../src/game/presentation";
 
@@ -12,6 +13,7 @@ const code = ts.transpileModule(source, {
 }).outputText;
 interface WrenHelpers {
   preloadWren(scene: unknown, opts?: { carry?: boolean }): void;
+  attachWrenHeldProp(scene: unknown, owner: unknown, sprite: unknown, prop: unknown, point: { x: number; y: number }): void;
   bobWrenSprite(image: Image): void;
   playWrenFocus(image: Image): void;
   playWrenAction(image: Image): void;
@@ -21,7 +23,9 @@ interface WrenHelpers {
 }
 const exports = {} as WrenHelpers;
 new Function("exports", "require", code)(exports, (name: string) =>
-  name.endsWith("actorLighting") ? actorLighting : { default: "inert-image-asset" });
+  name.endsWith("actorLighting") ? actorLighting : name === "phaser"
+    ? { default: { Scenes: { Events: { POST_UPDATE: "postupdate", SHUTDOWN: "shutdown" } },
+      GameObjects: { Events: { DESTROY: "destroy" } } } } : { default: "inert-image-asset" });
 
 interface Tween { targets: Image; onComplete?: () => void }
 interface Timer { removed: boolean; callback: () => void; remove(): void }
@@ -208,4 +212,118 @@ await suite("Wren carrying: only a scene requesting the pose expands its require
   exports.preloadWren({ load: { image: (key: string) => carrying.push(key) } }, { carry: true });
   assertEqual(ordinary, ["wren-front", "wren-walk", "wren-cast", "wren-hurt"], "all other scenes retain their original required pose set");
   assertEqual(carrying, [...ordinary, "wren-carry"], "the carrying scene preloads its new pose through the existing asset recovery gate");
+});
+
+
+// Exercise the real shared grip code, including its scene and prop lifetime.
+// The display surfaces model Phaser's transform and destroy event contracts.
+class GripImage extends EventEmitter {
+  texture = { key: "wren-front" };
+  width = 449; height = 789; x = 0; y = 0; scaleX = 1; scaleY = 1;
+  rotation = 0; alpha = 1; crop: number[] = []; parentContainer: any;
+  data = new Map<string, unknown>();
+  constructor(public scene: any) { super(); }
+  setTexture(key: string) { this.texture.key = key; return this; }
+  setOrigin() { return this; }
+  setCrop(...crop: number[]) { this.crop = crop; return this; }
+  setScale(x: number, y = x) { this.scaleX = x; this.scaleY = y; return this; }
+  setPosition(x: number, y: number) { this.x = x; this.y = y; return this; }
+  setRotation(rotation: number) { this.rotation = rotation; return this; }
+  setAlpha(alpha: number) { this.alpha = alpha; return this; }
+  setTint() { return this; }
+  getData(key: string) { return this.data.get(key); }
+  setData(key: string, value: unknown) { this.data.set(key, value); return this; }
+  getLocalTransformMatrix() {
+    const c = Math.cos(this.rotation), s = Math.sin(this.rotation);
+    return { a: c * this.scaleX, b: s * this.scaleX, c: -s * this.scaleY, d: c * this.scaleY, tx: this.x, ty: this.y };
+  }
+  destroy() {
+    if (!this.scene) return;
+    this.emit("destroy"); this.scene = undefined;
+    const siblings = this.parentContainer?.children;
+    if (siblings) siblings.splice(siblings.indexOf(this), 1);
+  }
+}
+function gripFixture() {
+  const active: any[] = [];
+  const scene: any = { sys: { settings: { key: "SkyIslandScene" } }, events: new EventEmitter(),
+    tweens: { killTweensOf: () => { active.length = 0; }, add: (t: any) => active.push(t) },
+    add: { image: () => new GripImage(scene) } };
+  const sprite = new GripImage(scene).setScale(240 / 789);
+  const owner = { x: 960, y: 826, children: [sprite] as GripImage[],
+    getIndex(child: GripImage) { return this.children.indexOf(child); },
+    addAt(child: GripImage, index: number) { const old = this.children.indexOf(child); if (old >= 0) this.children.splice(old, 1);
+      this.children.splice(index, 0, child); child.parentContainer = this; } };
+  const prop = new GripImage(scene).setScale(.08); prop.width = 499; prop.height = 1136;
+  return { scene, sprite, owner, prop, active, update: () => scene.events.emit("postupdate") };
+}
+
+await suite("Wren received props: readable silhouette sits above cloak with only original fingers in front", () => {
+  for (const x of [-42, 46]) {
+    const f = gripFixture();
+    exports.attachWrenHeldProp(f.scene, f.owner, f.sprite, f.prop, { x, y: -65 });
+    const [body, prop, hand] = f.owner.children;
+    assertEqual([body, prop], [f.sprite, f.prop], "the opaque body cannot cover the received object");
+    assertClose(prop.x, x, .0001, "the original horizontal palm contact is retained");
+    assertClose(prop.y, -65, .0001, "the original vertical palm contact is retained");
+    assertEqual(hand.crop, [x < 0 ? 75 : 350, 565, 25, 30], "the uppermost crop contains only the painted fingers for the receiving side");
+    assert(hand.crop[2] * hand.scaleX < 8 && hand.crop[3] * hand.scaleY < 10,
+      "the foreground grip cannot hide a 44-56 pixel keepsake with an opaque full sleeve");
+    assertEqual([hand.x, hand.y, hand.scaleX, hand.scaleY], [f.sprite.x, f.sprite.y, f.sprite.scaleX, f.sprite.scaleY],
+      "the cropped fingers exactly match the existing body, without a detached duplicate hand");
+    f.prop.destroy();
+  }
+});
+
+await suite("Wren received props: breathing, squash, attention and mirrored transforms keep the same physical grip", () => {
+  const f = gripFixture();
+  exports.attachWrenHeldProp(f.scene, f.owner, f.sprite, f.prop, { x: 46, y: -65 });
+  const hand = f.owner.children[2], baseline = f.sprite.scaleY;
+  f.sprite.setPosition(5, -3).setScale(-baseline * 1.02, baseline * .95); f.update();
+  assertClose(f.prop.x, 5 - 46 * 1.02, .0001, "the complete grip follows the same mirrored squash and horizontal attention translation");
+  assertClose(f.prop.y, -3 - 65 * .95, .0001, "the complete grip follows the same vertical squash and attention translation");
+  assertClose(f.prop.scaleX, -.08 * 1.02, .0001, "the object's horizontal fit stays proportional to the mirrored supporting fingers");
+  assertClose(f.prop.scaleY, .08 * .95, .0001, "the object's vertical fit stays proportional to the supporting fingers");
+  assertEqual([hand.x, hand.y, hand.scaleX, hand.scaleY], [5, -3, f.sprite.scaleX, f.sprite.scaleY], "the foreground crop follows the same frame transform");
+  const local = [f.prop.x, f.prop.y]; f.owner.y -= 5; f.update();
+  assertEqual([f.prop.x, f.prop.y], local, "owner breathing moves all layers once without world-space double translation");
+  f.prop.destroy();
+});
+
+await suite("Wren received props: typing preserves the receiving palm until the final held item is released", () => {
+  const f = gripFixture();
+  exports.attachWrenHeldProp(f.scene, f.owner, f.sprite, f.prop, { x: 46, y: -65 });
+  const other = new GripImage(f.scene).setScale(.1);
+  exports.attachWrenHeldProp(f.scene, f.owner, f.sprite, other, { x: -42, y: -65 });
+  for (let i = 0; i < 8; i++) {
+    exports.playWrenFocus(f.sprite as never); exports.bobWrenSprite(f.sprite as never); exports.playWrenAction(f.sprite as never);
+    assertEqual(f.sprite.texture.key, "wren-front", "walk or staff poses cannot break a held palm during rapid input");
+  }
+  f.prop.destroy();
+  exports.playWrenFocus(f.sprite as never);
+  assertEqual(f.sprite.texture.key, "wren-front", "releasing one item cannot release another item's palm");
+  other.destroy(); exports.playWrenFocus(f.sprite as never);
+  assertEqual(f.sprite.texture.key, "wren-walk", "ordinary feedback returns after the last received item is stowed");
+});
+
+await suite("Wren received props: repeat attachment, destruction and scene shutdown remove every extra layer and update listener", () => {
+  const f = gripFixture();
+  exports.attachWrenHeldProp(f.scene, f.owner, f.sprite, f.prop, { x: 46, y: -65 });
+  const oldHand = f.owner.children[2];
+  f.sprite.scaleX *= 1.02; f.sprite.scaleY *= .95; f.update();
+  exports.attachWrenHeldProp(f.scene, f.owner, f.sprite, f.prop, { x: 46, y: -65 });
+  assert(!oldHand.scene, "re-attaching the same actual prop destroys its stale foreground grip");
+  assertClose(f.prop.scaleX, .08, .0001, "re-attachment during a squash retains the original horizontal artwork fit");
+  assertClose(f.prop.scaleY, .08, .0001, "re-attachment during a squash retains the original vertical artwork fit");
+  assertEqual([f.owner.children.length, f.scene.events.listenerCount("postupdate"), f.scene.events.listenerCount("shutdown")],
+    [3, 1, 1], "an idempotent handoff retains exactly one prop, crop and update owner");
+  f.prop.destroy();
+  assertEqual([f.owner.children.length, f.scene.events.listenerCount("postupdate"), f.scene.events.listenerCount("shutdown")],
+    [1, 0, 0], "destroying the received prop removes its fingers and both lifecycle subscriptions immediately");
+  const next = new GripImage(f.scene).setScale(.1);
+  exports.attachWrenHeldProp(f.scene, f.owner, f.sprite, next, { x: 46, y: -65 });
+  const hand = f.owner.children[2]; f.scene.events.emit("shutdown");
+  assert(!hand.scene, "chapter shutdown releases its remaining cropped hand");
+  assertEqual([f.scene.events.listenerCount("postupdate"), next.listenerCount("destroy")], [0, 0], "no old scene tick or stale prop callback survives restart");
+  next.destroy();
 });

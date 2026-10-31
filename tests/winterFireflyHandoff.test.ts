@@ -1,3 +1,4 @@
+import { attachWrenHeldPropFixture } from "./_wrenHeldProp";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { checkpointIndex, committedWinterChoices } from "../src/game/chapterFlow";
@@ -19,6 +20,7 @@ const code = ts.transpileModule(`${constants}\nclass Winter {
 }`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 const noop = () => {};
 const globals = {
+    attachWrenHeldProp: attachWrenHeldPropFixture,
   checkpointIndex, committedWinterChoices,
   PALETTE_HEX: { frost: 1, brass: 2 },
   Phaser: { Math: { Clamp: (value: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, value)) }, GameObjects: { Events: { DESTROY: "destroy" } } },
@@ -142,7 +144,7 @@ await suite("Winter fireflies: taking and reloading carry the same lantern and l
   f.target().onComplete();
   assertEqual([f.scene.fireflyLanternSprite, lantern.parentContainer, lantern.x, lantern.y, lantern.depth], [lantern, f.scene.wrenContainer, 46, -65, 61], "the same lantern leaves the hollow and its loop meets Wren's fingers in the breathing body container");
   assertEqual([lantern.scale * lantern.height, ...lantern.origin], [58, 0.5, 0.04], "the resized lantern hangs from its actual top loop, not a centered chest anchor");
-  assert(f.scene.wrenContainer.children.indexOf(lantern) < f.scene.wrenContainer.children.indexOf(f.scene.wrenSprite), "the receiving fingers and sleeve overlap the loop");
+  assert(f.scene.wrenContainer.children.indexOf(lantern) > f.scene.wrenContainer.children.indexOf(f.scene.wrenSprite), "the lantern remains visible above the opaque cloak");
   assert(!hollow.children.includes(lantern), "the taken lantern cannot remain duplicated in the hollow");
   assertEqual(f.images.filter(image => image.key === "almanac-icon-firefly-lantern").length, 1, "taking reuses one physical painting");
   assert(f.gate() && f.captions.at(-1)!.includes("in your hands"), "the original carried-lantern acknowledgment has no added wait");

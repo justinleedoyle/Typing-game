@@ -73,6 +73,7 @@ import {
 } from "../game/winterNpcs";
 import { makeWolfSprite, preloadWolves } from "../game/wolf";
 import {
+  attachWrenHeldProp,
   bobWrenSprite,
   flashWrenMiss,
   isWrenHurtPlaying,
@@ -2470,8 +2471,7 @@ export class WinterMountainScene extends Phaser.Scene {
   /** A settled keepsake shares Wren's feet-origin body movement. Its handle
    * meets the painted fingers, with the sleeve in front of the contact. */
   private holdWinterProp(prop: Phaser.GameObjects.Image, x: number, y: number): void {
-    this.wrenContainer.addAt(prop, Math.max(0, this.wrenContainer.getIndex(this.wrenSprite)));
-    prop.setPosition(x, y);
+    attachWrenHeldProp(this, this.wrenContainer, this.wrenSprite, prop, { x, y });
   }
 
   private presentWinterPassageReaction(

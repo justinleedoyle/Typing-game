@@ -67,6 +67,7 @@ import {
   type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import {
+  attachWrenHeldProp,
   bobWrenSprite,
   flashWrenMiss,
   makeWrenSprite,
@@ -3262,8 +3263,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   /** The existing sleeve/palm paints in front of the handle, and the keepsake
    * shares Wren's breathing/movement instead of hovering beside the cloak. */
   private attachHeldWoodRelic(relic: Phaser.GameObjects.Image): void {
-    this.wrenContainer.addAt(relic, this.wrenContainer.getIndex(this.wrenSprite));
-    relic.setPosition(42, -68);
+    attachWrenHeldProp(this, this.wrenContainer, this.wrenSprite, relic, { x: 42, y: -68 });
   }
 
   private clearHeldWoodRelic(): void {

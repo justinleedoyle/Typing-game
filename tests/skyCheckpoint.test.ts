@@ -512,8 +512,8 @@ await suite("Sky revisits: recorded book, empty beacon and summit light survive 
     if(row.flame===null) assertEqual(f.scene.beaconBuilds.length,0,"unknown first-fork history does not invent a lit or stolen beacon");
     else {
       const beacon=f.scene.beaconFlameCue;
-      assertEqual([beacon.x,beacon.y],[1540,792],"the supported beacon contact is separate from the shelf footprint");
-      assert(1540-90>1260+130,"painted beacon and shelf silhouettes have a clear horizontal gap");
+      assertEqual([beacon.x,beacon.y],[1500,710],"the beacon contact sits upstage on paving, clear of the descending cliff lip");
+      assert(beacon.x-90>1260+130,"painted beacon and shelf silhouettes have a clear horizontal gap");
       assertEqual([beacon.getByName("beacon-spark").scene,beacon.getByName("beacon-light").scene],[row.flame,row.flame],"theft leaves the actual brazier empty without replaying a spark reward");
     }
     assertEqual(alpha,row.alpha,"independent kind/cut lighting follows resolved history; unknown remains neutral");

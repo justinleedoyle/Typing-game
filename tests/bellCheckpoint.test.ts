@@ -1,3 +1,4 @@
+import { attachWrenHeldPropFixture } from "./_wrenHeldProp";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { assert, assertEqual, suite } from "./_assert";
@@ -26,6 +27,7 @@ const code = ts.transpileModule(`${constants}\nclass Bell { ${methods}\n initial
 }).outputText;
 const noop = () => {};
 const globals: Record<string, unknown> = {
+  attachWrenHeldProp: attachWrenHeldPropFixture,
   bellStep, bellIndex, TypingInputController, resolveCombatLoadout, rememberRealmFork, resolveRealmFork, rememberCompanionDecision, resolveCompanionDecision,
   satchelIconFor: (id: string) => ({ key: `almanac-icon-${id}` }),
   applySceneActorLighting: (_scene: unknown, item: any) => { item.lit = true; },

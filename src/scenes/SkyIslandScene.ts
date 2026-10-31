@@ -69,6 +69,7 @@ import {
   type WordBodyAnchorHandle,
 } from "../game/livingScene";
 import {
+  attachWrenHeldProp,
   bobWrenSprite,
   flashWrenMiss,
   makeWrenSprite,
@@ -898,9 +899,9 @@ export class SkyIslandScene extends Phaser.Scene {
       this.beaconFlameCue ??= this.createBeaconFlameCue();
       const beacon = this.beaconFlameCue;
       this.tweens.killTweensOf(beacon);
-      // The foreground shelf ends at1390; the established masonry beacon
-      // sits on a separate solid terrace patch rather than inside its rack.
-      beacon.setPosition(1540, 792).setAlpha(1);
+      // The foreground shelf ends at1390. Put the masonry upstage on the
+      // terrace paving so its whole foundation clears the descending cliff.
+      beacon.setPosition(1500, 710).setAlpha(1);
       if (first === "steal-flame") {
         for (const name of ["beacon-spark", "beacon-light"]) {
           const light = beacon.getByName(name);
@@ -4381,11 +4382,11 @@ export class SkyIslandScene extends Phaser.Scene {
       light.destroy();
     }
     this.clearHeldBeaconSpark();
-    // Its true painted base meets the front palm. Parenting behind Wren's
-    // sleeve keeps the received curl attached through breathing and typing.
+    // Keep the curl readable in front of the cloak, with its true painted
+    // base at the palm and only the small finger crop over the contact.
     const flame = this.add.image(46, -65, "sky-beacon-flame").setDepth(43);
     this.fitBeaconPainting(flame, 56, "flame");
-    this.wrenContainer.addAt(flame, Math.max(0, this.wrenContainer.getIndex(this.wrenSprite)));
+    attachWrenHeldProp(this, this.wrenContainer, this.wrenSprite, flame, { x: 46, y: -65 });
     this.heldBeaconSpark = flame;
   }
 

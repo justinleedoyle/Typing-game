@@ -1,3 +1,4 @@
+import { attachWrenHeldPropFixture } from "./_wrenHeldProp";
 import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import ts from "typescript";
@@ -32,6 +33,7 @@ const huntressFactory = npcSource.statements.find(node => ts.isFunctionDeclarati
 const npcCode = ts.transpileModule(`const ${huntressHeight.getText(npcSource)};\n${huntressFactory.getText(npcSource).replace(/^export /, "")}`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 const makeHuntressSprite = new Function(npcCode + ";return makeHuntressSprite;")();
 const globals = {
+    attachWrenHeldProp: attachWrenHeldPropFixture,
     // Artwork failure lifecycle is covered by assetLoadRecovery.test; this fixture isolates staging.
     beginAssetLoad: noop, assetLoadBlocked: () => false,
   checkpointIndex, committedWinterChoices,
@@ -154,7 +156,7 @@ await suite("Winter horn: the actual two phrases transfer painted art before the
   const tween = f.settle();
   assertEqual([tween.duration, horn.x, horn.y], [650, -42, -65], "the same horn settles at the painted fingers in Wren's body coordinates");
   assertEqual(horn.parentContainer, f.s.wrenContainer, "the received horn follows Wren's body after travel settles");
-  assert(f.s.wrenContainer.children.indexOf(horn) < f.s.wrenContainer.children.indexOf(f.s.wrenSprite), "the receiving sleeve overlaps the horn contact");
+  assert(f.s.wrenContainer.children.indexOf(horn) > f.s.wrenContainer.children.indexOf(f.s.wrenSprite), "the horn silhouette remains above the opaque cloak");
   assertEqual(f.s.huntressHornTransferPending, false, "the held response replaces the visual-wait input guard");
   assertEqual(f.captions.at(-1), "She presses a spiral horn into your hand and gestures uphill.", "the exact canon acknowledgment follows settling");
   assertEqual(f.gates.length, 1, "the acknowledgment keeps one deliberate Continue gate");
@@ -602,7 +604,7 @@ await suite("Winter carried pelt: the same source empties before its held respon
     assertEqual([source.x, source.y, source.depth, source.alpha], [54, -50, 61, 1], "the folded fur rests beside Wren's hand at fixed opacity");
     assertClose((source.right - source.left) * source.scale, 80, 0.01, "the received pelt has a modest80px true-alpha width");
     assertEqual(source.parentContainer, f.s.wrenContainer, "the folded pelt follows the body instead of drifting away during idle breath");
-    assert(f.s.wrenContainer.children.indexOf(source) < f.s.wrenContainer.children.indexOf(f.s.wrenSprite), "the painted sleeve stays in front of the carrying contact");
+    assert(f.s.wrenContainer.children.indexOf(source) > f.s.wrenContainer.children.indexOf(f.s.wrenSprite), "the folded pelt remains visible above the opaque cloak");
     assert(!f.tweens.some(tween => tween.targets === source), "the held solid has no bob or transfer animation gate");
     f.next();
     assertEqual(f.timers.map(timer => timer.ms), [900], "the final response retains the original passage interval");

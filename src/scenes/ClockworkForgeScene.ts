@@ -75,6 +75,7 @@ import {
 import { pickAdaptiveWords, FORGE_COMMAND_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import {
+  attachWrenHeldProp,
   bobWrenSprite,
   flashWrenMiss,
   makeWrenSprite,
@@ -2856,8 +2857,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     applySceneActorLighting(this, item);
     const settle = (): void => {
       if (!item.scene || this.keepsakeSprite !== item) return;
-      this.wrenContainer.addAt(item, this.wrenContainer.getIndex(this.wrenSprite));
-      item.setPosition(hand.x, hand.y);
+      attachWrenHeldProp(this, this.wrenContainer, this.wrenSprite, item, hand);
     };
     if (immediate) { settle(); return; }
     this.tweens.add({ targets: item, ...end, duration: 650,

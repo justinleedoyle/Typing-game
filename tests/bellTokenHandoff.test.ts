@@ -1,3 +1,4 @@
+import { attachWrenHeldPropFixture } from "./_wrenHeldProp";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { bellIndex } from "../src/game/bellCheckpoint";
@@ -50,6 +51,7 @@ function fixture(reduced = false) {
     };
   }
   const globals: Record<string, unknown> = {
+    attachWrenHeldProp: attachWrenHeldPropFixture,
     // Artwork failure lifecycle is covered by assetLoadRecovery.test; this fixture isolates staging.
     beginAssetLoad: noop, assetLoadBlocked: () => false,
     bellIndex, reducedMotion: () => reduced, resolveRealmFork: () => null,
@@ -221,7 +223,7 @@ await suite("Bell token: actual binding rewards, visible giver-to-hand action an
     } else assert(!f.tweens.some(tween => tween.targets === token), "reduced motion has no token travel or delayed handoff");
     assertEqual([token.parentContainer, token.x, token.y], [f.wren, 46, -65], "the settled gift belongs to Wren and follows the body's idle movement");
     assertEqual(token.origin, [0.5, 0.1], "the cord loop meets the fingers rather than centering the token over Wren's chest");
-    assert(f.wren.children.indexOf(token) < f.wren.children.indexOf(f.scene.wrenSprite), "the receiving sleeve stays in front of the token grip");
+    assert(f.wren.children.indexOf(token) > f.wren.children.indexOf(f.scene.wrenSprite), "the token silhouette remains visible above the opaque cloak");
     const departure = f.tweens.find(tween => tween.targets.key === "aurland")!;
     assert(departure, "the original freedom departure begins only after receiving the gift");
     assertEqual(departure.duration, reduced ? 0 : 1000, "reduced motion removes the departure wait; normal freedom keeps its original fade");

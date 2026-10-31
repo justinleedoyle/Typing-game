@@ -61,6 +61,7 @@ import {
 import { pickAdaptiveWords, SUNKEN_BELL_WORD_BANK } from "../game/wordBank";
 import { TextWordTarget, type TextWordTargetOptions } from "../game/wordTarget";
 import {
+  attachWrenHeldProp,
   bobWrenSprite,
   flashWrenMiss,
   makeWrenSprite,
@@ -2974,8 +2975,7 @@ export class SunkenBellScene extends Phaser.Scene {
     const settle = (): void => {
       if (this.aurlandToken !== token || !token.scene || !this.wrenContainer.scene) return;
       // Reparent only at arrival so the held keepsake follows Wren's quiet breath.
-      this.wrenContainer.addAt(token, Math.max(0, this.wrenContainer.getIndex(this.wrenSprite)));
-      token.setPosition(hand.x, hand.y);
+      attachWrenHeldProp(this, this.wrenContainer, this.wrenSprite, token, hand);
       if (this.aurlandImage === giver) this.hideAurland();
     };
     if (immediate) settle();
@@ -4000,7 +4000,7 @@ export class SunkenBellScene extends Phaser.Scene {
     const bar = this.add.image(42, -65, icon.key).setOrigin(0.26, 0.32).setDepth(61);
     bar.setScale(106 / Math.max(bar.width, bar.height));
     applySceneActorLighting(this, bar);
-    this.wrenContainer.addAt(bar, Math.max(0, this.wrenContainer.getIndex(this.wrenSprite)));
+    attachWrenHeldProp(this, this.wrenContainer, this.wrenSprite, bar, { x: 42, y: -65 });
     this.heldLockBarSprite = bar;
   }
 

@@ -1,3 +1,4 @@
+import { attachWrenHeldPropFixture } from "./_wrenHeldProp";
 import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import ts from "typescript";
@@ -79,8 +80,8 @@ function fixture(reduced = false) {
       return { context: { drawImage(...args: any[]) { entry.draws.push(args); } }, refresh() { entry.refreshed = true; } };
     },
   };
-  const Forge = new Function("reducedMotion", "satchelIconFor", "applySceneActorLighting", "playWrenAction", "playWrenFocus", "playBodyImpact", "playActorAttention", "PALETTE_HEX", "resolveRealmFork", "resolveCompanionDecision", "forgePassageIndex", code + "; return Forge;")(
-    () => reduced, (id: string) => ({ key: `almanac-icon-${id}` }), (_scene: unknown, image: any) => { image.lit = true; },
+  const Forge = new Function("attachWrenHeldProp", "reducedMotion", "satchelIconFor", "applySceneActorLighting", "playWrenAction", "playWrenFocus", "playBodyImpact", "playActorAttention", "PALETTE_HEX", "resolveRealmFork", "resolveCompanionDecision", "forgePassageIndex", code + "; return Forge;")(
+    attachWrenHeldPropFixture, () => reduced, (id: string) => ({ key: `almanac-icon-${id}` }), (_scene: unknown, image: any) => { image.lit = true; },
     noop, noop, noop, noop, { ember: 0xcd7445 }, () => null, () => null, forgePassageIndex,
   );
   const scene = new Forge();
@@ -165,7 +166,7 @@ await suite("Forge Hammer: the existing gift phrase visibly transfers the preloa
     assertEqual(f.save.satchel, [], "showing the Hammer does not move its actual reward earlier");
     if (transfer) f.finishTween(transfer);
     assertEqual([image.x, image.y, image.parent], [42, -68, f.scene.wrenContainer], "the settled Hammer is attached to the actual hand");
-    assert(f.scene.wrenContainer.getIndex(image) < f.scene.wrenContainer.getIndex(f.scene.wrenSprite), "the real painted palm overlaps the tool grip");
+    assert(f.scene.wrenContainer.getIndex(image) > f.scene.wrenContainer.getIndex(f.scene.wrenSprite), "the actual tool silhouette remains above the opaque cloak");
     f.continue();
     assertEqual(f.word().word, "the forge breathes again", "native Continue still reveals the original fourth phrase");
     assertEqual(f.scene.keepsakeSprite, image, "the same Hammer remains visible while the final repair phrase is typed");

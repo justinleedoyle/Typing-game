@@ -1,3 +1,4 @@
+import { attachWrenHeldPropFixture } from "./_wrenHeldProp";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { woodStep, woodIndex } from "../src/game/woodCheckpoint";
@@ -35,9 +36,9 @@ function fixture(reduced = false) {
   let gate: (() => void) | undefined;
   let target: any;
   const assets = ["hauntedWoodBackdrop", "woodGhostSprite", "ghostKingSprite", "rootThroneSprite", "wispCatSprite", "snowFoxSprite", "groveFireSprite", "runaPortrait", "boneFluteSprite", "ashVialSprite", "offeringShrineSprite", "fluteHollowSprite"];
-  const Wood = new Function("beginAssetLoad", "assetLoadBlocked", "woodStep", "woodIndex", ...assets, "preloadSatchelIcons", "preloadWren", "reducedMotion", "addLocalGroundShadow", "addContainerWake", "addIdleBreath", "playChime", "playWrenAction", "playWrenFocus", "playBodyImpact", "PALETTE_HEX", "isPuristToggleKey", "togglePuristMode", "playClack", "resolveRealmFork", "resolveCompanionDecision", "applySceneActorLighting", "attachWordBodyAnchor", "playClaimLine", "playActorAttention", "playBodyTypePulse", "Phaser", code + ";return Wood;")(
+  const Wood = new Function("attachWrenHeldProp", "beginAssetLoad", "assetLoadBlocked", "woodStep", "woodIndex", ...assets, "preloadSatchelIcons", "preloadWren", "reducedMotion", "addLocalGroundShadow", "addContainerWake", "addIdleBreath", "playChime", "playWrenAction", "playWrenFocus", "playBodyImpact", "PALETTE_HEX", "isPuristToggleKey", "togglePuristMode", "playClack", "resolveRealmFork", "resolveCompanionDecision", "applySceneActorLighting", "attachWordBodyAnchor", "playClaimLine", "playActorAttention", "playBodyTypePulse", "Phaser", code + ";return Wood;")(
     // Artwork failure lifecycle is covered separately; this fixture isolates prop actions.
-    noop, () => false,
+    attachWrenHeldPropFixture, noop, () => false,
     woodStep, woodIndex, ...assets, noop, noop, () => reduced, () => ({}), noop, (_scene: unknown, body: any) => breaths.push(body), noop, noop, noop, noop, { moss: 0 }, () => false, noop, noop, () => null, () => null,
     (_scene: unknown, image: any) => { image.lit = true; }, () => ({ destroy: noop }), noop,
     (_scene: unknown, body: any) => attentions.push(body), noop, { GameObjects: { Events: { DESTROY: "destroy" } } },
@@ -211,7 +212,7 @@ await suite("Wood flute: native taking empties the hollow and shows the existing
     }
     assertEqual(f.scene.fluteHandoffPending, false, "a settled or reduced-motion handoff releases input before the response gate");
     assertEqual([flute.x, flute.y, flute.parent], [42, -68, f.scene.wrenContainer], "the settled flute belongs to Wren’s actual hand and follows subsequent movement");
-    assert(f.scene.wrenContainer.getIndex(flute) < f.scene.wrenContainer.getIndex(f.scene.wrenSprite), "the original sleeve and palm overlap the flute grip");
+    assert(f.scene.wrenContainer.getIndex(flute) > f.scene.wrenContainer.getIndex(f.scene.wrenSprite), "the flute remains readable above the opaque cloak");
     assertEqual([flute.depth, flute.alpha], [43, 1], "the held flute remains visible above the world actor");
     assertEqual(flute.height * flute.scale, 72, "the hand-held flute has a physical, readable size");
     assert(f.captions.at(-1)?.startsWith("The flute is cold."), "the original truthful result appears after the handoff");
@@ -232,7 +233,7 @@ await suite("Wood gathered ash: the existing vial is visible before the conseque
     assert(vial?.scene, "the gathered result has a real painted vial in the world");
     assertEqual([vial.x, vial.y, vial.height * vial.scale], [42, -68, 44], "the compact vial sits at Wren's hand below the hood");
     assertEqual(vial.parent, f.scene.wrenContainer, "the same vial follows Wren rather than floating at a world coordinate");
-    assert(f.scene.wrenContainer.getIndex(vial) < f.scene.wrenContainer.getIndex(f.scene.wrenSprite), "the sleeve/palm overlaps the received vial");
+    assert(f.scene.wrenContainer.getIndex(vial) > f.scene.wrenContainer.getIndex(f.scene.wrenSprite), "the small vial remains readable above the opaque cloak");
     assertEqual(f.save.satchel, ["ash-vial"], "the original force reward remains immediate");
     assert(f.captions.at(-1)?.includes("vial of ash"), "the unchanged consequence agrees with the visible prop");
     assertEqual(f.entered, [], "combat still waits for the original held Continue");

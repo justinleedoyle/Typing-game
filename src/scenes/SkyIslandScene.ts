@@ -2364,17 +2364,19 @@ export class SkyIslandScene extends Phaser.Scene {
     this.fadeOutForkCue(this.beaconFlameCue);
     this.beaconFlameCue = null;
     this.showEtta();
+    if (helpedBefore) this.restoreEttaBookPose("shelved");
+    else this.showEttaBookCue();
     this.band.setObjective("Etta welcomes your help. Press Enter or Space to continue.");
     this.setNarrator(helpedBefore
       ? "Etta remembers the book you placed for her. She offers her ledger; the beacon brightens."
-      : "Etta asks you to carry the remaining books to the shelves.");
+      : "Etta asks you to carry her last unburned book to its shelf.");
     const begin = (): void => {
       this.runPassageChain(
         helpedBefore ? ["etta thanks you quietly", "the beacon brightens"]
-          : ["carry her books", "the shelves hold them", "etta thanks you quietly", "the beacon brightens"],
+          : ["carry her book", "the shelf holds it", "etta thanks you quietly", "the beacon brightens"],
         helpedBefore ? ["Scholar Etta traces a title with one finger.", "The beacon brightens. It was watching."] : [
-          "One by one the shelves fill up.",
-          "Scholar Etta traces a title with one finger.",
+          "The book is heavier than it looks. Old paper, dense with writing.",
+          "The last volume rests safely on its shelf. Etta traces its title with one finger.",
           "She says nothing, but the lanterns flicker warmly.",
           "The beacon brightens. It was watching.",
         ],
@@ -2389,7 +2391,10 @@ export class SkyIslandScene extends Phaser.Scene {
           this.hideEtta();
           this.startAct3();
         },
-        undefined, "help-etta", { helpedBefore },
+        helpedBefore ? undefined : {
+          body: undefined,
+          onPhraseComplete: (index) => this.restoreEttaBookPose(index === 0 ? "carried" : "shelved"),
+        }, "help-etta", { helpedBefore },
       );
     };
     if (typeof resume.index === "number") begin(); else this.readThen(begin);

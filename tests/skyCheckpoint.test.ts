@@ -294,20 +294,60 @@ await suite("Sky forks: actual phrase completion roundtrips every index and resp
   await f.flush();
 });
 
-await suite("Sky help branch: phrase-list choice stays fixed and only actual completion helps Etta", async () => {
+await suite("Sky help branch: one last volume keeps its four-versus-two phrases, poses and rewards through every reload", async () => {
   for (const helpedBefore of [false, true]) {
     const f = fixture();
-    f.store.update(state => { if (helpedBefore) state.almanacLore.push("scholar-ettas-last-volume"); });
-    f.scene.ettaDone = helpedBefore; f.scene.showFork1Cues(); f.scene.startFork1HelpEtta(); f.next();
-    const expected = helpedBefore ? ["etta thanks you quietly", "the beacon brightens"] : ["carry her books", "the shelves hold them", "etta thanks you quietly", "the beacon brightens"];
-    for (const word of expected) {
-      assertEqual(f.targets.at(-1).word, word, "the original short/long help passage stays fixed"); f.complete();
-      const restored = await f.reload(); restored.scene.resumeSky(); assertEqual(restored.targets.length, 0, "completed help phrase restores its reading gate");
+    f.store.update(state => {
+      if (!helpedBefore) return;
+      state.almanacLore.push("scholar-ettas-last-volume");
+      state.realms["sky-island"] = { cleared: false, choices: { ettaHelped: "yes" } };
+    });
+    f.scene.ettaDone = helpedBefore; f.scene.showFork1Cues(); f.scene.startFork1HelpEtta();
+    const book = f.scene.ettaBookCue;
+    const pose = (scene: any) => [scene.ettaBookCue.x, scene.ettaBookCue.y, scene.ettaBookCue.angle];
+    const expectedPose = (completed: number) => helpedBefore || completed >= 2
+      ? [1260, 732, 0] : completed === 1 ? [898, 714, -8] : [760, 826, 0];
+    assert(book?.scene && f.scene.ettaBookShelf?.scene, "the later encounter stages the existing single volume and shelf");
+    assertEqual(pose(f.scene), expectedPose(0), "the already-placed book begins shelved; skipped help begins with one ground volume");
+    assertEqual(f.gates.length, 1, "the unchanged introduction remains held before typing");
+    assertEqual(f.targets.length, 0, "book staging does not start a phrase early");
+    assert(f.captions.at(-1).includes(helpedBefore ? "book you placed" : "last unburned book"), "both introductions refer to the same singular last volume");
+    assert(!f.captions.at(-1).includes("remaining books"), "the skipped early encounter cannot invent more unburned volumes");
+    f.next();
+    const expected = helpedBefore ? ["etta thanks you quietly", "the beacon brightens"] : ["carry her book", "the shelf holds it", "etta thanks you quietly", "the beacon brightens"];
+    for (let index = 0; index < expected.length; index++) {
+      assertEqual(f.targets.at(-1).word, expected[index], "the short route stays two phrases and the first-time route stays four singular phrases");
+      const pending = await f.reload();
+      pending.scene.ettaDone = !helpedBefore;
+      pending.scene.resumeSky();
+      assertEqual(pending.targets.at(-1).word, expected[index], "pending reload honors the saved phrase list even if the live help flag differs");
+      assertEqual(pending.gates.length, 0, "a pending phrase does not repeat its acknowledged introduction");
+      assertEqual(pose(pending.scene), expectedPose(index), "pending reload restores only already-completed book actions");
+      assertEqual(pending.store.get().checkpoint?.data.helpedBefore, helpedBefore, "pending reload preserves the original help-list decision");
+      assert(!pending.store.get().satchel.includes("ettas-ledger"), "pending help cannot award the later realm-ending Ledger");
+      await pending.flush();
+      f.complete();
+      assertEqual(f.scene.ettaBookCue, book, "one physical volume is reused through all later help phrases");
+      assertEqual(pose(f.scene), expectedPose(index + 1), "the same book reaches carried then shelved before its held response");
+      if (!helpedBefore) {
+        assertEqual(f.store.get().almanacLore, [], "placement lore waits for the original full help-chain completion");
+        assertEqual(f.store.get().realms["sky-island"].choices.ettaHelped, undefined, "the help flag does not advance before the original final acknowledgment");
+      }
+      const restored = await f.reload();
+      restored.scene.ettaDone = !helpedBefore;
+      restored.scene.resumeSky();
+      assertEqual(restored.targets.length, 0, "completed help phrase restores only its held reading gate");
+      assertEqual(restored.gates.length, 1, "each unchanged response keeps one deliberate Continue gate");
       assertEqual(restored.store.get().checkpoint?.data.helpedBefore, helpedBefore, "reload never shortens an unfinished long passage");
+      assertEqual(pose(restored.scene), expectedPose(index + 1), "held-response reload reconstructs the completed physical book pose");
+      assert(!restored.store.get().satchel.includes("ettas-ledger"), "held help responses do not grant the Ledger early");
       await restored.flush(); f.next();
     }
     assertEqual(f.store.get().checkpoint?.step, "boss-intro", "completion advances out of the committed branch");
-    assertEqual(f.store.get().almanacLore.filter(id => id === "scholar-ettas-last-volume").length, 1, "both help routes earn one original memory"); await f.flush();
+    assertEqual(f.store.get().realms["sky-island"].choices.ettaHelped, "yes", "original full-chain completion retains the same durable help flag");
+    assertEqual(f.store.get().almanacLore.filter(id => id === "scholar-ettas-last-volume").length, 1, "both help routes earn one original memory");
+    assert(!f.store.get().satchel.includes("ettas-ledger"), "help completion still leaves Ledger inventory to the unchanged realm ending");
+    await f.flush();
   }
 });
 

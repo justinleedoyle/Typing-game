@@ -130,10 +130,13 @@ class ChapterPauseMenu extends Phaser.Scene {
     this.render();
   }
   private resume(): void {
-    acknowledgeGameInterruption(this.config.owner.game);
-    void this.config.store.flush().catch(() => { /* owner displays retry status */ });
-    this.config.owner.scene.resume();
-    this.scene.stop();
+    const { owner, store } = this.config;
+    acknowledgeGameInterruption(owner.game);
+    void store.flush().catch(() => { /* owner displays retry status */ });
+    // Close and resume in the same deliberate action. Queuing these until a
+    // later frame lets a new blur fall between acknowledgment and activation.
+    this.scene.manager.stop(KEY);
+    owner.scene.manager.resume(owner.scene.key);
   }
   private async leave(): Promise<void> {
     const token = this.run.token();

@@ -38,7 +38,7 @@ const chooseSave = pauseClass.members.find(member => member.name?.getText(pauseS
 class TestCloudSaveError extends Error {}
 class TestSaveConflictError extends Error {}
 const Pause = compile(`class Pause { ${resume.getText(pauseSource)} ${leave.getText(pauseSource)} ${chooseSave.getText(pauseSource)} }`, "Pause", {
-  acknowledgeGameInterruption, CloudSaveError: TestCloudSaveError, SaveConflictError: TestSaveConflictError, rememberLocalSaveNotice() {},
+  acknowledgeGameInterruption, KEY: "ChapterPauseMenu", CloudSaveError: TestCloudSaveError, SaveConflictError: TestSaveConflictError, rememberLocalSaveNotice() {},
 });
 const install = pauseSource.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "installChapterMenu")!;
 const installMenu = compile(install.getText(pauseSource).replace(/^export /, ""), "installChapterMenu", {
@@ -74,13 +74,27 @@ const sceneConstants = require("phaser/src/scene/const.js");
 const systemPause = phaserMethod("../node_modules/phaser/src/scene/Systems.js", "pause", {
   Events: { PAUSE: "pause" }, CONST: sceneConstants,
 });
+const systemResume = phaserMethod("../node_modules/phaser/src/scene/Systems.js", "resume", {
+  Events: { RESUME: "resume" }, CONST: sceneConstants,
+});
+const systemShutdown = phaserMethod("../node_modules/phaser/src/scene/Systems.js", "shutdown", {
+  Events: { SHUTDOWN: "shutdown", TRANSITION_INIT: "transitioninit", TRANSITION_START: "transitionstart",
+    TRANSITION_COMPLETE: "transitioncomplete", TRANSITION_OUT: "transitionout" }, CONST: sceneConstants,
+});
 const pluginPause = phaserMethod("../node_modules/phaser/src/scene/ScenePlugin.js", "pause");
+const pluginResume = phaserMethod("../node_modules/phaser/src/scene/ScenePlugin.js", "resume");
+const pluginStop = phaserMethod("../node_modules/phaser/src/scene/ScenePlugin.js", "stop");
 const pluginLaunch = phaserMethod("../node_modules/phaser/src/scene/ScenePlugin.js", "launch");
 const queueOp = phaserMethod("../node_modules/phaser/src/scene/SceneManager.js", "queueOp");
 const managerCreate = phaserMethod("../node_modules/phaser/src/scene/SceneManager.js", "create", {
   Events: { CREATE: "create", TRANSITION_START: "transitionstart" }, CONST: sceneConstants,
 });
 const managerLoadComplete = phaserMethod("../node_modules/phaser/src/scene/SceneManager.js", "loadComplete");
+const managerProcessQueue = phaserMethod("../node_modules/phaser/src/scene/SceneManager.js", "processQueue");
+const managerResume = phaserMethod("../node_modules/phaser/src/scene/SceneManager.js", "resume");
+const managerStop = phaserMethod("../node_modules/phaser/src/scene/SceneManager.js", "stop", {
+  CONST: sceneConstants, LoaderEvents: { COMPLETE: "complete" },
+});
 const mainSource = source("../src/main.ts");
 const preBoot = find(mainSource, (node): node is ts.PropertyAssignment => ts.isPropertyAssignment(node) && node.name.getText(mainSource) === "preBoot");
 const bootTracker = compile(`const boot = ${preBoot.initializer.getText(mainSource)};`, "boot", { installGameInterruptionTracker });
@@ -147,6 +161,7 @@ function fixture(escapeHint?: () => string) {
   let pause: any;
   Object.assign(owner, {
     scene: {
+      key: "chapter", manager: { resume: () => { state.ownerActive = true; } },
       get: () => ({}), isActive: (key?: string) => key === "ChapterPauseMenu" ? state.pauseActive : state.ownerActive,
       pause: () => { state.ownerActive = false; }, resume: () => { state.ownerActive = true; },
       launch: () => { state.pauseActive = true; state.launches += 1; pause.openedAt = pause.time.now; }, bringToTop() {},
@@ -161,7 +176,7 @@ function fixture(escapeHint?: () => string) {
   pause = new Pause();
   Object.assign(pause, {
     config: { store, owner }, time: { now: 1000 }, openedAt: 0, busy: false, canResolve: false, selected: 0,
-    scene: { stop: () => { state.pauseActive = false; } },
+    scene: { stop: () => { state.pauseActive = false; }, manager: { stop: () => { state.pauseActive = false; } } },
     activate: () => pause.resume(),
   });
   const onPauseKey = bindPauseKey.call(pause);
@@ -186,6 +201,40 @@ function fixture(escapeHint?: () => string) {
     return event;
   };
   return { owner, state, typed, pause, dispatch, sceneEvents, gameEvents, texts, menu: owner.chapterMenu };
+}
+
+function queuedFixture() {
+  const f = fixture();
+  const EngineEmitter = require("eventemitter3");
+  const overlayEvents = new EngineEmitter();
+  const ownerSettings = { key: "chapter", status: sceneConstants.PAUSED, active: false, visible: true };
+  const overlaySettings = { key: "ChapterPauseMenu", status: sceneConstants.RUNNING, active: true, visible: true };
+  const lifecycle: string[] = [];
+  const overlay = { sys: { settings: overlaySettings, events: overlayEvents, shutdown: systemShutdown, isTransitioning: () => false } };
+  const manager = { _pending: [], _queue: [] as Array<{ op: string; keyA: string }>, queueOp,
+    processQueue: managerProcessQueue, resume: managerResume, stop: managerStop,
+    getScene(key: string) { return key === "ChapterPauseMenu" ? overlay : f.owner; },
+    // Starting renderer-owned overlay content is inert; queue processing and
+    // owner/menu stop/resume lifecycles remain the installed Phaser methods.
+    start(key: string, data: any) {
+      assertEqual(key, "ChapterPauseMenu", "a fresh interruption requests the ordinary pause scene");
+      overlaySettings.status = sceneConstants.RUNNING; overlaySettings.active = true;
+      f.state.launches++;
+      f.pause.config = data; f.pause.openedAt = f.pause.time.now;
+    },
+  };
+  Object.defineProperties(f.state, {
+    ownerActive: { get: () => ownerSettings.active, set: value => { ownerSettings.active = value; } },
+    pauseActive: { get: () => overlaySettings.active, set: value => { overlaySettings.active = value; } },
+  });
+  f.owner.sys = { settings: ownerSettings, events: f.sceneEvents, getStatus: () => ownerSettings.status,
+    pause: systemPause, resume: systemResume };
+  Object.assign(f.owner.scene, { manager, resume: pluginResume, launch: pluginLaunch });
+  Object.assign(f.pause.scene, { key: "ChapterPauseMenu", manager, stop: pluginStop });
+  overlayEvents.on("shutdown", () => lifecycle.push("stop-menu"));
+  f.sceneEvents.on("resume", () => lifecycle.push("resume-owner"));
+  bootTracker(f.owner.game);
+  return { ...f, manager, lifecycle, ownerSettings, overlaySettings };
 }
 
 await suite("pause interruption: hidden-only and blur events preserve one explicit pause until deliberate resume", () => {
@@ -233,6 +282,41 @@ await suite("pause interruption: installed Phaser queuing cannot delay the freez
   f.gameEvents.emit("blur"); f.gameEvents.emit("hidden");
   assertEqual([pauses, manager._queue.length], [1, 1], "paired events before any frame cannot queue a second overlay");
   f.menu.destroy();
+});
+
+await suite("pause interruption: native Resume closes synchronously so a subsequent blur cannot race its queued activation", () => {
+  const control = queuedFixture();
+  // Reproduce the former sequence using the unmodified installed plugin and
+  // queue methods. The second blur arrives before either queued action runs.
+  control.owner.scene.resume(); control.pause.scene.stop();
+  control.gameEvents.emit("blur"); control.manager.processQueue();
+  assert(control.state.ownerActive && !control.state.pauseActive && needsInterruptionPause(control.owner.game),
+    "the unchanged engine reproduces an unacknowledged interruption racing a queued resume");
+  control.menu.destroy(); control.gameEvents.emit("destroy");
+
+  for (const order of ["pause-first", "owner-first"] as const) for (const key of ["Escape", "Enter", " "]) {
+    const f = queuedFixture();
+    f.gameEvents.emit("hidden");
+    f.dispatch(key, order);
+    assertEqual(f.lifecycle, ["stop-menu", "resume-owner"], "the actual manager completes stop then resume in the native key action");
+    assert(f.state.ownerActive && !f.state.pauseActive, "the key leaves no deferred owner activation behind");
+    assertEqual(f.manager._queue, [], "Resume queues neither an old resume nor an old overlay stop");
+    assertEqual([f.state.ownerDispatches, f.typed], [0, []], "the installed KeyboardPlugin cannot replay the Resume key into the newly active owner");
+    assert(!needsInterruptionPause(f.owner.game), "the deliberate key acknowledges the original interruption");
+    f.gameEvents.emit("blur"); f.gameEvents.emit("hidden");
+    assert(!f.state.ownerActive && !f.state.pauseActive, "a new blur immediately freezes the active owner before any frame");
+    assertEqual(f.manager._queue.map(operation => operation.op), ["start"], "paired interruption events queue one fresh overlay, with no stale stop");
+    f.manager.processQueue();
+    assert(!f.state.ownerActive && f.state.pauseActive, "the installed queue opens the replacement overlay while the owner stays paused");
+    assertEqual([f.state.launches, f.pause.config.owner], [1, f.owner], "the replacement belongs to the same current owner exactly once");
+    f.gameEvents.emit("visible"); f.gameEvents.emit("focus");
+    assert(needsInterruptionPause(f.owner.game), "returning cannot acknowledge that later interruption");
+    f.pause.time.now += 200;
+    f.dispatch("Escape", order);
+    assert(f.state.ownerActive && !f.state.pauseActive && !needsInterruptionPause(f.owner.game), "a second deliberate native key resumes the replacement normally");
+    assertEqual(f.state.ownerDispatches, 0, "replacement Resume also cannot leak into gameplay");
+    f.menu.destroy(); f.gameEvents.emit("destroy");
+  }
 });
 
 await suite("pause interruption: artwork finishing after an earlier hide pauses at the installed engine CREATE boundary", () => {

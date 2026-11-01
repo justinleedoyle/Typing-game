@@ -3364,6 +3364,23 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private drawSteamPipeCue(x: number): Phaser.GameObjects.Container {
     const c = this.add.container(x, CATWALK_Y - 36).setDepth(-2).setAlpha(0);
     const pipe = this.add.graphics();
+    // The right elbow returns into a riser bolted onto the actual catwalk.
+    // The entrance lifts this container 5px, so place its foot at the
+    // settled deck height used by Wren and the painted catwalk.
+    const footY = CATWALK_SURFACE_Y - (c.y - 5);
+    pipe.lineStyle(20, 0x090706, 0.46);
+    pipe.lineBetween(126, -84, 126, footY - 6);
+    pipe.lineStyle(14, 0x1a1411, 0.96);
+    pipe.lineBetween(126, -84, 126, footY - 6);
+    pipe.lineStyle(4, 0x6f5338, 0.68);
+    pipe.lineBetween(121, -78, 121, footY - 8);
+    pipe.fillStyle(0x17100d, 1);
+    pipe.fillRoundedRect(110, footY - 7, 32, 7, 2);
+    pipe.lineStyle(1.5, 0x76573b, 0.6);
+    pipe.lineBetween(112, footY - 7, 140, footY - 7);
+    pipe.fillStyle(0x8b6843, 0.72);
+    pipe.fillCircle(115, footY - 4, 1.8);
+    pipe.fillCircle(137, footY - 4, 1.8);
     pipe.fillStyle(0x060403, 0.32);
     pipe.fillEllipse(98, 54, 126, 13);
     pipe.lineStyle(18, 0x090706, 0.46);

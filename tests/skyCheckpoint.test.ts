@@ -14,7 +14,7 @@ const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.S
 const owner = source.statements.find(ts.isClassDeclaration)!;
 const methods = ["init", "checkpoint", "savedStageData", "resumeSky", "settleResumedActor", "resumePath", "resumeBoss", "stageSkyRevisitAftermath", "restoreEttaBookPose", "setEttaCarryPose", "updateEttaBookCarry", "showEttaBookCue", "clearEttaBookCue", "resumeEttaBook", "finishRestoredEttaBook",
   "runPathBeats", "startLanternLighter", "onLighterConvoComplete", "startFirstSpiritEncounter", "beginFirstSpiritEncounter", "startFirstSpiritEncounterFixed", "defeatSpirit", "onFirstEncounterCleared",
-  "startAct2", "startTemple", "quietLordIntrusionAnchor", "onTempleCleared", "startSealedScrollTemple", "startEttaEncounter", "startEttaHelp", "moveEttaBook", "startFork1", "startFork1HelpEtta", "startFork1StealFlame", "startAct3",
+  "startAct2", "startTemple", "quietLordIntrusionAnchor", "onTempleCleared", "startSealedScrollTemple", "startEttaEncounter", "startEttaHelp", "moveEttaBook", "startFork1", "startFork1HelpEtta", "setEttaHelpBeaconBright", "startFork1StealFlame", "startAct3",
   "startBossPhase1", "startBossPhase2", "startBossPhase3", "onBossDefeated", "startFork2", "startFork2KindEnding", "startFork2CutTether", "releaseFork2Spirit", "startLanternMothGate", "showMothAnswer", "restoreMothPerch",
   "startTrueNamePassage", "startEnding", "commitFork", "runPassageChain", "applyOneShot"];
 const constants = source.statements.filter(ts.isVariableStatement).map(statement => statement.getText(source)).join("\n");
@@ -87,13 +87,13 @@ function fixture(initial?: SaveState, reduced = false) {
     drawSealedScroll: () => prop(), skyOwnedWordPosition: () => ({ x: 700, y: 500 }),
     showEtta() { scene.ettaSprite ??= prop(); }, hideEtta() { scene.ettaSprite = null; },
     showEttaBookCue() { scene.ettaBookCue ??= prop(760, 826); scene.ettaBookShelf ??= prop(1260, 826); scene.ettaBookGroundShadow ??= prop(760, 828); return scene.ettaBookCue; },
-    clearEttaBookWordAnchors:noop, fadeOutForkCue: noop, showFork1Cues() { scene.ettaSprite = prop(); scene.beaconFlameCue = prop(); },
-    showFork2Cues() { scene.kindAnswerCue = prop(); scene.tetherThreadCue = prop(); scene.fork2Scholar = prop(776,710); scene.beaconFlameCue = prop(1140,792); },
+    clearEttaBookWordAnchors:noop, fadeOutForkCue: noop, showFork1Cues() { scene.ettaSprite = prop(); scene.beaconFlameCue = scene.createBeaconFlameCue(); },
+    showFork2Cues() { scene.kindAnswerCue = prop(); scene.tetherThreadCue = prop(); scene.fork2Scholar = prop(776,710); scene.beaconFlameCue = prop(1500,710); },
     dimBeaconFlameVisual() { scene.dimmed = true; }, takeBeaconSparkVisual() { scene.taken = true; scene.heldBeaconSpark = prop(); }, clearHeldBeaconSpark: noop,
     drawScholarSpirit: () => prop(960, 400), scholarBossWordPosition: () => ({ x: 960, y: 500 }), tweenBossBow: noop, flashBossEyes: noop, spawnBossLanternBurst: noop,
     showLanternMothCompanion() { scene.lanternMothCompanion ??= prop(1160, 650); }, pulseLanternMothCompanion: noop,
     settleLanternMothOnWren(callback: () => void) { scene.landed = true; callback(); }, dismissLanternMothCompanion() { scene.lanternMothCompanion = null; },
-    createBeaconFlameCue() { const beacon=prop(1320,792),flame=prop(),light=prop();beacon.getByName=(name:string)=>name==="beacon-spark"?flame:name==="beacon-light"?light:null;scene.beaconBuilds.push(beacon);return beacon; },
+    createBeaconFlameCue() { const beacon=prop(1500,710),flame=prop(),light=prop();beacon.getByName=(name:string)=>name==="beacon-spark"?flame:name==="beacon-light"?light:null;scene.beaconBuilds.push(beacon);return beacon; },
     beaconBuilds:[],
     showAlmanacStamp: noop, playOneShotSourceLine: noop,
     startAct1() { entered.push("arrival"); scene.checkpoint("arrival"); },
@@ -317,7 +317,11 @@ await suite("Sky help branch: one last volume keeps its four-versus-two phrases,
       state.realms["sky-island"] = { cleared: false, choices: { ettaHelped: "yes" } };
     });
     f.scene.ettaDone = helpedBefore; f.scene.showFork1Cues(); f.scene.startFork1HelpEtta();
-    const book = f.scene.ettaBookCue;
+    const book = f.scene.ettaBookCue, beacon = f.scene.beaconFlameCue;
+    const beaconState = (scene: any) => [scene.beaconFlameCue.x, scene.beaconFlameCue.y,
+      scene.beaconFlameCue.getByName("beacon-spark").alpha,
+      scene.beaconFlameCue.getByName("beacon-light").alpha];
+    assertEqual(beaconState(f.scene), [1500, 710, 1, .12], "the waiting beacon remains visible on paving clear of Etta's shelf");
     const pose = (scene: any) => [scene.ettaBookCue.x, scene.ettaBookCue.y, scene.ettaBookCue.angle];
     const expectedPose = (completed: number) => helpedBefore || completed >= 2
       ? [1260, 732, 0] : completed === 1 ? [960, 722, -3] : [760, 826, 0];
@@ -337,11 +341,15 @@ await suite("Sky help branch: one last volume keeps its four-versus-two phrases,
       assertEqual(pending.targets.at(-1).word, expected[index], "pending reload honors the saved phrase list even if the live help flag differs");
       assertEqual(pending.gates.length, 0, "a pending phrase does not repeat its acknowledged introduction");
       assertEqual(pose(pending.scene), expectedPose(index), "pending reload restores only already-completed book actions");
+      assertEqual(beaconState(pending.scene), [1500, 710, 1, .12], "pending final help phrase restores a waiting beacon without claiming an untyped brightening");
       assertEqual(pending.store.get().checkpoint?.data.helpedBefore, helpedBefore, "pending reload preserves the original help-list decision");
       assert(!pending.store.get().satchel.includes("ettas-ledger"), "pending help cannot award the later realm-ending Ledger");
       await pending.flush();
       f.complete();
       assertEqual(f.scene.ettaBookCue, book, "one physical volume is reused through all later help phrases");
+      assertEqual(f.scene.beaconFlameCue, beacon, "the help chain keeps one physical beacon rather than replacing or duplicating the flame");
+      const bright = index === expected.length - 1;
+      assertEqual(beaconState(f.scene), [1500, 710, 1, bright ? .24 : .12], "only completing the original final phrase brightens the same visible flame and its light");
       assertEqual(pose(f.scene), expectedPose(index + 1), "the same book reaches carried then shelved before its held response");
       if (!helpedBefore) {
         assertEqual(f.store.get().almanacLore, [], "placement lore waits for the original full help-chain completion");
@@ -354,10 +362,12 @@ await suite("Sky help branch: one last volume keeps its four-versus-two phrases,
       assertEqual(restored.gates.length, 1, "each unchanged response keeps one deliberate Continue gate");
       assertEqual(restored.store.get().checkpoint?.data.helpedBefore, helpedBefore, "reload never shortens an unfinished long passage");
       assertEqual(pose(restored.scene), expectedPose(index + 1), "held-response reload reconstructs the completed physical book pose");
+      assertEqual(beaconState(restored.scene), [1500, 710, 1, bright ? .24 : .12], "held-response reload immediately reconstructs the exact earned beacon light without replay");
       assert(!restored.store.get().satchel.includes("ettas-ledger"), "held help responses do not grant the Ledger early");
       await restored.flush(); f.next();
     }
     assertEqual(f.store.get().checkpoint?.step, "boss-intro", "completion advances out of the committed branch");
+    assertEqual(f.scene.beaconFlameCue, null, "the original final Continue releases help's beacon before the boss introduction");
     assertEqual(f.store.get().realms["sky-island"].choices.ettaHelped, "yes", "original full-chain completion retains the same durable help flag");
     assertEqual(f.store.get().almanacLore.filter(id => id === "scholar-ettas-last-volume").length, 1, "both help routes earn one original memory");
     assert(!f.store.get().satchel.includes("ettas-ledger"), "help completion still leaves Ledger inventory to the unchanged realm ending");

@@ -30,7 +30,7 @@ function fixture() {
     checkpoint() {}, savedStageData() { return {}; },
     scale: { width: 1920, height: 1080 },
     ettaSprite: { scene: true, x: 520, y: 760 },
-    beaconFlameCue: { scene: true, x: 1320, y: 792 },
+    beaconFlameCue: { scene: true, x: 1500, y: 710 },
     band: { setObjective(text: string) { task = text; } },
     narration: { say() {} }, setNarrator() {}, setTempleBeamsActive() {}, showEtta() {}, hideEtta() {},
     showFork1Cues() {}, clearActiveTargets() {}, registerActiveTarget() {}, clearEttaBookCue() {},
@@ -64,7 +64,7 @@ await suite("Sky Etta choices: actual side and major-fork plates stay above her 
     f.s.startFork1();
     assertEqual(f.targets.map(target => target.word), ["help scholar etta", "steal the flame"], "the major fork keeps both original targets");
     assert(f.targets[0]!.y + 48 < bodyY - 280, "the long help-Etta plate also clears her hood");
-    assert(f.targets[1]!.x > 1320, "the flame choice stays in its separate original right-hand lane");
+    assert(f.targets[1]!.x > 1500, "the flame choice stays in its separate original right-hand lane");
   }
 });
 

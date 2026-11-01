@@ -661,8 +661,8 @@ await suite("Sky fork passages: words track their visible subject and clear Wren
   assert(target!.y + 38 < 581, "the complete phrase clears Wren's highest hood position");
 
   for (const [method, field, x, y, offset] of [
-    ["startFork1StealFlame", "beaconFlameCue", 1320, 770, -76],
-    ["startFork2CutTether", "beaconFlameCue", 1140, 792, -95],
+    ["startFork1StealFlame", "beaconFlameCue", 1500, 710, -76],
+    ["startFork2CutTether", "beaconFlameCue", 1500, 710, -95],
   ] as const) {
     const Branch = actualMethod(sky, method);
     const b = new Branch();
@@ -682,8 +682,8 @@ await suite("Sky fork passages: words track their visible subject and clear Wren
     s.beaconFlameCue = method === "startFork2CutTether" ? owner!.body : null;
     const pos = s.skyOwnedWordPosition(owner!.body, offset, "the shown passage", { side: owner!.side });
     if (method === "startFork2CutTether") {
-      assertEqual([pos.x, pos.y], [1140, 530], "the final cut phrase stays above the real masonry endpoint");
-    } else assert(pos.x > owner!.body.x, "the earlier flame phrase keeps its original clear outer lane");
+      assertEqual([pos.x, pos.y], [1180, 530], "the long final cut phrase sits beside the real upstage masonry endpoint");
+    } else assert(pos.x >= owner!.body.x, "the earlier flame phrase keeps its original clear outer lane");
   }
 });
 

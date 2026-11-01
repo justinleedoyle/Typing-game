@@ -47,9 +47,9 @@ const paintings = {
 const url = new URL("../src/scenes/SkyIslandScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
-const methods = ["createBeaconFlameCue", "fitBeaconPainting", "dimBeaconFlameVisual", "takeBeaconSparkVisual", "showHeldBeaconSpark", "clearHeldBeaconSpark", "clearSkyForkCues", "startFork1StealFlame", "runPassageChain", "skyOwnedWordPosition", "makeSkyForkWord", "fadeOutForkCue",
+const methods = ["createBeaconFlameCue", "fitBeaconPainting", "setEttaHelpBeaconBright", "dimBeaconFlameVisual", "takeBeaconSparkVisual", "showHeldBeaconSpark", "clearHeldBeaconSpark", "clearSkyForkCues", "startFork1StealFlame", "runPassageChain", "skyOwnedWordPosition", "makeSkyForkWord", "fadeOutForkCue",
   "showFork2Cues", "createKindAnswerCue", "createTetherThreadCue", "releaseFork2Spirit", "startFork2", "startFork2KindEnding", "startFork2CutTether", "startLanternMothGate", "onBossDefeated", "resumeSky", "drawAmbientLanterns", "setAmbientLanternFieldAlpha", "clearAmbientLanterns"];
-const constantNames = ["SCHOLAR_SPIRIT_HEIGHT", "SKY_WREN_STAGE_X", "SKY_WREN_STAGE_Y"];
+const constantNames = ["SKY_BEACON_BASE", "SCHOLAR_SPIRIT_HEIGHT", "SKY_WREN_STAGE_X", "SKY_WREN_STAGE_Y"];
 const constants = source.statements.filter(ts.isVariableStatement).flatMap(statement => statement.declarationList.declarations
   .filter(declaration => constantNames.includes(declaration.name.getText(source))).map(declaration => `const ${declaration.getText(source)};`)).join("\n");
 const code = ts.transpileModule(`${constants}\nclass Sky { ${methods.map(name => owner.members.find(member => member.name?.getText(source) === name)!.getText(source)).join("\n")} }`,
@@ -158,8 +158,8 @@ await suite("Sky painted beacon: true-alpha silhouettes meet the fixed terrace c
     const f = fixture(reduced), cue = f.s.beaconFlameCue;
     const brazier = cue.getByName("beacon-brazier"), flame = cue.getByName("beacon-spark");
     const base = paintedBounds(brazier, cue), fire = paintedBounds(flame, cue);
-    assertEqual([cue.x, cue.y], [1320, 792], "the fixture starts at its final terrace contact with no hover offset");
-    assertClose(base.bottom, 792, 0.1, "actual painted stone touches the floor despite transparent canvas padding");
+    assertEqual([cue.x, cue.y], [1500, 710], "the fixture starts at its final terrace contact with no hover offset");
+    assertClose(base.bottom, 710, 0.1, "actual painted stone touches the floor despite transparent canvas padding");
     assertClose(base.bottom - base.top, 180, 0.1, "the physical fixture uses its silhouette height");
     assertClose(fire.bottom - fire.top, 70, 0.1, "the flame fits its own silhouette rather than the padded canvas");
     const entrance = f.tweens.find(tween => tween.targets === cue);
@@ -168,11 +168,11 @@ await suite("Sky painted beacon: true-alpha silhouettes meet the fixed terrace c
     f.s.startFork1StealFlame(); f.next();
     const target = f.targets.at(-1);
     assert(target.y + 34 < fire.top, "the complete live phrase stays above the painted source");
-    assert(target.x > cue.x && target.y > 320, "the source retains its right-side phrase lane below the reading card");
+    assert(target.x >= cue.x && target.y > 320, "the source retains its right-side phrase lane below the reading card");
     assertEqual(f.anchors.at(-1).options.sourceOffsetY, cue.getData("sky-source-offset-y"), "the real tether connects to the same authored flame source");
     target.onClaim({}); target.onAdvance(1, target.word.length);
     assertEqual(f.attentions.at(-1), f.s.wrenContainer, "claim feedback does not scale or tint the physical masonry");
-    assertEqual([cue.x, cue.y, cue.scaleX, cue.scaleY, cue.angle], [1320, 792, 1, 1, 0], "claim and typing preserve the fixture's floor geometry");
+    assertEqual([cue.x, cue.y, cue.scaleX, cue.scaleY, cue.angle], [1500, 710, 1, 1, 0], "claim and typing preserve the fixture's floor geometry");
   }
 });
 
@@ -215,7 +215,7 @@ await suite("Sky stolen spark: original four phrases dim, take and hold painted 
     assertEqual(f.targets.length, 4, "no new typing action or timing gate was introduced");
     assertEqual([f.s.beaconFlameCue, f.s.heldBeaconSpark, f.acts()], [null, null, 1], "the original last Continue stows fire and reaches the same next act");
     const exit = f.tweens.findLast(tween => tween.targets === cue);
-    assertEqual([exit.y, exit.duration], [792, 540], "the physical stand fades in place over the original departure duration");
+    assertEqual([exit.y, exit.duration], [710, 540], "the physical stand fades in place over the original departure duration");
     f.settle(exit);
     assert(!cue.scene, "the empty fixture leaves with its original cleanup");
   }
@@ -252,12 +252,15 @@ await suite("Sky final choice: painted subjects and connected tether clear uncha
     const f = fork2Fixture(reduced, fork1); f.s.startFork2();
     const spirit = f.s.fork2Scholar, beacon = f.s.beaconFlameCue, tether = f.s.fork2Tether;
     assert(spirit?.scene && beacon?.scene && tether?.scene, "the choice names an actual visible spirit, beacon and joining thread");
-    assertEqual(f.targets.map(t => [t.word, t.x, t.y]), [["answer kindly", 776, 530], ["cut the tether", 1140, 530]], "original choice words sit directly above the actual subjects");
+    assertEqual(f.targets.map(t => [t.word, t.x, t.y]), [["answer kindly", 776, 530], ["cut the tether", 1240, 530]], "the original words sit above the spirit and beside the upstage beacon without covering its bowl");
     assertEqual(f.anchors.map(a => a.options.sourceOffsetY), [-42, -95], "claim lines reach the visible spirit and actual tether endpoint");
     const body = paintedBounds(spirit.getByName("fading-scholar"), spirit);
     const base = paintedBounds(beacon.getByName("beacon-brazier"), beacon);
-    assertClose(base.bottom, 792, 0.1, "the real alpha silhouette rests on the paving");
-    assert(f.targets.every(target => target.y + 38 < Math.min(body.top, base.top, 581)), "complete command plates clear both painted subjects and Wren's highest hood");
+    assertClose(base.bottom, 710, 0.1, "the real alpha silhouette rests on the paving");
+    assert(f.targets.every(target => target.y + 38 < Math.min(body.top, 581)), "complete command plates clear the spirit and Wren's highest hood");
+    assert(f.targets[1].x + 170 < base.left, "the beacon choice plate clears the upstage masonry to its left");
+    const longPhrase = f.s.skyOwnedWordPosition(beacon, -95, "the tether is cut the wind is free", { side: "right" });
+    assert(longPhrase.x + 230 < base.left, "long beacon passage phrases also clear the bowl without entering the reading row");
     assertEqual(f.anchors.map(anchor => anchor.body), [spirit, beacon], "feedback belongs to the real visible subjects rather than empty choice markers");
     assert(body.right < 960 - 90 - 8 && base.left > 960 + 90 + 8, "both painted subjects clear Wren's full cloak lane");
     const points = tether.children[0].points;
@@ -268,7 +271,7 @@ await suite("Sky final choice: painted subjects and connected tether clear uncha
     assert(points.filter((p: any) => p.x >= 870 && p.x <= 1050).every((p: any) => p.y < 581 - 8), "the connected strand passes above Wren's breathing hood");
     for (const tween of [...f.tweens].filter(t => !t.killed)) f.settle(tween);
     assert(spirit.alpha > 0.5 && spirit.alpha < 1 && tether.alpha > 0.5, "the held choice has a readable translucent subject and thin strand");
-    assertEqual([beacon.x, beacon.y, beacon.scaleX, beacon.scaleY], [1140, 792, 1, 1], "entrance and idle presentation never float or scale the physical beacon");
+    assertEqual([beacon.x, beacon.y, beacon.scaleX, beacon.scaleY], [1500, 710, 1, 1], "entrance and idle presentation never float or scale the physical beacon");
     assertEqual(Boolean(beacon.getByName("beacon-spark")), fork1 === "help-etta", "the earlier stolen spark is not recreated");
     const restored = reloadFork2(f, reduced);
     assert(restored.s.fork2Scholar?.scene && restored.s.fork2Tether?.scene, "actual fork2 reload reconstructs the same subject");
@@ -386,5 +389,29 @@ await suite("Sky cut tether: the opposite original outcome does not inherit kind
     assert(f.s.ambientLanterns.every((light: any) => light.alpha === 0.42), "the two native cutting phrases preserve their original light state");
     const held = reloadFork2(f, reduced);
     assert(held.s.ambientLanterns.every((light: any) => light.alpha === 0.42), "restoring the opposite result cannot claim kindness's visible consequence");
+  }
+});
+
+
+await suite("Sky Etta help beacon: the named final action brightens one grounded painting and restores without replaying a decorative pulse", () => {
+  for (const reduced of [false, true]) {
+    const f = fixture(reduced), cue = f.s.beaconFlameCue;
+    const flame = cue.getByName("beacon-spark"), light = cue.getByName("beacon-light");
+    const before = JSON.stringify(f.state), images = f.images.length;
+    const summitLamps = f.s.ambientLanterns.map((lamp: any) => lamp.alpha);
+    f.s.setEttaHelpBeaconBright(false);
+    const base = paintedBounds(cue.getByName("beacon-brazier"), cue);
+    assertEqual([cue.x, cue.y, cue.alpha], [1500, 710, 1], "the same beacon stands wholly on terrace paving, separate from the shelf");
+    assertClose(base.bottom, 710, .1, "the true painted masonry contact meets the fixed paving point");
+    assertEqual([flame.alpha, light.alpha], [1, .12], "the initial and pending states retain distinct waiting light");
+    const tweens = f.tweens.length;
+    f.s.setEttaHelpBeaconBright(true);
+    assertEqual([flame.alpha, light.alpha], [1, .24], "the completed original help phrase visibly strengthens the bloom around the same undimmed curl");
+    f.s.setEttaHelpBeaconBright(true);
+    assertEqual([f.images.length, f.tweens.length], [images, tweens], "a restored held result retains one painting and no replay animation or timing gate");
+    assertEqual(JSON.stringify(f.state), before, "the physical light state cannot grant or change inventory, lore or choices");
+    assertEqual(f.s.ambientLanterns.map((lamp: any) => lamp.alpha), summitLamps, "Etta's local beacon light cannot claim the independent kindly or cut-tether summit lighting");
+    f.s.clearSkyForkCues();
+    assert(!cue.scene && !flame.scene && !light.scene, "normal scene cleanup destroys the beacon and both light layers");
   }
 });

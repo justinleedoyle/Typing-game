@@ -229,6 +229,9 @@ const TRUE_NAME_PASSAGE =
 
 // ─── Spawn positions ───────────────────────────────────────────────────────────
 
+// One architectural landmark across the choice, help, aftermath and revisit.
+const SKY_BEACON_BASE = { x: 1500, y: 710 } as const;
+
 
 export class SkyIslandScene extends Phaser.Scene {
   private store!: SaveStore;
@@ -901,7 +904,8 @@ export class SkyIslandScene extends Phaser.Scene {
       this.tweens.killTweensOf(beacon);
       // The foreground shelf ends at1390. Put the masonry upstage on the
       // terrace paving so its whole foundation clears the descending cliff.
-      beacon.setPosition(1500, 710).setAlpha(1);
+      beacon.setPosition(SKY_BEACON_BASE.x, SKY_BEACON_BASE.y).setAlpha(1);
+      if (first === "help-etta") this.setEttaHelpBeaconBright(true);
       if (first === "steal-flame") {
         for (const name of ["beacon-spark", "beacon-light"]) {
           const light = beacon.getByName(name);
@@ -2437,14 +2441,13 @@ export class SkyIslandScene extends Phaser.Scene {
     const resume = this.savedStageData("help-etta") ?? {};
     const helpedBefore = typeof resume.helpedBefore === "boolean" ? resume.helpedBefore : this.ettaDone;
     this.checkpoint("help-etta", { ...resume, helpedBefore });
-    this.fadeOutForkCue(this.beaconFlameCue);
-    this.beaconFlameCue = null;
+    this.setEttaHelpBeaconBright(false);
     this.showEtta();
     if (helpedBefore) this.restoreEttaBookPose("shelved");
     else this.showEttaBookCue();
     this.band.setObjective("Etta welcomes your help. Press Enter or Space to continue.");
     this.setNarrator(helpedBefore
-      ? "Etta remembers the book you placed for her. She offers her ledger; the beacon brightens."
+      ? "Etta remembers the book you placed for her. She offers her ledger beside the waiting beacon."
       : "Etta asks you to carry her last unburned book to its shelf.");
     const begin = (): void => {
       this.runPassageChain(
@@ -2465,11 +2468,16 @@ export class SkyIslandScene extends Phaser.Scene {
             if (!s.almanacLore.includes("scholar-ettas-last-volume")) s.almanacLore.push("scholar-ettas-last-volume");
           });
           this.hideEtta();
+          this.fadeOutForkCue(this.beaconFlameCue);
+          this.beaconFlameCue = null;
           this.startAct3();
         },
-        helpedBefore ? undefined : {
+        {
           body: undefined,
-          onPhraseComplete: (index) => this.restoreEttaBookPose(index === 0 ? "carried" : "shelved"),
+          onPhraseComplete: (index) => {
+            if (!helpedBefore) this.restoreEttaBookPose(index === 0 ? "carried" : "shelved");
+            if (index === (helpedBefore ? 1 : 3)) this.setEttaHelpBeaconBright(true);
+          },
         }, "help-etta", { helpedBefore },
       );
     };
@@ -3582,9 +3590,9 @@ export class SkyIslandScene extends Phaser.Scene {
     const height = this.scale.height;
     if (!body?.scene) return { x: width / 2, y: height / 2 };
     if (this.fork2Tether?.scene && (body === this.fork2Scholar || body === this.beaconFlameCue)) {
-      // The aftermath commands belong to the painted spirit and the thread's
-      // masonry endpoint, with a clear shared lane above Wren's hood.
-      return { x: body.x, y: 530 };
+      // Keep the established readable lane above Wren. The beacon is
+      // upstage: put its words to the left of its bowl rather than over it.
+      return { x: body === this.beaconFlameCue ? body.x - (word.length > 16 ? 320 : 260) : body.x, y: 530 };
     }
     const physicalSource = body.getData?.("sky-source-offset-y");
     if (typeof physicalSource === "number") sourceOffsetY = physicalSource;
@@ -4279,7 +4287,7 @@ export class SkyIslandScene extends Phaser.Scene {
       this.tweens.add({ targets: c, alpha: 0.68, duration: 640, ease: "Sine.easeOut" });
     }
     if (!this.beaconFlameCue?.scene) {
-      this.beaconFlameCue = this.createBeaconFlameCue().setPosition(1140, 792);
+      this.beaconFlameCue = this.createBeaconFlameCue();
       if (this.fork1Choice === "steal-flame") {
         this.beaconFlameCue.getByName("beacon-spark")?.destroy();
         const light = this.beaconFlameCue.getByName("beacon-light");
@@ -4287,6 +4295,7 @@ export class SkyIslandScene extends Phaser.Scene {
         this.beaconFlameCue.setActive(false);
       }
     }
+    if (this.fork1Choice === "help-etta") this.setEttaHelpBeaconBright(true);
     // In this aftermath the thread, rather than the earlier flame, is the
     // physical source for claim lines and per-letter feedback.
     this.beaconFlameCue.setData("sky-source-offset-y", -95);
@@ -4295,7 +4304,7 @@ export class SkyIslandScene extends Phaser.Scene {
       const from = new Phaser.Math.Vector2(this.fork2Scholar.x + 40, this.fork2Scholar.y);
       const to = new Phaser.Math.Vector2(this.beaconFlameCue.x, this.beaconFlameCue.y - 95);
       const curve = new Phaser.Curves.CubicBezier(from,
-        new Phaser.Math.Vector2(from.x + 54, 450), new Phaser.Math.Vector2(to.x - 90, 450), to);
+        new Phaser.Math.Vector2(from.x + 20, 350), new Phaser.Math.Vector2(to.x - 90, 450), to);
       const thread = this.add.graphics();
       thread.lineStyle(2.5, 0xffe4a8, 0.84);
       thread.strokePoints(curve.getPoints(40));
@@ -4319,7 +4328,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private createBeaconFlameCue(): Phaser.GameObjects.Container {
     // The terrace and its masonry share a fixed contact point. Only the light
     // changes; the physical beacon never rises, breathes or scales on claim.
-    const c = this.add.container(1320, 792).setDepth(42).setAlpha(0);
+    const c = this.add.container(SKY_BEACON_BASE.x, SKY_BEACON_BASE.y).setDepth(42).setAlpha(0);
     c.setData("sky-source-offset-y", -190);
     c.add(addLocalGroundShadow(this, 142, 18, { y: 4, alpha: 0.2 }));
     const brazier = this.add.image(0, 0, "sky-beacon-brazier").setName("beacon-brazier");
@@ -4350,6 +4359,25 @@ export class SkyIslandScene extends Phaser.Scene {
       : { x: 341, y: 102, width: 499, height: 1136 };
     image.setOrigin((bounds.x + bounds.width / 2) / image.width, (bounds.y + bounds.height) / image.height);
     image.setScale(height / bounds.height);
+  }
+
+  /** The last help phrase changes the same visible beacon it names. Stable
+   * alpha states reconstruct from the existing phrase checkpoint without a
+   * new animation, reward, or timing gate. */
+  private setEttaHelpBeaconBright(bright: boolean): void {
+    if (!this.beaconFlameCue?.scene) this.beaconFlameCue = this.createBeaconFlameCue();
+    const cue = this.beaconFlameCue;
+    this.tweens.killTweensOf(cue);
+    // Keep the masonry clear of the book's foreground shelf and fully on
+    // the terrace paving, matching the recorded completed-world contact.
+    cue.setPosition(SKY_BEACON_BASE.x, SKY_BEACON_BASE.y).setAlpha(1);
+    const flame = cue.getByName("beacon-spark") as Phaser.GameObjects.Image | null;
+    const light = cue.getByName("beacon-light") as Phaser.GameObjects.Graphics | null;
+    flame?.setAlpha(1);
+    if (light?.scene) {
+      this.tweens.killTweensOf(light);
+      light.setAlpha(bright ? 0.24 : 0.12);
+    }
   }
 
   private dimBeaconFlameVisual(): void {

@@ -671,7 +671,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     }
 
     this.setNarrator(narratorLine);
-    this.band.setObjective("Type the wood memory to return to the Almanac.");
+    this.band.setObjective("Type the wood memory to return to the Portal Chamber.");
     this.readThen(() => this.deliverRevisitPassage(words));
   }
 

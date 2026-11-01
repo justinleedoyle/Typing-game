@@ -704,7 +704,7 @@ export class SunkenBellScene extends Phaser.Scene {
     }
 
     this.setNarrator(narratorLine);
-    this.band.setObjective("Type the bell memory to return to the Almanac.");
+    this.band.setObjective("Type the bell memory to return to the Portal Chamber.");
     this.readThen(() => this.deliverRevisitPassage(words));
   }
 

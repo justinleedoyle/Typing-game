@@ -19,7 +19,7 @@ function actualClass(file: string, name: string, methods: string[], constantName
 }
 const Forge = actualClass("ClockworkForgeScene", "Forge", ["startRevisit", "restoreForgeRevisitAftermath", "restoreForgeStage", "revisitMemoryCuePosition", "revisitMemoryWordPosition"],
   ["FLOOR_Y", "GOLEM_SPRITE_HEIGHT", "FOUNDRY_GROUND_Y", "FORGE_BELLOWS", "CATWALK_Y", "CATWALK_SURFACE_Y"]);
-const Wood = actualClass("HauntedWoodScene", "Wood", ["startRevisit", "restoreWoodRevisitAftermath"]);
+const Wood = actualClass("HauntedWoodScene", "Wood", ["startRevisit", "restoreWoodRevisitAftermath"], ["WOOD_OFFERING"]);
 
 function fixture(kind: "forge" | "wood", choices: Record<string, string>, satchel: string[] = []) {
   const realm = kind === "forge" ? "clockwork-forge" : "haunted-wood";

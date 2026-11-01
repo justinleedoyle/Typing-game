@@ -111,6 +111,7 @@ const WOOD_PATH_STAGE_Y = 826;
 const WOOD_ROOT_CUE_Y = 792;
 const WOOD_CANOPY_CUE_Y = 674;
 const WOOD_LANTERN_CUE_Y = 782;
+const WOOD_OFFERING = { x: 690, width: 230 } as const;
 const WOOD_NORTH_GHOST_REST_Y = 340;
 const WOOD_SOUTH_GHOST_REST_Y = 792;
 const WOOD_SIDE_GHOST_REST_Y = 704;
@@ -682,7 +683,8 @@ export class HauntedWoodScene extends Phaser.Scene {
     const aftermath = this.add.container(0, 0).setDepth(-0.4);
     this.revisitAftermath = aftermath;
     if (first === "offering") {
-      this.offeringCue = this.createRootedWoodProp(400, "wood-offering-shrine", 230, -72, 0);
+      this.offeringCue = this.createRootedWoodProp(WOOD_OFFERING.x, "wood-offering-shrine",
+        WOOD_OFFERING.width, -72, 0);
       this.tweens.killTweensOf(this.offeringCue);
       this.offeringCue.setAlpha(1);
       const candle = this.add.graphics();
@@ -827,9 +829,14 @@ export class HauntedWoodScene extends Phaser.Scene {
   private revisitMemoryWordPosition(idx: number, total: number): { x: number; y: number } {
     const cue = this.revisitMemoryCuePosition(idx, total);
     // Long middle answers such as "remembered" must clear Wren's hood.
-    const y = Math.abs(cue.x - this.wrenContainer.x) < 160
+    let y = Math.abs(cue.x - this.wrenContainer.x) < 160
       ? Math.min(cue.y - 110, this.wrenContainer.y - 280)
       : cue.y - 110;
+    // The remembered shrine stays where Wren used it. Lift only the nearby
+    // memory word above its new candle instead of covering that consequence.
+    if (this.offeringCue?.scene && Math.abs(cue.x - this.offeringCue.x) < WOOD_OFFERING.width / 2 + 20) {
+      y = Math.min(y, this.offeringCue.y - 168);
+    }
     return { x: cue.x, y };
   }
 
@@ -2590,7 +2597,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       case "north": return { x: 760 + slot * 360, y: WOOD_NORTH_GHOST_REST_Y - 92 };
       case "south": return { x: 750 + slot * 375, y: WREN_Y - 12 };
       case "east": return { x: 1580, y: 430 - slot * 70 };
-      case "west": return { x: 340, y: WOOD_SIDE_GHOST_REST_Y - 92 + slot * 70 };
+      case "west": return { x: 240, y: WOOD_SIDE_GHOST_REST_Y - 92 + slot * 70 };
     }
   }
 
@@ -3218,7 +3225,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private createOfferingCue(): Phaser.GameObjects.Container {
-    return this.createRootedWoodProp(690, "wood-offering-shrine", 230, -72, 640);
+    return this.createRootedWoodProp(WOOD_OFFERING.x, "wood-offering-shrine", WOOD_OFFERING.width, -72, 640);
   }
 
   private createBoneFluteCue(): Phaser.GameObjects.Container {

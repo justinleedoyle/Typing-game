@@ -9,7 +9,7 @@ const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.S
 const sceneClass = source.statements.find(ts.isClassDeclaration)!;
 const methods = ["finishFlute","init", "preload", "createRootedWoodProp", "addRootedWoodPainting", "createOfferingCue", "createBoneFluteCue", "createGroveLightCue", "showFork1Cues", "showFork2Cues", "startFork1", "startFork2", "makeWoodForkWord", "fadeOutForkCue", "drawShrine", "pulseShrine", "settleBoneFluteInHand", "showGatheredAshVial", "attachHeldWoodRelic", "clearHeldWoodRelic", "clearWoodForkCues", "startFork1BoneFlute", "startFork2Force", "runPassageChain", "ownerPassageWordPosition", "drawGhostKingRootThrone", "drawGhostKing", "fadeGhostKingBody", "onKeyDown"];
 const constants = source.statements.filter(ts.isVariableStatement).flatMap(statement =>
-  statement.declarationList.declarations.filter(declaration => ["WOOD_BRANCH_WORD_Y", "GHOST_KING_SPRITE_HEIGHT"].includes(declaration.name.getText(source)))
+  statement.declarationList.declarations.filter(declaration => ["WOOD_BRANCH_WORD_Y", "GHOST_KING_SPRITE_HEIGHT", "WOOD_OFFERING"].includes(declaration.name.getText(source)))
     .map(declaration => `const ${declaration.getText(source)};`)).join("\n");
 const code = ts.transpileModule(`${constants}\nclass Wood { ${methods.map(name => sceneClass.members.find(member => member.name?.getText(source) === name)!.getText(source)).join("\n")} }`,
   { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;

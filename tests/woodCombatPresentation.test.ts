@@ -247,6 +247,40 @@ function liveWardFixture(directions: readonly string[], stable = true) {
   return { s, enemies, configs, registered, tweens, timers, anchors, claims, hits: () => hits };
 }
 
+// Measure Inga's actual painted/glowing presentation at both recorded poses.
+// In particular the lantern's31px bloom travels with the same scaled owner.
+function ingaPresentationBounds() {
+  const names = ["INGA_FOREGROUND", "INGA_TREE_LINE", "INGA_GHOST_SPRITE_HEIGHT"];
+  const declarations = wood.statements.filter(ts.isVariableStatement).flatMap(statement => statement.declarationList.declarations
+    .filter(value => names.includes(value.name.getText(wood))).map(value => `const ${value.getText(wood)};`)).join("\n");
+  const code = ts.transpileModule(`${declarations}\nreturn [INGA_FOREGROUND, INGA_TREE_LINE, INGA_GHOST_SPRITE_HEIGHT];`,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  const [foreground, treeLine, spriteHeight] = new Function(code)();
+  const image = readFileSync(new URL("../art/wood/ghost.png", import.meta.url));
+  const spriteWidth = spriteHeight * image.readUInt32BE(16) / image.readUInt32BE(20);
+  const rectangles = [{ left: -spriteWidth / 2, right: spriteWidth / 2, top: -2 - spriteHeight / 2, bottom: -2 + spriteHeight / 2 }];
+  const owner = wood.statements.find(ts.isClassDeclaration)!;
+  const draw = owner.members.find(member => member.name?.getText(wood) === "drawInga")!;
+  function visit(node: ts.Node): void {
+    if (ts.isCallExpression(node) && ["glow.fillEllipse", "g.fillEllipse", "g.fillCircle"].includes(node.expression.getText(wood))) {
+      const [x, y, width, height] = node.arguments.map(argument => Number(argument.getText(wood)));
+      const circle = node.expression.getText(wood).endsWith("fillCircle");
+      const halfX = circle ? width : width / 2, halfY = circle ? width : height / 2;
+      rectangles.push({ left: x - halfX, right: x + halfX, top: y - halfY, bottom: y + halfY });
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(draw);
+  assert(rectangles.length > 5, "both the actual body and lantern/glow geometry are included in branch-clearance bounds");
+  return [foreground, treeLine].map(pose => {
+    const scale = pose.scale ?? 1;
+    return { left: pose.x + Math.min(...rectangles.map(r => r.left)) * scale,
+      right: pose.x + Math.max(...rectangles.map(r => r.right)) * scale,
+      top: pose.y + Math.min(...rectangles.map(r => r.top)) * scale - 3,
+      bottom: pose.y + Math.max(...rectangles.map(r => r.bottom)) * scale + 3 };
+  });
+}
+
 await suite("Wood compass answer lanes: source-configured parallel and paired spirits stay separate through body convergence and every retry lifecycle", () => {
   for (const directions of [["west", "east", "north"], ["north", "south", "east", "west"],
     ["north", "north", "east", "west"], ["south", "south", "north"], ["east", "east", "north"], ["west", "west", "north"]]) {
@@ -276,11 +310,15 @@ await suite("Wood compass answer lanes: source-configured parallel and paired sp
       assert(dx > halfWidths[0] + halfWidths[1] || dy >= 70,
         "complete conservative answer rectangles remain separate, including two north or two south siblings");
     }
+    const ingaBounds = ingaPresentationBounds();
     for (const [x, y] of positions) {
       assert(y + 30 < 860, "the lower answer bounds remain above the HUD");
       assert(x + 90 < 891 || x - 90 > 1029 || y + 30 < 586, "no complete answer rectangle crosses Wren's hood or foreground body");
       assert(x + 90 < 1220 || y + 30 < 484 || x - 90 > 1580, "the answer lane clears the king and his root-throne envelope");
-      assert(x + 90 < 490 || x - 90 > 630 || y + 30 < 660 || y - 30 > 806, "the complete word clears Inga's lantern and foreground glow");
+      for (const bounds of ingaBounds) {
+        assert(x + 90 < bounds.left || x - 90 > bounds.right || y + 30 < bounds.top || y - 30 > bounds.bottom,
+          "complete answer rectangles clear Inga's actual body and lantern glow at both foreground and tree-line branch poses");
+      }
       assert(Math.abs(x - 810) > 120 || Math.abs(y - 742) > 52, "south answers do not cover the west compass comma");
     }
     assertEqual(f.anchors.map(a => a.body), f.enemies.map(({ enemy }: any) => enemy.container), "each existing live tether follows its own moving spirit");

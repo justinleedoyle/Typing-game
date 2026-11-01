@@ -1963,6 +1963,9 @@ export class WinterMountainScene extends Phaser.Scene {
       knockbackPauseMs: WOLF_KNOCKBACK_PAUSE_MS,
       dangerRampStart: DANGER_RAMP_START,
       anchorOffsetY: -232,
+      // The pack may crowd the same body contact point. Keep each answer in
+      // its original readable lane; the existing live tether follows its wolf.
+      wordAnchorX: targetX,
       idleBobDy: 6,
       idleBobMs: 900,
       defeatRiseY: -60,

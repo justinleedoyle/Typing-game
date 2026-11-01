@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { assert, assertClose, assertEqual, suite } from "./_assert";
+import { advanceDurationMs, dangerRamp, splitChildPositions } from "../src/game/movingWordMath";
+import { circlerY } from "../src/game/winterMechanics";
 
 function source(path: string) {
   const url = new URL(path, import.meta.url);
@@ -13,7 +15,7 @@ function constants(file: ts.SourceFile, names: readonly string[]): string {
 }
 const winterSource = source("../src/scenes/WinterMountainScene.ts");
 const winterClass = winterSource.statements.find(ts.isClassDeclaration)!;
-const winterMethods = ["spawnBoss", "drawBossInto", "makeWolfSnowFooting", "quietLordIntrusionAnchor"].map(name =>
+const winterMethods = ["spawnWolf", "spawnBoss", "drawBossInto", "makeWolfSnowFooting", "quietLordIntrusionAnchor"].map(name =>
   winterClass.members.find(member => member.name?.getText(winterSource) === name)!.getText(winterSource));
 const wolfSource = source("../src/game/wolf.ts");
 const wolfFunction = wolfSource.statements.find(statement => ts.isFunctionDeclaration(statement) &&
@@ -33,8 +35,8 @@ const winterCode = ts.transpileModule(`${constants(winterSource, [
 class Enemy {
   constructor(readonly config: Record<string, any>) {}
 }
-const Winter = new Function("MovingWordEnemy", "makeWolfSprite", "addLocalGroundShadow", "addContainerWake", "PALETTE_HEX", "Phaser",
-  `${winterCode}; return Winter;`)(Enemy, makeWolfSprite, () => ({}), () => {}, { frost: 0xabcdef },
+const Winter = new Function("MovingWordEnemy", "circlerY", "makeWolfSprite", "addLocalGroundShadow", "addContainerWake", "PALETTE_HEX", "Phaser",
+  `${winterCode}; return Winter;`)(Enemy, circlerY, makeWolfSprite, () => ({}), () => {}, { frost: 0xabcdef },
     { Math: { Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)) } });
 
 class MarkGraphics {
@@ -129,4 +131,90 @@ await suite("Winter intrusion: the transient scar clears narration, wolves and l
     const fallback = winter.quietLordIntrusionAnchor();
     assertEqual(fallback, { x: 960, y: anchor.y }, "without a live threat the same clear lane remains centered");
   }
+});
+
+
+await suite("Winter pack labels: actual authored lanes stay readable as all four unchanged bodies crowd Wren", () => {
+  const winter = new Winter(), configs: any[] = [], tweens: any[] = [], timers: any[] = [], registered: any[] = [], anchors: any[] = [];
+  const noop = () => {};
+  const body = (x: number, y: number) => ({ x, y, scaleX: 1, scaleY: 1, scene: true,
+    setDepth() { return this; }, setAlpha() { return this; }, setScale(x: number, y = x) { this.scaleX = x; this.scaleY = y; return this; }, addAt: noop, destroy() { this.scene = false; } });
+  Object.assign(winter, { scale: { width: 1920 }, wrenContainer: { x: 960, y: 842 }, wolves: [], activeTargets: [], waveActive: true,
+    typingInput: { register: (target: any) => registered.push(target), unregister: (target: any) => registered.splice(registered.indexOf(target), 1) },
+    add: { container: body, graphics: () => ({ fillStyle: noop, fillEllipse: noop, lineStyle: noop, strokeEllipse: noop, destroy: noop }) }, drawWolfInto: noop, leanWrenToward: noop, returnWrenToRest: noop,
+    afterWolfDefeated: noop, onWolfHit: noop,
+    tweens: { add(options: any) { const tween = { ...options, stop() { this.stopped = true; } }; tweens.push(tween); return tween; }, killTweensOf: noop },
+    time: { delayedCall(ms: number, next: () => void) { const timer = { ms, next, remove: noop }; timers.push(timer); return timer; } },
+  });
+  const slots = Winter.spawnSlots as Array<{ x: number; y: number }>;
+  const words = ["glacier", "ledge", "frostbite", "blizzard"];
+  slots.forEach((slot, i) => {
+    winter.spawnWolf(slot.x < 960 ? -120 : 2040, slot.x, slot.y, words[i], i * 200, 12500, i === 3);
+    const config = (winter.wolves.at(-1) as Enemy).config; configs.push(config);
+    assertEqual([config.wordAnchorX, config.anchorOffsetY, config.fontSize], [slot.x, -232, 34], "each unchanged answer opts into its own stable authored horizontal lane");
+    assertEqual([config.restX, config.restY, config.wrenX, config.advanceMs, config.entranceMs, config.entranceDelayMs],
+      [slot.x, slot.y, 960, 12500, 700, i * 200], "label placement changes no body path, deadline or arrival staggering");
+    assertEqual(config.word, words[i], "the existing target strings remain exact");
+  });
+  const movingSource = source("../src/game/movingWordEnemy.ts"), owner = movingSource.statements.find(ts.isClassDeclaration)!;
+  const code = ts.transpileModule(owner.getText(movingSource).replace(/^export /, ""), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  class Target {
+    x: number; y: number; destroyed = false; danger = 0;
+    constructor(readonly opts: any) { this.x = opts.x; this.y = opts.y; }
+    setDepth() {} playEntryWake() {} setAnchorX(x: number) { this.x = x; } setAnchorY(y: number) { this.y = y; }
+    getAnchorX() { return this.x; } getAnchorY() { return this.y; } setDanger(danger: number) { this.danger = danger; }
+    isComplete() { return false; } destroy() { this.destroyed = true; }
+  }
+  const RuntimeEnemy = new Function("TextWordTarget", "advanceDurationMs", "dangerRamp", "splitChildPositions", "attachWordBodyAnchor",
+    "playBodyImpact", "playBodyTypePulse", "playClaimLine", "PALETTE_HEX", `${code}; return MovingWordEnemy;`)(
+    Target, advanceDurationMs, dangerRamp, splitChildPositions,
+    (_scene: unknown, ownBody: any, point: () => { x: number; y: number }, options: any) => {
+      const anchor = { ownBody, point, options, destroyed: false, destroy() { this.destroyed = true; } }; anchors.push(anchor); return anchor;
+    }, noop, noop, noop, { frost: 1, brass: 2 });
+  const enemies = configs.map(config => {
+    config.container.x = config.restX;
+    const enemy = new RuntimeEnemy(config); enemy.attachWord(); enemy.startAdvance();
+    const advance = tweens.at(-1);
+    assertEqual([advance.x, advance.duration], [960, 12500], "the original full advance deadline remains exact with separated labels");
+    return { enemy, config, advance };
+  });
+  for (const progress of [.1, .5, .9, .99]) {
+    for (const { enemy, config, advance } of enemies) {
+      config.container.x = config.restX + (960 - config.restX) * progress;
+      advance.onUpdate({ progress });
+      assertEqual(enemy.target.getAnchorX(), config.restX, "late convergence cannot merge either side's target labels");
+      assertEqual(enemy.target.getAnchorY(), (config.verticalOffset ? circlerY(config.restY, progress) : config.restY) - 232,
+        "the circler's existing vertical motion stays connected while straight labels keep their original height");
+    }
+    const xs = enemies.map(({ enemy }) => enemy.target.getAnchorX()).sort((a, b) => a - b);
+    assert(xs.slice(1).every((x, i) => x - xs[i] >= 300), "all concurrent answer centers retain at least300px separation even at body overlap");
+  }
+  const labelHalfHeight = 30;
+  assert(enemies.every(({ enemy }) => enemy.target.getAnchorY() - labelHalfHeight > 430 && enemy.target.getAnchorY() + labelHalfHeight < 860),
+    "regular labels stay below the large reading-card zone and above the fixed HUD");
+  assert(enemies.every(({ enemy }) => Math.abs(enemy.target.getAnchorX() - 960) >= 300), "the stable lanes stay outside Wren's hood and typing-lean area");
+  assertEqual(anchors.map(anchor => anchor.ownBody), configs.map(config => config.container), "each original tether remains attached to its own actual moving wolf");
+  assertEqual(anchors.map(anchor => anchor.point().x), slots.map(slot => slot.x), "tether endpoints continue to the visible stable answers");
+  for (const { enemy, config } of enemies) {
+    enemy.knockBack(260, 2600); const retreat = tweens.at(-1);
+    config.container.x = (960 + config.restX) / 2; retreat.onUpdate();
+    assertEqual(enemy.target.getAnchorX(), config.restX, "thunder knockback cannot drag a label across another lane");
+    assertEqual([retreat.duration, retreat.x, retreat.y], [260, config.restX, config.restY], "thunder's original retreat geometry and time remain untouched");
+    config.container.x = config.restX; config.container.y = config.restY; retreat.onComplete();
+    assertEqual(timers.at(-1).ms, 2600, "the caller's original re-advance pause stays exact");
+  }
+  const frozen = enemies[0].enemy, frozenTarget = frozen.target;
+  frozen.freeze(900);
+  assert(frozen.isFrozen() && frozen.target === frozenTarget, "an existing freeze keeps the same readable target and its lane");
+  assertEqual(timers.at(-1).ms, 900, "freeze retains the caller's original duration");
+  timers.at(-1).next();
+  assert(!frozen.isFrozen() && frozen.target === frozenTarget, "thaw resumes the same word without duplicating a target or tether");
+  assertEqual([frozen.target.getAnchorX(), anchors.length, registered.length], [slots[0].x, slots.length, slots.length],
+    "thaw does not move a stable answer or create an extra connected lane");
+  for (const { enemy } of enemies) enemy.dismiss();
+  assertEqual([registered.length, winter.activeTargets.length], [0, 0], "a wipe or scene cleanup removes every lane's gameplay target");
+  assert(anchors.every(anchor => anchor.destroyed) && enemies.every(({ enemy }) => enemy.target === null),
+    "dismissal releases the original connected labels and tethers without orphan update owners");
 });

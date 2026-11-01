@@ -147,6 +147,7 @@ const COMMAND_GOLEM_SCALE = 2.4;
 // painted boot line, half a regular golem below that center.
 const FOUNDRY_GROUND_Y = FLOOR_Y + GOLEM_SPRITE_HEIGHT / 2;
 const CATWALK_SURFACE_Y = CATWALK_Y + 20;
+const FORGE_BELLOWS = { x: 800, width: 300 } as const;
 const TUTORIAL_GOLEM_GROUND_Y = GOLEM_SPRITE_HEIGHT / 2 + 6;
 const TUTORIAL_GOLEM_Y = CATWALK_SURFACE_Y - TUTORIAL_GOLEM_GROUND_Y;
 
@@ -742,8 +743,11 @@ export class ClockworkForgeScene extends Phaser.Scene {
     if (first === "forn") {
       this.showFornSprite();
       this.showFornEmptyHands();
-      this.bellowsWorkstation ??= this.drawForgeWorkstation(650, FOUNDRY_GROUND_Y,
-        "forge-bellows-workstation", 260);
+      // Revisit the same repaired machine; Wren uses the clear lane beside it.
+      // Keep the existing foundry footing and its already-running idle motion.
+      this.wrenContainer.setPosition(1060, this.wrenContainer.y);
+      this.bellowsWorkstation ??= this.drawForgeWorkstation(FORGE_BELLOWS.x, FOUNDRY_GROUND_Y,
+        "forge-bellows-workstation", FORGE_BELLOWS.width);
     } else if (first === "cabal") {
       this.showApprenticeSprite();
       this.apprenticeSprite?.setPosition(400, FOUNDRY_GROUND_Y).setFlipX(false);
@@ -1449,7 +1453,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private showFork1ChoiceCues(): void {
     this.showApprenticeSprite();
     if (!this.bellowsWorkstation?.scene) {
-      this.bellowsWorkstation = this.drawForgeWorkstation(800, FOUNDRY_GROUND_Y, "forge-bellows-workstation", 300);
+      this.bellowsWorkstation = this.drawForgeWorkstation(FORGE_BELLOWS.x, FOUNDRY_GROUND_Y,
+        "forge-bellows-workstation", FORGE_BELLOWS.width);
     }
     if (!this.apprenticeCue?.scene) {
       this.apprenticeCue = this.drawApprenticeCue(1280, FLOOR_Y + 4);

@@ -165,7 +165,7 @@ await suite("Forge Gregor lesson: both native static commands stay outside Wren'
 const workstationMethods = ["forgeWorkstationTexture", "drawForgeWorkstation", "drawApprenticeCue", "drawStandDownCue", "drawFightCue", "showFork1ChoiceCues", "showFork2ChoiceCues", "getForgeChoiceCue", "setForgeChoiceCue", "dismissForgeChoiceCue", "dismissBellowsWorkstation", "pulseForgeChoiceCue", "startFornBranch", "startCabalBranch", "afterFork1"];
 const workstationConstants = source.statements.filter(ts.isVariableStatement).flatMap(statement =>
   statement.declarationList.declarations.filter(declaration =>
-    ["FLOOR_Y", "GOLEM_SPRITE_HEIGHT", "FOUNDRY_GROUND_Y", "FORN_PASSAGES", "CABAL_PASSAGES"].includes(declaration.name.getText(source)))
+    ["FLOOR_Y", "GOLEM_SPRITE_HEIGHT", "FOUNDRY_GROUND_Y", "FORGE_BELLOWS", "FORN_PASSAGES", "CABAL_PASSAGES"].includes(declaration.name.getText(source)))
     .map(declaration => `const ${declaration.getText(source)};`)).join("\n");
 const workstationCode = ts.transpileModule(`${workstationConstants}
 class Workshop {

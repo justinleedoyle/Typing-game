@@ -18,7 +18,7 @@ function actualClass(file: string, name: string, methods: string[], constantName
     resolveRealmFork, noop, noop, { ember: 0, moss: 0 });
 }
 const Forge = actualClass("ClockworkForgeScene", "Forge", ["startRevisit", "restoreForgeRevisitAftermath", "restoreForgeStage", "revisitMemoryCuePosition", "revisitMemoryWordPosition"],
-  ["FLOOR_Y", "GOLEM_SPRITE_HEIGHT", "FOUNDRY_GROUND_Y", "CATWALK_Y", "CATWALK_SURFACE_Y"]);
+  ["FLOOR_Y", "GOLEM_SPRITE_HEIGHT", "FOUNDRY_GROUND_Y", "FORGE_BELLOWS", "CATWALK_Y", "CATWALK_SURFACE_Y"]);
 const Wood = actualClass("HauntedWoodScene", "Wood", ["startRevisit", "restoreWoodRevisitAftermath"]);
 
 function fixture(kind: "forge" | "wood", choices: Record<string, string>, satchel: string[] = []) {
@@ -74,7 +74,7 @@ function fixture(kind: "forge" | "wood", choices: Record<string, string>, satche
 await suite("Forge aftermath: both worker routes and both final golem outcomes return to supported floor without replaying rewards", () => {
   for (const fork1 of ["forn", "cabal"]) for (const fork2 of ["peaceful", "fought"]) {
     const f = fixture("forge", { fork1, fork2 });
-    assertEqual([f.scene.wrenContainer.x, f.scene.wrenContainer.y], [860, 866], "revisit uses the same painted lower foundry footing as later chapter scenes");
+    assertEqual([f.scene.wrenContainer.x, f.scene.wrenContainer.y], [fork1 === "forn" ? 1060 : 860, 866], "revisit keeps Wren beside the chosen work on the painted lower foundry floor");
     assertEqual(f.props.map(p => p.texture), [fork1 === "forn" ? "forge-bellows-workstation" : "forge-valve-workstation"], "only the chosen work remains in the foundry");
     assertEqual(f.props[0].y, 866, "the selected machine shares the actual lower ground line");
     assertEqual(Boolean(f.scene.fornSprite?.empty), fork1 === "forn", "Forn never regains the gifted Hammer on a return");

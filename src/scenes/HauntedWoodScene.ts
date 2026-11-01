@@ -1002,7 +1002,8 @@ export class HauntedWoodScene extends Phaser.Scene {
     if (!cue?.scene) return { x: WREN_X, y: WOOD_PATH_STAGE_Y };
     if (idx === 0) return { x: cue.x - 112, y: WOOD_PATH_STAGE_Y };
     if (idx === 1) return { x: cue.x - 24, y: WOOD_PATH_STAGE_Y - 10 };
-    return { x: cue.x + 54, y: WOOD_PATH_STAGE_Y - 2 };
+    // Stop beside the post, leaving its lantern visible through the held reply.
+    return { x: cue.x - 112, y: WOOD_PATH_STAGE_Y - 2 };
   }
 
   private stageWrenAtPathEntrance(): void {

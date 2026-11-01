@@ -292,7 +292,9 @@ await suite("Sky forks: actual phrase completion roundtrips every index and resp
     assertEqual(f.targets.at(-1).word, phrases[index], "canon phrase order is unchanged");
     for (const reading of [false, true]) {
       if (reading) f.complete();
+      const expectedCaption = f.captions.at(-1);
       const resumed = await f.reload(); resumed.scene.resumeSky();
+      assertEqual(resumed.captions.at(-1), expectedCaption, "pending and held theft reloads retain the caption matching the already-completed physical actions");
       assertEqual(resumed.store.get().realms["sky-island"].choices.fork1, "steal-flame", "committed choice survives interruption");
       assertEqual(resumed.gates.length, reading ? 1 : 0, "phrase response and native target remain distinct states");
       if (!reading) assertEqual(resumed.targets.at(-1).word, phrases[index], "only the unfinished phrase restarts");
@@ -340,6 +342,7 @@ await suite("Sky help branch: one last volume keeps its four-versus-two phrases,
       pending.scene.resumeSky();
       assertEqual(pending.targets.at(-1).word, expected[index], "pending reload honors the saved phrase list even if the live help flag differs");
       assertEqual(pending.gates.length, 0, "a pending phrase does not repeat its acknowledged introduction");
+      assertEqual(pending.captions.at(-1), f.captions.at(-1), "a pending help reload describes the carried or shelved book exactly as natural Continue did");
       assertEqual(pose(pending.scene), expectedPose(index), "pending reload restores only already-completed book actions");
       assertEqual(beaconState(pending.scene), [1500, 710, 1, .12], "pending final help phrase restores a waiting beacon without claiming an untyped brightening");
       assertEqual(pending.store.get().checkpoint?.data.helpedBefore, helpedBefore, "pending reload preserves the original help-list decision");
@@ -360,6 +363,7 @@ await suite("Sky help branch: one last volume keeps its four-versus-two phrases,
       restored.scene.resumeSky();
       assertEqual(restored.targets.length, 0, "completed help phrase restores only its held reading gate");
       assertEqual(restored.gates.length, 1, "each unchanged response keeps one deliberate Continue gate");
+      assertEqual(restored.captions.at(-1), f.captions.at(-1), "a held help reload still displays its current completed response");
       assertEqual(restored.store.get().checkpoint?.data.helpedBefore, helpedBefore, "reload never shortens an unfinished long passage");
       assertEqual(pose(restored.scene), expectedPose(index + 1), "held-response reload reconstructs the completed physical book pose");
       assertEqual(beaconState(restored.scene), [1500, 710, 1, bright ? .24 : .12], "held-response reload immediately reconstructs the exact earned beacon light without replay");
@@ -400,8 +404,13 @@ await suite("Sky aftermath routes: kindly and cut passages preserve every commit
   assertEqual(kindRestored.store.get().realms["sky-island"].choices.fork2, "answer-kindly", "kind route remains committed"); await kindRestored.flush();
   const cut = fixture(); cut.scene.showFork2Cues(); cut.scene.startFork2CutTether(); cut.next();
   for (const [index, word] of ["pull the thread", "the tether falls"].entries()) {
-    assertEqual(cut.targets.at(-1).word, word, "cut route keeps its original phrase order"); cut.complete();
+    assertEqual(cut.targets.at(-1).word, word, "cut route keeps its original phrase order");
+    const pending = await cut.reload(); pending.scene.resumeSky();
+    assertEqual(pending.captions.at(-1), cut.captions.at(-1), "a pending cut phrase restores the last acknowledged thread response rather than the original invitation");
+    assertEqual([pending.targets.at(-1).word, pending.gates.length], [word, 0], "restored thread context cannot add a reading gate or repeat a completed phrase");
+    await pending.flush(); cut.complete();
     const restored = await cut.reload(); restored.scene.resumeSky();
+    assertEqual(restored.captions.at(-1), cut.captions.at(-1), "the current held cut response remains unchanged");
     assertEqual([restored.targets.length, restored.gates.length], [0, 1], "finished cut phrase restores only its acknowledgment");
     assertEqual(restored.store.get().checkpoint?.data.index, index, "the exact completed cut phrase survives serialization"); await restored.flush(); cut.next();
   }
@@ -533,4 +542,24 @@ await suite("Sky revisits: recorded book, empty beacon and summit light survive 
     await f.flush();const restored=await f.reload();restored.scene.stageSkyRevisitAftermath();
     assertEqual(Boolean(restored.scene.ettaBookCue?.scene),row.book,"the same book aftermath is reconstructed after the real serializer/backend reload");await restored.flush();
   }
+});
+
+
+await suite("Sky pending passage context: a silent intermediate response retains the last acknowledged line through real save restoration", async () => {
+  const f = fixture();
+  const phrases = ["first action", "silent action", "last action"];
+  const responses = ["The first action is complete.", "", "The last action is complete."];
+  f.scene.setNarrator("Initial instructions.");
+  f.scene.runPassageChain(phrases, responses, noop, undefined, "help-etta");
+  assertEqual(f.captions.at(-1), "Initial instructions.", "the first pending phrase retains its untouched introduction");
+  f.complete(); f.next(); f.complete();
+  assertEqual([f.targets.at(-1).word, f.gates.length, f.captions.at(-1)],
+    ["last action", 0, responses[0]], "a silent completed action naturally keeps the earlier acknowledged context without an extra reading gate");
+  const restored = await f.reload();
+  restored.scene.setNarrator("Initial instructions.");
+  restored.scene.runPassageChain(phrases, responses, noop, undefined, "help-etta");
+  assertEqual([restored.targets.at(-1).word, restored.gates.length, restored.captions.at(-1)],
+    ["last action", 0, responses[0]], "reload skips the empty response, restores existing context, and leaves the last phrase unfinished");
+  assertEqual(restored.store.get().checkpoint?.data.reading, false, "restoring prose cannot turn a pending phrase into a completed response");
+  await restored.flush(); await f.flush();
 });

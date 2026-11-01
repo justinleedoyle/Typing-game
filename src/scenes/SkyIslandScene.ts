@@ -3630,6 +3630,15 @@ export class SkyIslandScene extends Phaser.Scene {
     if (checkpointStep && this.resumeCheckpoint?.step === checkpointStep) this.resumeCheckpoint = null;
     // Completed physical consequences are stable poses, not animations.
     for (let previous = 0; previous < step; previous++) owner?.onPhraseComplete?.(previous);
+    // Continuing naturally keeps the latest completed response on screen.
+    // A pending reload must restore that context beside its reconstructed
+    // props, rather than asking for a book or spark already received.
+    if (!held) {
+      for (let previous = step - 1; previous >= 0; previous--) {
+        const line = narratorLines[previous];
+        if (line) { this.setNarrator(line); break; }
+      }
+    }
 
     const advance = (): void => {
       if (step >= passages.length) {

@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import ts from "typescript";
 import EventEmitter from "eventemitter3";
 import { RELICS } from "../src/game/relics";
@@ -7,10 +8,12 @@ import { navigationAction } from "../src/game/ui/navigationPolicy";
 import { decorativeTween, installPresentation, PRESENTATION_CHANGED, reducedMotion } from "../src/game/presentation";
 import { assert, assertClose, assertEqual, suite } from "./_assert";
 
+const earcut = createRequire(import.meta.url)("phaser/src/geom/polygon/Earcut.js");
+
 const url = new URL("../src/scenes/PortalChamberScene.ts", import.meta.url);
 const source = ts.createSourceFile(url.pathname, readFileSync(url, "utf8"), ts.ScriptTarget.Latest, true);
 const owner = source.statements.find(ts.isClassDeclaration)!;
-const names = ["drawRoom", "drawRuna", "drawWren", "drawArch", "renderArch", "setPortalSpin", "setCompletedPortalFocus", "updateAllArchAppearances", "focusPortalForScene", "pulsePortalTyping", "playHubArrival", "drawPortalGlow", "drawArchLabels", "drawArchKeystone", "drawKeystoneGlyph", "drawArchStatusPlaque", "registerPortalZoneTargets", "registerRealmPortalTarget", "registerShelfZoneTargets", "registerPortalReturnTarget", "registerDeskAlmanacTarget", "registerNavTarget", "stageHubTarget", "drawDisplayShelf", "clearShelfDisplay", "stageShelfObject", "openAlmanac", "resumeAfterAlmanac", "enterZone", "clearZoneTargets", "onKeyDown"];
+const names = ["drawRoom", "drawChairForeground", "drawRuna", "drawWren", "drawArch", "renderArch", "setPortalSpin", "setCompletedPortalFocus", "updateAllArchAppearances", "focusPortalForScene", "pulsePortalTyping", "playHubArrival", "drawPortalGlow", "drawArchLabels", "drawArchKeystone", "drawKeystoneGlyph", "drawArchStatusPlaque", "registerPortalZoneTargets", "registerRealmPortalTarget", "registerShelfZoneTargets", "registerPortalReturnTarget", "registerDeskAlmanacTarget", "registerNavTarget", "stageHubTarget", "drawDisplayShelf", "clearShelfDisplay", "stageShelfObject", "openAlmanac", "resumeAfterAlmanac", "enterZone", "clearZoneTargets", "onKeyDown"];
 const constants = source.statements.filter(ts.isVariableStatement).map(node => node.getText(source)).join("\n");
 const targetY = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "archTargetY")!;
 const create = owner.members.find(node => node.name?.getText(source) === "create") as ts.MethodDeclaration;
@@ -68,17 +71,22 @@ function glyphSignature(call: { ops: DrawOp[]; x: number; y: number }) {
 function fixture(satchel: string[] = [], cleared = 0, motionReduced = false) {
   let now = 0, paused = false;
   const scheduled: Array<{ at: number; next: () => void }> = [];
-  const objects: any[] = [], tweens: any[] = [], masks: any[] = [], words: any[] = [], drifts: any[] = [], breaths: any[] = [], launches: any[] = [], stationFocus: any[] = [];
+  const objects: any[] = [], tweens: any[] = [], masks: any[] = [], words: any[] = [], drifts: any[] = [], breaths: any[] = [], launches: any[] = [], stationFocus: any[] = [], lights: any[] = [];
   const events = new EventEmitter();
   const state = { typewriterAwakened: true, satchel, realms: {} as Record<string, any>, reducedMotion: motionReduced };
   const data = new Map<string, unknown>();
   function object(x = 0, y = 0, key = "") {
-    const b: any = { x, y, key, scene: true, active: true, alpha: 1, scaleX: 1, scaleY: 1, children: [], ops: [], destroyed: 0,
+    const b: any = { x, y, key, scene: true, active: true, visible: true, alpha: 1, scaleX: 1, scaleY: 1, children: [], ops: [], destroyed: 0,
+      frame: { name: "__BASE" }, commandBuffer: [], blendMode: 0,
+      tintTopLeft: 0xffffff, tintTopRight: 0xffffff, tintBottomLeft: 0xffffff, tintBottomRight: 0xffffff,
       setOrigin(x: number, y = x) { this.originX = x; this.originY = y; return this; },
       setDepth(depth: number) { this.depth = depth; return this; }, setAlpha(alpha: number) { this.alpha = alpha; return this; },
       setPosition(x: number, y: number) { this.x = x; this.y = y; return this; }, setVisible(visible: boolean) { this.visible = visible; return this; },
       setDisplaySize(width: number, height: number) { this.displayWidth = width; this.displayHeight = height; return this; },
       setScale(x: number, y = x) { this.scaleX = x; this.scaleY = y; return this; },
+      setCrop(x: number, y: number, width: number, height: number) { this.crop = { x, y, width, height }; return this; },
+      setTint(...colors: number[]) { [this.tintTopLeft, this.tintTopRight, this.tintBottomLeft, this.tintBottomRight] = colors; return this; },
+      setBlendMode(mode: number) { this.blendMode = mode; return this; },
       add(children: any) { this.children.push(...(Array.isArray(children) ? children : [children])); return this; },
       setMask(mask: any) { this.mask = mask; return this; }, clearMask() { this.mask = null; return this; },
       destroy() { if (!this.scene) return; this.destroyed++; this.scene = false; this.active = false; for (const child of this.children) child.destroy?.(); },
@@ -89,7 +97,7 @@ function fixture(satchel: string[] = [], cleared = 0, motionReduced = false) {
     const b = object();
     const proxy = new Proxy(b, { get(target, key) {
       if (key in target) return target[key];
-      if (key === "createGeometryMask") return () => { const mask = { destroyed: 0, destroy() { this.destroyed++; } }; masks.push(mask); return mask; };
+      if (key === "createGeometryMask") return () => { const mask = { source: b, destroyed: 0, destroy() { this.destroyed++; } }; masks.push(mask); return mask; };
       return (...args: any[]) => { if (key === "clear") b.ops = []; else b.ops.push({ name: key, args }); return proxy; };
     } });
     return proxy;
@@ -112,11 +120,14 @@ function fixture(satchel: string[] = [], cleared = 0, motionReduced = false) {
   }
   const globals = {
     TextWordTarget: Target, RELICS, SERIF: "Iowan Old Style", UI_HEX: { panel: 0, brass: 0xc8a85f, frame: 0 }, PALETTE: { cream: "cream", brass: "brass" }, PALETTE_HEX: { brass: 0xc8a85f },
-    Phaser: { Scenes: { Events: { SHUTDOWN: "shutdown" } } }, navigationAction,
+    Phaser: { Scenes: { Events: { SHUTDOWN: "shutdown", POST_UPDATE: "postupdate" } }, Geom: { Polygon: { Earcut: earcut } } }, navigationAction,
     decorativeTween, reducedMotion, PRESENTATION_CHANGED, playSceneEventPulse: noop,
     isPuristToggleKey: () => false, playClack: noop, playChime: noop,
     addBackdropDrift: (_s: any, body: any) => drifts.push(body), addIdleBreath: (_s: any, body: any) => breaths.push(body),
-    addAmbientDrift: noop, addLivingLight: noop, addGroundShadow: noop, addContainerWake: noop, applySceneActorLighting: noop,
+    addAmbientDrift: noop, addLivingLight: (_scene: unknown, opts: any) => {
+      const light = graphics().setPosition(opts.x, opts.y).setAlpha(opts.alpha).setBlendMode(1);
+      light.commandBuffer = [opts.width, opts.height, opts.color]; lights.push(light); return light;
+    }, addGroundShadow: noop, addContainerWake: noop, applySceneActorLighting: noop,
     makeWrenSprite, addLocalGroundShadow: () => object(),
     satchelIconFor: (id: string) => ({ key: `icon-${id}` }),
   };
@@ -133,7 +144,7 @@ function fixture(satchel: string[] = [], cleared = 0, motionReduced = false) {
     input: { keyboard: { on(_event: string, fn: unknown) { keyboard.add(fn); }, off(_event: string, fn: unknown) { keyboard.delete(fn); } } },
     scene: { launch(key: string, data: any) { launches.push({ key, data }); }, pause() { paused = true; }, isActive: () => !paused },
     add: {
-      image(x: number, y: number, key: string) { return Object.assign(object(x, y, key), key === "runa-sprite" ? runa : key === "wren-front" ? wren : { width: 80, height: 120 }); },
+      image(x: number, y: number, key: string) { return Object.assign(object(x, y, key), key === "hub-backdrop" ? backdrop : key === "runa-sprite" ? runa : key === "wren-front" ? wren : { width: 80, height: 120 }); },
       container: object, graphics,
       text(x: number, y: number, text: string, style: any) { return Object.assign(object(x, y), { text, style }); },
       sprite(x: number, y: number, key: string) { const b = object(x, y, key); b.anims = { isPlaying: false, timeScale: 1 }; b.play = () => { b.anims.isPlaying = true; return b; }; b.stop = () => { b.anims.isPlaying = false; return b; }; b.setFrame = (frame: number) => { b.frame = frame; return b; }; b.clearTint = () => { b.tint = null; return b; }; b.setTint = (tint: number) => { b.tint = tint; return b; }; return b; },
@@ -157,7 +168,7 @@ function fixture(satchel: string[] = [], cleared = 0, motionReduced = false) {
     chapterMenu: { handleKey: () => false },
   });
   installPresentation(hub, hub.store);
-  return { hub, geometry: Hub.geometry, objects, masks, words, tweens, drifts, breaths, launches, state, keyboard, stationFocus,
+  return { hub, geometry: Hub.geometry, objects, masks, words, tweens, drifts, breaths, launches, state, keyboard, stationFocus, lights,
     paused: () => paused,
     resumeBook() { paused = false; hub.resumeAfterAlmanac(); },
     tick(ms: number) { const end = now + ms; while (true) { scheduled.sort((a,b) => a.at-b.at); if (!scheduled[0] || scheduled[0].at > end) break; const t = scheduled.shift()!; now = t.at; t.next(); } now = end; },
@@ -187,6 +198,49 @@ await suite("Hub integration: the painted architecture and every portal mask sha
   }
   f.hub.events.emit("shutdown");
   assert(f.masks.every(mask => mask.destroyed === 1), "scene shutdown releases every actual aperture mask once");
+});
+
+await suite("Hub foreground: the original chair crest occludes portal light while its carved gaps remain open", () => {
+  for (const reduced of [false, true]) {
+    const f = fixture([], 0, reduced); f.hub.drawRoom();
+    const background = f.objects.find(o => o.key === "hub-backdrop" && !o.crop);
+    const chair = f.objects.find(o => o.key === "hub-backdrop" && o.crop);
+    assert(chair, "the foreground reuses accepted backdrop pixels, rather than new art or a painted cover");
+    for (const key of ["x", "y", "originX", "originY", "displayWidth", "displayHeight", "alpha", "tintTopLeft", "tintTopRight", "tintBottomLeft", "tintBottomRight"]) {
+      assertEqual(chair[key], background[key], `foreground ${key} stays aligned with the actual stationary painting`);
+    }
+    assertEqual(chair.frame.name, background.frame.name, "the foreground uses the identical accepted texture frame");
+    assert(chair.depth > -5 && chair.depth < -3, "chair wood is above the portal and below ambient motes, actors and UI");
+    assert(chair.crop.x >= 335 && chair.crop.x <= 340 && chair.crop.y >= 568 && chair.crop.y <= 571 && chair.crop.width < 90 && chair.crop.height < 50,
+      "the copied area is only the independently measured intersecting crest, not a room-sized overlay");
+    const shape = chair.mask.source;
+    const triangles = shape.ops.filter((op: DrawOp) => op.name === "fillTriangle");
+    const covered = (sourceX: number, sourceY: number) => {
+      const x = sourceX * 1920 / backdrop.width, y = sourceY * 1080 / backdrop.height;
+      const edge = (ax: number, ay: number, bx: number, by: number) => (x - bx) * (ay - by) - (ax - bx) * (y - by);
+      return triangles.some(({ args: a }: DrawOp) => {
+        const d = [edge(a[0],a[1],a[2],a[3]),edge(a[2],a[3],a[4],a[5]),edge(a[4],a[5],a[0],a[1])];
+        return !(d.some(v => v < -0.00001) && d.some(v => v > 0.00001));
+      });
+    };
+    for (const [x,y] of [[380,575], [345,588], [365,590], [410,590]]) assert(covered(x,y), "actual crown and upright wood hide the portal behind them");
+    for (const [x,y] of [[350,600], [403,605], [360,575], [419,575]]) assert(!covered(x,y), "left/right carved gaps and exterior aperture keep the portal visible");
+    assert(!shape.ops.some((op: DrawOp) => op.name === "fillRect"), "a rectangular patch cannot replace negative space with dark backdrop");
+    const sourceLight = f.lights.find(o => o.x === 1148);
+    const light = f.objects.find(o => o.mask === chair.mask && o !== chair);
+    assert(light.depth > chair.depth && light.depth < -3 && light.blendMode === sourceLight.blendMode,
+      "the same room wash is restored only above the copied wood, without changing scene ordering");
+    assertEqual(light.commandBuffer, sourceLight.commandBuffer, "the clipped wash uses the original drawing commands");
+    assert(light.commandBuffer !== sourceLight.commandBuffer, "the light mirror cannot mutate the original room commands");
+    Object.assign(sourceLight, { alpha: .017, scaleX: 1.028, scaleY: 1.031 });
+    f.hub.events.emit("postupdate");
+    assertEqual([light.alpha,light.scaleX,light.scaleY], [.017,1.028,1.031], "actual light animation/preferences are mirrored at render time with no independent drift");
+    assertEqual(f.hub.events.listenerCount("postupdate"), 1, "the foreground installs one live light-copy listener");
+    const mask = chair.mask;
+    f.hub.events.emit("shutdown"); f.hub.events.emit("shutdown");
+    assertEqual([chair.destroyed,light.destroyed,shape.destroyed,mask.destroyed], [1,1,1,1], "shutdown releases foreground, light copy and mask exactly once");
+    assertEqual(f.hub.events.listenerCount("postupdate"), 0, "leaving removes the light copy callback");
+  }
 });
 
 await suite("Hub integration: usable completed passages remain faint amber and respect motion preferences", () => {

@@ -104,6 +104,23 @@ const REALM_SEQUENCE = ARCHES.map((a) => a.id);
 const COMPLETED_PORTAL_ALPHA = 0.22;
 const COMPLETED_PORTAL_FOCUS_ALPHA = 0.52;
 
+// Source-pixel contours of the foreground chair crest in the accepted painting.
+// Its wood crosses Winter's aperture. Keep the carved openings transparent;
+// a rectangular backdrop copy would block the portal through those gaps.
+const CHAIR_CROP = { x: 337, y: 569, width: 83, height: 43 } as const;
+const CHAIR_WOOD_OUTLINE = [
+  [339, 588], [344, 584], [350, 583], [354, 585], [359, 589],
+  [363, 586], [366, 578], [374, 574], [379, 571], [387, 570],
+  [392, 573], [396, 578], [400, 586], [403, 581], [407, 579],
+  [413, 581], [417, 584], [419, 589], [416, 595], [414, 612],
+  [337, 612], [338, 602],
+] as const;
+const CHAIR_OPENINGS = [
+  [[348, 594], [352, 595], [353, 602], [351, 611], [347, 612]],
+  [[399, 600], [404, 598], [408, 601], [406, 612], [398, 612]],
+  [[375, 608], [380, 606], [384, 608], [383, 612], [375, 612]],
+] as const;
+
 // Wren's X position when standing in each zone — aligned to the painted
 // desk (left), portal floor (centre), and utility stations. Shelf uses the
 // cabinet's approach lane so the expanded keepsakes stay on the shelves.
@@ -2255,7 +2272,7 @@ export class PortalChamberScene extends Phaser.Scene {
   // ─── Drawing ──────────────────────────────────────────────────────────────
 
   private drawRoom(): void {
-    this.add
+    const backdrop = this.add
       .image(0, 0, "hub-backdrop")
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
@@ -2303,7 +2320,7 @@ export class PortalChamberScene extends Phaser.Scene {
       durationMs: 2800,
       delayMs: 900,
     });
-    addLivingLight(this, {
+    const chairRoomLight = addLivingLight(this, {
       x: 1148,
       y: 650,
       width: 980,
@@ -2313,6 +2330,7 @@ export class PortalChamberScene extends Phaser.Scene {
       durationMs: 3400,
       scale: 1.035,
     });
+    this.drawChairForeground(backdrop, chairRoomLight);
     addAmbientDrift(this, {
       kind: "mote",
       count: 12,
@@ -2329,6 +2347,50 @@ export class PortalChamberScene extends Phaser.Scene {
     this.startHubForegroundLife();
 
     this.drawHubStations();
+  }
+
+  private drawChairForeground(
+    backdrop: Phaser.GameObjects.Image,
+    roomLight: Phaser.GameObjects.Graphics,
+  ): void {
+    const contours = [CHAIR_WOOD_OUTLINE, ...CHAIR_OPENINGS];
+    const vertices = contours.flatMap(contour => contour.flatMap(([x, y]) => [x, y]));
+    const holes: number[] = [];
+    let count = CHAIR_WOOD_OUTLINE.length;
+    for (const opening of CHAIR_OPENINGS) { holes.push(count); count += opening.length; }
+    const indices = Phaser.Geom.Polygon.Earcut(vertices, holes, 2);
+    const shape = this.make.graphics({ x: 0, y: 0 }, false).fillStyle(0xffffff);
+    const sx = this.scale.width / 1672, sy = this.scale.height / 941;
+    for (let i = 0; i < indices.length; i += 3) {
+      const a = indices[i] * 2, b = indices[i + 1] * 2, c = indices[i + 2] * 2;
+      shape.fillTriangle(vertices[a] * sx, vertices[a + 1] * sy,
+        vertices[b] * sx, vertices[b + 1] * sy, vertices[c] * sx, vertices[c + 1] * sy);
+    }
+    const mask = shape.createGeometryMask();
+    // Reuse the original texture/frame and its exact stationary mapping. Only
+    // the intersecting crest is copied, below people and above portal surfaces.
+    const chair = this.add.image(backdrop.x, backdrop.y, "hub-backdrop", backdrop.frame.name)
+      .setOrigin(backdrop.originX, backdrop.originY)
+      .setDisplaySize(backdrop.displayWidth, backdrop.displayHeight)
+      .setAlpha(backdrop.alpha)
+      .setTint(backdrop.tintTopLeft, backdrop.tintTopRight, backdrop.tintBottomLeft, backdrop.tintBottomRight)
+      .setCrop(CHAIR_CROP.x, CHAIR_CROP.y, CHAIR_CROP.width, CHAIR_CROP.height)
+      .setDepth(-4.9).setMask(mask);
+    // The broad room wash reaches this crest. Mirror that same live drawing
+    // only on the copied wood, rather than changing any room/portal ordering.
+    const light = this.add.graphics().setDepth(-4.8).setBlendMode(roomLight.blendMode).setMask(mask);
+    light.commandBuffer = roomLight.commandBuffer.slice();
+    const syncLight = (): void => {
+      light.setPosition(roomLight.x, roomLight.y).setScale(roomLight.scaleX, roomLight.scaleY)
+        .setAlpha(roomLight.alpha).setVisible(roomLight.visible);
+    };
+    syncLight();
+    this.events.on(Phaser.Scenes.Events.POST_UPDATE, syncLight);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.events.off(Phaser.Scenes.Events.POST_UPDATE, syncLight);
+      chair.clearMask(); light.clearMask();
+      chair.destroy(); light.destroy(); mask.destroy(); shape.destroy();
+    });
   }
 
   private startHubForegroundLife(): void {

@@ -2443,6 +2443,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   ): void {
     this.ensureCompassDrawn();
     const pos = this.spawnPositionFor(direction, slot);
+    const answer = this.ghostWordPositionFor(direction, slot);
     const container = this.add.container(pos.startX, pos.startY);
     const isPunctWord = hasPunctuation(word);
     this.drawGhostInto(container, isPunctWord);
@@ -2483,6 +2484,10 @@ export class HauntedWoodScene extends Phaser.Scene {
       knockbackPauseMs: GHOST_KNOCKBACK_PAUSE_MS,
       dangerRampStart: DANGER_RAMP_START,
       anchorOffsetY: -92,
+      // Compass lanes remain readable when the physical spirits crowd Wren.
+      // The existing live tether keeps each answer joined to its own ghost.
+      wordAnchorX: answer.x,
+      wordAnchorY: answer.y,
       idleBobDy: 7,
       idleBobMs: 1000,
       defeatRiseY: -50,
@@ -2574,6 +2579,18 @@ export class HauntedWoodScene extends Phaser.Scene {
         const restY = WOOD_SIDE_GHOST_REST_Y + slot * WOOD_SIDE_GHOST_STEP_Y;
         return { startX: -120, startY: restY, restX: 340, restY };
       }
+    }
+  }
+
+  /** Stable answer space for the authored maximum of two siblings per
+   * compass approach. South uses two low flanking lanes below the compass,
+   * clear of Inga, Wren and the root-throne, above the HUD at y=860. */
+  private ghostWordPositionFor(direction: WoodDirection, slot: number): { x: number; y: number } {
+    switch (direction) {
+      case "north": return { x: 760 + slot * 360, y: WOOD_NORTH_GHOST_REST_Y - 92 };
+      case "south": return { x: 750 + slot * 375, y: WREN_Y - 12 };
+      case "east": return { x: 1580, y: 430 - slot * 70 };
+      case "west": return { x: 340, y: WOOD_SIDE_GHOST_REST_Y - 92 + slot * 70 };
     }
   }
 

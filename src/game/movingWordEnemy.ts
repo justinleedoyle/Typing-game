@@ -96,6 +96,9 @@ export interface MovingWordEnemyConfig {
   /** Optional stable horizontal word lane. Bodies still advance normally; the
    * tether connects them to this readable answer instead of converging labels. */
   wordAnchorX?: number;
+  /** Optional stable vertical answer lane for diagonal approaches. Omit to
+   * retain the body's original vertical tracking and circling behavior. */
+  wordAnchorY?: number;
   /** Body fade-up distance and duration on defeat. Defaults −50 / 480. */
   defeatRiseY?: number;
   defeatMs?: number;
@@ -319,11 +322,11 @@ export class MovingWordEnemy {
       ease: "Sine.easeOut",
       onUpdate: () => {
         this.wordTarget?.setAnchorX(this.cfg.wordAnchorX ?? c.x);
-        this.wordTarget?.setAnchorY(c.y + this.anchorOffsetY);
+        this.wordTarget?.setAnchorY(this.cfg.wordAnchorY ?? c.y + this.anchorOffsetY);
       },
       onComplete: () => {
         this.wordTarget?.setAnchorX(this.cfg.wordAnchorX ?? c.x);
-        this.wordTarget?.setAnchorY(c.y + this.anchorOffsetY);
+        this.wordTarget?.setAnchorY(this.cfg.wordAnchorY ?? c.y + this.anchorOffsetY);
         this.cfg.scene.time.delayedCall(pauseMs, () => {
           if (this.defeated || !this.waveActive()) return;
           this.idleBob();
@@ -437,7 +440,7 @@ export class MovingWordEnemy {
       scene: this.cfg.scene,
       word: this.cfg.word,
       x: this.cfg.wordAnchorX ?? this.cfg.container.x,
-      y: this.cfg.restY + this.anchorOffsetY,
+      y: this.cfg.wordAnchorY ?? this.cfg.restY + this.anchorOffsetY,
       // The body advances through Wren's silhouette. Keep its answer above
       // world actors/tethers, while the console and pause UI retain their layers.
       depth: 70,
@@ -496,7 +499,7 @@ export class MovingWordEnemy {
       from.x,
       from.y,
       this.cfg.wordAnchorX ?? this.cfg.container.x,
-      this.cfg.container.y + this.anchorOffsetY,
+      this.cfg.wordAnchorY ?? this.cfg.container.y + this.anchorOffsetY,
       { color: this.cfg.claimLineColor },
     );
   }
@@ -642,12 +645,11 @@ export class MovingWordEnemy {
           container.y = this.cfg.verticalOffset(this.cfg.restY, tween.progress);
         }
         this.wordTarget.setAnchorX(this.cfg.wordAnchorX ?? container.x);
-        // Track the body's y ONLY when the advance itself drives it — a weave
-        // (Winter circler) or a diagonal close (Wood). For a straight horizontal
-        // advance the word holds its attach-time y, so it doesn't ride the idle
-        // bob's jitter. This matches what every realm did inline (setAnchorX only).
-        if (this.cfg.verticalOffset || this.cfg.wrenY !== undefined) {
-          this.wordTarget.setAnchorY(container.y + this.anchorOffsetY);
+        // Stable lanes opt out of diagonal label convergence. Without an
+        // override, retain the original weave/diagonal tracking; horizontal
+        // labels still hold their attach-time y instead of riding idle bob.
+        if (this.cfg.wordAnchorY !== undefined || this.cfg.verticalOffset || this.cfg.wrenY !== undefined) {
+          this.wordTarget.setAnchorY(this.cfg.wordAnchorY ?? container.y + this.anchorOffsetY);
         }
         this.wordTarget.setDanger(dangerRamp(tween.progress, this.rampStart));
       },

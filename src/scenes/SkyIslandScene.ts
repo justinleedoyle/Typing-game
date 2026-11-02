@@ -520,12 +520,15 @@ export class SkyIslandScene extends Phaser.Scene {
       this.combatSatchel,
       "sky-island",
     );
+    const offensiveOneShots = this.combat.oneShots.filter(isOffensiveOneShot);
 
     // UI cohesion — the console band: the crafted bottom zone (TTT two-zone
     // composition) that houses the meters + satchel. Passive relics show as icon
     // tiles ("always on"); the offensive one-shots drop in as charge cards. This
     // replaces the floating top-right HUD and the centered one-shot stack.
     this.band = new ConsoleBand(this, {
+      quietPanels: true,
+      quietMeterRows: offensiveOneShots.length > 0 ? 2 : 1,
       activity: () => (
         this.templeBeamsActive
         || this.spirits.some(spirit => !spirit.defeated)
@@ -534,7 +537,7 @@ export class SkyIslandScene extends Phaser.Scene {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,
-      maxOneShots: this.combat.oneShots.filter(isOffensiveOneShot).length,
+      maxOneShots: offensiveOneShots.length,
     });
     const band = this.band;
 
@@ -543,7 +546,7 @@ export class SkyIslandScene extends Phaser.Scene {
       framed: true,
       onSpeak: (speakerName) => this.attendSpeaker(speakerName),
     });
-    this.reading = new ChapterReading(this, () => Math.max(316, this.narration.bottom() + 40));
+    this.reading = new ChapterReading(this, { below: () => this.narration.bottom() });
 
     this.typingInput = new TypingInputController(this.store);
     if (this.resumeCheckpoint) this.typingInput.getStats().restoreCheckpoint(this.resumeCheckpoint.data);
@@ -555,7 +558,6 @@ export class SkyIslandScene extends Phaser.Scene {
       },
       onClaim: () => playClaim(),
     });
-    const offensiveOneShots = this.combat.oneShots.filter(isOffensiveOneShot);
     new HeartSoulHud(this, {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),
@@ -798,7 +800,7 @@ export class SkyIslandScene extends Phaser.Scene {
     }
     if (!this.wrenSprite?.scene) return;
     setWrenPose(this.wrenSprite, "carry");
-    this.ettaCarryHands ??= makeWrenCarryHands(this).setDepth(62);
+    this.ettaCarryHands ??= makeWrenCarryHands(this, this.wrenSprite).setDepth(62);
     this.updateEttaBookCarry();
     this.events.on(Phaser.Scenes.Events.UPDATE, this.updateEttaBookCarry, this);
   }

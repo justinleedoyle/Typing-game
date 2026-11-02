@@ -2,7 +2,15 @@ import Phaser from "phaser";
 import { readingAction } from "../chapterFlow";
 import { SERIF } from "../palette";
 import { UI_CSS, UI_HEX } from "./uiTheme";
-import { chapterPreferences, PRESENTATION_CHANGED } from "../presentation";
+import { chapterPreferences, NARRATION_LAYOUT_CHANGED, PRESENTATION_CHANGED } from "../presentation";
+
+export type ChapterReadingPosition = number | (() => number) | {
+  /** Actual bottom of the current caption after wrapping and preferences. */
+  below: () => number;
+  gap?: number;
+  /** Exceptional actor clearance, such as the Forge's raised catwalk. */
+  minCenterY?: () => number;
+};
 
 /** One deliberate reading stop. Continuing or replaying never injects a game
  * character, and holding a key cannot skip several paragraphs. */
@@ -23,27 +31,39 @@ export class ChapterReading {
   private openedAt = 0;
   private readonly onShutdown = () => this.clear();
 
-  constructor(private readonly scene: Phaser.Scene, private readonly position: number | (() => number)) {
+  constructor(private readonly scene: Phaser.Scene, private readonly position: ChapterReadingPosition) {
     this.plate = scene.add.graphics().setDepth(1900).setVisible(false);
-    this.hint = scene.add.text(scene.scale.width / 2, typeof position === "number" ? position : position(),
+    this.hint = scene.add.text(scene.scale.width / 2, this.anchorY(),
       "Enter / Space · Continue", {
         fontFamily: SERIF, fontSize: "22px", color: UI_CSS.cream,
         align: "center", padding: { x: 14, y: 8 },
       }).setOrigin(0.5).setDepth(1901).setVisible(false);
     this.replayHint = scene.add.text(scene.scale.width / 2,
-      typeof position === "number" ? position : position(), "", {
+      this.anchorY(), "", {
         fontFamily: SERIF, fontSize: "17px", color: "#c8b88f",
         stroke: "#0b0a0f", strokeThickness: 3,
       }).setOrigin(0, 0.5).setDepth(1901).setVisible(false);
     scene.events.on(PRESENTATION_CHANGED, this.redraw, this);
+    scene.events.on(NARRATION_LAYOUT_CHANGED, this.redraw, this);
     scene.events.once("shutdown", this.onShutdown);
   }
 
+  private anchorY(): number {
+    return typeof this.position === "number" ? this.position
+      : typeof this.position === "function" ? this.position() : this.position.below();
+  }
+
   private redraw(): void {
-    const y = typeof this.position === "number" ? this.position : this.position();
     const large = chapterPreferences(this.scene)?.textScale === "large";
-    this.hint.setY(y).setFontSize(large ? 28 : 22);
-    this.replayHint.setY(y).setFontSize(large ? 22 : 17);
+    this.hint.setFontSize(large ? 28 : 22);
+    this.replayHint.setFontSize(large ? 22 : 17);
+    const height = Math.max(this.hint.height, this.replay ? this.replayHint.height : 0);
+    const y = typeof this.position === "object"
+      ? Math.max(this.anchorY() + (this.position.gap ?? 12) + height / 2,
+        this.position.minCenterY?.() ?? -Infinity)
+      : this.anchorY();
+    this.hint.setY(y);
+    this.replayHint.setY(y);
     const gap = this.replay ? 18 : 0;
     const secondaryW = this.replay ? this.replayHint.width : 0;
     const left = (this.scene.scale.width - this.hint.width - gap - secondaryW) / 2;
@@ -112,6 +132,7 @@ export class ChapterReading {
 
   destroy(): void {
     this.scene.events.off(PRESENTATION_CHANGED, this.redraw, this);
+    this.scene.events.off(NARRATION_LAYOUT_CHANGED, this.redraw, this);
     this.scene.events.off("shutdown", this.onShutdown);
     this.clear();
     this.hint.destroy();

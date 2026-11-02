@@ -447,7 +447,10 @@ export class ClockworkForgeScene extends Phaser.Scene {
       framed: true,
       onSpeak: (speakerName) => this.attendSpeaker(speakerName),
     });
-    this.reading = new ChapterReading(this, () => this.readingHintY());
+    this.reading = new ChapterReading(this, {
+      below: () => this.narration.bottom(),
+      minCenterY: () => this.readingHintFloorY(),
+    });
 
     this.typingInput = new TypingInputController(this.store);
     this.director = new WaveDirector(this.typingInput.getStats());
@@ -482,6 +485,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // tiles ("always on"); the offensive one-shots drop in as charge cards. This
     // replaces the floating top-right HUD and the centered one-shot stack.
     this.band = new ConsoleBand(this, {
+      quietPanels: true,
+      quietMeterRows: this.revisit ? 1 : 2,
       activity: () => (
         this.waveActive
         || (Boolean(this.bossContainer?.scene) && this.activeTargets.some(target => !target.isComplete()))) ? "combat" : "story",
@@ -2461,13 +2466,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
     }));
   }
 
-  private readingHintY(): number {
-    const belowCaption = Math.max(316, this.narration.bottom() + 40);
+  private readingHintFloorY(): number {
     // The catwalk puts Wren's hood in the usual reading lane. Its figures
     // need the hint below their feet until the written descent has happened.
     return (this.wrenContainer?.y ?? Infinity) <= CATWALK_SURFACE_Y + 12
-      ? Math.max(belowCaption, CATWALK_SURFACE_Y + 64)
-      : belowCaption;
+      ? CATWALK_SURFACE_Y + 64
+      : 0;
   }
 
   private readThen(next: () => void): void {

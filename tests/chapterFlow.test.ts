@@ -6,7 +6,7 @@ import { EventEmitter } from "node:events";
 import { woodIndex } from "../src/game/woodCheckpoint";
 import { checkpointIndex, committedWinterChoices, openingStep, readingAction, winterStep } from "../src/game/chapterFlow";
 import { ChapterReading } from "../src/game/ui/chapterReading";
-import { PRESENTATION_CHANGED } from "../src/game/presentation";
+import { NARRATION_LAYOUT_CHANGED, PRESENTATION_CHANGED } from "../src/game/presentation";
 
 assert.equal(readingAction("Enter"), "continue");
 assert.equal(readingAction(" "), "continue");
@@ -151,6 +151,43 @@ gate.destroy();
 assert.equal(readingEvents.eventNames().length, 0, "destroy removes presentation and shutdown listeners");
 assert(displays.every((value) => value.destroyed && !value.visible), "shutdown removes the reading UI");
 console.log("chapterFlow: actual reading gate protects deliberate progression and replay");
+
+// Measured caption docking is opt-in; the legacy fixed-position and exact
+// deliberate-input behavior above remain the default for Opening/Homecoming.
+let captionBottom = 184;
+for (const scale of ["standard", "large"] as const) for (const bottom of [184, 280, 430]) {
+  readingTextScale = scale; captionBottom = bottom;
+  const docked = new ChapterReading(readingScene, { below: () => captionBottom });
+  let advances = 0;
+  docked.show(() => { advances++; }, () => {});
+  const primary = (docked as unknown as { hint: ReadingDisplay }).hint;
+  const secondary = (docked as unknown as { replayHint: ReadingDisplay }).replayHint;
+  const groupHeight = Math.max(primary.height, secondary.height);
+  assert(Math.abs(primary.y - groupHeight / 2 - captionBottom - 12) < .00001,
+    "the complete measured control group leaves12px below short, long and large captions");
+  assert.equal(primary.y, secondary.y, "Continue and replay share one reading baseline");
+  if (bottom === 184) assert(primary.y < 316, "a short caption no longer creates an arbitrary316px control gap");
+  clock.now += 200;
+  captionBottom += 72; readingEvents.emit(NARRATION_LAYOUT_CHANGED);
+  assert(Math.abs(primary.y - groupHeight / 2 - captionBottom - 12) < .00001,
+    "later measured caption reflow moves both controls without reopening the reading gate");
+  assert.equal(docked.handleKey({ key: "Enter", repeat: true, preventDefault() {} } as KeyboardEvent), true);
+  assert.equal(advances, 0, "caption reflow cannot make a held key skip the paragraph");
+  docked.handleKey({ key: "Enter", preventDefault() {} } as KeyboardEvent);
+  assert.equal(advances, 1, "layout updates do not restart the established180ms input guard");
+  docked.destroy();
+}
+readingTextScale = "standard"; captionBottom = 184;
+const raised = new ChapterReading(readingScene, { below: () => captionBottom, minCenterY: () => 580 });
+raised.show(() => {}, null);
+const raisedHint = (raised as unknown as { hint: ReadingDisplay }).hint;
+assert.equal(raisedHint.y, 580, "an exceptional catwalk still keeps its reading control below the actors' feet");
+captionBottom = 640; readingEvents.emit(NARRATION_LAYOUT_CHANGED);
+assert(raisedHint.y - raisedHint.height / 2 >= captionBottom + 12,
+  "an unusually tall caption can still extend beyond an actor-clearance minimum");
+raised.destroy();
+assert.equal(readingEvents.eventNames().length, 0, "destroy removes caption-reflow listeners along with preference listeners");
+console.log("chapterFlow: measured caption docking preserves deliberate progression and legacy actor clearance");
 
 const readingTransitions: boolean[] = [];
 readingEvents.on(ChapterReading.STATE_CHANGED, () => readingTransitions.push(ChapterReading.activeIn(readingScene)));

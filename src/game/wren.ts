@@ -4,7 +4,7 @@ import wrenWalk from "../../art/wren/wren-walk-right.png";
 import wrenCast from "../../art/wren/wren-cast.png";
 import wrenHurt from "../../art/wren/wren-hurt.png";
 import wrenCarry from "../../art/wren/wren-carry.png";
-import { applySceneActorLighting, restoreSceneActorLighting } from "./actorLighting";
+import { applySceneActorLighting, matchActorCropLighting, refreshSceneActorLighting, restoreSceneActorLighting } from "./actorLighting";
 
 export type WrenPose = "front" | "walk" | "cast" | "hurt" | "carry";
 
@@ -29,6 +29,23 @@ const HURT_TIMER_KEY = "wrenHurtTimer";
 const pendingReactions = new WeakMap<Phaser.GameObjects.Image, () => boolean>();
 const heldProps = new WeakMap<Phaser.GameObjects.Image, Set<Phaser.GameObjects.Image>>();
 const heldPropCleanup = new WeakMap<Phaser.GameObjects.Image, () => void>();
+const handLightUpdates = new WeakMap<Phaser.GameObjects.Image, Set<() => void>>();
+
+function syncWrenLighting(sprite: Phaser.GameObjects.Image): void {
+  refreshSceneActorLighting(sprite);
+  handLightUpdates.get(sprite)?.forEach(update => update());
+}
+
+function trackHandLighting(sprite: Phaser.GameObjects.Image, update: () => void): () => void {
+  const updates = handLightUpdates.get(sprite) ?? new Set<() => void>();
+  updates.add(update);
+  handLightUpdates.set(sprite, updates);
+  update();
+  return () => {
+    updates.delete(update);
+    if (!updates.size) handLightUpdates.delete(sprite);
+  };
+}
 
 /** Keystrokes can interrupt a flourish before its tween completes. Restore its
  * resting pose first so the next reaction cannot inherit a raised walk frame. */
@@ -54,13 +71,14 @@ function beginReaction(img: Phaser.GameObjects.Image): () => boolean {
     if (hurtTimer) {
       hurtTimer.remove();
       img.setData(HURT_TIMER_KEY, undefined);
-      restoreSceneActorLighting(img);
     }
     img.setTexture(resting.key);
     img.x = resting.x;
     img.y = resting.y;
     img.scaleX = resting.scaleX;
     img.scaleY = resting.scaleY;
+    if (hurtTimer) restoreSceneActorLighting(img);
+    syncWrenLighting(img);
     return true;
   };
   pendingReactions.set(img, restore);
@@ -78,8 +96,9 @@ export function preloadWren(scene: Phaser.Scene, opts: { carry?: boolean } = {})
 /** Foreground fingers from the same painted carrying pose. Keeping the book
  * between the body and these small crops gives it a real supported grip. The
  * caller keeps this layer on the sprite's exact transform while carrying. */
-export function makeWrenCarryHands(scene: Phaser.Scene): Phaser.GameObjects.Container {
+export function makeWrenCarryHands(scene: Phaser.Scene, sprite: Phaser.GameObjects.Image): Phaser.GameObjects.Container {
   const hands = scene.add.container(0, 0);
+  const lightUpdates: (() => void)[] = [];
   for (const region of [
     { x: 0.318, y: 0.493, width: 0.161, height: 0.055 },
     { x: 0.529, y: 0.493, width: 0.155, height: 0.055 },
@@ -87,9 +106,27 @@ export function makeWrenCarryHands(scene: Phaser.Scene): Phaser.GameObjects.Cont
     const hand = scene.add.image(0, 0, "wren-carry").setOrigin(0.5, 1);
     hand.setCrop(region.x * hand.width, region.y * hand.height,
       region.width * hand.width, region.height * hand.height);
-    applySceneActorLighting(scene, hand);
+    lightUpdates.push(() => matchActorCropLighting(sprite, hand, region));
     hands.add(hand);
   }
+  const untrack = trackHandLighting(sprite, () => {
+    if (sprite.scene && hands.scene) lightUpdates.forEach(update => update());
+  });
+  let released = false;
+  const release = (destroyHands: boolean): void => {
+    if (released) return;
+    released = true;
+    untrack();
+    sprite.off(Phaser.GameObjects.Events.DESTROY, onOwnerEnd);
+    hands.off(Phaser.GameObjects.Events.DESTROY, onHandsDestroy);
+    scene.events.off(Phaser.Scenes.Events.SHUTDOWN, onOwnerEnd);
+    if (destroyHands && hands.scene) hands.destroy();
+  };
+  const onOwnerEnd = (): void => release(true);
+  const onHandsDestroy = (): void => release(false);
+  sprite.once(Phaser.GameObjects.Events.DESTROY, onOwnerEnd);
+  hands.once(Phaser.GameObjects.Events.DESTROY, onHandsDestroy);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, onOwnerEnd);
   return hands;
 }
 
@@ -112,9 +149,12 @@ export function attachWrenHeldProp(
   // Source artwork is 449 x 789. These narrow regions contain the fingers,
   // leaving the object silhouette readable above and below the contact.
   const left = point.x < 0;
-  hand.setCrop((left ? 75 : 350) / 449 * hand.width, 565 / 789 * hand.height,
-    25 / 449 * hand.width, 30 / 789 * hand.height);
-  applySceneActorLighting(scene, hand);
+  const region = { x: (left ? 75 : 350) / 449, y: 565 / 789, width: 25 / 449, height: 30 / 789 };
+  hand.setCrop(region.x * hand.width, region.y * hand.height,
+    region.width * hand.width, region.height * hand.height);
+  const untrackLight = trackHandLighting(sprite, () => {
+    if (sprite.scene && hand.scene) matchActorCropLighting(sprite, hand, region);
+  });
   owner.addAt(prop, owner.getIndex(sprite) + 1);
   owner.addAt(hand, owner.getIndex(prop) + 1);
   const restingScale = WREN_DISPLAY_HEIGHT / sprite.height;
@@ -131,11 +171,13 @@ export function attachWrenHeldProp(
     hand.setPosition(sprite.x, sprite.y).setScale(sprite.scaleX, sprite.scaleY)
       .setRotation(sprite.rotation);
     hand.setAlpha(sprite.alpha);
+    syncWrenLighting(sprite);
   };
   let released = false;
   const release = (): void => {
     if (released) return;
     released = true;
+    untrackLight();
     scene.events.off(Phaser.Scenes.Events.POST_UPDATE, sync);
     scene.events.off(Phaser.Scenes.Events.SHUTDOWN, release);
     prop.off(Phaser.GameObjects.Events.DESTROY, release);
@@ -186,6 +228,7 @@ function applyWrenPose(img: Phaser.GameObjects.Image, pose: WrenPose, faceLeft: 
   const scale = WREN_DISPLAY_HEIGHT / img.height;
   img.setScale(scale);
   img.scaleX = faceLeft ? -scale : scale;
+  syncWrenLighting(img);
 }
 
 /**
@@ -294,6 +337,7 @@ export function playWrenHurt(
 
   applyWrenPose(img, "hurt", facingLeft);
   img.setTintFill(0x8a3a2a);
+  syncWrenLighting(img);
 
   scene.tweens.add({
     targets: img,
@@ -318,5 +362,9 @@ export function playWrenHurt(
  */
 export function flashWrenMiss(img: Phaser.GameObjects.Image): void {
   img.setTintFill(0x8a3a2a);
-  img.scene.time.delayedCall(80, () => restoreSceneActorLighting(img));
+  syncWrenLighting(img);
+  img.scene.time.delayedCall(80, () => {
+    restoreSceneActorLighting(img);
+    syncWrenLighting(img);
+  });
 }

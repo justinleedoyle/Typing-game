@@ -114,7 +114,7 @@ class Display {
   clear() { this.rectangles = []; return this; }
   fillStyle() { return this; } lineStyle() { return this; }
   fillRect(...values: number[]) { this.rectangles.push(values); return this; }
-  fillRoundedRect() { return this; } strokeRoundedRect() { return this; }
+  fillRoundedRect(...values: number[]) { this.rectangles.push(values); return this; } strokeRoundedRect() { return this; }
   beginPath() { return this; } moveTo() { return this; }
   lineTo() { return this; } strokePath() { return this; } lineBetween() { return this; }
   add(child: Display) { this.children.push(child); return this; }
@@ -156,7 +156,8 @@ new Function("require", "exports", moduleCode)((id: string) => {
   throw new Error(`Unexpected ConsoleBand dependency ${id}`);
 }, moduleExports);
 
-function liveBand(textScale: "standard" | "large", customShelf = false, explicitActivity = true, initiallyReading = false) {
+function liveBand(textScale: "standard" | "large", customShelf = false, explicitActivity = true, initiallyReading = false,
+  extraOptions: Record<string, unknown> = {}) {
   const events = new SceneEvents();
   const all: Display[] = [];
   const make = (x = 0, y = 0) => { const value = new Display().setPosition(x, y); all.push(value); return value; };
@@ -178,6 +179,7 @@ function liveBand(textScale: "standard" | "large", customShelf = false, explicit
     ...(explicitActivity ? { activity: () => activity } : {}), portraitKey: "runa", portraitName: "Runa",
     passiveIconIds: Array.from({ length: 10 }, (_, i) => `item-${i}`),
     satchelLabel: customShelf ? "cold" : "satchel",
+    ...extraOptions,
   });
   return { band, reader, events, timers, all, scene, setActivity(value: typeof activity) { activity = value; events.emit("preupdate"); } };
 }
@@ -233,6 +235,73 @@ await suite("console held cards: default full chrome detects a reader created be
   assert(band.fullChrome.visible && !band.storySurface.visible, "unconfigured scenes keep their original full console between held cards");
   assert(band.objectiveContainer.visible, "the persistent task returns immediately after the gate clears");
   events.emit("shutdown"); reader.destroy();
+});
+
+await suite("console quiet panels: fitted resource backing preserves every anchor and full combat even behind held reading", () => {
+  for (const scale of ["standard", "large"] as const) {
+    const f = liveBand(scale, false, true, false, { quietPanels: true });
+    const { band, reader, events } = f;
+    const anchors = JSON.stringify([band.bandTopY, band.metersAnchor, band.satchelAnchor, band.oneShotSlots]);
+    const panels = band.storySurface.rectangles as number[][];
+    assertEqual(panels.length, 2, "only the existing meter and actual drawable satchel row receive quiet backing");
+    assert(panels.every(([, , width]) => width < 500), "quiet chrome cannot become a full-width opaque band");
+    assert(panels.every(([x, y, width, height]) => !(960 >= x && 960 <= x + width && 116 >= y && 116 <= y + height)),
+      "the painting remains visible through the unused center of the former footer");
+    const satchel = panels.find(([x]) => x > 500)!;
+    assert([...band.satchelIconTiles.values()].every((tile: Display) => tile.visible && tile.x - 18 >= satchel[0]
+      && tile.x + 18 <= satchel[0] + satchel[2] && tile.y - 18 >= satchel[1] && tile.y + 18 <= satchel[1] + satchel[3]),
+      "the fitted row contains every retained icon and the overflow tile");
+    const chromeChildren = band.fullChrome.children.length;
+    band.setObjective("Type the phrase, including punctuation.");
+    reader.show(() => {}, () => {});
+    assert(!band.objectiveContainer.visible, "the original reading controls still own held continuation");
+    band.showNotice("The keepsake answers.");
+    assert(band.objectiveContainer.visible, "resource notices remain visible beside a deliberate reading stop");
+    assertEqual(band.fullChrome.children.length, chromeChildren, "quiet tasks and notices never allocate a full-width rail wake");
+    f.timers.at(-1)!();
+    assert(!band.objectiveContainer.visible, "notice expiry cannot restore a duplicate Continue instruction");
+    f.setActivity("combat");
+    assert(band.fullChrome.visible && !band.storySurface.visible, "explicit live combat retains its full console even while reading is held");
+    assert(band.satchelFrames.every((frame: Display) => frame.visible), "combat restores the existing readable icon furniture");
+    f.setActivity("story"); reader.clear();
+    assert(!band.fullChrome.visible && band.storySurface.visible && band.objectiveContainer.visible,
+      "returning to a playable quiet beat restores its complete task and fitted panels");
+    assertEqual(JSON.stringify([band.bandTopY, band.metersAnchor, band.satchelAnchor, band.oneShotSlots]), anchors,
+      "quiet mode never translates resource, spell, task or gameplay boundaries");
+    events.emit("shutdown"); reader.destroy();
+    assert(!events.listeners.some(value => ["preupdate", ChapterReading.STATE_CHANGED].includes(value.event)),
+      "quiet presentation does not retain scene listeners after shutdown");
+  }
+});
+
+await suite("console quiet panels: empty revisits draw no reserved shelves while explicit custom meters retain their own backing", () => {
+  const empty = liveBand("standard", false, true, false, { quietPanels: true, showMeterShelf: false,
+    passiveIconIds: [], satchelLabel: "", maxOneShots: 0 });
+  assertEqual(empty.band.storySurface.rectangles, [], "an empty revisit cannot gain a decorative reserved-resource slab");
+  const childCount = empty.band.container.children.length;
+  empty.band.showNotice("A memory remains.", { label: "relic" });
+  assertEqual(empty.band.container.children.length, childCount, "an absent keepsake row cannot flash an empty quiet shelf");
+  assert(empty.band.objectiveContainer.visible, "the meaningful notice itself still appears");
+  empty.events.emit("shutdown"); empty.reader.destroy();
+  const heartOnly = liveBand("standard", false, true, false, { quietPanels: true, quietMeterRows: 1, passiveIconIds: [] });
+  assertEqual(heartOnly.band.storySurface.rectangles.map((r: number[]) => r.slice(0, 4)), [[232, 90, 258, 40]],
+    "a Heart-only quiet HUD fits one row without reserving the absent Soul/combo space");
+  assertEqual([heartOnly.band.metersAnchor.x, heartOnly.band.metersAnchor.y], [470, 960],
+    "a shorter quiet backplate never moves the live resource anchor");
+  const heartY = heartOnly.band.metersAnchor.y + 11;
+  assert(heartY - 10 >= heartOnly.band.bandTopY + 90 && heartY + 10 <= heartOnly.band.bandTopY + 130,
+    "the existing centered Heart-only row fits fully within its smaller backplate");
+  heartOnly.events.emit("shutdown"); heartOnly.reader.destroy();
+  const bounds = { x: 510, y: 64, width: 448, height: 96 };
+  const custom = liveBand("large", true, true, false, { quietPanels: true, showMeterShelf: false,
+    passiveIconIds: [], quietResourcePanels: [bounds] });
+  assertEqual(custom.band.storySurface.rectangles.map((r: number[]) => r.slice(0, 4)), [[510, 64, 448, 96]],
+    "a custom scene resource uses only its explicit fitted rectangle");
+  assertEqual([custom.band.satchelAnchor.x, custom.band.satchelAnchor.y, custom.band.metersAnchor.y], [532, 976, 960],
+    "custom backing leaves all external live widgets at their original anchors");
+  assert(custom.band.satchelHeading.visible && custom.band.satchelHeading.y === 78,
+    "custom resource labels remain on their established quiet baseline");
+  custom.events.emit("shutdown"); custom.reader.destroy();
 });
 
 function sceneActivity(sceneName: string, state: object): () => "combat" | "story" {

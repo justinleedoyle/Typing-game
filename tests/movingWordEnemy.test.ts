@@ -413,18 +413,15 @@ await suite("Forge boss grounding: the scaled Command-Golem keeps its boots abov
 });
 
 await suite("Forge reading hint: catwalk figures keep a clear silhouette before the descent", () => {
-  const Forge = renderMethod("../src/scenes/ClockworkForgeScene.ts", "readingHintY", { CATWALK_SURFACE_Y: 460 });
+  const Forge = renderMethod("../src/scenes/ClockworkForgeScene.ts", "readingHintFloorY", { CATWALK_SURFACE_Y: 460 });
   const s = new Forge();
   for (const feet of [460, 456, 866]) {
-    for (const captionBottom of [178, 215, 600]) {
-      Object.assign(s, { wrenContainer: { y: feet }, narration: { bottom: () => captionBottom } });
-      const center = s.readingHintY();
-      assert(center >= captionBottom + 40, "hint remains below the current standard or large caption");
-      if (feet < 500) {
-        assert(center - 32 >= feet + 16, "large hint plate clears the catwalk actors' feet, including idle breath");
-      } else {
-        assertEqual(center, Math.max(316, captionBottom + 40), "foundry reading retains its existing caption-following lane");
-      }
+    Object.assign(s, { wrenContainer: { y: feet } });
+    const floor = s.readingHintFloorY();
+    if (feet < 500) {
+      assert(floor - 32 >= feet + 16, "large hint plate clears the catwalk actors' feet, including idle breath");
+    } else {
+      assertEqual(floor, 0, "foundry readings defer to the measured caption without a catwalk floor");
     }
   }
 });

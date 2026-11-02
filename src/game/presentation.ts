@@ -2,6 +2,8 @@ import type Phaser from "phaser";
 import type { SaveStore } from "./saveState";
 
 export const PRESENTATION_CHANGED = "chapter-presentation-changed";
+/** Caption measurement finished; reading controls can follow the actual card. */
+export const NARRATION_LAYOUT_CHANGED = "chapter-narration-layout-changed";
 const STORE_KEY = "chapter-presentation-store";
 
 /** Bind the shared player preferences before a scene creates its artwork. */

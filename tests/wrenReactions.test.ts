@@ -13,12 +13,13 @@ const code = ts.transpileModule(source, {
 }).outputText;
 interface WrenHelpers {
   preloadWren(scene: unknown, opts?: { carry?: boolean }): void;
+  makeWrenCarryHands(scene: unknown, sprite: unknown): GripContainer;
   attachWrenHeldProp(scene: unknown, owner: unknown, sprite: unknown, prop: unknown, point: { x: number; y: number }): void;
   bobWrenSprite(image: Image): void;
   playWrenFocus(image: Image): void;
   playWrenAction(image: Image): void;
   setWrenPose(image: Image, pose: string, faceLeft?: boolean): void;
-  playWrenHurt(image: Image, options: { onComplete: () => void }): void;
+  playWrenHurt(image: Image, options: { faceLeft?: boolean; onComplete: () => void }): void;
   flashWrenMiss(image: Image): void;
 }
 const exports = {} as WrenHelpers;
@@ -70,6 +71,11 @@ class Image {
   originX = 0.5;
   originY = 1;
   tinted = false;
+  tintFill = false;
+  tintTopLeft = 0xffffff;
+  tintTopRight = 0xffffff;
+  tintBottomLeft = 0xffffff;
+  tintBottomRight = 0xffffff;
   cornerLight: number[] = [];
   data = new Map<string, unknown>();
   constructor(readonly scene: { tweens: unknown; time: unknown }) {}
@@ -77,16 +83,22 @@ class Image {
   setScale(scale: number) { this.scaleX = scale; this.scaleY = scale; return this; }
   getData(key: string) { return this.data.get(key); }
   setData(key: string, value: unknown) { this.data.set(key, value); return this; }
-  setTintFill(color: number) { this.tinted = true; this.cornerLight = [color, color, color, color]; return this; }
-  setTint(...light: number[]) { this.cornerLight = light; this.tinted = false; return this; }
-  clearTint() { this.tinted = false; return this; }
+  setTintFill(...light: number[]) { this.setTint(...light); this.tinted = this.tintFill = true; return this; }
+  setTint(...light: number[]) {
+    if (light.length === 1) light = Array(4).fill(light[0]);
+    this.cornerLight = light;
+    [this.tintTopLeft, this.tintTopRight, this.tintBottomLeft, this.tintBottomRight] = light;
+    this.tinted = this.tintFill = false;
+    return this;
+  }
+  clearTint() { return this.setTint(0xffffff); }
 }
 
 const resting = (image: Image) => ({ key: image.texture.key, x: image.x, y: image.y,
   scaleX: image.scaleX, scaleY: image.scaleY, alpha: image.alpha, originX: image.originX, originY: image.originY });
 
 await suite("Wren reactions: damage restores painted scene light after its feedback", () => {
-  for (const key of ["ClockworkForgeScene", "SunkenBellScene", "HauntedWoodScene"]) for (const reduced of [false, true]) {
+  for (const key of ["ClockworkForgeScene", "SunkenBellScene", "HauntedWoodScene", "SkyIslandScene"]) for (const reduced of [false, true]) {
     const { scene, image, timers } = fixture(key, reduced);
     actorLighting.applySceneActorLighting(scene as never, image);
     const expected = [...image.cornerLight], initial = resting(image);
@@ -99,6 +111,62 @@ await suite("Wren reactions: damage restores painted scene light after its feedb
     assertEqual(resting(image), initial, "ambient restoration preserves the original painted feet, scale and facing");
     assert(!image.tinted, "the damage fill itself is cleared");
   }
+});
+await suite("Sky scene light: turning and interrupted reactions keep the sunset on the same world side", () => {
+  for (const reduced of [false, true]) {
+    const { scene, image, timers, finish } = fixture("SkyIslandScene", reduced);
+    actorLighting.applySceneActorLighting(scene as never, image);
+    exports.setWrenPose(image, "front", false);
+    const rightFacing = [...image.cornerLight];
+    assert((rightFacing[0] >> 16) > (rightFacing[1] >> 16), "the sunset-facing left edge keeps the stronger warm red channel");
+    exports.setWrenPose(image, "walk", true);
+    assertEqual(image.cornerLight, [rightFacing[1], rightFacing[0], rightFacing[3], rightFacing[2]], "mirrored artwork keeps the light fixed in the world");
+    exports.playWrenFocus(image);
+    image.y -= 2;
+    exports.flashWrenMiss(image);
+    exports.setWrenPose(image, "front", false);
+    assert(image.tintFill, "a pose change does not end the existing typo fill early");
+    timers.at(-1)!.callback();
+    assertEqual(image.cornerLight, rightFacing, "typo completion restores the current facing, rather than its old pose");
+    exports.playWrenFocus(image);
+    exports.bobWrenSprite(image);
+    finish();
+    assertEqual(image.cornerLight, rightFacing, "interrupting and restoring focus retains the resting light");
+    exports.playWrenHurt(image, { faceLeft: true, onComplete() {} });
+    assert(image.tintFill, "hurt keeps ownership of the fill during its normal hold");
+    timers.at(-1)!.callback();
+    assertEqual(image.cornerLight, rightFacing, "hurt restores the original facing before choosing its ambient corners");
+  }
+});
+
+await suite("Painted overlays: crop light follows Phaser's source triangle, including fill effects", () => {
+  const { image: source } = fixture("SkyIslandScene"), { image: crop } = fixture("SkyIslandScene");
+  source.setTint(0xfc0000, 0x00fc00, 0x0000fc, 0xfcfcfc);
+  actorLighting.matchActorCropLighting(source, crop, { x: .25, y: .5, width: .125, height: .125 });
+  assertEqual(crop.cornerLight, [0xbd3f7e, 0xdd5f7e, 0x9e3f9e, 0xbd5f9e], "a lower-triangle crop samples original-image colors instead of starting a new gradient");
+  actorLighting.matchActorCropLighting(source, crop, { x: .5, y: .125, width: .25, height: .125 });
+  assertEqual(crop.cornerLight, [0x9e7e20, 0x5fbd20, 0xbd7e3f, 0x7ebd3f], "upper-triangle samples retain the shader's different corner weights");
+  source.setTintFill(0x8a3a2a);
+  actorLighting.matchActorCropLighting(source, crop, { x: .5, y: .125, width: .25, height: .125 });
+  assert(crop.tintFill && crop.cornerLight.every(color => color === 0x8a3a2a), "a red fill covers the same painted fingers as their supporting body");
+});
+await suite("Scene light direction: parent mirrors and texture flips preserve ambient restoration after attention", () => {
+  const { scene, image } = fixture("SkyIslandScene");
+  image.scaleX = 2.4;
+  const actor = Object.assign(image, { flipX: false, getWorldTransformMatrix: () => ({ a: 2.4 }) });
+  actorLighting.applySceneActorLighting(scene as never, actor);
+  const original = [...image.cornerLight];
+  actor.getWorldTransformMatrix = () => ({ a: -2.4 });
+  actorLighting.refreshSceneActorLighting(actor);
+  const mirrored = [original[1], original[0], original[3], original[2]];
+  assertEqual(image.cornerLight, mirrored, "a mirrored parent is included in the light direction");
+  actor.flipX = true; actorLighting.refreshSceneActorLighting(actor);
+  assertEqual(image.cornerLight, original, "a texture flip and parent mirror cancel each other");
+  actor.setTintFill(0xf5c842); actor.flipX = false;
+  actorLighting.refreshSceneActorLighting(actor);
+  assert(image.tintFill && image.cornerLight.every(color => color === 0xf5c842), "ambient refresh preserves an in-flight speaker fill");
+  actorLighting.restoreSceneActorLighting(actor);
+  assertEqual(image.cornerLight, mirrored, "attention completion restores light for the actor's current world facing");
 });
 await suite("Wren scene lighting: miss and interrupted hurt feedback retain the Bell and Wood ambient gradient", () => {
   for (const key of ["SunkenBellScene", "HauntedWoodScene"]) for (const reduced of [false, true]) {
@@ -222,6 +290,9 @@ class GripImage extends EventEmitter {
   width = 449; height = 789; x = 0; y = 0; scaleX = 1; scaleY = 1;
   rotation = 0; alpha = 1; crop: number[] = []; parentContainer: any;
   data = new Map<string, unknown>();
+  tintFill = false;
+  tintTopLeft = 0xffffff; tintTopRight = 0xffffff;
+  tintBottomLeft = 0xffffff; tintBottomRight = 0xffffff;
   constructor(public scene: any) { super(); }
   setTexture(key: string) { this.texture.key = key; return this; }
   setOrigin() { return this; }
@@ -230,7 +301,12 @@ class GripImage extends EventEmitter {
   setPosition(x: number, y: number) { this.x = x; this.y = y; return this; }
   setRotation(rotation: number) { this.rotation = rotation; return this; }
   setAlpha(alpha: number) { this.alpha = alpha; return this; }
-  setTint() { return this; }
+  setTint(tl: number, tr = tl, bl = tl, br = tl) {
+    this.tintTopLeft = tl; this.tintTopRight = tr; this.tintBottomLeft = bl; this.tintBottomRight = br;
+    this.tintFill = false; return this;
+  }
+  setTintFill(tl: number, tr = tl, bl = tl, br = tl) { this.setTint(tl, tr, bl, br); this.tintFill = true; return this; }
+  clearTint() { return this.setTint(0xffffff); }
   getData(key: string) { return this.data.get(key); }
   setData(key: string, value: unknown) { this.data.set(key, value); return this; }
   getLocalTransformMatrix() {
@@ -244,19 +320,93 @@ class GripImage extends EventEmitter {
     if (siblings) siblings.splice(siblings.indexOf(this), 1);
   }
 }
+class GripContainer extends EventEmitter {
+  children: GripImage[] = [];
+  destroyCalls = 0;
+  constructor(public scene: any) { super(); }
+  add(image: GripImage) { this.children.push(image); image.parentContainer = this; return this; }
+  destroy() {
+    if (!this.scene) return;
+    this.destroyCalls++;
+    this.emit("destroy"); this.scene = undefined;
+    for (const image of [...this.children]) image.destroy();
+  }
+}
 function gripFixture() {
   const active: any[] = [];
+  const timers: { callback: () => void; remove: () => void }[] = [];
   const scene: any = { sys: { settings: { key: "SkyIslandScene" } }, events: new EventEmitter(),
     tweens: { killTweensOf: () => { active.length = 0; }, add: (t: any) => active.push(t) },
-    add: { image: () => new GripImage(scene) } };
+    time: { delayedCall: (_delay: number, callback: () => void) => { const timer = { callback, remove() {} }; timers.push(timer); return timer; } },
+    add: { image: () => new GripImage(scene), container: () => new GripContainer(scene) } };
   const sprite = new GripImage(scene).setScale(240 / 789);
+  actorLighting.applySceneActorLighting(scene, sprite);
   const owner = { x: 960, y: 826, children: [sprite] as GripImage[],
     getIndex(child: GripImage) { return this.children.indexOf(child); },
     addAt(child: GripImage, index: number) { const old = this.children.indexOf(child); if (old >= 0) this.children.splice(old, 1);
       this.children.splice(index, 0, child); child.parentContainer = this; } };
   const prop = new GripImage(scene).setScale(.08); prop.width = 499; prop.height = 1136;
-  return { scene, sprite, owner, prop, active, update: () => scene.events.emit("postupdate") };
+  return { scene, sprite, owner, prop, active, timers, update: () => scene.events.emit("postupdate") };
 }
+
+const corners = (image: GripImage) => [image.tintTopLeft, image.tintTopRight, image.tintBottomLeft, image.tintBottomRight];
+// Sky is an affine color plane, so a source point has this independent planar
+// expectation on either side of the renderer's triangle diagonal.
+const skyPlanePoint = (image: GripImage, x: number, y: number): number => {
+  let result = 0;
+  for (const shift of [16, 8, 0]) {
+    const tl = (image.tintTopLeft >> shift) & 255;
+    const horizontal = ((image.tintTopRight >> shift) & 255) - tl;
+    const vertical = ((image.tintBottomLeft >> shift) & 255) - tl;
+    result |= Math.round(tl + horizontal * x + vertical * y) << shift;
+  }
+  return result;
+};
+
+await suite("Wren hand lighting: held fingers match body source positions through mirrors, damage and release", () => {
+  const f = gripFixture();
+  exports.attachWrenHeldProp(f.scene, f.owner, f.sprite, f.prop, { x: 46, y: -65 });
+  const hand = f.owner.children[2];
+  const expectFingers = () => assertEqual(corners(hand), [
+    skyPlanePoint(f.sprite, 350 / 449, 565 / 789), skyPlanePoint(f.sprite, 375 / 449, 565 / 789),
+    skyPlanePoint(f.sprite, 350 / 449, 595 / 789), skyPlanePoint(f.sprite, 375 / 449, 595 / 789),
+  ], "small finger crops use the full body's source-image positions");
+  expectFingers();
+  f.sprite.scaleX *= -1; f.update(); expectFingers();
+  exports.flashWrenMiss(f.sprite as never);
+  assert(hand.tintFill && corners(hand).every(color => color === 0x8a3a2a), "the original miss fill reaches fingers synchronously");
+  f.timers.at(-1)!.callback(); expectFingers();
+  assert(!hand.tintFill, "miss completion restores painted fingers with the body");
+  exports.playWrenHurt(f.sprite as never, { onComplete() {} });
+  assert(hand.tintFill, "hurt does not leave a normal-color hand over a red body");
+  f.timers.at(-1)!.callback(); expectFingers();
+  f.prop.destroy();
+  const released = corners(hand); exports.flashWrenMiss(f.sprite as never);
+  assertEqual(corners(hand), released, "destroyed fingers are no longer followed by body-light updates");
+});
+
+await suite("Wren carrying light: both palm crops share the body gradient without new frame subscriptions", () => {
+  const f = gripFixture();
+  exports.setWrenPose(f.sprite as never, "carry");
+  const hands = exports.makeWrenCarryHands(f.scene, f.sprite);
+  const left = hands.children[0], right = hands.children[1];
+  assertEqual([left.tintTopLeft, right.tintTopLeft], [skyPlanePoint(f.sprite, .318, .493), skyPlanePoint(f.sprite, .529, .493)],
+    "each painted palm starts at its own original source position");
+  assertEqual(f.scene.events.listenerCount("postupdate"), 0, "carrying light uses existing reaction updates instead of another frame listener");
+  exports.flashWrenMiss(f.sprite as never);
+  assert(left.tintFill && right.tintFill, "both crops share an active fill immediately");
+  f.timers.at(-1)!.callback();
+  assert(!left.tintFill && !right.tintFill, "both palms return to their original painted light after the flash");
+  const before = corners(left); hands.destroy();
+  assertEqual(hands.destroyCalls, 1, "direct stowing cannot re-enter the container's destroy event");
+  exports.flashWrenMiss(f.sprite as never);
+  assertEqual(corners(left), before, "stowed palms no longer receive lighting callbacks");
+  assertEqual([f.scene.events.listenerCount("shutdown"), f.sprite.listenerCount("destroy")], [0, 0], "stowing removes both lifecycle hooks");
+  const next = exports.makeWrenCarryHands(f.scene, f.sprite);
+  f.scene.events.emit("shutdown");
+  assert(!next.scene && !next.children[0]?.scene, "scene shutdown destroys the remaining foreground crops");
+  assertEqual([f.scene.events.listenerCount("shutdown"), f.sprite.listenerCount("destroy")], [0, 0], "shutdown leaves no hand-light owner behind");
+});
 
 await suite("Wren received props: readable silhouette sits above cloak with only original fingers in front", () => {
   for (const x of [-42, 46]) {

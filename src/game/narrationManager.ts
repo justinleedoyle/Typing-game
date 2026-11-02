@@ -13,7 +13,7 @@ import { getRunaLine } from "../audio/runaLines";
 import { PALETTE, SERIF } from "./palette";
 import { UI_CSS, UI_HEX } from "./ui/uiTheme";
 import type { SaveStore } from "./saveState";
-import { PRESENTATION_CHANGED } from "./presentation";
+import { chapterPreferences, NARRATION_LAYOUT_CHANGED, PRESENTATION_CHANGED } from "./presentation";
 
 const DEFAULT_Y = 150;
 const DEFAULT_WORD_WRAP = 1400;
@@ -196,6 +196,7 @@ export class NarrationManager {
       this.speakerBg.strokeRoundedRect(tabX, tabY, tabW, tabH, 6);
       this.speakerText.setPosition(tabX + tabW / 2, tabY + tabH / 2 - 1);
     }
+    this.scene.events.emit(NARRATION_LAYOUT_CHANGED);
   }
 
   private setSpeaker(name: string | null): void {
@@ -271,12 +272,12 @@ export class NarrationManager {
     const root = this.container ?? this.text;
     this.scene.tweens.killTweensOf(root);
     root.setAlpha(0);
-    if (this.framed && changed && !this.store?.get().reducedMotion) this.playCardWake();
+    if (this.framed && changed && !this.preferences()?.reducedMotion) this.playCardWake();
     this.renderedLineKey = lineKey;
     this.scene.tweens.add({
       targets: root,
       alpha: 1,
-      duration: this.store?.get().reducedMotion ? 0 : FADE_DURATION_MS,
+      duration: this.preferences()?.reducedMotion ? 0 : FADE_DURATION_MS,
       ease: "Sine.easeOut",
     });
   }
@@ -287,9 +288,13 @@ export class NarrationManager {
   }
 
   private applyPreferences(): void {
-    const large = this.store?.get().textScale === "large";
+    const large = this.preferences()?.textScale === "large";
     this.text.setFontSize(large ? (this.framed ? 37 : 40) : (this.framed ? 30 : 32));
     if (this.framed && this.text.text) this.redrawCard();
+  }
+
+  private preferences() {
+    return this.store?.get() ?? chapterPreferences(this.scene);
   }
 
   /** Clear the caption immediately (no fade). */

@@ -448,6 +448,8 @@ export class SunkenBellScene extends Phaser.Scene {
     // Passive relics own the satchel lane; the breath meter uses the otherwise
     // empty right-side slot so late-game icon overflows never collide with it.
     this.band = new ConsoleBand(this, {
+      quietPanels: true,
+      quietMeterRows: 1,
       activity: () => (this.rhythmPracticeActive || this.breathActive || this.beatPhase !== "free") ? "combat" : "story",
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
@@ -462,7 +464,7 @@ export class SunkenBellScene extends Phaser.Scene {
       framed: true,
       onSpeak: (speakerName) => this.attendSpeaker(speakerName),
     });
-    this.reading = new ChapterReading(this, () => Math.max(316, this.narration.bottom() + 40));
+    this.reading = new ChapterReading(this, { below: () => this.narration.bottom() });
     // Bell is "quiet listening" — softer per-keystroke feedback than the
     // Winter Mountain default. 120ms / 0.002 shake instead of 80ms / 0.002.
     this.typingInput.setKeystrokeHooks({

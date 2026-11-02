@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { assert, assertEqual, suite } from "./_assert";
+import { EventEmitter } from "node:events";
+import { chapterPreferences, NARRATION_LAYOUT_CHANGED, PRESENTATION_CHANGED } from "../src/game/presentation";
 
 // Run the actual caption component with only the canvas display objects faked.
 const url = new URL("../src/game/narrationManager.ts", import.meta.url);
@@ -10,9 +12,9 @@ const owner = source.statements.find(ts.isClassDeclaration)!;
 const code = ts.transpileModule(`${declarations}\n${owner.getText(source).replace(/^export /, "")}`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;
-const Narration = new Function("Phaser", "SERIF", "PALETTE", "UI_CSS", "UI_HEX", "PRESENTATION_CHANGED",
+const Narration = new Function("Phaser", "SERIF", "PALETTE", "UI_CSS", "UI_HEX", "PRESENTATION_CHANGED", "NARRATION_LAYOUT_CHANGED", "chapterPreferences",
   `${code}; return NarrationManager;`)(
-  { Scenes: { Events: { SHUTDOWN: "shutdown", DESTROY: "destroy" } } }, "serif", {}, {}, {}, "preferences");
+  { Scenes: { Events: { SHUTDOWN: "shutdown", DESTROY: "destroy" } } }, "serif", {}, {}, {}, PRESENTATION_CHANGED, NARRATION_LAYOUT_CHANGED, chapterPreferences);
 
 class Display {
   visible = true;
@@ -55,12 +57,17 @@ class Display {
   destroy() {}
 }
 
-function caption(large = false) {
+function caption(large = false, installedOnly = false) {
   const texts: Display[] = [];
   const graphics: Display[] = [];
+  const preferences = { textScale: large ? "large" : "standard", reducedMotion: true };
+  const store = { get: () => preferences };
+  const events = new EventEmitter();
+  const animations: Array<{ duration: number }> = [];
   const scene = {
-    scale: { width: 1920 }, events: { on() {}, once() {}, off() {} },
-    tweens: { add() {}, killTweensOf() {} },
+    scale: { width: 1920 }, events,
+    data: { get: () => store },
+    tweens: { add(config: { duration: number }) { animations.push(config); }, killTweensOf() {} },
     add: {
       container: () => new Display(),
       graphics: () => { const display = new Display(); graphics.push(display); return display; },
@@ -70,9 +77,9 @@ function caption(large = false) {
     },
   };
   const manager = new Narration(scene, {
-    framed: true, store: { get: () => ({ textScale: large ? "large" : "standard", reducedMotion: true }) },
+    framed: true, ...(installedOnly ? {} : { store }),
   });
-  return { manager, speaker: texts[0], body: texts[1], card: graphics[0], badge: graphics[2] };
+  return { manager, speaker: texts[0], body: texts[1], card: graphics[0], badge: graphics[2], preferences, events, animations };
 }
 
 await suite("speaker badges: long names stay on one measured line above standard and large captions", () => {
@@ -102,4 +109,26 @@ await suite("speaker badges: exceptional names fit the normal caption width with
   assert(speaker.text.endsWith("…") && !speaker.text.includes("\n"), "oversized labels end with a single-line ellipsis");
   assert(badge.shapes[0].width <= 920, "badge cannot exceed the normal caption wrap width");
   assertEqual(body.text, "A short line.", "bounded label does not truncate the dialogue");
+});
+
+await suite("narration preferences: installed chapter settings resize held captions before controls follow", () => {
+  const { manager, body, preferences, events, animations } = caption(false, true);
+  const measured: Array<{ font: number; bottom: number }> = [];
+  events.on(NARRATION_LAYOUT_CHANGED, () => measured.push({ font: body.fontSize, bottom: manager.bottom() }));
+  const line = "The last volume is still here. Carry it gently, and let the shelf hold what the wind could not keep.";
+  manager.sayRaw(line);
+  const standardBottom = manager.bottom();
+  assertEqual(body.fontSize, 30, "an implicit scene store keeps standard text unchanged");
+  preferences.textScale = "large";
+  events.emit(PRESENTATION_CHANGED);
+  assertEqual(body.fontSize, 37, "Sky and other chapters honor installed large text without an explicit narration store");
+  assert(manager.bottom() > standardBottom, "the larger held caption is actually measured and reflowed");
+  assertEqual(measured.at(-1)?.bottom, manager.bottom(), "control layout is notified only after the current card dimensions settle");
+  assertEqual(measured.at(-1)?.font, 37, "listeners see the new text size, not stale caption geometry");
+  manager.replay();
+  assertEqual(body.text, line, "replay preserves the same held story text");
+  assert(animations.every(value => value.duration === 0), "installed reduced motion also suppresses caption wake/fade movement");
+  preferences.textScale = "standard";
+  events.emit(PRESENTATION_CHANGED);
+  assertEqual(manager.bottom(), standardBottom, "returning to standard text restores the measured card size");
 });

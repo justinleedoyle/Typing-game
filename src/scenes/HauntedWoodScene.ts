@@ -428,7 +428,10 @@ export class HauntedWoodScene extends Phaser.Scene {
     // UI cohesion — the console band houses the meters + satchel. Wood's mist is
     // a vision overlay (not a bottom meter), so the satchel zone shows the passive
     // relic icon tiles; the offensive one-shots drop into the band's charge cards.
+    const offensiveOneShots = this.combat.oneShots.filter(isOffensiveOneShot);
     this.band = new ConsoleBand(this, {
+      quietPanels: true,
+      quietMeterRows: offensiveOneShots.length > 0 ? 2 : 1,
       activity: () => (
         this.wardPracticeActive
         || this.ghosts.some(ghost => !ghost.isDefeated())
@@ -436,7 +439,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
       passiveIconIds: this.combat.passiveRelicIds,
-      maxOneShots: this.combat.oneShots.filter(isOffensiveOneShot).length,
+      maxOneShots: offensiveOneShots.length,
     });
     const band = this.band;
 
@@ -445,7 +448,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       framed: true,
       onSpeak: (speakerName) => this.attendSpeaker(speakerName),
     });
-    this.reading = new ChapterReading(this, () => Math.max(316, this.narration.bottom() + 40));
+    this.reading = new ChapterReading(this, { below: () => this.narration.bottom() });
 
     this.typingInput = new TypingInputController(this.store);
     this.typingInput.setKeystrokeHooks({
@@ -466,7 +469,6 @@ export class HauntedWoodScene extends Phaser.Scene {
       },
       onClaim: () => playClaim(),
     });
-    const offensiveOneShots = this.combat.oneShots.filter(isOffensiveOneShot);
     new HeartSoulHud(this, {
       getHeart: () => this.typingInput.getStats().getHeart(),
       getSoul: () => this.typingInput.getStats().getSoul(),

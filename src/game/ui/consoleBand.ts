@@ -79,6 +79,14 @@ export interface ConsoleBandOptions {
   /** Explicit scene activity. Combat retains the original full console; story
    *  choices and traversal use quieter chrome. Omit to compact held cards only. */
   activity?: () => "combat" | "story";
+  /** Fit quiet backplates around existing resources instead of spanning the
+   * screen. Combat keeps the original full console and every anchor. */
+  quietPanels?: boolean;
+  /** Match the visible Heart-only or Heart/Soul resource rows. Default two. */
+  quietMeterRows?: 1 | 2;
+  /** Additional quiet backplates for a scene's own resource widgets. Bounds
+   * are band-local; omit empty/revisit-only shelves rather than reserving them. */
+  quietResourcePanels?: readonly { x: number; y: number; width: number; height: number }[];
   /** Texture key for the speaker portrait shown in the nook (optional). */
   portraitKey?: string;
   /** Name shown under the portrait. */
@@ -181,6 +189,7 @@ export class ConsoleBand {
   private readonly fullChrome: Phaser.GameObjects.Container;
   private readonly storySurface: Phaser.GameObjects.Graphics;
   private readonly activity?: ConsoleBandOptions["activity"];
+  private readonly quietPanels: boolean;
   private compact = false;
   private readingActive = false;
   private satchelHeading?: Phaser.GameObjects.Text;
@@ -222,22 +231,21 @@ export class ConsoleBand {
       .setScrollFactor(0)
       .setDepth(DEPTH);
     this.activity = opts.activity;
+    this.quietPanels = opts.quietPanels === true;
     this.fullChrome = scene.add.container(0, 0);
     this.container.add(this.fullChrome);
     this.storySurface = scene.add.graphics().setVisible(false);
-    this.storySurface.fillStyle(0x17120e, 0.96);
-    this.storySurface.fillRect(0, BAND_H - STORY_H, W, STORY_H);
-    this.storySurface.lineStyle(1, UI_HEX.brass, 0.3);
-    this.storySurface.lineBetween(0, BAND_H - STORY_H, W, BAND_H - STORY_H);
     this.container.add(this.storySurface);
 
     const maxOneShots = Math.max(0, opts.maxOneShots ?? 3);
     const passiveIconIds = opts.passiveIconIds ?? [];
     const satchelLabel = opts.satchelLabel ?? "satchel";
+    const displayedCount = displayedSatchelTileCount(scene, passiveIconIds);
     this.satchelShelfWidth = satchelShelfWidthFor(
-      displayedSatchelTileCount(scene, passiveIconIds),
+      displayedCount,
       satchelLabel,
     );
+    this.drawStorySurface(W, opts, displayedCount);
 
     this.drawSurface(scene, W, opts.showMeterShelf ?? true, this.satchelShelfWidth);
     this.drawPortraitFrame(scene);
@@ -261,10 +269,14 @@ export class ConsoleBand {
     scene.events.once(Phaser.Scenes.Events.DESTROY, () => this.destroy());
   }
 
+  private isCompactPresentation(): boolean {
+    const activity = this.activity?.();
+    return activity !== "combat" && (activity === "story" || ChapterReading.activeIn(this.scene));
+  }
+
   private refreshPresentation(): void {
     const reading = ChapterReading.activeIn(this.scene);
-    const activity = this.activity?.();
-    const compact = activity !== "combat" && (activity === "story" || reading);
+    const compact = this.isCompactPresentation();
     if (compact !== this.compact) {
       this.compact = compact;
       this.fullChrome.setVisible(!compact);
@@ -277,6 +289,34 @@ export class ConsoleBand {
     }
     this.readingActive = reading;
     this.updateReadoutVisibility();
+  }
+
+  private drawStorySurface(W: number, opts: ConsoleBandOptions, displayedCount: number): void {
+    const surface = this.storySurface;
+    if (!this.quietPanels) {
+      surface.fillStyle(0x17120e, 0.96);
+      surface.fillRect(0, BAND_H - STORY_H, W, STORY_H);
+      surface.lineStyle(1, UI_HEX.brass, 0.3);
+      surface.lineBetween(0, BAND_H - STORY_H, W, BAND_H - STORY_H);
+      return;
+    }
+    const panels = [...(opts.quietResourcePanels ?? [])];
+    if (opts.showMeterShelf !== false) {
+      // Heart/Soul and the combo stay on their existing absolute baselines.
+      panels.push({ x: 232, y: opts.quietMeterRows === 1 ? 90 : 78,
+        width: 258, height: opts.quietMeterRows === 1 ? 40 : 82 });
+    }
+    if (displayedCount > 0) {
+      panels.push({ x: SATCHEL_X - 12, y: TILE_Y - TILE / 2 - 12,
+        width: displayedCount * TILE + Math.max(0, displayedCount - 1) * TILE_GAP + 24,
+        height: TILE + 24 });
+    }
+    surface.fillStyle(0x17120e, 0.86);
+    surface.lineStyle(1, UI_HEX.brass, 0.26);
+    for (const panel of panels) {
+      surface.fillRoundedRect(panel.x, panel.y, panel.width, panel.height, 8);
+      surface.strokeRoundedRect(panel.x, panel.y, panel.width, panel.height, 8);
+    }
   }
 
   private updateReadoutVisibility(): void {
@@ -599,6 +639,7 @@ export class ConsoleBand {
   }
 
   private playBandEntryWake(): void {
+    if (this.quietPanels && this.isCompactPresentation()) return;
     const rail = this.scene.add.graphics().setAlpha(0);
     rail.fillStyle(UI_HEX.brass, 0.3);
     rail.fillRect(0, 0, this.bandWidth, 3);
@@ -877,6 +918,7 @@ export class ConsoleBand {
     }
     if (!itemId && !["satchel", "relic", "companion", "ally"].includes(label)) return;
     const hasTiles = this.satchelTileCount > 0;
+    if (!hasTiles && this.quietPanels && this.isCompactPresentation()) return;
     const rowW = hasTiles
       ? this.satchelTileCount * TILE + Math.max(0, this.satchelTileCount - 1) * TILE_GAP
       : Math.max(TILE, this.satchelShelfWidth - 20);
@@ -1050,20 +1092,22 @@ export class ConsoleBand {
   private playReadoutWake(label: string): void {
     const notice = label !== "task";
     const color = noticeColorsFor(label).wakeColor;
-    const rail = this.scene.add.graphics().setAlpha(0.78);
-    rail.fillStyle(color, notice ? 0.34 : 0.26);
-    rail.fillRect(0, 0, this.bandWidth, 3);
-    rail.fillStyle(color, notice ? 0.11 : 0.08);
-    rail.fillRect(0, 3, this.bandWidth, 14);
-    this.fullChrome.add(rail);
+    if (!(this.quietPanels && this.isCompactPresentation())) {
+      const rail = this.scene.add.graphics().setAlpha(0.78);
+      rail.fillStyle(color, notice ? 0.34 : 0.26);
+      rail.fillRect(0, 0, this.bandWidth, 3);
+      rail.fillStyle(color, notice ? 0.11 : 0.08);
+      rail.fillRect(0, 3, this.bandWidth, 14);
+      this.fullChrome.add(rail);
 
-    this.scene.tweens.add({
-      targets: rail,
-      alpha: 0,
-      duration: notice ? 520 : 420,
-      ease: "Sine.easeOut",
-      onComplete: () => rail.destroy(),
-    });
+      this.scene.tweens.add({
+        targets: rail,
+        alpha: 0,
+        duration: notice ? 520 : 420,
+        ease: "Sine.easeOut",
+        onComplete: () => rail.destroy(),
+      });
+    }
 
     const strip = this.scene.add
       .graphics()

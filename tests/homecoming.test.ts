@@ -146,8 +146,8 @@ function homecomingFixture(gender: "boy" | "girl" | null = "boy", reduced = fals
   const readingCode = ts.transpileModule(readingSource.statements.find(ts.isClassDeclaration)!.getText(readingSource).replace(/^export /, ""), {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  const Reading = new Function("readingAction", "SERIF", "UI_CSS", "UI_HEX", "chapterPreferences", "PRESENTATION_CHANGED",
-    `${readingCode}; return ChapterReading;`)(readingAction, "serif", {}, {}, () => ({}), "presentation");
+  const Reading = new Function("readingAction", "SERIF", "UI_CSS", "UI_HEX", "chapterPreferences", "PRESENTATION_CHANGED", "NARRATION_LAYOUT_CHANGED",
+    `${readingCode}; return ChapterReading;`)(readingAction, "serif", {}, {}, () => ({}), "presentation", "narration-layout");
   const loaded = new Map<string, string>(), images: any[] = [], containers: any[] = [], graphics: any[] = [];
   const tweens: any[] = [], captions: string[] = [], starts: any[] = [], shutdown: Array<() => void> = [];
   let onKey: ((event: any) => void) | undefined;

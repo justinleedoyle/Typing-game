@@ -518,6 +518,12 @@ export class WinterMountainScene extends Phaser.Scene {
     // UI cohesion — the console band houses the meters + Winter's candle/thunder
     // status. Realm 1 has no satchel, so those dock in the satchel zone.
     this.band = new ConsoleBand(this, {
+      quietPanels: true,
+      quietMeterRows: this.revisit ? 1 : 2,
+      quietResourcePanels: this.revisit ? [] : [
+        { x: 574, y: 62, width: 96, height: 86 },
+        { x: 850, y: 62, width: 104, height: 86 },
+      ],
       activity: () => (this.waveActive || this.coldDecayTimer !== null) ? "combat" : "story",
       portraitKey: "band-portrait-runa",
       portraitName: "Runa",
@@ -623,7 +629,7 @@ export class WinterMountainScene extends Phaser.Scene {
       anchor: band.metersAnchor,
       plate: false,
     });
-    this.reading = new ChapterReading(this, () => Math.max(316, this.narration.bottom() + 40));
+    this.reading = new ChapterReading(this, { below: () => this.narration.bottom() });
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.input.keyboard?.on("keyup", this.onKeyUp, this);

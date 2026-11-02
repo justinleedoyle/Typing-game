@@ -29,6 +29,7 @@ await import("./finaleFacets.test.ts");
 await import("./saveState.test.ts");
 await import("./desktopFileStorage.test.ts");
 await import("./desktopPackaging.test.ts");
+await import("./desktopFullscreen.test.ts");
 await import("./desktopBackend.test.ts");
 await import("./saveTransfer.test.ts");
 await import("./saveTransferStorage.test.ts");

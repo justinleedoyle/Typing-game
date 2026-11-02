@@ -110,7 +110,8 @@ async function start(): Promise<void> {
   });
   window.webContents.on("before-input-event", (event, input) => {
     if (input.type === "keyDown" && input.key === "F11" && !input.control && !input.meta && !input.alt) {
-      event.preventDefault(); window?.setFullScreen(!window.isFullScreen());
+      event.preventDefault();
+      if (!input.isAutoRepeat) window?.setFullScreen(!window.isFullScreen());
     }
   });
   window.on("close", event => {

@@ -311,8 +311,8 @@ const HUB_LINES: readonly RunaLine[] = [
   {
     id: "hub_post_battle",
     scene: "hub",
-    trigger: "PortalChamberScene — after Great Battle, New Game+ prompt",
-    text: "The Almanac is complete. Type to begin a new run.",
+    trigger: "PortalChamberScene — after Great Battle, revisit and Almanac guidance",
+    text: "Holdfast is safe. The realms remain open. Revisit a realm, or open your Almanac.",
     tone: "wonder",
   },
 ];

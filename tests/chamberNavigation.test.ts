@@ -80,7 +80,7 @@ function chamber(time = clock()) {
     typingInput: input, activeZone: "portals", openingUtilityScene: false, almanacOverlayOpen: false,
     portalWordAnchors: [], stationWordAnchorReleases: [], portalInstructionObjects: [], zoneTargets: [],
     clearPortalFloorCallWake() {}, clearDeskDisplay() {}, clearAccountDisplay() {}, clearShelfDisplay() {},
-    walkWrenTo() {}, input: { keyboard: { on() {} } },
+    walkWrenTo() {}, settleHubArrival() {}, input: { keyboard: { on() {} } },
     chapterMenu: { handleKey(event: KeyboardEvent) {
       const action = navigationAction(event, "play", input.hasClaim() || input.getTypingBuffer().length > 0);
       if (action === "pause") { pauses += 1; return true; }

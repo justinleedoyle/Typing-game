@@ -170,6 +170,7 @@ const ACCOUNT_PANEL = {
   statusY: 184,
   authY: 232,
   settingsY: 280,
+  restartY: 328,
 } as const;
 const ACCOUNT_STATION = {
   x: ACCOUNT_PANEL.x,
@@ -243,18 +244,28 @@ export class PortalChamberScene extends Phaser.Scene {
   private ambientHandle?: AmbientHandle;
   private focusedCompletedPortal: string | null = null;
   private hubArrival: HubArrivalSource | null = null;
+  private hubArrivalEpoch = 0;
+  private hubArrivalInFlight = false;
+  private hubArrivalTimer?: Phaser.Time.TimerEvent;
+  private hubArrivalTween?: Phaser.Tweens.Tween;
   private activeZone: Zone = "portals";
   private openingUtilityScene = false;
   private almanacOverlayOpen = false;
-  private almanacReturnZone: "desk" | "shelf" = "desk";
+  private almanacReturnZone: "portals" | "desk" | "shelf" = "desk";
   private enteringGreatBattle = false;
   private restartingNewGame = false;
+  private confirmingNewGame = false;
+  private newGameRequest = 0;
+  private newGamePrepared = false;
+  private newGameLifetime = 0;
 
   constructor() {
     super("PortalChamberScene");
   }
 
   init(data: ChamberSceneData): void {
+    this.newGameLifetime += 1;
+    this.settleHubArrival();
     this.store = data.store;
     this.hubArrival = data.arrival ?? null;
     this.archGraphics = new Map();
@@ -281,6 +292,9 @@ export class PortalChamberScene extends Phaser.Scene {
     this.almanacReturnZone = "desk";
     this.enteringGreatBattle = false;
     this.restartingNewGame = false;
+    this.confirmingNewGame = false;
+    this.newGameRequest += 1;
+    this.newGamePrepared = false;
   }
 
   preload(): void {
@@ -309,7 +323,7 @@ export class PortalChamberScene extends Phaser.Scene {
     this.chapterMenu = installChapterMenu(this, {
       store: this.store,
       hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),
-      escapeHint: () => this.activeZone === "portals" ? "Esc · pause" : "Esc · portals",
+      escapeHint: () => this.confirmingNewGame ? "Esc · keep journey" : this.newGamePrepared ? "Save retry" : this.activeZone === "portals" ? "Esc · pause" : "Esc · portals",
       onLeave: () => this.scene.start("TitleScene"),
       leaveLabel: "Save & return to title",
       leaveHint: "Your journey is saved. Continue from the title to resume your latest saved place.",
@@ -362,6 +376,8 @@ export class PortalChamberScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.RESUME, this.resumeAfterAlmanac, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.newGameLifetime += 1;
+      this.settleHubArrival();
       this.chapterMenu?.destroy();
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
@@ -394,6 +410,8 @@ export class PortalChamberScene extends Phaser.Scene {
   // ─── Zone system ──────────────────────────────────────────────────────────
 
   private enterZone(zone: Zone, animate = true): void {
+    this.confirmingNewGame = false;
+    this.newGameRequest += 1;
     this.activeZone = zone;
     this.clearZoneTargets();
     for (const object of this.portalInstructionObjects) object.setVisible(zone === "portals");
@@ -434,6 +452,7 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private walkWrenTo(targetX: number, animate: boolean): void {
+    this.settleHubArrival();
     this.tweens.killTweensOf(this.wrenContainer);
     if (!animate || targetX === this.wrenContainer.x) {
       this.wrenContainer.x = targetX;
@@ -512,34 +531,9 @@ export class PortalChamberScene extends Phaser.Scene {
         this.narration.say("hub_all_cleared");
         this.narration.clearAfter(HUB_SHORT_CAPTION_MS);
       } else {
-        // Battle cleared — show begin again target (New Game+).
-        let releaseAnchor = (): void => {};
-        const ngPlusTarget = new TextWordTarget({
-          scene: this,
-          word: "begin again",
-          x: this.scale.width / 2,
-          y: PORTAL_CALL_WORD_Y,
-          fontSize: 34,
-          outline: true,
-          idleAlpha: 0.9,
-          onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),
-          onAdvance: () => this.pulseStationTyping(HUB_STATIONS.portalFloor),
-          onComplete: () => {
-            releaseAnchor();
-            this.portalFloorCallGlow?.destroy();
-            this.portalFloorCallGlow = undefined;
-            this.clearPortalFloorCallWake();
-            this.playHubActorAction(HUB_STATIONS.portalFloor.x);
-            this.pulseStation(HUB_STATIONS.portalFloor);
-            void this.startNewGame();
-          },
-        });
-        releaseAnchor = this.attachPortalFloorCallAnchor(ngPlusTarget, UI_HEX.brass);
-        this.showPortalFloorCallGlow(UI_HEX.brass);
-        this.showPortalFloorCallWake(UI_HEX.brass);
-        this.typingInput.register(ngPlusTarget);
-        this.zoneTargets.push(ngPlusTarget);
-        this.stageHubTarget(ngPlusTarget, 80);
+        // The completed room keeps its earned places and book available.
+        // Starting a replacement journey belongs in Profile, behind confirmation.
+        this.registerDeskAlmanacTarget();
         this.narration.say("hub_post_battle");
         this.narration.clearAfter(HUB_SHORT_CAPTION_MS);
       }
@@ -548,7 +542,7 @@ export class PortalChamberScene extends Phaser.Scene {
     // Secondary targets — all cleared realms are revisitable at lower priority.
     for (let i = 0; i < nextAvailableIdx; i++) {
       this.registerRealmPortalTarget(ARCHES[i], i, true, {
-        fontSize: 20,
+        fontSize: state.realms["great-battle"]?.cleared ? 24 : 20,
         priority: -1,
         entryDelayMs: 80 + i * 28,
       });
@@ -1272,6 +1266,7 @@ export class PortalChamberScene extends Phaser.Scene {
   // ─── Portal entry ─────────────────────────────────────────────────────────
 
   private onEnterPortal(sceneKey: string, revisit: boolean): void {
+    this.settleHubArrival();
     playChime();
     this.narration.clear();
     // The selected target is complete, so leave the room input-quiet while Wren
@@ -1292,6 +1287,7 @@ export class PortalChamberScene extends Phaser.Scene {
 
   private enterGreatBattle(): void {
     if (this.enteringGreatBattle) return;
+    this.settleHubArrival();
     this.enteringGreatBattle = true;
     playChime();
     this.narration.clear();
@@ -1563,8 +1559,10 @@ export class PortalChamberScene extends Phaser.Scene {
 
   private async renderAccountStatus(): Promise<void> {
     const zoneAtRequest = this.activeZone;
+    const request = this.newGameRequest;
     const name = await currentUserDisplayName();
-    if (zoneAtRequest !== "account" || this.activeZone !== "account") return;
+    if (zoneAtRequest !== "account" || this.activeZone !== "account" ||
+        request !== this.newGameRequest || this.confirmingNewGame || !this.scene.isActive()) return;
 
     const status = this.add
       .text(ACCOUNT_PANEL.x, ACCOUNT_PANEL.statusY, desktopBridge() ? "saved on this computer · offline edition" : name ? `signed in as ${name}` : "local save", {
@@ -1607,6 +1605,12 @@ export class PortalChamberScene extends Phaser.Scene {
         idleAlpha: 0.88,
       },
     );
+    if (this.store.get().realms["great-battle"]?.cleared) {
+      this.registerNavTarget("begin again", ACCOUNT_PANEL.x, ACCOUNT_PANEL.restartY,
+        () => this.requestNewGame(), {
+          fontSize: 18, frame: "banner", entryDelayMs: 110, idleAlpha: 0.7,
+        });
+    }
     this.registerPortalReturnTarget(130);
     void this.addAccountAuthTarget();
   }
@@ -1614,8 +1618,10 @@ export class PortalChamberScene extends Phaser.Scene {
   private async addAccountAuthTarget(): Promise<void> {
     if (desktopBridge()) return;
     const zoneAtRequest = this.activeZone;
+    const request = this.newGameRequest;
     const name = await currentUserDisplayName();
-    if (zoneAtRequest !== "account" || this.activeZone !== "account") return;
+    if (zoneAtRequest !== "account" || this.activeZone !== "account" ||
+        request !== this.newGameRequest || this.confirmingNewGame || !this.scene.isActive()) return;
 
     let releaseAnchor = (): void => {};
     const target = new TextWordTarget({
@@ -1649,22 +1655,28 @@ export class PortalChamberScene extends Phaser.Scene {
     this.stageHubTarget(target, 110);
   }
 
+  private accountPanelGeometry(): { y: number; height: number } {
+    const extra = this.store.get().realms["great-battle"]?.cleared ? 48 : 0;
+    return { y: ACCOUNT_PANEL.y + extra / 2, height: ACCOUNT_PANEL.height + extra };
+  }
+
   private drawAccountStationPanel(): void {
+    const { y, height } = this.accountPanelGeometry();
     const panel = this.add.graphics().setDepth(0);
     panel.fillStyle(UI_HEX.panel, 0.44);
     panel.fillRoundedRect(
       ACCOUNT_PANEL.x - ACCOUNT_PANEL.width / 2,
-      ACCOUNT_PANEL.y - ACCOUNT_PANEL.height / 2,
+      y - height / 2,
       ACCOUNT_PANEL.width,
-      ACCOUNT_PANEL.height,
+      height,
       9,
     );
     panel.lineStyle(1.5, UI_HEX.brass, 0.58);
     panel.strokeRoundedRect(
       ACCOUNT_PANEL.x - ACCOUNT_PANEL.width / 2,
-      ACCOUNT_PANEL.y - ACCOUNT_PANEL.height / 2,
+      y - height / 2,
       ACCOUNT_PANEL.width,
-      ACCOUNT_PANEL.height,
+      height,
       9,
     );
     panel.lineStyle(1, UI_HEX.brass, 0.3);
@@ -1677,12 +1689,12 @@ export class PortalChamberScene extends Phaser.Scene {
     this.accountDisplayObjects.push(panel);
     this.stageAccountObject(panel, 35, { offsetY: 8 });
 
-    const corners = cornerTicks(this, ACCOUNT_PANEL.width, ACCOUNT_PANEL.height, {
+    const corners = cornerTicks(this, ACCOUNT_PANEL.width, height, {
       inset: 6,
       size: 9,
       width: 1,
     })
-      .setPosition(ACCOUNT_PANEL.x, ACCOUNT_PANEL.y)
+      .setPosition(ACCOUNT_PANEL.x, y)
       .setAlpha(0.58)
       .setDepth(0.1);
     this.accountDisplayObjects.push(corners);
@@ -1719,30 +1731,31 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private playAccountPanelWake(): void {
+    const { y, height } = this.accountPanelGeometry();
     const frame = this.add
-      .container(ACCOUNT_PANEL.x, ACCOUNT_PANEL.y)
+      .container(ACCOUNT_PANEL.x, y)
       .setDepth(8)
       .setAlpha(0.52);
     const g = this.add.graphics();
     g.fillStyle(UI_HEX.brass, 0.04);
     g.fillRoundedRect(
       -ACCOUNT_PANEL.width / 2,
-      -ACCOUNT_PANEL.height / 2,
+      -height / 2,
       ACCOUNT_PANEL.width,
-      ACCOUNT_PANEL.height,
+      height,
       10,
     );
     g.lineStyle(1.5, UI_HEX.brass, 0.52);
     g.strokeRoundedRect(
       -ACCOUNT_PANEL.width / 2,
-      -ACCOUNT_PANEL.height / 2,
+      -height / 2,
       ACCOUNT_PANEL.width,
-      ACCOUNT_PANEL.height,
+      height,
       10,
     );
     frame.add(g);
     frame.add(
-      cornerTicks(this, ACCOUNT_PANEL.width, ACCOUNT_PANEL.height, {
+      cornerTicks(this, ACCOUNT_PANEL.width, height, {
         inset: 5,
         size: 11,
         width: 2,
@@ -1762,7 +1775,8 @@ export class PortalChamberScene extends Phaser.Scene {
   private openAlmanac(): void {
     if (this.openingUtilityScene) return;
     this.openingUtilityScene = true;
-    this.almanacReturnZone = this.activeZone === "shelf" ? "shelf" : "desk";
+    this.settleHubArrival();
+    this.almanacReturnZone = this.activeZone === "shelf" ? "shelf" : this.activeZone === "portals" ? "portals" : "desk";
     const station = this.almanacReturnZone === "shelf" ? HUB_STATIONS.shelf : HUB_STATIONS.almanac;
     playChime();
     this.playHubActorAction(station.x, true);
@@ -1793,6 +1807,24 @@ export class PortalChamberScene extends Phaser.Scene {
   // ─── Input ────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
+    if (this.restartingNewGame) return;
+    // Once a confirmed reset is prepared, only its save retry is available.
+    if (this.newGamePrepared) {
+      if (!event.ctrlKey && !event.metaKey) this.typingInput.handleChar(event.key);
+      return;
+    }
+    if (this.confirmingNewGame) {
+      if (event.repeat) return;
+      if (event.ctrlKey || event.metaKey) return;
+      const typing = this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0;
+      if (event.key === "Escape" && !typing) {
+        event.preventDefault();
+        this.enterZone("account", false);
+      } else {
+        this.typingInput.handleChar(event.key);
+      }
+      return;
+    }
     // Ctrl+Shift+P: toggle purist mode from the hub too.
     if (isPuristToggleKey(event)) {
       event.preventDefault();
@@ -1821,8 +1853,8 @@ export class PortalChamberScene extends Phaser.Scene {
     const width = 236;
     const height = 46;
     const y =
-      ACCOUNT_PANEL.y +
-      ACCOUNT_PANEL.height / 2 +
+      this.accountPanelGeometry().y +
+      this.accountPanelGeometry().height / 2 +
       (this.activeZone === "account" ? 48 : 38);
     const container = this.add
       .container(station.x, y)
@@ -2669,10 +2701,27 @@ export class PortalChamberScene extends Phaser.Scene {
     this.playHubArrivalMaterialize(sourceX, color);
   }
 
+  /** Navigation owns Wren immediately, even during the short arrival beat. */
+  private settleHubArrival(): void {
+    this.hubArrivalEpoch += 1;
+    this.hubArrivalTimer?.remove(false);
+    this.hubArrivalTimer = undefined;
+    this.hubArrivalTween?.remove();
+    this.hubArrivalTween = undefined;
+    const arriving = this.hubArrivalInFlight;
+    this.hubArrivalInFlight = false;
+    if (arriving && this.wrenContainer?.active) {
+      this.wrenContainer.setPosition(this.wrenContainer.x, WREN_Y).setScale(1).setAlpha(1);
+    }
+  }
+
   /** A realm return resolves at the portal floor before the hub settles. This
    * keeps the existing source-to-Wren flecks from reading as a detached overlay. */
   private playHubArrivalMaterialize(sourceX: number, color: number): void {
     if (!this.wrenContainer?.active || !this.wrenSprite?.active) return;
+    this.settleHubArrival();
+    const epoch = this.hubArrivalEpoch;
+    this.hubArrivalInFlight = true;
 
     const landingX = this.wrenContainer.x;
     const landingY = WREN_Y;
@@ -2684,8 +2733,9 @@ export class PortalChamberScene extends Phaser.Scene {
       .setScale(0.92)
       .setAlpha(0);
 
-    this.time.delayedCall(150, () => {
-      if (!this.wrenContainer?.active || !this.wrenSprite?.active) return;
+    this.hubArrivalTimer = this.time.delayedCall(150, () => {
+      if (epoch !== this.hubArrivalEpoch || !this.hubArrivalInFlight || !this.wrenContainer?.active || !this.wrenSprite?.active) return;
+      this.hubArrivalTimer = undefined;
       playSceneEventPulse(this, {
         kind: "mote",
         color,
@@ -2700,7 +2750,7 @@ export class PortalChamberScene extends Phaser.Scene {
         spreadX: 38,
         spreadY: 12,
       });
-      this.tweens.add({
+      this.hubArrivalTween = this.tweens.add({
         targets: this.wrenContainer,
         y: landingY,
         alpha: 1,
@@ -2709,7 +2759,9 @@ export class PortalChamberScene extends Phaser.Scene {
         duration: 460,
         ease: "Sine.easeOut",
         onComplete: () => {
-          if (!this.wrenContainer?.active || !this.wrenSprite?.active) return;
+          if (epoch !== this.hubArrivalEpoch || !this.hubArrivalInFlight || !this.wrenContainer?.active || !this.wrenSprite?.active) return;
+          this.hubArrivalTween = undefined;
+          this.hubArrivalInFlight = false;
           setWrenPose(this.wrenSprite, "front", faceLeft);
           playWrenFocus(this.wrenSprite, { faceLeft, durationMs: 150 });
           addIdleBreath(this, this.wrenContainer, { dy: -4, durationMs: 2100 });
@@ -2722,6 +2774,7 @@ export class PortalChamberScene extends Phaser.Scene {
     if (this.hubArrival || this.activeZone !== "portals") return;
 
     const state = this.store.get();
+    if (state.realms["great-battle"]?.cleared) return;
     const firstUnclearedIdx = REALM_SEQUENCE.findIndex(
       (id) => !state.realms[id]?.cleared,
     );
@@ -2915,6 +2968,7 @@ export class PortalChamberScene extends Phaser.Scene {
     },
   ): void {
     if (this.openingUtilityScene) return;
+    this.settleHubArrival();
     this.openingUtilityScene = true;
     if (opts.playChime) playChime();
     this.playHubActorAction(station.x, opts.includeRuna === true);
@@ -3167,35 +3221,71 @@ export class PortalChamberScene extends Phaser.Scene {
 
   // ─── New Game+ ────────────────────────────────────────────────────────────
 
+  private requestNewGame(): void {
+    if (this.confirmingNewGame || this.restartingNewGame || this.newGamePrepared ||
+        this.activeZone !== "account" || !this.store.get().realms["great-battle"]?.cleared) return;
+    this.clearZoneTargets();
+    this.confirmingNewGame = true;
+    const request = ++this.newGameRequest;
+    this.narration.sayRaw("A new journey replaces this journey’s progress, discoveries and keepsakes. Your name and settings stay.");
+    const add = (word: string, y: number, confirm: boolean): void => {
+      const target = new TextWordTarget({
+        scene: this, word, x: this.scale.width / 2, y,
+        fontSize: 26, outline: true, frame: "banner",
+        onComplete: () => {
+          if (!this.confirmingNewGame || request !== this.newGameRequest) return;
+          if (!confirm) { this.enterZone("account", false); return; }
+          this.confirmingNewGame = false;
+          this.newGameRequest += 1;
+          this.clearZoneTargets();
+          void this.startNewGame();
+        },
+      });
+      this.typingInput.register(target);
+      this.zoneTargets.push(target);
+    };
+    add("keep this journey", 510, false);
+    add("confirm new journey", 590, true);
+  }
+
   private async startNewGame(): Promise<void> {
     if (this.restartingNewGame) return;
     this.restartingNewGame = true;
+    const lifetime = this.newGameLifetime;
+    const store = this.store;
+    const ownsScene = (): boolean => lifetime === this.newGameLifetime &&
+      (this.scene.isActive() || this.scene.isPaused());
     playChime();
     this.narration.clear();
-    // Preserve identity/calibration and comfort settings, never chapter state.
-    resetSave(this.store, true);
+    this.settleHubArrival();
+    // A failed save retry must not reset an already prepared journey again.
+    if (!this.newGamePrepared) {
+      resetSave(store, true);
+      this.newGamePrepared = true;
+    }
     try {
-      await this.store.flush();
+      await store.flush();
     } catch {
-      if (!this.scene.isActive()) return;
+      if (!ownsScene()) return;
       this.restartingNewGame = false;
       this.clearZoneTargets();
-      this.narration.sayRaw("Could not finish saving the fresh start. Type retry to try again. Your current session is still here.");
+      this.narration.sayRaw("Your new journey is ready, but could not be saved. Type retry to save it before continuing.");
       const retry = new TextWordTarget({
         scene: this, word: "retry", x: this.scale.width / 2, y: PORTAL_CALL_WORD_Y,
         fontSize: 34, outline: true, frame: "banner",
-        onComplete: () => { void this.startNewGame(); },
+        onComplete: () => { if (ownsScene()) void this.startNewGame(); },
       });
       this.typingInput.register(retry);
       this.zoneTargets.push(retry);
       return;
     }
-    if (!this.scene.isActive()) return;
+    if (!ownsScene()) return;
     this.playBeginAgainWake();
     this.time.delayedCall(320, () => {
+      if (!ownsScene()) return;
       this.cameras.main.fadeOut(720, 10, 8, 15);
       this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-        this.scene.start("OpeningScene", { store: this.store });
+        if (ownsScene()) this.scene.start("OpeningScene", { store });
       });
     });
   }

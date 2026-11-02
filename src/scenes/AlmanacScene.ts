@@ -14,7 +14,7 @@ import {
 } from "../game/realmLore";
 import { RELICS } from "../game/relics";
 import type { SaveStore } from "../game/saveState";
-import { TypingInputController } from "../game/typingInput";
+import { TypingInputController, type WordTarget } from "../game/typingInput";
 import { TextWordTarget } from "../game/wordTarget";
 import { navigationAction } from "../game/ui/navigationPolicy";
 import { installPresentation } from "../game/presentation";
@@ -33,6 +33,16 @@ type AlmanacPageEntry =
   | { kind: "overview" }
   | { kind: "realm"; realmId: string }
   | { kind: "lore"; loreId: string; realmId: string };
+
+type AlmanacPageLink = WordTarget & { destroy(): void };
+
+const REALM_CONTENTS_COMMANDS: Record<string, string> = {
+  "winter-mountain": "winter mountain",
+  "sunken-bell": "sunken bell",
+  "clockwork-forge": "clockwork forge",
+  "sky-island": "sky island",
+  "haunted-wood": "haunted wood",
+};
 
 interface AlmanacSceneData {
   store: SaveStore;
@@ -123,6 +133,10 @@ export class AlmanacScene extends Phaser.Scene {
   private nextTarget?: TextWordTarget;
   private prevTarget?: TextWordTarget;
   private closeTarget?: TextWordTarget;
+  private contentsTarget?: TextWordTarget;
+  private directTargets: AlmanacPageLink[] = [];
+  private contentsOpen = false;
+  private navigationGeneration = 0;
   private navAnchorReleases: Array<() => void> = [];
   private navTypingPulseTimes = new Map<string, number>();
   private pageWakeIndex = 0;
@@ -143,6 +157,9 @@ export class AlmanacScene extends Phaser.Scene {
     this.navTypingPulseTimes.clear();
     this.pageWakeIndex = 0;
     this.closing = false;
+    this.contentsOpen = false;
+    this.directTargets = [];
+    this.navigationGeneration += 1;
   }
 
   preload(): void {
@@ -239,14 +256,14 @@ export class AlmanacScene extends Phaser.Scene {
     this.typingInput = new TypingInputController(this.store);
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.clearNavigationTargets();
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
     });
 
-    this.renderCurrentPage();
-    this.placeNavigationTargets();
+    this.refreshBookPage();
     this.add.text(this.scale.width / 2, 976,
-      "← / → or Page Up / Down: turn pages · Esc: cancel typing, then close · Typed commands also work", {
+      "Type contents: chapters & discoveries · ← / → or Page Up / Down: pages · Esc: cancel typing, then close", {
         fontFamily: SERIF, fontSize: "22px", color: UI_CSS.cream,
       }).setOrigin(0.5).setDepth(32);
     this.playBookEntryWake();
@@ -307,6 +324,11 @@ export class AlmanacScene extends Phaser.Scene {
     for (const t of this.pageTexts) t.destroy();
     this.pageTexts = [];
     this.pageWakeIndex = 0;
+
+    if (this.contentsOpen) {
+      this.renderContentsPage();
+      return;
+    }
 
     const entry = this.pageStack[this.currentPage];
     if (!entry || entry.kind === "overview") {
@@ -434,9 +456,8 @@ export class AlmanacScene extends Phaser.Scene {
 
     }
 
-    // Left page bottom — list any lore pages stamped for this realm. Each
-    // title is rendered in italic; bodies live on their own sub-pages,
-    // reachable by typing forward through the navigation.
+    // Left page bottom — earned titles are printed commands to their original
+    // discovery spreads. Sequential page navigation remains available too.
     const stampedLoreIds = lorePageIdsForRealm(realmId).filter((id) =>
       state.almanacLore.includes(id) &&
       (realmId !== "winter-mountain" || winterLorePageMatchesChoices(id, realmProgress.choices)),
@@ -446,7 +467,7 @@ export class AlmanacScene extends Phaser.Scene {
       this.addPageText(
         LEFT_PAGE_X,
         loreY,
-        `Pages stamped (${stampedLoreIds.length}):`,
+        `Pages stamped (${stampedLoreIds.length}) · type a title:`,
         {
           fontSize: "22px",
           fontStyle: "italic",
@@ -456,12 +477,9 @@ export class AlmanacScene extends Phaser.Scene {
       stampedLoreIds.forEach((loreId, i) => {
         const page = ALMANAC_LORE_PAGES[loreId];
         if (!page) return;
-        this.addPageText(
-          LEFT_PAGE_X,
-          loreY + 40 + i * 32,
-          `• ${page.title}`,
-          { fontSize: "22px", color: PAGE_INK },
-        );
+        const pageIndex = this.pageStack.findIndex(entry => entry.kind === "lore" && entry.loreId === loreId);
+        this.addPageLink(page.title, pageIndex, LEFT_PAGE_X, loreY + 40 + i * 36,
+          this.store.get().textScale === "large" ? 26 : 22, PAGE_TEXT_WIDTH - 100, 34);
       });
     }
 
@@ -485,6 +503,95 @@ export class AlmanacScene extends Phaser.Scene {
       },
       { centerX: true },
     );
+  }
+
+  /** An unnumbered index leaves the original overview, realm and discovery
+   * page sequence intact. Every destination is an already-readable page. */
+  private renderContentsPage(): void {
+    const large = this.store.get().textScale === "large";
+    const chapters = this.pageStack.flatMap((entry, index) => entry.kind === "realm" && this.canReadPage(index)
+      ? [{ realmId: entry.realmId, index }] : []);
+    this.addPageText(LEFT_PAGE_X, TOP_TEXT_Y, "Contents", { fontSize: large ? "50px" : "46px", color: PAGE_INK });
+    this.addPageText(LEFT_PAGE_X, TOP_TEXT_Y + 76, "Type an underlined realm to open its recorded path.", {
+      fontSize: large ? "28px" : "24px", color: PAGE_INK_DIM, wordWrap: { width: PAGE_TEXT_WIDTH },
+    });
+    chapters.forEach(({ realmId, index }, row) => {
+      this.addPageLink(REALM_CONTENTS_COMMANDS[realmId], index, LEFT_PAGE_X, TOP_TEXT_Y + 190 + row * 80,
+        large ? 34 : 30, PAGE_TEXT_WIDTH - 24, 44);
+      const discoveries = this.pageStack.filter((entry, at) => entry.kind === "lore" && entry.realmId === realmId && this.canReadPage(at)).length;
+      this.addPageText(LEFT_PAGE_X, TOP_TEXT_Y + 238 + row * 80,
+        `page ${index + 1} · ${discoveries} ${discoveries === 1 ? "discovery" : "discoveries"}`, {
+          fontSize: large ? "22px" : "20px", fontStyle: "italic", color: PAGE_INK_DIM,
+        });
+    });
+    if (chapters.length === 0) {
+      this.addPageText(LEFT_PAGE_X, TOP_TEXT_Y + 190, "No realm chapters stamped yet.", {
+        fontSize: large ? "30px" : "26px", color: PAGE_INK, wordWrap: { width: PAGE_TEXT_WIDTH },
+      });
+      this.addPageText(LEFT_PAGE_X, TOP_TEXT_Y + 286, "Complete a realm to record its path here. Your overview is still available.", {
+        fontSize: large ? "28px" : "24px", color: PAGE_INK_DIM, wordWrap: { width: PAGE_TEXT_WIDTH },
+      });
+    }
+    this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y, "Stamped discoveries", {
+      fontSize: large ? "36px" : "32px", color: PAGE_INK,
+    });
+    this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 76,
+      "Open a realm, then type an underlined page title to read that discovery. Only pages already stamped in this Almanac are listed.", {
+        fontSize: large ? "30px" : "26px", color: PAGE_INK_DIM, wordWrap: { width: PAGE_TEXT_WIDTH },
+      });
+    const discoveries = this.pageStack.filter((entry, index) => entry.kind === "lore" && this.canReadPage(index)).length;
+    this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 300,
+      `${chapters.length} realm ${chapters.length === 1 ? "chapter" : "chapters"}\n${discoveries} stamped ${discoveries === 1 ? "discovery" : "discoveries"}`, {
+        fontSize: large ? "32px" : "28px", color: PAGE_INK, lineSpacing: 12,
+      });
+    this.addPageText(RIGHT_PAGE_X, TOP_TEXT_Y + 454,
+      "Contents returns to this index from any page. Previous and next still follow the original reading order.", {
+        fontSize: large ? "28px" : "24px", color: PAGE_INK_DIM, wordWrap: { width: PAGE_TEXT_WIDTH },
+      });
+    this.addPageText(RIGHT_PAGE_X + 205, PAGE_BOTTOM_Y - 42, "Contents", {
+      fontSize: "20px", fontStyle: "italic", color: PAGE_INK_DIM,
+    }, { centerX: true });
+  }
+
+  /** Ink links belong to the printed page, rather than adding cream combat
+   * labels or filled choice buttons over the parchment. Input still runs
+   * through the same prefix/correction controller as every typed command. */
+  private addPageLink(word: string, pageIndex: number, x: number, y: number,
+    fontSize: number, maxWidth: number, maxHeight: number): void {
+    if (!word || !this.canReadPage(pageIndex)) return;
+    const generation = this.navigationGeneration;
+    const typed = this.add.text(x, y, "", { fontFamily: SERIF, fontSize: `${fontSize}px`, color: "#8a5429" }).setDepth(11);
+    const remaining = this.add.text(x, y, word, { fontFamily: SERIF, fontSize: `${fontSize}px`, color: PAGE_INK }).setDepth(11);
+    while ((remaining.width > maxWidth || remaining.height > maxHeight) && fontSize > 20) {
+      fontSize -= 1;
+      typed.setFontSize(fontSize); remaining.setFontSize(fontSize);
+    }
+    const rule = this.add.graphics().setDepth(10);
+    rule.lineStyle(1, PAGE_INK_DIM_HEX, 0.45);
+    rule.lineBetween(x, y + remaining.height + 1, x + remaining.width, y + remaining.height + 1);
+    let cursor = 0, complete = false, claimed = false, dimmed = false, candidate = false, alive = true;
+    const render = (): void => {
+      if (!alive) return;
+      typed.setText(word.slice(0, cursor));
+      remaining.setText(word.slice(cursor)).setPosition(x + typed.width, y);
+      const alpha = dimmed && !claimed && !candidate ? 0.28 : 1;
+      typed.setAlpha(alpha); remaining.setAlpha(alpha);
+      rule.setAlpha(alpha * (claimed || candidate ? 1 : 0.65));
+    };
+    const target: AlmanacPageLink = {
+      remaining: () => word.toLowerCase().slice(cursor), isComplete: () => complete,
+      advance: () => { cursor = Math.min(word.length, cursor + 1); complete = cursor === word.length; render(); },
+      reverse: () => { if (cursor === 0) return false; cursor -= 1; complete = false; render(); return true; },
+      resetCursor: () => { cursor = 0; complete = false; render(); }, miss: () => {},
+      onClaim: () => { claimed = true; dimmed = false; render(); },
+      onRelease: () => { if (complete) return; cursor = 0; claimed = false; candidate = false; render(); },
+      setDimmed: value => { dimmed = value; render(); }, setCandidate: value => { candidate = value; render(); },
+      onComplete: () => { if (!this.closing && generation === this.navigationGeneration) this.openPage(pageIndex); },
+      destroy: () => { if (!alive) return; alive = false; typed.destroy(); remaining.destroy(); rule.destroy(); },
+    };
+    render();
+    this.directTargets.push(target);
+    this.typingInput.register(target);
   }
 
   /** Render a single lore sub-page: title spread across the top of the left
@@ -977,7 +1084,8 @@ export class AlmanacScene extends Phaser.Scene {
   }
 
   private placeNavigationTargets(): void {
-    this.clearNavigationTargets();
+    const generation = this.navigationGeneration;
+    const active = (): boolean => !this.closing && generation === this.navigationGeneration;
     const hasPrev = this.currentPage > 0;
     const hasNext = this.currentPage < this.pageStack.length - 1;
 
@@ -992,7 +1100,7 @@ export class AlmanacScene extends Phaser.Scene {
         frame: "banner",
         onClaim: () => this.playPageFocus(-1),
         onAdvance: () => this.playPageTypingPulse(-1),
-        onComplete: () => this.turnPage(-1),
+        onComplete: () => { if (active()) this.turnPage(-1); },
       });
       this.attachNavigationAnchor(this.prevTarget, -1);
       this.typingInput.register(this.prevTarget);
@@ -1011,7 +1119,7 @@ export class AlmanacScene extends Phaser.Scene {
         frame: "banner",
         onClaim: () => this.playPageFocus(1),
         onAdvance: () => this.playPageTypingPulse(1),
-        onComplete: () => this.turnPage(1),
+        onComplete: () => { if (active()) this.turnPage(1); },
       });
       this.attachNavigationAnchor(this.nextTarget, 1);
       this.typingInput.register(this.nextTarget);
@@ -1029,12 +1137,25 @@ export class AlmanacScene extends Phaser.Scene {
       frame: "banner",
       onClaim: () => this.playCloseFocus(),
       onAdvance: () => this.playCloseTypingPulse(),
-      onComplete: () => this.closeBook(),
+      onComplete: () => { if (active()) this.closeBook(); },
     });
     this.attachNavigationAnchor(this.closeTarget, 0);
     this.typingInput.register(this.closeTarget);
     this.closeTarget.playEntryWake({ delayMs: 140, durationMs: 230, offsetY: 10 });
     this.closeTarget.playIdleFloat({ delayMs: 550, dy: -2, durationMs: 2030 });
+
+    this.contentsTarget = new TextWordTarget({
+      scene: this, word: this.contentsOpen ? "overview" : "contents",
+      x: LEFT_PAGE_X + 450, y: PAGE_BOTTOM_Y - 46,
+      fontSize: this.store.get().textScale === "large" ? 28 : 24,
+      outline: true, frame: "banner", burstColor: null,
+      onComplete: () => {
+        if (!active()) return;
+        if (this.contentsOpen) this.openPage(0); else this.openContents();
+      },
+    });
+    this.typingInput.register(this.contentsTarget);
+    this.contentsTarget.playEntryWake({ delayMs: 70, durationMs: 230, offsetY: 0 });
   }
 
   private attachNavigationAnchor(
@@ -1079,12 +1200,43 @@ export class AlmanacScene extends Phaser.Scene {
 
   private turnPage(delta: -1 | 1): void {
     const nextPage = this.currentPage + delta;
-    if (nextPage < 0 || nextPage >= this.pageStack.length) return;
+    this.openPage(nextPage);
+  }
 
-    this.currentPage = nextPage;
+  private refreshBookPage(): void {
+    this.clearNavigationTargets();
     this.renderCurrentPage();
     this.placeNavigationTargets();
-    this.playPageTurn(delta);
+  }
+
+  private openContents(): void {
+    if (this.closing) return;
+    this.contentsOpen = true;
+    this.refreshBookPage();
+    this.playPageTurn(-1);
+  }
+
+  private canReadPage(index: number): boolean {
+    if (!Number.isInteger(index)) return false;
+    const entry = this.pageStack[index];
+    if (!entry) return false;
+    if (entry.kind === "overview") return true;
+    const state = this.store.get();
+    if (!REALM_LORE[entry.realmId] || !state.realms[entry.realmId]?.cleared) return false;
+    if (entry.kind === "realm") return true;
+    return ALMANAC_LORE_PAGES[entry.loreId]?.realmId === entry.realmId
+      && lorePageIdsForRealm(entry.realmId).includes(entry.loreId)
+      && state.almanacLore.includes(entry.loreId)
+      && (entry.realmId !== "winter-mountain" || winterLorePageMatchesChoices(entry.loreId, state.realms[entry.realmId]?.choices));
+  }
+
+  private openPage(index: number): void {
+    if (this.closing || !this.canReadPage(index)) return;
+    const direction = index < this.currentPage ? -1 : 1;
+    this.currentPage = index;
+    this.contentsOpen = false;
+    this.refreshBookPage();
+    this.playPageTurn(direction);
   }
 
   private playPageTurn(direction: -1 | 1): void {
@@ -1320,11 +1472,12 @@ export class AlmanacScene extends Phaser.Scene {
   }
 
   private clearNavigationTargets(): void {
+    this.navigationGeneration += 1;
     for (const release of [...this.navAnchorReleases]) {
       release();
     }
     this.navAnchorReleases = [];
-    for (const t of [this.prevTarget, this.nextTarget, this.closeTarget]) {
+    for (const t of [this.prevTarget, this.nextTarget, this.closeTarget, this.contentsTarget, ...this.directTargets]) {
       if (t) {
         this.typingInput.unregister(t);
         t.destroy();
@@ -1333,6 +1486,8 @@ export class AlmanacScene extends Phaser.Scene {
     this.prevTarget = undefined;
     this.nextTarget = undefined;
     this.closeTarget = undefined;
+    this.contentsTarget = undefined;
+    this.directTargets = [];
   }
 
   private closeBook(): void {

@@ -139,7 +139,7 @@ function fixture(satchel: string[] = [], cleared = 0, motionReduced = false) {
     scale: { width: 1920, height: 1080 }, store: { get: () => state }, events, data,
     archGraphics: new Map(), archGlows: new Map(), archSprites: new Map(), portalInstructionObjects: [],
     shelfDisplayObjects: [], zoneTargets: [], portalWordAnchors: [], stationWordAnchorReleases: [],
-    activeZone: "portals", focusedCompletedPortal: null, openingUtilityScene: false, almanacOverlayOpen: false, portalTypingPulseTimes: new Map(),
+    activeZone: "portals", newGameRequest: 0, confirmingNewGame: false, focusedCompletedPortal: null, openingUtilityScene: false, almanacOverlayOpen: false, portalTypingPulseTimes: new Map(),
     typingInput: new TypingInputController(), narration: { clear: noop, say: noop, clearAfter: noop },
     input: { keyboard: { on(_event: string, fn: unknown) { keyboard.add(fn); }, off(_event: string, fn: unknown) { keyboard.delete(fn); } } },
     scene: { launch(key: string, data: any) { launches.push({ key, data }); }, pause() { paused = true; }, isActive: () => !paused },
@@ -158,7 +158,7 @@ function fixture(satchel: string[] = [], cleared = 0, motionReduced = false) {
       });
       return t;
     }, killTweensOf(body: any) { for (const t of tweens) if (t.targets === body) t.cancelled = true; } },
-    startHubForegroundLife: noop, drawHubStations: noop, walkWrenTo: noop, clearDeskDisplay: noop, clearAccountDisplay: noop,
+    startHubForegroundLife: noop, drawHubStations: noop, walkWrenTo: noop, settleHubArrival: noop, clearDeskDisplay: noop, clearAccountDisplay: noop,
     clearPortalFloorCallWake: noop, playShelfDisplayWake: noop, playHubActorAction: noop, pulseStation: noop, playUtilityStationExitWake: noop,
     attachStationWordAnchor: () => noop, attachPortalWordAnchor: () => noop, attachPortalFloorCallAnchor: () => noop, playPortalClaimLine: noop,
     playHubActorFocus: noop, playHubArrivalFlecks: noop, playHubArrivalMaterialize: noop,
@@ -276,7 +276,7 @@ await suite("Hub integration: usable completed passages remain faint amber and r
     f.hub.enterZone("portals", false);
     assertEqual(f.hub.zoneTargets.filter((word: any) => f.geometry.ARCHES.some((arch: any) => arch.label === word.opts.word)).map((word: any) => word.opts.word), f.geometry.ARCHES.map((arch: any) => arch.label), "all five revisits are immediately registered before and after the finale, without a discovery flag");
     assert(!f.words.some(word => word.opts.word === "old paths"), "no extra old-paths command hides already usable realm names");
-    assert(f.words.some(word => word.opts.word === (battleCleared ? "begin again" : "defend holdfast")), "revealing the revisits preserves the appropriate finale action");
+    assert(f.words.some(word => word.opts.word === (battleCleared ? "almanac" : "defend holdfast")), "the completed room keeps its book available while the pre-finale room retains its battle action");
   }
 });
 
@@ -408,8 +408,10 @@ await suite("Hub integration: empty and full shelves use the painted cabinet and
 });
 
 await suite("Hub integration: shelf commands truly type, open the book once and restore input to the initiating station", () => {
-  for (const zone of ["shelf", "desk"]) {
-    const f = fixture(["hunters-horn"]); f.hub.enterZone(zone, false);
+  for (const zone of ["shelf", "desk", "portals"]) {
+    const f = fixture(["hunters-horn"], zone === "portals" ? 5 : 0);
+    if (zone === "portals") f.state.realms["great-battle"] = { cleared: true };
+    f.hub.enterZone(zone, false);
     const book = f.words.find(word => word.opts.word === "almanac");
     assert(book && f.hub.typingInput, "the initiating station registers a genuine book word");
     if (zone === "shelf") {
@@ -426,8 +428,8 @@ await suite("Hub integration: shelf commands truly type, open the book once and 
     assertEqual([f.hub.activeZone, f.hub.typingInput.getTypingBuffer()], [zone, ""], "book-overlay keystrokes cannot leak into the paused chamber");
     f.resumeBook();
     assertEqual([f.hub.activeZone, f.hub.openingUtilityScene, f.hub.almanacOverlayOpen, f.keyboard.size], [zone, false, false, 1], "closing restores the initiating desk or shelf and one input listener");
-    f.type("portals"); f.tick(320);
-    assertEqual(f.hub.activeZone, "portals", "the first full native return command works after closing the book");
+    f.type(zone === "portals" ? "shelf" : "portals"); f.tick(320);
+    assertEqual(f.hub.activeZone, zone === "portals" ? "shelf" : "portals", "the first full native navigation command works after closing the book");
     assertEqual(f.hub.typingInput.getTypingBuffer(), "", "replacing station targets leaves no invisible shared prefix");
   }
 });

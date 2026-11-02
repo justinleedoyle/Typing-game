@@ -336,3 +336,20 @@ await suite("Profile replies: old account status and auth cannot reappear during
   assertEqual(f.hub.zoneTargets.filter((target: any) => target.opts.word === "sign out").length, 1, "a stopped scene cannot register another late auth target");
   await f.store.flush();
 });
+
+await suite("Profile blur: current account replies survive pause and resume exactly once", async () => {
+  const f = fixture(); f.hub.enterZone("account", false);
+  const current = [...f.auth];
+  f.pause();
+  for (const reply of current) reply.resolve("Paused returning player");
+  await microtasks();
+  assertEqual(f.objects.filter(object => object.scene).map(object => object.text), ["signed in as Paused returning player"],
+    "the same paused Profile retains its awaited account status for resume");
+  assertEqual(f.hub.zoneTargets.filter((target: any) => target.opts.word === "sign out").length, 1,
+    "the same paused Profile registers its awaited auth action once");
+  f.resume(); f.resume();
+  assertEqual(f.objects.filter(object => object.scene).length, 1, "repeated ordinary resumes do not duplicate status text");
+  assertEqual(f.hub.zoneTargets.filter((target: any) => target.opts.word === "sign out").length, 1, "repeated ordinary resumes do not duplicate auth commands");
+  assertEqual(f.auth.length, current.length, "resuming does not launch a replacement provider request");
+  await f.store.flush();
+});

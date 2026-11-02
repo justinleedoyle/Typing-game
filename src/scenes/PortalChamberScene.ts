@@ -1562,7 +1562,7 @@ export class PortalChamberScene extends Phaser.Scene {
     const request = this.newGameRequest;
     const name = await currentUserDisplayName();
     if (zoneAtRequest !== "account" || this.activeZone !== "account" ||
-        request !== this.newGameRequest || this.confirmingNewGame || !this.scene.isActive()) return;
+        request !== this.newGameRequest || this.confirmingNewGame || (!this.scene.isActive() && !this.scene.isPaused())) return;
 
     const status = this.add
       .text(ACCOUNT_PANEL.x, ACCOUNT_PANEL.statusY, desktopBridge() ? "saved on this computer · offline edition" : name ? `signed in as ${name}` : "local save", {
@@ -1621,7 +1621,7 @@ export class PortalChamberScene extends Phaser.Scene {
     const request = this.newGameRequest;
     const name = await currentUserDisplayName();
     if (zoneAtRequest !== "account" || this.activeZone !== "account" ||
-        request !== this.newGameRequest || this.confirmingNewGame || !this.scene.isActive()) return;
+        request !== this.newGameRequest || this.confirmingNewGame || (!this.scene.isActive() && !this.scene.isPaused())) return;
 
     let releaseAnchor = (): void => {};
     const target = new TextWordTarget({

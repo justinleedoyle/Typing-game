@@ -73,7 +73,10 @@ class ReturnStageBoundary {
   approaches: string[] = [];
   performances: Array<{ action: string; done: () => void }> = [];
   subjects = new Map<string, any>();
-  constructor(scene: any) { scene.stages.push(this); }
+  constructor(scene: any, actors: any) {
+    if (scene.actualReturnStage) { const stage = scene.actualReturnStage(actors); scene.stages.push(stage); return stage; }
+    scene.stages.push(this);
+  }
   present(route: string | null, phase: string, completed: number) { this.presentations.push({ route, phase, completed }); }
   subject(action: string) {
     if (!this.subjects.has(action)) this.subjects.set(action, { action, scene: true, x: 980, y: 810 });
@@ -91,6 +94,7 @@ const globals = {
   playWrenFocus: noop, playWrenAction: noop, playClack: noop, playChime: noop, setWrenPose: noop,
   playBodyImpact: noop, playBodyTypePulse: noop, playClaimLine: noop, playActorAttention: noop,
   beginAssetLoad: noop, isPuristToggleKey: () => false, togglePuristMode: noop, SPELL_COST: 50,
+  reducedMotion: (scene: any) => scene.store.get().reducedMotion,
 };
 const Winter = new Function(...Object.keys(globals), `${code}; return Winter;`)(...Object.values(globals));
 const stores: SaveStore[] = [];
@@ -360,7 +364,7 @@ function stageFixture(reduced = false) {
       killTweensOf(target: any) { for (const entry of tweens) if (entry.targets === target) entry.cancelled = true; } },
   };
   const stage = new ActualReturnStage(scene, { wren, sprite });
-  return { stage, wren, sprite, roots, tweens, listeners,
+  return { scene, stage, wren, sprite, roots, tweens, listeners,
     complete(entry: any) { assert(!entry.cancelled, "only a live physical tween can move an actor");
       for (const property of ["x", "y"]) if (typeof entry[property] === "number") entry.targets[property] = entry[property];
       entry.onComplete?.(); },
@@ -430,6 +434,107 @@ await suite("Winter return stage: re-present, replacement and shutdown invalidat
   assertEqual(before.slice(0, 5), [960, 842, false, 1, 37], "shutdown restores original placement, visibility, standing pose and draw depth even while ducking");
   assert(f.roots.every(body => body.destroyed === 1), "each temporary painted root and child is destroyed exactly once");
   assert(duck.cancelled, "shutdown cancels the ducking tween");
+});
+
+function joinedReturnState(route: "crossing" | "bank", reading = false, index = 0) {
+  const state = routeState("return-trail", "huntress", route);
+  Object.assign(state.realms["winter-mountain"].choices, { fork2: "bury", companion: "accepted",
+    ...(route === "crossing" ? { returnPrepared: "1" } : {}) });
+  state.satchel.push("snow-fox-cub");
+  Object.assign(state.checkpoint!.data, { returnRouteVersion: 1, reading, index });
+  return state;
+}
+function attachReturnRendering(f: ReturnType<typeof fixture>, reduced = false) {
+  const r = stageFixture(reduced), foxes: any[] = [];
+  f.store.update(state => { state.reducedMotion = reduced; });
+  Object.assign(f.scene, { wrenContainer: r.wren, wrenSprite: r.sprite, tweens: r.scene.tweens,
+    actualReturnStage: () => r.stage,
+    // The real companion painting factory is an inert display boundary; the
+    // scene's actual placement, movement, save rules and cleanup all execute.
+    showFoxCompanion(options: any) {
+      if (f.scene.foxCompanion?.scene) return;
+      const fox = stageDisplay(options.startX, options.startY);
+      f.scene.foxCompanion = fox; foxes.push(fox);
+      r.scene.tweens.add({ targets: fox, x: options.x, y: options.y, duration: 720 });
+    },
+  });
+  return { ...r, foxes,
+    completeNext(target: any) {
+      const tween = r.tweens.find(entry => entry.targets === target && !entry.cancelled && !entry.testDone);
+      assert(tween, "the actual actor has its next supported movement");
+      tween.testDone = true; r.complete(tween); return tween;
+    },
+  };
+}
+
+await suite("Winter joined fox: both actual return routes keep her on supported banks and follow the same ridge in normal or reduced motion", async () => {
+  for (const route of ["crossing", "bank"] as const) for (const reduced of [false, true]) {
+    const f = fixture(joinedReturnState(route)), r = attachReturnRendering(f, reduced);
+    const gladeFox = stageDisplay(836, 842); f.scene.foxCompanion = gladeFox;
+    const before = { satchel: [...f.store.get().satchel], stats: f.stats.captureCheckpoint() };
+    f.scene.resumeWinter();
+    const fox = f.scene.returnFox;
+    assertEqual([gladeFox.destroyed, fox === f.scene.foxCompanion, r.foxes.length], [1, true, 1], "the previous glade cameo is retired and one joined fox enters the actual trail");
+    assertEqual([fox.x, fox.y, fox.visible, fox.alpha], [route === "crossing" ? 1466 : 1435, 810, true, 1], "the fox waits on the supported right bank beside Wren, not at her old glade coordinates in the stream");
+    assert(fox.depth > r.stage.subject("cross").depth && fox.depth > r.stage.braces.depth, "the complete fox silhouette draws above the crossing and bank wedges");
+    assert(r.tweens.filter(entry => entry.targets === fox && entry.duration === 720).every(entry => entry.cancelled), "the gate's old entrance tween cannot drag the trail fox back to its glade");
+    const actions = winterRouteActions(route, "return");
+    for (const [index, action] of actions.entries()) {
+      const target = f.target(action); target.onSettled(); target.onComplete();
+      if (!reduced) {
+        const start = { x: fox.x, y: fox.y };
+        assertEqual(f.scheduled.map(timer => timer.delay), [110], "the fox starts a small beat behind Wren without delaying the original response");
+        f.scheduled.shift()!.next();
+        const points = action === "cross" ? [[1230, 667], [750, 682], [494, 810]] : action === "step" ? [[1435, 810]] : [[1584, 810]];
+        assertEqual([fox.x, fox.y], [start.x, start.y], "scheduling the follower does not teleport her across unsupported ground");
+        for (const point of points) {
+          r.completeNext(r.wren);
+          const movement = r.completeNext(fox);
+          assertEqual([movement.x, movement.y, movement.duration], [...point, 420], "the fox traverses the same supported ridge or bank as the existing actor movement");
+          assertEqual([fox.x, fox.y, fox.visible], [...point, true], "the companion stays visible through every actual movement");
+        }
+      } else assertEqual(f.scheduled, [], "reduced motion places the joined fox directly without adding a follower timer");
+      assertEqual([fox.x, fox.y], [route === "crossing" ? 494 : action === "step" ? 1435 : 1584, 810], "the settled companion rests beside Wren on the bank reached by this action");
+      assert(f.gate() && f.endings.length === 0, "the existing response still waits for deliberate Continue after the movement");
+      if (index < actions.length - 1) f.continue();
+    }
+    const restored = await f.reload(), replay = attachReturnRendering(restored, reduced); restored.scene.resumeWinter();
+    const returnedFox = restored.scene.returnFox;
+    assertEqual([returnedFox.x, returnedFox.y, returnedFox.visible, replay.foxes.length], [route === "crossing" ? 494 : 1584, 810, true, 1], "a real saved final response restores one accepted fox beside the settled actor");
+    assertEqual(replay.tweens.filter(entry => !entry.cancelled), [], "restored held responses never replay the companion's arrival or traversal");
+    assertEqual({ satchel: restored.store.get().satchel, stats: restored.stats.captureCheckpoint() }, before, "visual repair leaves the saved companion, inventory and typing resources unchanged");
+    restored.continue(); f.continue();
+    assertEqual([returnedFox.destroyed, restored.scene.foxCompanion, restored.scene.returnFox, fox.destroyed], [1, null, null, 1], "retiring the temporary trail destroys both live/reloaded fox cameos instead of jumping them back into the stamp glade");
+  }
+});
+
+await suite("Winter joined fox: declined or unrecorded companions cannot be invented by either return route", () => {
+  for (const route of ["crossing", "bank"] as const) for (const answer of [undefined, "declined"]) {
+    const state = joinedReturnState(route);
+    if (answer) state.realms["winter-mountain"].choices.companion = answer;
+    else delete state.realms["winter-mountain"].choices.companion;
+    const f = fixture(state), r = attachReturnRendering(f);
+    const old = stageDisplay(836, 842); old.setVisible(false); f.scene.foxCompanion = old;
+    const before = JSON.stringify(f.store.get().realms["winter-mountain"].choices);
+    f.scene.resumeWinter();
+    assertEqual([old.destroyed, r.foxes, f.scene.foxCompanion, f.scene.returnFox], [1, [], null, null], "a stale hidden wounded fox or carried relic cannot fabricate an accepted trail companion");
+    assertEqual(JSON.stringify(f.store.get().realms["winter-mountain"].choices), before, "rendering does not infer acceptance or rewrite the declined/unrecorded decision");
+  }
+});
+
+await suite("Winter joined fox: leaving during the trailing timer or ridge movement cannot revive a retired companion", () => {
+  for (const duringMovement of [false, true]) {
+    const f = fixture(joinedReturnState("crossing")), r = attachReturnRendering(f); f.scene.resumeWinter();
+    const fox = f.scene.returnFox, target = f.target("cross"); target.onSettled(); target.onComplete();
+    const timer = f.scheduled.shift()!;
+    if (duringMovement) timer.next();
+    const lateMovement = r.tweens.find(entry => entry.targets === fox && !entry.cancelled);
+    f.scene.clearReturnStage(); const after = JSON.stringify(f.store.get());
+    timer.next(); lateMovement?.onComplete?.(); target.onComplete(); f.scene.clearReturnStage();
+    assertEqual([fox.destroyed, r.foxes.length, f.scene.foxCompanion, f.scene.returnFox], [1, 1, null, null], "late delayed/tween callbacks cannot resurrect or replace the retired fox");
+    assertEqual([JSON.stringify(f.store.get()), f.gate(), f.endings], [after, null, []], "leaving changes no canonical choices and cannot reveal a stale reading or ending");
+    if (lateMovement) assert(lateMovement.cancelled, "scene cleanup cancels the in-progress follower tween");
+  }
 });
 
 await Promise.all(stores.map(store => store.flush()));

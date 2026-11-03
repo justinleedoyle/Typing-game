@@ -17,7 +17,7 @@ import {
 import { NarrationManager } from "../game/narrationManager";
 import { checkpointIndex, committedWinterChoices, winterStep, type WinterStep } from "../game/chapterFlow";
 import { winterReturnRoute, winterReturnPending, winterRouteActions, winterRouteProgress,
-  WINTER_ROUTE_REACTIONS, type WinterReturnRoute, type WinterReturnPhase } from "../game/winterReturnRoute";
+  WINTER_ROUTE_REACTIONS, type WinterReturnRoute, type WinterReturnPhase, type WinterRouteAction } from "../game/winterReturnRoute";
 import { WinterReturnStage } from "../game/winterReturnStage";
 import { ChapterReading } from "../game/ui/chapterReading";
 import { installChapterMenu } from "../game/ui/pauseMenu";
@@ -312,6 +312,9 @@ export class WinterMountainScene extends Phaser.Scene {
   private returnStage: WinterReturnStage | null = null;
   private returnGeneration = 0;
   private returnTransitionPending = false;
+  private returnFox: Phaser.GameObjects.Container | null = null;
+  private returnFoxTimer: Phaser.Time.TimerEvent | null = null;
+  private returnFoxMotion = 0;
 
   // Cold-decay timer active in Act 1
   private coldDecayTimer: Phaser.Time.TimerEvent | null = null;
@@ -2768,13 +2771,86 @@ export class WinterMountainScene extends Phaser.Scene {
   private clearReturnStage(): void {
     this.returnGeneration = (this.returnGeneration ?? 0) + 1;
     this.returnTransitionPending = false;
+    this.clearReturnFox();
     this.returnStage?.destroy();
     this.returnStage = null;
+  }
+
+  private stopReturnFox(): void {
+    this.returnFoxMotion = (this.returnFoxMotion ?? 0) + 1;
+    this.returnFoxTimer?.remove(false);
+    this.returnFoxTimer = null;
+    if (this.returnFox?.scene) this.tweens.killTweensOf(this.returnFox);
+  }
+
+  private clearReturnFox(): void {
+    this.stopReturnFox();
+    const fox = this.returnFox;
+    this.returnFox = null;
+    if (this.foxCompanion === fox) this.foxCompanion = null;
+    if (fox?.scene) fox.destroy();
+  }
+
+  /** The joined fox shares this trail's banks, never the previous glade's
+   * world coordinates. Restore held responses directly at their earned bank. */
+  private placeReturnFox(phase: WinterReturnPhase): void {
+    this.stopReturnFox();
+    if (phase !== "return" || this.store.get().realms["winter-mountain"]?.choices.companion !== "accepted") return;
+    const route = winterReturnRoute(this.store.get().realms["winter-mountain"]!.choices);
+    const x = route === "crossing" ? this.wrenContainer.x < 1000 ? 494 : 1466
+      : this.wrenContainer.x >= 1650 ? 1584 : 1435;
+    this.showFoxCompanion({ x, y: 810, startX: x, startY: 810 });
+    const fox = this.foxCompanion;
+    if (!fox?.scene) return;
+    this.returnFox = fox;
+    // Cancel the gate's entrance/breath: its coordinates belong to the glade.
+    this.tweens.killTweensOf(fox);
+    fox.setPosition(x, 810).setScale(1).setAlpha(1).setVisible(true).setDepth(47);
+  }
+
+  /** Follow the same supported ridge as Wren with a small trailing start.
+   * This never delays the original response or changes its Continue gate. */
+  private moveReturnFox(action: WinterRouteAction): void {
+    this.stopReturnFox();
+    const fox = this.returnFox;
+    if (!fox?.scene) return;
+    const points = action === "cross"
+      ? [{ x: 1230, y: 667 }, { x: 750, y: 682 }, { x: 494, y: 810 }]
+      : action === "step" ? [{ x: 1435, y: 810 }]
+        : action === "duck" ? [{ x: 1584, y: 810 }] : [];
+    const token = this.returnFoxMotion;
+    const generation = this.returnGeneration;
+    const live = (): boolean => token === this.returnFoxMotion && generation === this.returnGeneration
+      && this.returnFox === fox && !!fox.scene;
+    if (reducedMotion(this)) {
+      const last = points.at(-1);
+      if (last) fox.setPosition(last.x, last.y);
+      return;
+    }
+    const advance = (index: number): void => {
+      if (!live()) return;
+      const point = points[index];
+      if (!point) return;
+      this.tweens.add({ targets: fox, ...point, duration: 420, ease: "Sine.easeInOut",
+        onComplete: () => advance(index + 1) });
+    };
+    this.returnFoxTimer = this.time.delayedCall(110, () => {
+      if (!live()) return;
+      this.returnFoxTimer = null;
+      advance(0);
+    });
   }
 
   private ensureReturnStage(): WinterReturnStage {
     if (!this.returnStage) {
       this.clearWinterForkCues();
+      // The early fox and late companion gate both use this reference. Their
+      // old cameo (and wake listener) cannot survive a different trail plate.
+      if (this.foxCompanion?.scene) {
+        this.tweens.killTweensOf(this.foxCompanion);
+        this.foxCompanion.destroy();
+        this.foxCompanion = null;
+      }
       if (this.huntressSprite?.scene) {
         this.tweens.killTweensOf(this.huntressSprite);
         this.huntressSprite.destroy();
@@ -2851,6 +2927,7 @@ export class WinterMountainScene extends Phaser.Scene {
     const step = phase === "prepare" ? "return-prep" : "return-trail";
     const stage = this.ensureReturnStage();
     stage.present(route, phase, index + (reading ? 1 : 0));
+    this.placeReturnFox(phase);
     const generation = this.returnGeneration;
     const live = (): boolean => generation === this.returnGeneration && this.returnStage === stage;
     const action = actions[index];
@@ -2891,6 +2968,7 @@ export class WinterMountainScene extends Phaser.Scene {
       onComplete: () => {
         if (!live()) return;
         this.clearActiveTargets();
+        this.moveReturnFox(action);
         stage.perform(action, response);
       },
     }, { kind: "snow", color: PALETTE_HEX.frost, sourceOffsetY: -55 });

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { assert, assertEqual, suite } from "./_assert";
 import { rememberRealmFork, resolveRealmFork } from "../src/game/realmChoices";
+import { winterReturnRoute } from "../src/game/winterReturnRoute";
 import type { SaveState } from "../src/game/saveState";
 import { getRunaLine } from "../src/audio/runaLines";
 
@@ -34,7 +35,7 @@ const hubValues = new Function(ts.transpileModule(`${hubConstants}\nreturn { REA
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText)();
 const Hub = sceneMethods("PortalChamberScene", "Hub", ["deskReflectionLineId", "registerDeskZoneTargets"], {
-  resolveRealmFork, ...hubValues,
+  resolveRealmFork, winterReturnRoute, ...hubValues,
 });
 
 function frozenStory(realm: string, choices: Record<string, string>, satchel: string[] = []) {
@@ -231,6 +232,82 @@ await suite("Hub branches: entering the actual desk zone uses its latest complet
   assertEqual(cards, ["clockwork-forge"], "reflection card and narration describe the same completed realm");
   assertEqual(actions, ["wake", "runa", "book", "return"], "reflection does not alter the desk's existing interactions");
   assertEqual(JSON.stringify(state), before, "visiting the desk preserves progress and inventory");
+});
+
+await suite("Runa's Winter reflection: both completed return routes recall the action actually taken", () => {
+  for (const route of ["crossing", "bank"] as const) for (const fork1 of ["huntress", "firefly"]) {
+    const choices = { fork1, returnRouteVersion: "1", returnRoute: route, returnRouteDone: "1",
+      ...(route === "crossing" ? { returnPrepared: "1" } : {}) };
+    const state = frozenStory("winter-mountain", choices, ["hunters-horn", "firefly-lantern"]);
+    const before = JSON.stringify(state), scene = new Hub();
+    Object.assign(scene, { store: { get: () => state } });
+    const id = scene.deskReflectionLineId("winter-mountain");
+    assertEqual(id, `hub_desk_winter_${route}`, "Runa remembers the explicit completed route independently of the earlier fork or contradictory carried relics");
+    const text = getRunaLine(id)?.text ?? "";
+    assert(text.includes("Wren"), "the authored reflection speaks directly to the returning character");
+    if (route === "crossing") {
+      assert(/stones/i.test(text) && /holding/i.test(text), "the crossing response recalls the braces that physically supported the way home");
+      assert(!/old footprints|along the bank/i.test(text), "the prepared crossing cannot borrow the other route's walked-bank consequence");
+    } else {
+      assert(/footprints/i.test(text) && /bank/i.test(text) && /footing/i.test(text), "the bank response recalls finding footing after the old tracks disappeared");
+      assert(!/stones you set|still holding/i.test(text), "the bank cannot credit preparation that Wren never performed");
+    }
+    assertEqual(JSON.stringify(state), before, "a character response does not canonicalize choices, grant rewards or mutate an old save");
+  }
+});
+
+await suite("Runa's Winter reflection: partial, unsupported and uncleared histories keep the original bounded response", () => {
+  const complete = { returnRouteVersion: "1", returnRoute: "crossing", returnPrepared: "1", returnRouteDone: "1" };
+  const cases: Array<{ choices: Record<string, string>; cleared?: boolean }> = [
+    { choices: {} },
+    { choices: { returnRoute: "bank", returnRouteDone: "1" } },
+    { choices: { ...complete, returnRouteVersion: "0" } },
+    { choices: { ...complete, returnRouteVersion: "2" } },
+    { choices: { ...complete, returnRoute: "unknown" } },
+    { choices: { returnRouteVersion: "1", returnRoute: "bank" } },
+    { choices: { ...complete, returnRouteDone: "0" } },
+    { choices: { returnRouteVersion: "1", returnRoute: "crossing", returnRouteDone: "1" } },
+    { choices: { ...complete, returnPrepared: "0" } },
+    { choices: { ...complete }, cleared: false },
+    { choices: { returnRouteVersion: "1", returnRoute: "bank", returnRouteDone: "1" }, cleared: false },
+  ];
+  for (const sample of cases) {
+    const state = Object.freeze({ realms: Object.freeze({ "winter-mountain": Object.freeze({
+      cleared: sample.cleared !== false, choices: Object.freeze(sample.choices),
+    }) }), satchel: Object.freeze(["hunters-horn", "firefly-lantern", "cairn-token"]) });
+    const before = JSON.stringify(state), scene = new Hub();
+    Object.assign(scene, { store: { get: () => state } });
+    assertEqual(scene.deskReflectionLineId("winter-mountain"), "hub_desk_winter", "missing evidence never invents a successfully prepared or walked return route");
+    assertEqual(JSON.stringify(state), before, "fallback reflection leaves historical, partial and malformed records untouched");
+  }
+  const scene = new Hub(); Object.assign(scene, { store: { get: () => ({ realms: {}, satchel: [] }) } });
+  assertEqual(scene.deskReflectionLineId("winter-mountain"), "hub_desk_winter", "an absent Winter record also keeps the original generic reflection");
+});
+
+await suite("Runa's Winter reflection: repeated desk visits preserve interactions and later completed realms retain priority", () => {
+  for (const route of ["crossing", "bank"] as const) for (const bellCleared of [false, true]) {
+    const state = Object.freeze({ realms: Object.freeze({
+      "winter-mountain": Object.freeze({ cleared: true, choices: Object.freeze({
+        returnRouteVersion: "1", returnRoute: route, returnRouteDone: "1", ...(route === "crossing" ? { returnPrepared: "1" } : {}),
+      }) }),
+      "sunken-bell": Object.freeze({ cleared: bellCleared, choices: Object.freeze({ fork2: "free-aurland" }) }),
+      "sky-island": Object.freeze({ cleared: false, choices: Object.freeze({ fork2: "answer-kindly" }) }),
+    }), satchel: Object.freeze(["cairn-token"]), checkpoint: null });
+    const before = JSON.stringify(state), scene = new Hub(), spoken: string[] = [], cards: string[] = [], actions: string[] = [];
+    Object.assign(scene, {
+      store: { get: () => state }, narration: { say: (id: string) => spoken.push(id) },
+      drawDeskReflectionCard: (realm: string) => cards.push(realm),
+      playDeskReflectionWake: () => actions.push("wake"), playRunaAttention: () => actions.push("runa"),
+      registerDeskAlmanacTarget: () => actions.push("book"), registerPortalReturnTarget: () => actions.push("return"),
+    });
+    for (let visit = 0; visit < 3; visit++) scene.registerDeskZoneTargets();
+    const id = bellCleared ? "hub_desk_sunken_freed" : `hub_desk_winter_${route}`;
+    assertEqual(spoken, [id, id, id], "each real desk visit selects the same earned current reflection without a one-shot flag or stale Winter override");
+    const realm = bellCleared ? "sunken-bell" : "winter-mountain";
+    assertEqual(cards, [realm, realm, realm], "Runa's response and the desk card continue to describe the same latest completed realm");
+    assertEqual(actions, Array.from({ length: 3 }, () => ["wake", "runa", "book", "return"]).flat(), "repeated character responses retain the existing Almanac and portal-return interactions without an added reading gate");
+    assertEqual(JSON.stringify(state), before, "visiting Runa cannot add read flags, change completion, grant items or rewrite route history");
+  }
 });
 
 await suite("Winter revisit aftermath: only an actual recorded burial restores the existing cairn", () => {

@@ -14,6 +14,7 @@ import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
 import { desktopBridge } from "../game/desktopBridge";
 import { RELICS } from "../game/relics";
 import { resolveRealmFork } from "../game/realmChoices";
+import { winterReturnRoute } from "../game/winterReturnRoute";
 import type { Difficulty, SaveStore } from "../game/saveState";
 import {
   currentUserDisplayName,
@@ -862,6 +863,14 @@ export class PortalChamberScene extends Phaser.Scene {
 
   private deskReflectionLineId(realmId: string): string {
     const state = this.store.get();
+    if (realmId === "winter-mountain") {
+      const winter = state.realms[realmId];
+      if (winter?.cleared && winter.choices.returnRouteDone === "1") {
+        const route = winterReturnRoute(winter.choices);
+        if (route === "crossing" && winter.choices.returnPrepared === "1") return "hub_desk_winter_crossing";
+        if (route === "bank") return "hub_desk_winter_bank";
+      }
+    }
     if (realmId === "sunken-bell") {
       const ending = resolveRealmFork(realmId, "fork2", state.realms[realmId], state.satchel);
       return ending === "free-aurland" ? "hub_desk_sunken_freed"

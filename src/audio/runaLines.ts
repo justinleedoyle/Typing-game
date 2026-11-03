@@ -232,6 +232,22 @@ const HUB_LINES: readonly RunaLine[] = [
     tone: "intimate",
   },
   {
+    id: "hub_desk_winter_crossing",
+    scene: "hub",
+    trigger: "PortalChamberScene desk — completed recorded Winter crossing",
+    text: "The stones you set were still holding when you returned. Remember that, Wren. You can leave something sound behind you.",
+    tone: "intimate",
+    isNew: true,
+  },
+  {
+    id: "hub_desk_winter_bank",
+    scene: "hub",
+    trigger: "PortalChamberScene desk — completed recorded Winter bank route",
+    text: "Your old footprints were gone, and you found another way along the bank. Remember that, Wren. You can trust your own footing.",
+    tone: "intimate",
+    isNew: true,
+  },
+  {
     id: "hub_desk_sunken",
     scene: "hub",
     trigger: "PortalChamberScene desk zone — Sunken Bell cleared (Phase 2)",

@@ -76,7 +76,7 @@ function fixture(initial: SaveState = emptySave(), reopened?: SaveStore) {
     narration: { say: (line: string) => captions.push(line), bottom: () => 300 },
     setNarrator: (text: string) => captions.push(text),
     band: { setObjective: (text: string) => tasks.push(text) },
-    clearFireflyLantern: noop, clearHeldPelt: noop, resetWrenToWinterStage: noop,
+    clearFireflyLantern: noop, clearHeldPelt: noop, clearReturnStage: noop, resetWrenToWinterStage: noop,
     makeWord: (options: any) => ({ ...options, getAnchorX: () => options.x, getAnchorY: () => options.y }),
     makeFoxWord: (options: any) => ({ ...options, getAnchorX: () => options.x, getAnchorY: () => options.y }),
     registerActiveTarget(...items: any[]) { scene.activeTargets = items; targets.push(...items); },

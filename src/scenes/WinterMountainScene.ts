@@ -16,6 +16,9 @@ import {
 } from "../game/lowHeartFeedback";
 import { NarrationManager } from "../game/narrationManager";
 import { checkpointIndex, committedWinterChoices, winterStep, type WinterStep } from "../game/chapterFlow";
+import { winterReturnRoute, winterReturnPending, winterRouteActions, winterRouteProgress,
+  WINTER_ROUTE_REACTIONS, type WinterReturnRoute, type WinterReturnPhase } from "../game/winterReturnRoute";
+import { WinterReturnStage } from "../game/winterReturnStage";
 import { ChapterReading } from "../game/ui/chapterReading";
 import { installChapterMenu } from "../game/ui/pauseMenu";
 import { decorativeTween, reducedMotion, reducedFlashes } from "../game/presentation";
@@ -306,6 +309,9 @@ export class WinterMountainScene extends Phaser.Scene {
   private foxCareStage: WinterFoxCareStage | null = null;
   private foxCareGeneration = 0;
   private foxCareTransitionPending = false;
+  private returnStage: WinterReturnStage | null = null;
+  private returnGeneration = 0;
+  private returnTransitionPending = false;
 
   // Cold-decay timer active in Act 1
   private coldDecayTimer: Phaser.Time.TimerEvent | null = null;
@@ -327,6 +333,7 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   init(data: WinterSceneData): void {
+    this.clearReturnStage();
     this.revisit = data.revisit === true;
     this.store = data.store;
     this.chapterMenu = undefined;
@@ -655,6 +662,7 @@ export class WinterMountainScene extends Phaser.Scene {
       this.dismissRevisitMemoryCue(false);
       this.clearWinterForkCues();
       this.clearFoxCare();
+      this.clearReturnStage();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.input.keyboard?.off("keyup", this.onKeyUp, this);
       this.events.off(Phaser.Scenes.Events.PAUSE, this.clearSpellModifiers, this);
@@ -707,7 +715,7 @@ export class WinterMountainScene extends Phaser.Scene {
     const index = saved?.data.index;
     if (step !== "arrival" && step !== "trail") this.resetWrenToWinterStage();
     if (["wave", "fox", "fox-answer", "fork1", "huntress", "firefly", "boss", "boss-defeated",
-      "fork2", "bury", "pelt", "fox-gate", "companion-answer", "true-name", "ending"].includes(step)) {
+      "return-plan", "return-prep", "return-trail", "fork2", "bury", "pelt", "fox-gate", "companion-answer", "true-name", "ending"].includes(step)) {
       this.combatCandlesActive = true;
     }
     switch (step) {
@@ -726,6 +734,9 @@ export class WinterMountainScene extends Phaser.Scene {
       case "fork1": this.startFork1(2); break;
       case "huntress": this.startHuntressBranch(2); break;
       case "firefly": this.startFireflyBranch(2); break;
+      case "return-plan": this.startReturnPlan(); break;
+      case "return-prep": this.startReturnPreparation(); break;
+      case "return-trail": this.startReturnTrail(); break;
       case "boss": this.resumeBoss(); break;
       case "boss-defeated": this.onBossDefeated(); break;
       case "fork2": this.startFork2(); break;
@@ -2450,7 +2461,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.registerActiveTarget(huntress, firefly);
   }
 
-  private startHuntressBranch(nextWave: number): void {
+  private startHuntressBranch(_nextWave: number): void {
     this.clearHuntressHorn();
     this.fork1Choice = "huntress";
     this.checkpoint("huntress", this.savedStageData("huntress"));
@@ -2473,7 +2484,7 @@ export class WinterMountainScene extends Phaser.Scene {
         ],
         () => {
           this.fadeOutHuntress();
-          this.time.delayedCall(600, () => this.startWave(nextWave));
+          this.time.delayedCall(600, () => this.startReturnPlan());
         },
         "huntress",
         undefined,
@@ -2585,7 +2596,7 @@ export class WinterMountainScene extends Phaser.Scene {
     else present();
   }
 
-  private startFireflyBranch(nextWave: number): void {
+  private startFireflyBranch(_nextWave: number): void {
     this.fork1Choice = "firefly";
     this.checkpoint("firefly", this.savedStageData("firefly"));
     this.showFireflyCue();
@@ -2607,7 +2618,7 @@ export class WinterMountainScene extends Phaser.Scene {
         ],
         () => {
           this.dismissFireflyCue();
-          this.startWave(nextWave);
+          this.startReturnPlan();
         },
         "firefly",
         undefined,
@@ -2750,6 +2761,148 @@ export class WinterMountainScene extends Phaser.Scene {
       ease: "Sine.easeIn",
       onComplete: () => cue.destroy(),
     });
+  }
+
+  // ─── A route chosen before the climb, used after the mountain settles ───
+
+  private clearReturnStage(): void {
+    this.returnGeneration = (this.returnGeneration ?? 0) + 1;
+    this.returnTransitionPending = false;
+    this.returnStage?.destroy();
+    this.returnStage = null;
+  }
+
+  private ensureReturnStage(): WinterReturnStage {
+    if (!this.returnStage) {
+      this.clearWinterForkCues();
+      if (this.huntressSprite?.scene) {
+        this.tweens.killTweensOf(this.huntressSprite);
+        this.huntressSprite.destroy();
+        this.huntressSprite = null;
+      }
+      this.returnStage = new WinterReturnStage(this, { wren: this.wrenContainer, sprite: this.wrenSprite });
+    }
+    return this.returnStage;
+  }
+
+  private startReturnPlan(): void {
+    if (winterReturnRoute(this.store.get().realms["winter-mountain"]?.choices ?? {})) {
+      this.startReturnPreparation(); return;
+    }
+    this.clearActiveTargets();
+    this.returnTransitionPending = false;
+    this.checkpoint("return-plan", { returnRouteVersion: 1 });
+    const stage = this.ensureReturnStage();
+    stage.present(null, "prepare", 0);
+    this.setNarrator("Above the fork, the stream bends across the trail. Seat and brace the fallen pine now for a ready crossing on your return, or keep to the sheltered bank and find your footing there later. Both ways lead uphill.");
+    this.band.setObjective("Choose when to do the trail work · Prepare the crossing now, or navigate the bank on the way back. These words are untimed.");
+    const generation = this.returnGeneration;
+    const y = Math.max(470, this.narration.bottom() + 90);
+    const option = (route: WinterReturnRoute, word: string, x: number): TextWordTarget => this.makeWinterForkWord(
+      stage.subject(route === "crossing" ? "choice-crossing" : "choice-bank"), {
+        scene: this, word, x, y, frame: "banner", fontSize: 30, burstColor: null,
+        onSettled: () => { if (generation === this.returnGeneration) this.commitReturnRoute(route); },
+        onComplete: () => { if (generation === this.returnGeneration) this.startReturnPreparation(); },
+      }, { kind: "snow", color: PALETTE_HEX.frost, sourceOffsetY: -50 });
+    this.registerActiveTarget(option("crossing", "prepare the crossing", 810), option("bank", "take the bank", 1500));
+  }
+
+  /** The last character owns the decision before the word's visual exit. */
+  private commitReturnRoute(route: WinterReturnRoute): void {
+    const choices = this.store.get().realms["winter-mountain"]?.choices ?? {};
+    if (winterReturnRoute(choices)) return;
+    this.returnTransitionPending = true;
+    this.store.update(s => {
+      const realm = s.realms["winter-mountain"] ?? { cleared: false, choices: {} };
+      realm.choices.returnRouteVersion = "1";
+      realm.choices.returnRoute = route;
+      s.realms["winter-mountain"] = realm;
+    });
+    this.checkpoint("return-prep", { returnRouteVersion: 1, index: 0, reading: route === "bank" });
+  }
+
+  private startReturnPreparation(): void {
+    const route = winterReturnRoute(this.store.get().realms["winter-mountain"]?.choices ?? {});
+    if (!route) { this.startReturnPlan(); return; }
+    const actions = winterRouteActions(route, "prepare");
+    const progress = winterRouteProgress(this.savedStageData("return-prep"), actions.length);
+    this.runReturnActions("prepare", progress.index, progress.reading);
+  }
+
+  private startReturnTrail(): void {
+    const choices = this.store.get().realms["winter-mountain"]?.choices ?? {};
+    // Historical later checkpoints retain their original ending. Never invent
+    // a route, preparation or a replay after a committed return.
+    const route = winterReturnRoute(choices);
+    const saved = this.savedStageData("return-trail");
+    const heldAnswer = route !== null && saved.returnRouteVersion === 1 && saved.reading === true
+      && (route !== "crossing" || choices.returnPrepared === "1");
+    if (!route || !winterReturnPending(choices) && !heldAnswer) { this.startEnding(); return; }
+    const progress = winterRouteProgress(saved, winterRouteActions(route, "return").length);
+    this.runReturnActions("return", progress.index, progress.reading);
+  }
+
+  private runReturnActions(phase: WinterReturnPhase, index: number, reading: boolean): void {
+    this.clearActiveTargets();
+    this.returnTransitionPending = false;
+    const route = winterReturnRoute(this.store.get().realms["winter-mountain"]?.choices ?? {});
+    if (!route) { if (phase === "prepare") this.startReturnPlan(); else this.startEnding(); return; }
+    const actions = winterRouteActions(route, phase);
+    const step = phase === "prepare" ? "return-prep" : "return-trail";
+    const stage = this.ensureReturnStage();
+    stage.present(route, phase, index + (reading ? 1 : 0));
+    const generation = this.returnGeneration;
+    const live = (): boolean => generation === this.returnGeneration && this.returnStage === stage;
+    const action = actions[index];
+    const response = (): void => {
+      if (!live()) return;
+      this.returnTransitionPending = false;
+      this.setNarrator(action ? WINTER_ROUTE_REACTIONS[action]
+        : "You leave the pine where it lies and take the sheltered bank. When you return, you will find firm footing and pass beneath the low bough.");
+      this.band.setObjective(phase === "prepare" ? "Your route is chosen. Continue when ready." : "The homeward trail remembers your choice. Continue when ready.");
+      this.readThen(() => {
+        if (!live()) return;
+        if (index + 1 < actions.length) this.runReturnActions(phase, index + 1, false);
+        else this.finishReturnPhase(phase);
+      });
+    };
+    this.checkpoint(step, { returnRouteVersion: 1, index, reading: reading || !action });
+    if (reading || !action) { response(); return; }
+    this.setNarrator(phase === "prepare"
+      ? action === "seat" ? "Type seat to slide the pine across the narrow ice. You are preparing the way back before continuing the climb."
+        : "Type brace to wedge the pine against the bank stones. The crossing will stay here for your return."
+      : route === "crossing" ? "The mountain has settled. The pine is still braced where you left it. Type cross to use the way you prepared."
+        : action === "step" ? "The mountain has settled, and you return to the stream. Your old footprints have filled with snow. Type step to find firm ground along the bank."
+          : "The low bough still reaches across the bank. Type duck to pass beneath it and rejoin the homeward trail.");
+    this.band.setObjective(phase === "prepare" ? "Prepare the crossing · Seat, then brace. No timer is running." : "Follow your chosen route home. These trail words are untimed.");
+    const target = this.makeWinterForkWord(stage.subject(action), {
+      scene: this, word: action, x: action === "step" || action === "duck" ? 1490 : 980,
+      y: Math.max(460, this.narration.bottom() + 90), frame: "banner", fontSize: 38, burstColor: null,
+      onClaim: () => { if (live()) stage.approach(action); },
+      onSettled: () => {
+        if (!live()) return;
+        this.returnTransitionPending = true;
+        if (index === actions.length - 1) this.store.update(s => {
+          const choices = s.realms["winter-mountain"]?.choices;
+          if (choices) choices[phase === "prepare" ? "returnPrepared" : "returnRouteDone"] = "1";
+        });
+        this.checkpoint(step, { returnRouteVersion: 1, index, reading: true });
+      },
+      onComplete: () => {
+        if (!live()) return;
+        this.clearActiveTargets();
+        stage.perform(action, response);
+      },
+    }, { kind: "snow", color: PALETTE_HEX.frost, sourceOffsetY: -55 });
+    this.registerActiveTarget(target);
+  }
+
+  private finishReturnPhase(phase: WinterReturnPhase): void {
+    this.clearActiveTargets();
+    this.checkpoint(phase === "prepare" ? "wave" : "ending", phase === "prepare" ? { index: 2 } : {});
+    this.clearReturnStage();
+    if (phase === "prepare") this.startWave(2);
+    else this.startEnding();
   }
 
   // ─── Stakes: wolf reaches Wren ───────────────────────────────────────────
@@ -3294,7 +3447,7 @@ export class WinterMountainScene extends Phaser.Scene {
         () => {
           dismissTrueNameSeal(this, seal);
           playChime();
-          this.time.delayedCall(600, () => this.startEnding());
+          this.time.delayedCall(600, () => this.startReturnTrail());
         },
         "none",
         seal,
@@ -3441,8 +3594,12 @@ export class WinterMountainScene extends Phaser.Scene {
 
     const advance = (): void => {
       if (step >= passages.length) {
-        if (checkpointStep === "true-name") this.checkpoint("ending");
-        else if (checkpointStep === "huntress" || checkpointStep === "firefly") this.checkpoint("wave", { index: 2 });
+        if (checkpointStep === "true-name") {
+          if (winterReturnPending(this.store.get().realms["winter-mountain"]?.choices ?? {})) {
+            this.checkpoint("return-trail", { returnRouteVersion: 1, index: 0, reading: false });
+          } else this.checkpoint("ending");
+        }
+        else if (checkpointStep === "huntress" || checkpointStep === "firefly") this.checkpoint("return-plan", { returnRouteVersion: 1 });
         else if (checkpointStep === "bury" || checkpointStep === "pelt") this.checkpoint("fox-gate");
         this.time.delayedCall(900, onDone);
         return;
@@ -3596,7 +3753,7 @@ export class WinterMountainScene extends Phaser.Scene {
     if (event.ctrlKey || event.metaKey) return;
     if (this.chapterMenu?.handleKey(event)) return;
     if (this.reading.handleKey(event)) return;
-    if (this.trailTransitionPending || this.foxCareTransitionPending) { event.preventDefault(); return; }
+    if (this.trailTransitionPending || this.foxCareTransitionPending || this.returnTransitionPending) { event.preventDefault(); return; }
     // The received-horn acknowledgment opens only after its short handoff.
     // Early Continue/typing must not count as a miss while no word is live.
     if (this.huntressHornTransferPending) { event.preventDefault(); return; }

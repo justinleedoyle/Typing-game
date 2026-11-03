@@ -6,6 +6,7 @@
 // therefore looks different on every run.
 
 import type { RealmProgress } from "./saveState";
+import { winterRouteMemory } from "./winterReturnRoute";
 
 export interface RealmLore {
   title: string;
@@ -191,9 +192,11 @@ export function winterRealmSummary(
     : choices.fox === "ignored"
       ? "Wren passed the wounded fox without stopping. She vanished into the trees."
       : "The first meeting with the snow-fox is not recorded.";
-  const trail = choices.fork1 === "huntress" || choices.fork1 === "firefly"
+  const originalTrail = choices.fork1 === "huntress" || choices.fork1 === "firefly"
     ? endings[choices.fork1]
     : "The trail fork is not recorded on this page.";
+  const routeMemory = winterRouteMemory(choices);
+  const trail = routeMemory ? `${originalTrail} ${routeMemory}` : originalTrail;
   const aftermath = choices.fork2 === "bury" || choices.fork2 === "pelt"
     ? endings[choices.fork2]
     : "The old wolf's resting place is not recorded.";

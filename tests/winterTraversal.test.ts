@@ -113,7 +113,7 @@ function fixture(reduced = false) {
     readThen(next: () => void) { assert(!gate, "a held story gate is not overwritten"); gate = next; },
     makeWord: (options: any) => options,
     registerActiveTarget(target: any) { targets.push(target); },
-    clearActiveTargets: noop,
+    clearActiveTargets: noop, clearReturnStage: noop,
     fadeInHeldur() { entered.push("heldur"); },
     typingInput: { getStats: () => ({ canCast: () => false }), handleChar(key: string) { typed.push(key); } },
     setShiftHeld: noop, setAltHeld: noop,

@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import ts from "typescript";
 import { checkpointIndex, committedWinterChoices } from "../src/game/chapterFlow";
+import { winterReturnPending } from "../src/game/winterReturnRoute";
 import { SessionStats } from "../src/game/sessionStats";
 import { assert, assertClose, assertEqual, suite } from "./_assert";
 
@@ -38,7 +39,7 @@ const globals = {
     attachWrenHeldProp: attachWrenHeldPropFixture,
     // Artwork failure lifecycle is covered by assetLoadRecovery.test; this fixture isolates staging.
     beginAssetLoad: noop, assetLoadBlocked: () => false,
-  checkpointIndex, committedWinterChoices,
+  checkpointIndex, committedWinterChoices, winterReturnPending,
   reducedMotion: (scene: any) => scene.motionReduced,
   satchelIconFor: () => ({ key: "almanac-icon-hunters-horn", url: "fixture-only" }),
   applySceneActorLighting: (_scene: any, item: any) => { item.lit = true; },
@@ -76,7 +77,7 @@ function fixture(options: { reduced?: boolean; restored?: boolean; missingArt?: 
   const s = new Winter();
   const stats = new SessionStats();
   const images: any[] = [], tweens: any[] = [], killed: any[] = [], gates: Array<() => void> = [];
-  const targets: any[] = [], captions: string[] = [], checkpoints: any[] = [], timers: any[] = [], waves: number[] = [];
+  const targets: any[] = [], captions: string[] = [], checkpoints: any[] = [], timers: any[] = [], waves: number[] = [], plans: number[] = [];
   const state: any = { realms: { "winter-mountain": { cleared: false, choices: {} } }, satchel: [], almanacLore: [] };
   const huntress = { x: 560, y: 842, scene: true, once: noop };
   Object.assign(s, {
@@ -92,6 +93,7 @@ function fixture(options: { reduced?: boolean; restored?: boolean; missingArt?: 
     textures: { exists: () => !options.missingArt },
     typingInput: { getStats: () => stats },
     store: {
+      get: () => state,
       update: (change: (value: typeof state) => void) => change(state),
       setCheckpoint: (checkpoint: any) => { state.checkpoint = structuredClone(checkpoint); checkpoints.push(state.checkpoint); },
     },
@@ -106,6 +108,7 @@ function fixture(options: { reduced?: boolean; restored?: boolean; missingArt?: 
     registerActiveTarget: (target: any) => { targets.push(target); s.activeTargets.push(target); },
     clearActiveTargets: () => { s.activeTargets = []; },
     startWave: (index: number) => waves.push(index),
+    startReturnPlan: () => plans.push(1),
     time: { delayedCall: (ms: number, next: () => void) => { timers.push({ ms, next }); } },
     tweens: { add: (tween: any) => { tweens.push(tween); }, killTweensOf: (item: any) => killed.push(item) },
     add: { image(x: number, y: number, key: string) {
@@ -122,7 +125,7 @@ function fixture(options: { reduced?: boolean; restored?: boolean; missingArt?: 
     } },
   });
   s.wrenContainer.children.push(s.wrenSprite);
-  return { s, images, tweens, killed, gates, targets, captions, checkpoints, timers, waves, state, huntress,
+  return { s, images, tweens, killed, gates, targets, captions, checkpoints, timers, waves, plans, state, huntress,
     continue() { const next = gates.shift(); assert(next, "an actual held Continue is available"); next!(); },
     settle() { const tween = tweens.at(-1); assert(tween, "the actual horn movement was scheduled");
       tween.targets.x = tween.x; tween.targets.y = tween.y; tween.onComplete(); return tween; },
@@ -167,13 +170,13 @@ await suite("Winter horn: the actual two phrases transfer painted art before the
   assert(horn.scene, "the received horn remains visible throughout the held acknowledgment");
   f.continue();
   assertEqual([horn.destroyed, f.s.huntressHornSprite], [1, null], "Continue releases the received prop");
-  assertEqual([f.state.checkpoint.step, f.state.checkpoint.data.index], ["wave", 2], "the next checkpoint still follows the acknowledgment");
+  assertEqual([f.state.checkpoint.step, f.state.checkpoint.data.returnRouteVersion], ["return-plan", 1], "the new route decision is durable only after the horn acknowledgment");
   assertEqual(f.timers.map(timer => timer.ms), [900], "the existing post-passage delay remains unchanged");
   f.timers.shift().next();
   assertEqual(f.timers.map(timer => timer.ms), [600], "the existing Huntress departure delay remains unchanged");
   f.timers.shift().next();
-  assertEqual(f.waves, [2], "the original next wave starts exactly once");
-  assertEqual(f.state.satchel, [], "the next wave still precedes the original ending award");
+  assertEqual([f.plans, f.waves], [[1], []], "the Huntress departure enters the route decision once before combat");
+  assertEqual(f.state.satchel, [], "the route decision still precedes the original ending award");
 });
 
 await suite("Winter Huntress passages: both actual words stay with her and the complete Horn phrase clears Wren", () => {
@@ -269,7 +272,7 @@ await suite("Winter horn: reduced motion and restored acknowledgment settle imme
     assertEqual(f.state.satchel, [], "restoration cannot grant an early or duplicate inventory reward");
     f.continue();
     assertEqual(horn.destroyed, 1, "continuing the restored/reduced response releases the prop once");
-    assertEqual(f.state.checkpoint.step, "wave", "restoration advances to the original wave checkpoint");
+    assertEqual(f.state.checkpoint.step, "return-plan", "restoration preserves the new route decision after the original acknowledgment");
   }
 });
 
@@ -380,7 +383,7 @@ function aftermathFixture(reduced = false) {
   Object.assign(s, {
     motionReduced: reduced, fireflyCue: null, cairnCue: null, peltCue: null, huntressHornSprite: null, heldPeltSprite: null,
     testBreaths: [],
-    clearFireflyLantern: noop,
+    clearFireflyLantern: noop, clearReturnStage: noop,
     huntressHornTransferToken: 0, huntressHornTransferPending: false, forkChoiceWordAnchors: [],
     fork1Choice: "huntress", fork2Choice: null, foxDecided: true, foxSpared: true, candles: 3,
     resumeCheckpoint: null, activeTargets: [], scale: { width: 1920, height: 1080 },

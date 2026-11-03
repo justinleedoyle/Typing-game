@@ -2,6 +2,7 @@ import { attachWrenHeldPropFixture } from "./_wrenHeldProp";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { checkpointIndex, committedWinterChoices } from "../src/game/chapterFlow";
+import { winterReturnPending } from "../src/game/winterReturnRoute";
 import { emptySave, SaveStore, type SaveState } from "../src/game/saveState";
 import { SessionStats } from "../src/game/sessionStats";
 import { assert, assertEqual, suite } from "./_assert";
@@ -21,7 +22,7 @@ const code = ts.transpileModule(`${constants}\nclass Winter {
 const noop = () => {};
 const globals = {
     attachWrenHeldProp: attachWrenHeldPropFixture,
-  checkpointIndex, committedWinterChoices,
+  checkpointIndex, committedWinterChoices, winterReturnPending,
   PALETTE_HEX: { frost: 1, brass: 2 },
   Phaser: { Math: { Clamp: (value: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, value)) }, GameObjects: { Events: { DESTROY: "destroy" } } },
   reducedMotion: (scene: any) => scene.store.get().reducedMotion, satchelIconFor: (id: string) => ({ key: `almanac-icon-${id}` }),
@@ -67,7 +68,7 @@ function fixture(initial: SaveState = emptySave()) {
   let persisted: SaveState | null = null;
   const store = new SaveStore({ load: async () => initial, save: async state => { persisted = structuredClone(state); } }, initial, { saveDelayMs: 60_000 });
   stores.push(store);
-  const scene = new Winter(), images: any[] = [], tweens: any[] = [], timers: any[] = [], captions: string[] = [], objectives: string[] = [], waves: number[] = [];
+  const scene = new Winter(), images: any[] = [], tweens: any[] = [], timers: any[] = [], captions: string[] = [], objectives: string[] = [], waves: number[] = [], plans: number[] = [];
   const stats = new SessionStats();
   let gate: (() => void) | null = null, target: any = null;
   Object.assign(scene, {
@@ -89,9 +90,10 @@ function fixture(initial: SaveState = emptySave()) {
     makeWord: (options: any) => ({ ...options, getAnchorX: () => options.x, getAnchorY: () => options.y }),
     fadeOutHuntress: noop, clearHuntressHorn: noop, clearHeldPelt: noop,
     startWave: (index: number) => waves.push(index),
+    startReturnPlan: () => plans.push(1),
   });
   scene.wrenContainer.add(scene.wrenSprite);
-  return { scene, store, captions, objectives, images, tweens, timers, waves, target: () => target, gate: () => gate,
+  return { scene, store, captions, objectives, images, tweens, timers, waves, plans, target: () => target, gate: () => gate,
     continue() { assert(gate, "the native Continue is held"); const next = gate!; gate = null; next(); },
     async reload() { await store.flush(); return fixture(persisted!); },
   };
@@ -153,7 +155,7 @@ await suite("Winter fireflies: taking and reloading carry the same lantern and l
   restored.continue();
   assertEqual(restored.timers.map(timer => timer.ms), [900], "Continue retains the original post-passage delay");
   restored.timers.shift().next();
-  assertEqual(restored.waves, [2], "the original callback continues to the final pack");
+  assertEqual([restored.plans, restored.waves], [[1], []], "the original callback enters the new route decision before the final pack");
   assertEqual(restored.scene.fireflyLanternSprite, null, "the held lantern stows when the branch ends");
   assertEqual(restored.store.get().satchel, [], "the original realm ending still owns the reward");
   f.scene.clearWinterForkCues();

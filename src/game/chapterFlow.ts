@@ -27,8 +27,8 @@ export function openingStep(value: string | undefined): OpeningStep {
 
 export const WINTER_STEPS = [
   "arrival", "trail", "heldur", "heldur-answer", "heldur-awake", "cold", "kindle",
-  "wave", "fox", "fox-answer", "fork1", "huntress", "firefly", "boss", "boss-defeated",
-  "fork2", "bury", "pelt", "fox-gate", "companion-answer", "true-name", "ending",
+  "wave", "fox", "fox-answer", "fork1", "huntress", "firefly", "return-plan", "return-prep", "boss", "boss-defeated",
+  "fork2", "bury", "pelt", "fox-gate", "companion-answer", "true-name", "return-trail", "ending",
 ] as const;
 export type WinterStep = typeof WINTER_STEPS[number];
 export function winterStep(value: string | undefined): WinterStep {

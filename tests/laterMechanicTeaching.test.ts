@@ -5,6 +5,7 @@ import { getRunaLine } from "../src/audio/runaLines";
 import { WOOD_DIRECTION_PUNCTUATION, woodWardWord, type WoodDirection } from "../src/game/wordBank";
 import { selectFinalPhrase, FORCE_RELICS, KINDNESS_RELICS } from "../src/game/relicAlignment";
 import { forgePassageIndex } from "../src/game/forgeCheckpoint";
+import { winterFoxCareBindings } from "./_winterFoxCare";
 import { woodIndex } from "../src/game/woodCheckpoint";
 
 function sceneSource(name: string) {
@@ -601,7 +602,7 @@ await suite("Snow-fox answer: landing precedes acceptance reading and refusal st
 
 await suite("Wounded fox answer: an ignored fox is gone before the held departure caption", () => {
   for (const spared of [true, false]) {
-    const Scene = actualMethod(winter, "showFoxAnswer", { WINTER_WREN_STAGE_Y: 842 });
+    const Scene = actualMethod(winter, "showFoxAnswer", { WINTER_WREN_STAGE_Y: 842, ...winterFoxCareBindings });
     const s = new Scene();
     const fox = { visible: true, setVisible(value: boolean) { this.visible = value; return this; } };
     let reading: (() => void) | undefined;
@@ -610,6 +611,8 @@ await suite("Wounded fox answer: an ignored fox is gone before the held departur
     let waves = 0;
     Object.assign(s, {
       foxSpared: spared, foxDecided: false, foxCompanion: fox,
+      foxCareApproach: null, foxCareStage: null, foxCareGeneration: 0,
+      clearActiveTargets() {}, clearFoxCare() { s.foxCareGeneration += 1; },
       checkpoint() {}, band: { setObjective() {} },
       showFoxCompanion: () => { shown += 1; },
       narration: { say: (key: string) => {

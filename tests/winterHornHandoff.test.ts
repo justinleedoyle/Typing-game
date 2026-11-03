@@ -1,4 +1,5 @@
 import { attachWrenHeldPropFixture } from "./_wrenHeldProp";
+import { winterFoxCareBindings } from "./_winterFoxCare";
 import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import ts from "typescript";
@@ -33,6 +34,7 @@ const huntressFactory = npcSource.statements.find(node => ts.isFunctionDeclarati
 const npcCode = ts.transpileModule(`const ${huntressHeight.getText(npcSource)};\n${huntressFactory.getText(npcSource).replace(/^export /, "")}`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 const makeHuntressSprite = new Function(npcCode + ";return makeHuntressSprite;")();
 const globals = {
+  ...winterFoxCareBindings,
     attachWrenHeldProp: attachWrenHeldPropFixture,
     // Artwork failure lifecycle is covered by assetLoadRecovery.test; this fixture isolates staging.
     beginAssetLoad: noop, assetLoadBlocked: () => false,

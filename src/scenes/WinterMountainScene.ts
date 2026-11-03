@@ -9,6 +9,7 @@ import { playDamageThud } from "../audio/damageThud";
 import { playWaveSting } from "../audio/waveSting";
 import { flashDamageVignette } from "../game/vfx";
 import { HeartSoulHud } from "../game/heartSoulHud";
+import { resolveWinterFoxApproach, winterFoxCareData, WinterFoxCareStage, type WinterFoxApproach } from "../game/winterFoxEncounter";
 import {
   showLowHeartFeedback,
   showSpellReadyFeedback,
@@ -301,6 +302,10 @@ export class WinterMountainScene extends Phaser.Scene {
   // Act 1 companion gate — set when the player shows kindness to the fox
   private foxSpared = false;
   private foxDecided = false;
+  private foxCareApproach: WinterFoxApproach | null = null;
+  private foxCareStage: WinterFoxCareStage | null = null;
+  private foxCareGeneration = 0;
+  private foxCareTransitionPending = false;
 
   // Cold-decay timer active in Act 1
   private coldDecayTimer: Phaser.Time.TimerEvent | null = null;
@@ -351,6 +356,11 @@ export class WinterMountainScene extends Phaser.Scene {
     this.peltCue = null;
     this.clearHeldPelt();
     this.forkChoiceWordAnchors = [];
+    this.foxCareStage?.destroy();
+    this.foxCareStage = null;
+    this.foxCareGeneration = (this.foxCareGeneration ?? 0) + 1;
+    this.foxCareTransitionPending = false;
+    this.foxCareApproach = resolveWinterFoxApproach(this.resumeCheckpoint, this.store.get().realms["winter-mountain"]?.choices ?? {});
     this.foxCompanion = null;
     this.foxWordAnchors = [];
     this.wolves = [];
@@ -391,7 +401,7 @@ export class WinterMountainScene extends Phaser.Scene {
     this.load.image("winter-aftermath-cairn", winterAftermathCairn);
     this.load.image("winter-aftermath-pelt", winterAftermathPelt);
     this.load.image("band-portrait-runa", runaPortrait);
-    preloadWren(this);
+    preloadWren(this, { kneel: true });
     preloadWolves(this);
     preloadWinterNpcs(this);
     preloadSatchelIcons(this, ["hunters-horn", "firefly-lantern"]);
@@ -644,6 +654,7 @@ export class WinterMountainScene extends Phaser.Scene {
       this.dismissRiverCue(false);
       this.dismissRevisitMemoryCue(false);
       this.clearWinterForkCues();
+      this.clearFoxCare();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.input.keyboard?.off("keyup", this.onKeyUp, this);
       this.events.off(Phaser.Scenes.Events.PAUSE, this.clearSpellModifiers, this);
@@ -1745,7 +1756,7 @@ export class WinterMountainScene extends Phaser.Scene {
     return target;
   }
 
-  private makeFoxWord(opts: TextWordTargetOptions): TextWordTarget {
+  private makeFoxWord(opts: TextWordTargetOptions, gentle = false): TextWordTarget {
     const body = this.foxCompanion;
     if (!body?.scene) return this.makeWord(opts);
 
@@ -1763,12 +1774,13 @@ export class WinterMountainScene extends Phaser.Scene {
 
     const target = this.makeWord({
       ...opts,
-      burstColor: opts.burstColor ?? PALETTE_HEX.frost,
+      burstColor: gentle ? null : opts.burstColor ?? PALETTE_HEX.frost,
       onClaim: (mods) => {
+        const hand = this.foxCareStage?.handPosition();
         playClaimLine(
           this,
-          this.wrenContainer.x,
-          this.wrenContainer.y - 112,
+          hand?.x ?? this.wrenContainer.x,
+          hand?.y ?? this.wrenContainer.y - 112,
           body.x,
           body.y - 60,
           { color: PALETTE_HEX.frost, depth: 58 },
@@ -1788,7 +1800,8 @@ export class WinterMountainScene extends Phaser.Scene {
       },
       onComplete: () => {
         releaseAnchor();
-        playBodyImpact(this, body, {
+        if (gentle) playActorAttention(this, body, { scale: 1.012, durationMs: 180 });
+        else playBodyImpact(this, body, {
           kind: "snow",
           color: PALETTE_HEX.frost,
           offsetY: -60,
@@ -1918,10 +1931,12 @@ export class WinterMountainScene extends Phaser.Scene {
   }
 
   private playWrenTypingPulse(): void {
-    playBodyTypePulse(this, this.wrenContainer, {
+    const careBody = this.foxCareStage?.typingBody();
+    playBodyTypePulse(this, careBody ?? this.wrenContainer, {
       kind: "snow",
       color: PALETTE_HEX.frost,
-      offsetY: -108,
+      offsetX: careBody ? 93.5 : 0,
+      offsetY: careBody ? -54.7 : -108,
       depth: 58,
       ringRadius: 22,
     });
@@ -2256,69 +2271,132 @@ export class WinterMountainScene extends Phaser.Scene {
   // ─── Wounded Fox (between Wave 1 and Wave 2) ─────────────────────────────
 
   private startWoundedFox(nextWave: number): void {
+    this.clearFoxCare();
+    this.clearActiveTargets();
+    // Old fox-answer saves retain their settled response. An old placeholder
+    // with foxDecided=false is still undecided, not a fabricated refusal.
+    if (this.foxDecided) { this.showFoxAnswer(nextWave); return; }
+    this.foxCareApproach = resolveWinterFoxApproach(this.resumeCheckpoint, {});
+    if (this.foxCareApproach) {
+      this.startFoxCare(this.foxCareApproach, nextWave, true);
+      return;
+    }
     this.checkpoint("fox");
     this.narration.say("winter_fox_intro");
-    this.band.setObjective("Choose how Wren answers the wounded fox.");
-    this.showFoxCompanion({
-      x: this.scale.width / 2 + 290,
-      y: WINTER_WREN_STAGE_Y,
-      startX: this.scale.width / 2 + 430,
-      height: 118,
-      shadowWidth: 96,
-    });
-    // The choice rail stays above the actors' heads, with each option in its
-    // own empty snowfield. Neither banner can cover Wren or the fox.
-    const choiceY = Math.max(510, this.narration.bottom() + 78);
-
-    const kindTarget = this.makeFoxWord({
-      scene: this,
-      word: "i mean no harm",
-      x: 590,
-      y: choiceY,
-      frame: "banner",
-      fontSize: 30,
-      onComplete: () => {
-        this.clearActiveTargets();
-        this.foxSpared = true;
-        this.foxDecided = true;
-        this.store.update((s) => {
-          if (!s.almanacLore.includes("the-wounded-foxs-name")) {
-            s.almanacLore.push("the-wounded-foxs-name");
-          }
-        });
-        this.showFoxAnswer(nextWave);
+    this.band.setObjective("Choose an approach. Offer light or give space, then reassure her; you can also move on.");
+    this.showFoxCompanion({ x: 1250, y: WINTER_WREN_STAGE_Y, startX: 1390, height: 118, shadowWidth: 96 });
+    const generation = this.foxCareGeneration;
+    const choiceY = Math.max(520, this.narration.bottom() + 85);
+    const approachTarget = (word: string, approach: WinterFoxApproach, x: number): TextWordTarget => this.makeFoxWord({
+      scene: this, word, x, y: choiceY, frame: "banner", fontSize: 32, burstColor: null,
+      onSettled: () => {
+        if (generation !== this.foxCareGeneration || this.foxDecided) return;
+        this.foxCareTransitionPending = true;
+        this.foxCareApproach = approach;
+        this.checkpoint("fox", winterFoxCareData(approach));
       },
-    });
-
-    const hurtTarget = this.makeFoxWord({
-      scene: this,
-      word: "i don't have time",
-      x: 1450,
-      y: choiceY,
-      frame: "banner",
-      fontSize: 30,
       onComplete: () => {
-        this.clearActiveTargets();
-        this.foxSpared = false;
-        this.foxDecided = true;
-        this.showFoxAnswer(nextWave);
+        if (generation === this.foxCareGeneration && !this.foxDecided) this.startFoxCare(approach, nextWave, false);
       },
-    });
+    }, true);
+    this.registerActiveTarget(
+      approachTarget("offer light", "light", 680),
+      approachTarget("give space", "space", 1300),
+      this.foxLeaveTarget(nextWave, generation, 500, choiceY + 100),
+    );
+  }
 
-    this.registerActiveTarget(kindTarget, hurtTarget);
+  private startFoxCare(approach: WinterFoxApproach, nextWave: number, restored = false): void {
+    this.clearActiveTargets();
+    this.foxCareStage?.destroy();
+    this.foxCareApproach = approach;
+    this.foxCareTransitionPending = true;
+    const generation = ++this.foxCareGeneration;
+    this.checkpoint("fox", winterFoxCareData(approach));
+    this.showFoxCompanion({ x: 1250, y: WINTER_WREN_STAGE_Y, startX: 1250, height: 118, shadowWidth: 96 });
+    this.narration.say(approach === "light" ? "winter_fox_offer_light" : "winter_fox_give_space");
+    this.band.setObjective(approach === "light" ? "Wren lowers a small light. The fox chooses how close to come." : "Wren steps back and kneels. The fox has room to choose.");
+    this.foxCareStage = new WinterFoxCareStage(this, { wren: this.wrenContainer, sprite: this.wrenSprite, fox: this.foxCompanion! });
+    this.foxCareStage.present(approach, restored, () => {
+      if (generation !== this.foxCareGeneration || this.foxDecided) return;
+      this.foxCareTransitionPending = false;
+      this.showFoxReassurance(nextWave);
+    });
+  }
+
+  private foxLeaveTarget(nextWave: number, generation: number, x: number, y: number): TextWordTarget {
+    return this.makeWord({
+      scene: this, word: "i don't have time", x, y, frame: "banner", fontSize: 28, burstColor: null,
+      onSettled: () => { if (generation === this.foxCareGeneration) this.commitFoxAnswer(false); },
+      onComplete: () => { if (generation === this.foxCareGeneration && this.foxDecided) this.showFoxAnswer(nextWave); },
+    });
+  }
+
+  private showFoxReassurance(nextWave: number): void {
+    const generation = this.foxCareGeneration;
+    const fox = this.foxCompanion;
+    if (!fox?.scene) return;
+    this.band.setObjective("The fox is closer. Type your reassurance above her, or choose to move on.");
+    const wordY = Math.max(590, this.narration.bottom() + 84);
+    this.registerActiveTarget(this.makeFoxWord({
+      scene: this, word: "i mean no harm", x: fox.x, y: wordY, frame: "banner", fontSize: 32, burstColor: null,
+      onSettled: () => { if (generation === this.foxCareGeneration) this.commitFoxAnswer(true); },
+      onComplete: () => { if (generation === this.foxCareGeneration && this.foxDecided) this.showFoxAnswer(nextWave); },
+    }, true), this.foxLeaveTarget(nextWave, generation, 500, wordY));
+  }
+
+  /** The final character commits the answer before its visual exit. */
+  private commitFoxAnswer(spared: boolean): void {
+    if (this.foxDecided) return;
+    this.foxDecided = true;
+    this.foxSpared = spared;
+    this.foxCareTransitionPending = true;
+    this.store.update(s => {
+      const realm = s.realms["winter-mountain"] ?? { cleared: false, choices: {} };
+      if (this.foxCareApproach) realm.choices.foxApproach = this.foxCareApproach;
+      s.realms["winter-mountain"] = realm;
+      if (spared && !s.almanacLore.includes("the-wounded-foxs-name")) s.almanacLore.push("the-wounded-foxs-name");
+    });
+    this.checkpoint("fox-answer", winterFoxCareData(this.foxCareApproach));
+  }
+
+  private clearFoxCare(): void {
+    this.foxCareGeneration = (this.foxCareGeneration ?? 0) + 1;
+    this.foxCareTransitionPending = false;
+    this.foxCareStage?.destroy();
+    this.foxCareStage = null;
   }
 
   // ─── CYOA Fork 1 (after Wave 2, before Wave 3) ───────────────────────────
 
   private showFoxAnswer(nextWave: number): void {
+    this.clearActiveTargets();
     this.foxDecided = true;
-    this.checkpoint("fox-answer");
-    if (this.foxSpared) this.showFoxCompanion();
-    else this.foxCompanion?.setVisible(false);
-    this.narration.say(this.foxSpared ? "winter_fox_spared_ear" : "winter_fox_dismissed");
-    this.band.setObjective(this.foxSpared ? "The fox remembers your patience." : "You leave the fox behind.");
-    this.readThen(() => {
+    this.foxCareTransitionPending = false;
+    this.checkpoint("fox-answer", winterFoxCareData(this.foxCareApproach ?? null));
+    if (this.foxSpared) {
+      this.showFoxCompanion();
+      if (this.foxCareApproach && !this.foxCareStage && this.foxCompanion) {
+        this.foxCareStage = new WinterFoxCareStage(this, { wren: this.wrenContainer, sprite: this.wrenSprite, fox: this.foxCompanion });
+        this.foxCareStage.present(this.foxCareApproach, true, () => {});
+      }
+    } else {
+      this.foxCareStage?.destroy();
+      this.foxCareStage = null;
       this.foxCompanion?.setVisible(false);
+    }
+    this.narration.say(this.foxSpared
+      ? this.foxCareApproach === "light" ? "winter_fox_light_trusted"
+        : this.foxCareApproach === "space" ? "winter_fox_space_trusted" : "winter_fox_spared_ear"
+      : "winter_fox_dismissed");
+    this.band.setObjective(this.foxSpared ? "The fox remembers your patience." : "You leave the fox behind.");
+    const generation = this.foxCareGeneration;
+    let continued = false;
+    this.readThen(() => {
+      if (continued || generation !== this.foxCareGeneration) return;
+      continued = true;
+      this.foxCompanion?.setVisible(false);
+      this.clearFoxCare();
       this.dismissFoxCompanion(this.foxSpared ? 1640 : 460, WINTER_WREN_STAGE_Y);
       this.startWave(nextWave);
     });
@@ -3518,7 +3596,7 @@ export class WinterMountainScene extends Phaser.Scene {
     if (event.ctrlKey || event.metaKey) return;
     if (this.chapterMenu?.handleKey(event)) return;
     if (this.reading.handleKey(event)) return;
-    if (this.trailTransitionPending) { event.preventDefault(); return; }
+    if (this.trailTransitionPending || this.foxCareTransitionPending) { event.preventDefault(); return; }
     // The received-horn acknowledgment opens only after its short handoff.
     // Early Continue/typing must not count as a miss while no word is live.
     if (this.huntressHornTransferPending) { event.preventDefault(); return; }

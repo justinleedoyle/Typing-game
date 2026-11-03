@@ -4,6 +4,7 @@ import wrenWalk from "../../art/wren/wren-walk-right.png";
 import wrenCast from "../../art/wren/wren-cast.png";
 import wrenHurt from "../../art/wren/wren-hurt.png";
 import wrenCarry from "../../art/wren/wren-carry.png";
+import wrenKneel from "../../art/wren/wren-kneel-right-v1.png";
 import { applySceneActorLighting, matchActorCropLighting, refreshSceneActorLighting, restoreSceneActorLighting } from "./actorLighting";
 
 export type WrenPose = "front" | "walk" | "cast" | "hurt" | "carry";
@@ -86,11 +87,12 @@ function beginReaction(img: Phaser.GameObjects.Image): () => boolean {
 }
 
 /** Load the regular poses; a carrying scene opts into its extra artwork. */
-export function preloadWren(scene: Phaser.Scene, opts: { carry?: boolean } = {}): void {
+export function preloadWren(scene: Phaser.Scene, opts: { carry?: boolean; kneel?: boolean } = {}): void {
   for (const [key, src] of Object.entries(SOURCE)) {
     if (key === "wren-carry" && !opts.carry) continue;
     scene.load.image(key, src);
   }
+  if (opts.kneel) scene.load.image("wren-kneel-right", wrenKneel);
 }
 
 /** Foreground fingers from the same painted carrying pose. Keeping the book

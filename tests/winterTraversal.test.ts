@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { winterFoxCareBindings } from "./_winterFoxCare";
 import ts from "typescript";
 import { checkpointIndex, winterStep } from "../src/game/chapterFlow";
 import { assert, assertClose, assertEqual, suite } from "./_assert";
@@ -53,6 +54,7 @@ function fixture(reduced = false) {
     destroy() { this.scene = false; for (const child of this.children) child.destroy?.(); },
   });
   const bindings = {
+    ...winterFoxCareBindings,
     // Artwork failure lifecycle is covered by assetLoadRecovery.test; this fixture isolates staging.
     beginAssetLoad: noop, assetLoadBlocked: () => false,
     reducedMotion: () => reduced,

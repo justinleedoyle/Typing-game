@@ -23,6 +23,8 @@ await import("./movingWordEnemy.test.ts");
 await import("./winterWolfStaging.test.ts");
 await import("./winterHornHandoff.test.ts");
 await import("./winterTraversal.test.ts");
+await import("./winterFoxEncounter.test.ts");
+await import("./winterFoxStage.test.ts");
 await import("./winterRetry.test.ts");
 await import("./wrenReactions.test.ts");
 await import("./finaleFacets.test.ts");

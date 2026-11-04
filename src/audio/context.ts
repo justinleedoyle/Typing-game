@@ -20,6 +20,15 @@ const LEVEL_TO_GAIN: Record<AudioLevel, number> = {
 let ctx: AudioContext | null = null;
 let masterGain: GainNode | null = null;
 let currentLevel: AudioLevel = "medium";
+let unlockInstalled = false;
+
+/** Preferences and asynchronous asset/save loads never unlock audio. Browser
+ * autoplay permission is requested only inside a real key/pointer gesture. */
+export function unlockAudio(event?: Event): void {
+  const gesture = event?.isTrusted === true || navigator.userActivation?.isActive === true;
+  if (!ctx || document.hidden || !gesture || ctx.state !== "suspended") return;
+  void ctx.resume().catch(() => { /* A denied gesture can be retried later. */ });
+}
 
 export function getAudioContext(): AudioContext {
   if (!ctx) {
@@ -28,10 +37,13 @@ export function getAudioContext(): AudioContext {
       (window as unknown as { webkitAudioContext: typeof AudioContext })
         .webkitAudioContext;
     ctx = new Ctor();
+    if (!unlockInstalled) {
+      unlockInstalled = true;
+      window.addEventListener("keydown", unlockAudio, { capture: true });
+      window.addEventListener("pointerdown", unlockAudio, { capture: true });
+    }
   }
-  if (ctx.state === "suspended") {
-    void ctx.resume();
-  }
+  unlockAudio();
   return ctx;
 }
 

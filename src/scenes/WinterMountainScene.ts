@@ -1,7 +1,8 @@
 import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
 import Phaser from "phaser";
 import { applySceneActorLighting, restoreSceneActorLighting } from "../game/actorLighting";
-import { type AmbientHandle, playAmbientWinter } from "../audio/ambient";
+import { type SceneSoundscape, installSoundscape } from "../audio/soundscapes";
+import { winterSoundscapeMood } from "../audio/winterSoundscape";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
@@ -328,7 +329,7 @@ export class WinterMountainScene extends Phaser.Scene {
   /** True after the Quiet Lord's §5.5.10 intrusion has fired this playthrough. */
   private quietLordIntruded = false;
 
-  private ambientHandle?: AmbientHandle;
+  private ambientHandle?: SceneSoundscape;
   private revisit = false;
 
   constructor() {
@@ -673,7 +674,7 @@ export class WinterMountainScene extends Phaser.Scene {
       this.ambientHandle?.stop();
     });
 
-    this.ambientHandle = playAmbientWinter();
+    this.ambientHandle = installSoundscape(this, this.revisit ? "winter-rest" : winterSoundscapeMood(this.resumeCheckpoint?.step));
 
     if (this.revisit) {
       this.startRevisit();
@@ -684,6 +685,7 @@ export class WinterMountainScene extends Phaser.Scene {
 
   private checkpoint(step: WinterStep, data: SaveCheckpoint["data"] = {}): void {
     if (this.revisit) return;
+    this.ambientHandle?.setMood(winterSoundscapeMood(step));
     this.store.update((s) => {
       const realm = s.realms["winter-mountain"] ?? { cleared: false, choices: {} };
       realm.choices = committedWinterChoices(realm.choices, {
@@ -1033,6 +1035,7 @@ export class WinterMountainScene extends Phaser.Scene {
       onComplete: () => {
         if (generation !== this.trailGeneration || !this.trailBackdrop?.scene) return;
         this.trailTransitionPending = true;
+        this.ambientHandle?.cue(beat === "lift" ? "wood" : beat === "step" ? "snow" : "bough");
         this.completeRiverBeat(beat);
         playChime();
         this.releaseRiverCueWordAnchor();
@@ -1468,6 +1471,7 @@ export class WinterMountainScene extends Phaser.Scene {
         }),
       onComplete: () => {
         releaseCueAnchor();
+        this.ambientHandle?.cue("flame");
         this.playWrenTrailAction();
         playBodyImpact(this, cue, {
           kind: "ember",
@@ -2968,6 +2972,7 @@ export class WinterMountainScene extends Phaser.Scene {
       onComplete: () => {
         if (!live()) return;
         this.clearActiveTargets();
+        this.ambientHandle?.cue(action === "seat" ? "wood" : action === "brace" ? "stone" : action === "duck" ? "bough" : "snow");
         this.moveReturnFox(action);
         stage.perform(action, response);
       },

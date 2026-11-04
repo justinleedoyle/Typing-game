@@ -10,6 +10,7 @@
 console.log("Running logic test suites…\n");
 
 await import("./runaLines.test.ts");
+await import("./winterSoundscape.test.ts");
 await import("./sayResolution.test.ts");
 await import("./narrationLayout.test.ts");
 await import("./pureMath.test.ts");
@@ -97,6 +98,8 @@ await import("./forgeWoodAftermath.test.ts");
 await import("./woodPromiseStory.test.ts");
 await import("./navigationPolicy.test.ts");
 await import("./homecoming.test.ts");
+await import("./soundscapePlayer.test.ts");
+await import("./audioOwnership.test.ts");
 
 console.log("\nAll logic test suites passed.");
 // Force a clean exit: saveState.test imports the real supabase client, whose

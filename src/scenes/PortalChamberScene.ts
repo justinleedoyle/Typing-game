@@ -5,7 +5,7 @@ import { decorativeTween, PRESENTATION_CHANGED, reducedMotion } from "../game/pr
 import Phaser from "phaser";
 import { applySceneActorLighting } from "../game/actorLighting";
 import { resetSave } from "../game/resetSave";
-import { type AmbientHandle, playAmbientHub } from "../audio/ambient";
+import { type SceneSoundscape, installSoundscape } from "../audio/soundscapes";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
@@ -242,7 +242,7 @@ export class PortalChamberScene extends Phaser.Scene {
   private portalFloorCallWakeObjects: Phaser.GameObjects.GameObject[] = [];
   private stationTypingPulseTimes = new WeakMap<StationSpec, number>();
   private portalTypingPulseTimes = new Map<string, number>();
-  private ambientHandle?: AmbientHandle;
+  private ambientHandle?: SceneSoundscape;
   private focusedCompletedPortal: string | null = null;
   private hubArrival: HubArrivalSource | null = null;
   private hubArrivalEpoch = 0;
@@ -390,7 +390,7 @@ export class PortalChamberScene extends Phaser.Scene {
       this.difficultyNotice = undefined;
     });
 
-    this.ambientHandle = playAmbientHub();
+    this.ambientHandle = installSoundscape(this, "home");
 
     // Enter the portals zone initially.
     this.enterZone("portals", false);

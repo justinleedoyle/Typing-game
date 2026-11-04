@@ -49,7 +49,7 @@ First contained slice: the wounded fox between Winter's first two wolf fights. L
 - [ ] Verify pause/resume, muted audio, interruption and re-entry without overlapping or orphaned playback.
 - [ ] Record and integrate voices only after gameplay, staging and text are stable. Preserve subtitles and deliberate reading controls.
 
-The current ambient entry points return silence; this is unfinished production work, not an audio feature already delivered.
+Opening, the chamber bridge and Winter now have original music/environmental audio; the other realms' older ambient entry points remain silent. The full sound/music production goal stays open.
 
 ## 5. Almanac, progression and replay
 
@@ -95,6 +95,10 @@ New realms, multiplayer, broad localization and an engine rewrite are not the fi
 - The continuous review exposed a companion placement defect: the accepted fox retained its old glade position beneath the return log and disappeared on checkpoint restoration. The fox now joins Wren on the actual trail bank, follows the supported crossing or bank route, and restores beside him after held responses. Declined or merely inferred companions are not added.
 - Reflection/companion regression validation: 648 logic groups and 171,930 checks, typecheck, browser production build and desktop build. Separately labeled RAM-only fixtures review both reflections, older/incomplete history, later-chapter priority, large text/reduced motion, real SaveStore capture/restore and alternate bank companion staging. A desktop build is not physical desktop acceptance.
 - Reflection source: `src/scenes/PortalChamberScene.ts`, `src/audio/runaLines.ts`; companion repair: `src/scenes/WinterMountainScene.ts`. Local sprint `.claude/sessions/2026-11-03-winter-reflection-continuous-playthrough.md`; unchanged screenshot originals and exact provenance: `.claude/playthrough-audit/2026-11-03-winter-reflection-continuous/`.
+- Opening/Winter audio milestone: two original96-second instrumental themes share a home/return motif; room/lamp texture, mountain wind and trail-only water ground the location. Completed pine, snow, bough, stone and kindle actions have material sounds. Source and sample provenance are retained in `scripts/render-opening-winter-audio.mjs` and `art/audio/README.md`; no voices or third-party recordings.
+- Scene-owned sources retain playheads on pause, stop on shutdown/destroy and cannot resume merely because focus returns or a sound preference changes. Pending asset loads cannot resurrect old scenes. Browser autoplay unlock requires deliberate trusted input; audio failure never blocks a journey. Calm aftermath remains calm across burial, pelt, fox reunion, true name and return checkpoints.
+- Audio verification:662 logic groups /172,081 checks, typecheck and browser/desktop builds. All10MP3s decode at exact authored lengths without clipped/invalid samples; original browser scenes separately verify actual decoded loop lengths, live output, muted resume, frozen pause positions and deliberate resume. Screenshots document visual flow; meters/asset checks establish their technical scope, while artistic listening acceptance remains separate.
+- Audio local sprint `.claude/sessions/2026-11-03-opening-winter-audio.md`; screenshot, actual audio-meter and preview evidence `.claude/playthrough-audit/2026-11-03-opening-winter-audio/`. Fresh ordinary Opening→Winter trail/Heldur and recovery remain separate from synthetic later-phase fixture entries. Broad realm-wide audio work and voices remain open.
 - A checkbox closes only when its stated scope is implemented and verified. Partial milestones should link their evidence without checking the whole broad goal.
 - Local sprint: `.claude/sessions/2026-11-02-winter-fox-encounter.md`.
 - Screenshot audit: `.claude/playthrough-audit/2026-11-02-winter-fox-encounter/`.

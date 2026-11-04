@@ -1,0 +1,85 @@
+{
+  "generator": "Original deterministic DSP; seed73641; no source samples or voices",
+  "tracks": [
+    {
+      "name": "hearth-theme",
+      "seconds": 96,
+      "peak": 0.2052914798259735,
+      "rms": 0.034072750373920394,
+      "sampleRate": 32000,
+      "channels": 2
+    },
+    {
+      "name": "winter-theme",
+      "seconds": 96,
+      "peak": 0.19545607268810272,
+      "rms": 0.0323203912453476,
+      "sampleRate": 32000,
+      "channels": 2
+    },
+    {
+      "name": "hearth",
+      "seconds": 22,
+      "peak": 0.03318796679377556,
+      "rms": 0.006981572223976019,
+      "sampleRate": 32000,
+      "channels": 2
+    },
+    {
+      "name": "wind",
+      "seconds": 22,
+      "peak": 0.16105037927627563,
+      "rms": 0.028264877834021086,
+      "sampleRate": 32000,
+      "channels": 2
+    },
+    {
+      "name": "stream",
+      "seconds": 22,
+      "peak": 0.17716814577579498,
+      "rms": 0.03512637345490637,
+      "sampleRate": 32000,
+      "channels": 2
+    },
+    {
+      "name": "snow",
+      "seconds": 2,
+      "peak": 0.26704293489456177,
+      "rms": 0.014104816770801052,
+      "sampleRate": 32000,
+      "channels": 2
+    },
+    {
+      "name": "wood",
+      "seconds": 2,
+      "peak": 0.18730571866035461,
+      "rms": 0.014528412916646104,
+      "sampleRate": 32000,
+      "channels": 2
+    },
+    {
+      "name": "stone",
+      "seconds": 2,
+      "peak": 0.1212971955537796,
+      "rms": 0.008432453372680532,
+      "sampleRate": 32000,
+      "channels": 2
+    },
+    {
+      "name": "bough",
+      "seconds": 2,
+      "peak": 0.0596618577837944,
+      "rms": 0.007772684778968545,
+      "sampleRate": 32000,
+      "channels": 2
+    },
+    {
+      "name": "flame",
+      "seconds": 2,
+      "peak": 0.07676529139280319,
+      "rms": 0.008914241069900776,
+      "sampleRate": 32000,
+      "channels": 2
+    }
+  ]
+}

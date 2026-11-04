@@ -8,6 +8,7 @@ import { NarrationManager } from "../game/narrationManager";
 import { OPENING_STEPS, openingStep, type OpeningStep } from "../game/chapterFlow";
 import { ChapterReading } from "../game/ui/chapterReading";
 import { installChapterMenu } from "../game/ui/pauseMenu";
+import { installSoundscape } from "../audio/soundscapes";
 import { reducedMotion, reducedFlashes } from "../game/presentation";
 import { PALETTE_HEX } from "../game/palette";
 import type { SaveStore } from "../game/saveState";
@@ -237,6 +238,7 @@ export class OpeningScene extends Phaser.Scene {
     });
 
     // ── Beat sequence ────────────────────────────────────────────────────────
+    installSoundscape(this, "home");
     this.resumeOpening();
   }
 

@@ -1,0 +1,207 @@
+import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
+import ts from "typescript";
+import { SoundscapePlayer } from "../src/audio/soundscapePlayer";
+import { acknowledgeGameInterruption, installGameInterruptionTracker, needsInterruptionPause } from "../src/game/sceneInterruption";
+import { assert, assertEqual, suite } from "./_assert";
+
+class BrowserEvents extends EventEmitter {
+  hidden = false;
+  addEventListener(event: string, callback: (...args: any[]) => void) { this.on(event, callback); }
+  removeEventListener(event: string, callback: (...args: any[]) => void) { this.off(event, callback); }
+}
+async function settle() { for (let i = 0; i < 12; i++) await Promise.resolve(); }
+function compile(file: string, bindings: Record<string, unknown>) {
+  const source = ts.createSourceFile(file, readFileSync(new URL(`../src/audio/${file}`, import.meta.url), "utf8"), ts.ScriptTarget.Latest, true);
+  const body = source.statements.filter(statement => !ts.isImportDeclaration(statement))
+    .map(statement => statement.getText(source).replace(/^export\s+/, "")).join("\n");
+  const code = ts.transpileModule(body, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  return new Function(...Object.keys(bindings), `${code}; return { ${file === "soundscapes.ts" ? "installSoundscape, soundscapeStatus" : "getAudioContext, getMasterGain, setAudioLevel, unlockAudio"} };`)(...Object.values(bindings));
+}
+function parameter() {
+  return { value: 1, events: [] as any[], cancelScheduledValues(time: number) { this.events.push(["cancel", time]); },
+    setValueAtTime(value: number, time: number) { this.value = value; this.events.push(["set", value, time]); },
+    linearRampToValueAtTime(value: number, time: number) { this.events.push(["ramp", value, time]); } };
+}
+async function withWorld(work: (world: any) => Promise<void>) {
+  const documentBefore = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const document = new BrowserEvents(), window = new BrowserEvents(), sources: any[] = [], requests: any[] = [];
+  Object.defineProperty(globalThis, "document", { configurable: true, value: document });
+  const master = { gain: parameter(), name: "shared-master" };
+  let defer = false, fail = false;
+  const context = { currentTime: 0, decodeCalls: 0,
+    decodeAudioData: async (_bytes: ArrayBuffer) => { context.decodeCalls++; return { duration: 20 }; },
+    createGain() { return { gain: parameter(), connections: [] as any[], connect(target: any) { this.connections.push(target); }, disconnect() {} }; },
+    createBufferSource() {
+      const source: any = { started: false, stopped: false, connections: [], onended: null,
+        connect(target: any) { this.connections.push(target); }, disconnect() {},
+        start(_when?: number, offset = 0) { this.started = true; this.offset = offset; },
+        stop() { if (this.stopped) return; this.stopped = true; this.onended?.(); },
+      }; sources.push(source); return source;
+    },
+  };
+  const fetch = (url: string) => new Promise((resolve, reject) => {
+    const request = { url, resolve, reject, settled: false }; requests.push(request);
+    if (!defer) { request.settled = true; resolve({ ok: !fail, arrayBuffer: async () => new ArrayBuffer(1) }); }
+  });
+  const facade = compile("soundscapes.ts", {
+    SoundscapePlayer, getAudioContext: () => context, getMasterGain: () => master, needsInterruptionPause,
+    document, window, fetch, home: "/home.mp3", winter: "/winter.mp3", hearth: "/hearth.mp3",
+    wind: "/wind.mp3", stream: "/stream.mp3", snow: "/snow.mp3", wood: "/wood.mp3",
+    stone: "/stone.mp3", bough: "/bough.mp3", flame: "/flame.mp3",
+  });
+  const game: any = { events: new EventEmitter(), loop: { inFocus: true } };
+  const disposeTracker = installGameInterruptionTracker(game);
+  const scenes: any[] = [];
+  const world = { ...facade, document, window, context, master, game, sources, requests,
+    active: () => sources.filter(source => source.started && !source.stopped),
+    defer(value: boolean) { defer = value; }, fail(value: boolean) { fail = value; },
+    scene(key: string) { let paused = false;
+      const scene = { game, events: new EventEmitter(), scene: { key }, sys: { isPaused: () => paused },
+        pause() { paused = true; this.events.emit("pause"); },
+        resume() { paused = false; this.events.emit("resume"); } };
+      scenes.push(scene); return scene;
+    },
+    async resolveAll() {
+      for (const request of requests) if (!request.settled) {
+        request.settled = true; request.resolve({ ok: !fail, arrayBuffer: async () => new ArrayBuffer(1) });
+      }
+      await settle();
+    },
+  };
+  try { await work(world); }
+  finally {
+    for (const scene of scenes) scene.events.emit("shutdown");
+    disposeTracker();
+    if (documentBefore) Object.defineProperty(globalThis, "document", documentBefore);
+    else delete (globalThis as any).document;
+  }
+}
+
+await suite("Audio ownership: scene pause preserves silent preferences and resume owns one current mood", async () => withWorld(async w => {
+  const scene = w.scene("OpeningScene"), handle = w.installSoundscape(scene, "home"); await settle();
+  assertEqual([w.active().length, handle.status().mood], [2, "home"], "Opening owns its two authored music/environment layers");
+  assert(w.active().every((source: any) => source.connections[0].connections[0] === w.master), "every scene source remains behind the common sound preference gain");
+  scene.pause(); assertEqual([handle.status().paused, w.active()], [true, []], "pausing the real owner stops its sources");
+  const count = w.sources.length, requested = w.requests.length;
+  for (const level of [0, .25, .6, 1]) {
+    w.master.gain.setValueAtTime(level, w.context.currentTime);
+    handle.setMood("winter-trail"); handle.cue("snow");
+  }
+  await settle();
+  assertEqual([w.sources.length, w.requests.length], [count, requested], "mix/preference changes and cues while paused cannot start a source or decode");
+  scene.resume(); await settle();
+  assertEqual([w.active().length, handle.status().mood], [3, "winter-trail"], "resume starts only the latest requested mood");
+  scene.events.emit("resume"); scene.events.emit("wake"); await settle();
+  assertEqual(w.active().length, 3, "repeated resume/wake cannot overlap a second soundscape");
+}));
+
+await suite("Audio ownership: hidden creation and focus return never autoplay before deliberate acknowledgment", async () => withWorld(async w => {
+  w.document.hidden = true;
+  w.game.events.emit("hidden");
+  const scene = w.scene("WinterMountainScene"), handle = w.installSoundscape(scene, "winter-trail"); await settle();
+  assertEqual([handle.status().paused, w.sources.length, w.requests.filter((request: any) => ["/winter.mp3", "/wind.mp3", "/stream.mp3"].includes(request.url))], [true, 0, []], "a scene finishing load in a hidden tab starts no sources or music requests; optional small material prefetches remain silent");
+  const prefetched = w.requests.length;
+  w.document.hidden = false; w.document.emit("visibilitychange"); w.game.events.emit("visible"); w.game.events.emit("focus");
+  scene.resume(); await settle();
+  assertEqual([w.requests.length, w.active()], [prefetched, []], "a resume event while interruption remains pending cannot bypass its explicit pause");
+  acknowledgeGameInterruption(w.game); scene.resume(); await settle();
+  assertEqual(w.active().length, 3, "deliberate acknowledgment permits the original current mood exactly once");
+  w.game.events.emit("blur"); w.game.events.emit("hidden");
+  assertEqual(w.active(), [], "paired hidden/blur immediately silence the current owner");
+  w.game.events.emit("focus"); w.game.events.emit("visible"); scene.events.emit("wake"); await settle();
+  assertEqual(w.active(), [], "returning focus or waking cannot clear a later interruption");
+}));
+
+await suite("Audio ownership: latest scene wins pending loads and stale scene shutdown cannot stop its successor", async () => withWorld(async w => {
+  w.defer(true);
+  const opening = w.scene("OpeningScene"), old = w.installSoundscape(opening, "home");
+  const winter = w.scene("WinterMountainScene"), current = w.installSoundscape(winter, "winter-trail");
+  assertEqual([old.status().stopped, old.status().layers], [true, []], "installing the next scene retires the prior owner before its decodes finish");
+  await w.resolveAll();
+  assertEqual(w.active().length, 3, "late Opening loads cannot play alongside the new Winter scene");
+  assertEqual(w.soundscapeStatus().scene, "WinterMountainScene", "read-only status follows only the latest owner");
+  const requests = w.requests.length;
+  old.setMood("home"); old.cue("wood"); opening.events.emit("shutdown"); opening.events.emit("destroy"); await settle();
+  assertEqual([w.requests.length, w.active().length, w.soundscapeStatus().scene], [requests, 3, "WinterMountainScene"], "stale controls and repeated old cleanup cannot affect the successor");
+  current.stop(); current.stop();
+  assertEqual([w.active(), w.soundscapeStatus()], [[], null], "the current stop is idempotent and releases public ownership");
+}));
+
+await suite("Audio ownership: shutdown and destroy release listeners, pending cues and future callbacks", async () => withWorld(async w => {
+  w.defer(true);
+  const scene = w.scene("OpeningScene"), handle = w.installSoundscape(scene, "home");
+  handle.cue("wood");
+  assertEqual([scene.events.listenerCount("pause"), scene.events.listenerCount("resume"), w.window.listenerCount("pagehide"), w.document.listenerCount("visibilitychange")], [1, 1, 1, 1], "one active owner installs one set of lifecycle hooks");
+  scene.events.emit("shutdown"); scene.events.emit("destroy"); handle.stop(); await w.resolveAll();
+  assertEqual([w.sources.length, w.soundscapeStatus(), scene.events.eventNames()], [0, null, []], "decoded loops/cues cannot resurrect a shutdown owner and every scene listener is removed");
+  assertEqual([w.window.listenerCount("pagehide"), w.document.listenerCount("visibilitychange")], [0, 0], "cleanup removes both browser hooks");
+  assertEqual([w.game.events.listenerCount("blur"), w.game.events.listenerCount("hidden")], [1, 1], "only the pre-existing game interruption tracker remains");
+  scene.events.emit("resume"); w.window.emit("pagehide"); await settle();
+  assertEqual(w.sources, [], "late lifecycle events have no stopped owner to restart");
+  w.defer(false);
+  const restart = w.scene("OpeningScene"); w.installSoundscape(restart, "home"); await settle();
+  assertEqual(w.active().length, 2, "a fresh visit may reuse decoded buffers without retaining the stopped visit");
+  w.window.emit("pagehide"); assertEqual(w.active(), [], "pagehide pauses the fresh soundscape even before another engine event");
+  w.window.emit("pageshow"); w.game.events.emit("focus"); assertEqual(w.active(), [], "browser restoration alone does not restart scene audio");
+}));
+
+await suite("Audio ownership: failed optional assets are evicted so a later scene can retry", async () => withWorld(async w => {
+  w.fail(true);
+  const opening = w.scene("OpeningScene"), old = w.installSoundscape(opening, "home"); await settle();
+  assertEqual([w.active(), old.status().layers.map((value: any) => value.failed)], [[], [true, true]], "failed requests remain optional and cannot create incomplete sources");
+  const requests = w.requests.length; w.fail(false);
+  w.installSoundscape(w.scene("OpeningScene"), "home"); await settle();
+  assertEqual([w.requests.length - requests, w.active().length], [2, 2], "re-entry retries both failed URLs instead of caching their rejected promises forever");
+}));
+
+await suite("Audio context: saved levels do not unlock autoplay and denied gestures can retry safely", async () => {
+  const window = new BrowserEvents(), document = new BrowserEvents(), navigator = { userActivation: { isActive: false } };
+  let created = 0, resumeCalls = 0, deny = true;
+  class Context {
+    state = "suspended"; currentTime = 2; destination = {}; gains: any[] = [];
+    constructor() { created++; }
+    createGain() { const gain = { gain: parameter(), destination: null as any, connect(destination: any) { this.destination = destination; } }; this.gains.push(gain); return gain; }
+    resume() { resumeCalls++; if (deny) return Promise.reject(new Error("fixture autoplay denied")); this.state = "running"; return Promise.resolve(); }
+  }
+  (window as any).AudioContext = Context;
+  const audio = compile("context.ts", { window, document, navigator });
+  audio.setAudioLevel("off"); audio.setAudioLevel("quiet"); const context = audio.getAudioContext();
+  assertEqual([created, resumeCalls], [1, 0], "asynchronous preference setup creates one shared context without requesting autoplay");
+  assertEqual(audio.getMasterGain().gain.events.at(-1), ["ramp", .25, 2.05], "quiet applies the authored preference through the existing master gain");
+  assertEqual([window.listenerCount("keydown"), window.listenerCount("pointerdown")], [1, 1], "repeated context access installs only one set of gesture listeners");
+  window.emit("keydown"); assertEqual(resumeCalls, 0, "synthetic or inactive gesture events cannot unlock audio");
+  navigator.userActivation.isActive = true; document.hidden = true;
+  window.emit("pointerdown"); assertEqual(resumeCalls, 0, "a hidden page cannot request audio unlock even while activation is reported");
+  document.hidden = false; window.emit("keydown"); await settle();
+  assertEqual([resumeCalls, context.state], [1, "suspended"], "a rejected browser permission is handled and keeps the context retryable");
+  deny = false; window.emit("pointerdown"); await settle();
+  assertEqual([resumeCalls, context.state], [2, "running"], "a later deliberate gesture can recover from the earlier denial");
+  window.emit("keydown"); audio.getAudioContext();
+  assertEqual([created, resumeCalls], [1, 2], "already-running audio neither creates nor resumes another context");
+  audio.setAudioLevel("off");
+  assertEqual(audio.getMasterGain().gain.events.at(-1), ["ramp", 0, 2.05], "off mutes the same master output for all current and future sounds");
+});
+
+await suite("Audio context: browsers without userActivation unlock only from trusted key or pointer gestures", async () => {
+  for (const eventName of ["keydown", "pointerdown"]) {
+    const window = new BrowserEvents(), document = new BrowserEvents(); let resumed = 0;
+    class Context {
+      state = "suspended"; currentTime = 0; destination = {};
+      createGain() { return { gain: parameter(), connect() {} }; }
+      resume() { resumed++; this.state = "running"; return Promise.resolve(); }
+    }
+    (window as any).AudioContext = Context;
+    const audio = compile("context.ts", { window, document, navigator: {} });
+    audio.setAudioLevel("off"); const context = audio.getAudioContext();
+    assertEqual(resumed, 0, "loading preferences and buffers does not use the missing activation API as permission");
+    window.emit(eventName, { type: eventName, isTrusted: false });
+    assertEqual(resumed, 0, "an untrusted synthetic key/pointer event cannot substitute for activation");
+    document.hidden = true; window.emit(eventName, { type: eventName, isTrusted: true });
+    assertEqual(resumed, 0, "a trusted event still cannot start hidden-tab audio");
+    document.hidden = false; window.emit(eventName, { type: eventName, isTrusted: true }); await settle();
+    assertEqual([resumed, context.state], [1, "running"], "a native key or pointer gesture unlocks a visible suspended context without userActivation support");
+    window.emit(eventName, { type: eventName, isTrusted: true });
+    assertEqual(resumed, 1, "later native gestures cannot resume an already-running context again");
+  }
+});

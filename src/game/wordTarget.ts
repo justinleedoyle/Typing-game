@@ -22,6 +22,10 @@ export interface TextWordTargetOptions {
   /** Higher wins on first-letter ties. Default 0. */
   priority?: number;
   onComplete: () => void;
+  /** Durable bookkeeping when the typing controller settles the final character,
+   * after its keystroke statistics are recorded. The visual onComplete response
+   * still follows the original320ms exit animation. */
+  onSettled?: () => void;
   /** Fired instead of onComplete when the target was claimed in spell mode
    *  (first letter typed with Shift held). If omitted, onComplete runs
    *  normally and spell mode is purely cosmetic. */
@@ -78,9 +82,9 @@ export interface TextWordTargetOptions {
   /** UI-cohesion pass: a dark legibility stroke around the glyphs so a word reads
    *  cleanly against busy painted art (TTT's outlined in-world words). Off by default. */
   outline?: boolean;
-  /** UI-cohesion pass: draw a framed dark plate behind the word — used for choice
-   *  "banners" so a fork reads as a pickable option, not bare floating text. */
-  frame?: "banner";
+  /** Choice banners retain a filled plate. Inscription labels use a quiet
+   *  ruled baseline for commands attached to painted objects or architecture. */
+  frame?: "banner" | "inscription";
   /** Optional low-emphasis resting alpha. The word brightens while claimed or
    *  candidate-matched, then settles back to this value. */
   idleAlpha?: number;
@@ -149,6 +153,7 @@ export class TextWordTarget implements WordTarget {
   private suffixMasked = false;
   private bannerW = 0;
   private bannerH = 0;
+  private inscriptionRule: Phaser.GameObjects.Graphics | null = null;
   private idleFloatTween: Phaser.Tweens.Tween | null = null;
   // Tier 4 `unseal`: number of cursor-resets to PARDON (keep progress) before
   // the target resets for real. `resetForgivenPending` collapses the two
@@ -190,8 +195,9 @@ export class TextWordTarget implements WordTarget {
 
     // UI-cohesion: a dark stroke makes the word legible on busy painted art.
     if (opts.outline) {
-      this.typedText.setStroke("#0b0a0f", 5);
-      this.remainingText.setStroke("#0b0a0f", 5);
+      const width = opts.frame === "inscription" ? 3 : 5;
+      this.typedText.setStroke("#0b0a0f", width);
+      this.remainingText.setStroke("#0b0a0f", width);
     }
     // UI-cohesion: a framed plate behind the word turns a fork into a clear,
     // pickable banner. Sized to the full word (measured at construction) and
@@ -209,6 +215,26 @@ export class TextWordTarget implements WordTarget {
       plate.lineStyle(2, UI_HEX.brass, 0.9);
       plate.strokeRoundedRect(-w / 2, -h / 2, w, h, 9);
       this.container.addAt(plate, 0);
+    }
+    if (opts.frame === "inscription") {
+      // A soft glyph shadow provides contrast on busy paintings without a
+      // rectangular fill masking the object that owns the command.
+      this.typedText.setShadow(0, 2, "#08090c", 5, true, true);
+      this.remainingText.setShadow(0, 2, "#08090c", 5, true, true);
+      this.inscriptionRule = opts.scene.add.graphics();
+      const halfWidth = this.remainingText.width / 2 + 9;
+      const y = this.remainingText.height / 2 + 3;
+      this.inscriptionRule.lineStyle(1, UI_HEX.brass, 0.58);
+      this.inscriptionRule.lineBetween(-halfWidth + 9, y, halfWidth - 9, y);
+      this.inscriptionRule.lineStyle(1, UI_HEX.brass, 0.24);
+      this.inscriptionRule.lineBetween(-halfWidth, y, -halfWidth + 9, y);
+      this.inscriptionRule.lineBetween(halfWidth - 9, y, halfWidth, y);
+      // Small cut marks belong to the same baseline; no second floating badge.
+      this.inscriptionRule.lineStyle(1, UI_HEX.brass, 0.48);
+      this.inscriptionRule.lineBetween(-halfWidth, y - 2, -halfWidth + 2, y + 2);
+      this.inscriptionRule.lineBetween(halfWidth - 2, y + 2, halfWidth, y - 2);
+      this.inscriptionRule.setAlpha(0.68);
+      this.container.addAt(this.inscriptionRule, 0);
     }
 
     this.relayout();
@@ -377,10 +403,12 @@ export class TextWordTarget implements WordTarget {
     this.typedText.setColor(PALETTE.brass);
     this.remainingText.setColor(PALETTE.cream);
     this.relayout();
+    if (this.inscriptionRule) this.applyDim();
     this.opts.onRelease?.();
   }
 
   onComplete(): void {
+    this.opts.onSettled?.();
     const spell = this.spellClaimed;
     const alt = this.altClaimed;
 
@@ -504,6 +532,11 @@ export class TextWordTarget implements WordTarget {
     this.applyDim();
   }
 
+  /** Keep combat words readable above nearby actors. */
+  setDepth(depth: number): void {
+    this.container.setDepth(depth);
+  }
+
   /** Reposition the floating word — used to keep it pinned above a moving
    *  enemy. */
   setAnchorX(x: number): void {
@@ -599,6 +632,7 @@ export class TextWordTarget implements WordTarget {
   private applyDim(): void {
     const alpha = this.dimmed ? 0.12 : this.restingAlpha();
     this.container.setAlpha(alpha);
+    this.inscriptionRule?.setAlpha(this.claimed || this.candidate ? 1 : 0.68);
     if (this.dimmed) return;
     // Color priority: alt > spell > candidate > danger > default.
     if (this.altClaimed) return; // brass, set in onClaim

@@ -2,8 +2,8 @@
 // opt-in via a URL param, so normal play is never affected:
 //
 //   ?dev                  → unlock every realm + fill the satchel (all relics +
-//                           companions), persisted to the player's cloud save, then
-//                           the hub opens with every portal available.
+//                           companions) in a fresh temporary journey, then the
+//                           hub opens with every portal available.
 //   ?dev=clockwork-forge  → the same unlock, then jump STRAIGHT into that realm's
 //                           combat (so any realm's enemies/bosses + relic effects +
 //                           companion art are reachable in one hop).
@@ -29,10 +29,10 @@
 //                         → jump straight to the finale duel or final phrase for
 //                           late-finale screenshot/feel-tuning passes.
 //
-// The unlock writes to the real save (tied to the player's login), so once you've
-// loaded ?dev once, everything stays unlocked in normal play too. The bare-loadout
-// variant is the exception: it is temporary and per-load. The jump is a per-load
-// navigation shortcut (not persisted).
+// Every ?dev route uses only an isolated in-memory save. Actions, rewards and
+// resets in a review cannot unlock, replace or upload the player's real journey.
+// Removing ?dev returns to normal saved progress. Unknown targets also stay
+// temporary and open the review hub.
 
 import { RELICS } from "./relics";
 import type { SaveState } from "./saveState";

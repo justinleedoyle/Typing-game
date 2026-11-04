@@ -2,6 +2,14 @@ import Phaser from "phaser";
 import { playClack } from "../audio/clack";
 import { setAudioLevel } from "../audio/context";
 import { applyDevUnlock, parseDevTarget } from "../game/devUnlock";
+import { SceneRunGuard } from "../game/sceneRunGuard";
+import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
+import { downloadSaveRecovery, saveRecoveryPresentation } from "../game/saveRecovery";
+import { showRecoveryDialog, type RecoveryDialog } from "../game/ui/recoveryDialog";
+import { defaultSaveBackend, DesktopSaveBackend } from "../game/desktopBackend";
+import { showJourneyTransfer } from "../game/journeyTransferUI";
+import { titleCheckpoint, titleHomecoming } from "../game/titleResume";
+import { saveChoiceFocus, saveChoicePresentation, saveJourneySummary } from "../game/saveChoice";
 import { SERIF } from "../game/palette";
 import {
   addAmbientDrift,
@@ -13,9 +21,14 @@ import { cornerTicks, UI_CSS, UI_HEX } from "../game/ui/uiTheme";
 import {
   emptySave,
   SaveStore,
-  SyncedBackend,
+  InvalidSaveError,
+  UnsupportedSaveVersionError,
+  CloudSaveError,
   type SaveBackend,
+  type SaveConflict,
+  type SaveSource,
   type SaveState,
+  type SaveRecoverySnapshot,
 } from "../game/saveState";
 import openingBackdrop from "../../art/references/opening-typewriter-study-clean.png";
 
@@ -34,18 +47,55 @@ export class TitleScene extends Phaser.Scene {
   private promptTween?: Phaser.Tweens.Tween;
   private store?: SaveStore;
   private storePromise?: Promise<SaveStore>;
-  private hasTyped = false;
-  private transitioning = false;
+  private backend?: SaveBackend;
+  private saveChoicePanel?: Phaser.GameObjects.Container;
+  private saveChoiceRows: Array<{ source: SaveSource; box: Phaser.GameObjects.Rectangle }> = [];
+  private saveChoiceMessage?: Phaser.GameObjects.Text;
+  private selectedSave: SaveSource | null = null;
+  private resolvingSave = false;
+  private recoveryDialog?: RecoveryDialog;
+  private recoveringSave = false;
+  private transfer?: { destroy(): void };
+  private transferring = false;
+  private readonly run = new SceneRunGuard();
 
   constructor() {
     super("TitleScene");
   }
 
+  init(): void {
+    this.resetTitleRun();
+  }
+
+  private resetTitleRun(): void {
+    this.transfer?.destroy(); this.transfer = undefined; this.transferring = false;
+    this.recoveryDialog?.destroy();
+    this.recoveryDialog = undefined;
+    this.recoveringSave = false;
+    this.run.begin();
+    this.store = undefined;
+    this.storePromise = undefined;
+    this.backend = undefined;
+    this.saveChoicePanel = undefined;
+    this.saveChoiceRows = [];
+    this.saveChoiceMessage = undefined;
+    this.selectedSave = null;
+    this.resolvingSave = false;
+    this.promptTween = undefined;
+    this.promptPlate = undefined;
+    this.promptPlateCorners = undefined;
+    this.promptPlateW = 0;
+    this.promptPlateH = 0;
+  }
+
   preload(): void {
+    beginAssetLoad(this);
     this.load.image("title-backdrop", openingBackdrop);
   }
 
   create(): void {
+    if (assetLoadBlocked(this)) return;
+    this.resetTitleRun();
     const { width, height } = this.scale;
 
     const backdrop = this.add
@@ -115,10 +165,10 @@ export class TitleScene extends Phaser.Scene {
     });
 
     this.prompt = this.add
-      .text(TITLE_PROMPT.x, TITLE_PROMPT.y, "press any key", {
+      .text(TITLE_PROMPT.x, TITLE_PROMPT.y, "Enter · begin or continue", {
         fontFamily: SERIF,
         fontSize: "22px",
-        color: UI_CSS.inkSoft,
+        color: UI_CSS.ink,
         fontStyle: "italic",
       })
       .setOrigin(0.5)
@@ -136,18 +186,48 @@ export class TitleScene extends Phaser.Scene {
     // Kick off save loading immediately so the chamber transition doesn't
     // wait on disk I/O. registry stores the backend so tests / future
     // SupabaseBackend swap can override it from outside.
-    const backend =
-      (this.registry.get("saveBackend") as SaveBackend | undefined) ??
-      new SyncedBackend();
-    this.storePromise = SaveStore.load(backend);
-    // Apply the saved audio level the moment the store resolves, so even the
-    // first title-screen clack respects "off" / "quiet".
-    void this.storePromise.then((s) => setAudioLevel(s.get().audioLevel));
+    this.loadStore();
+    const dev = parseDevTarget(typeof location !== "undefined" ? location.search : "");
+    if (!dev.unlock) this.add.text(TITLE_PROMPT.x, TITLE_PROMPT.y + 78, "Move a journey · T", {
+      fontFamily: SERIF, fontSize: "21px", color: UI_CSS.brass,
+    }).setOrigin(0.5).setDepth(6).setInteractive({ useHandCursor: true }).on("pointerdown", () => { void this.openTransfer(); });
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
-    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.run.end();
+      this.recoveryDialog?.destroy();
+      this.recoveryDialog = undefined;
+      this.recoveringSave = false;
+      this.transfer?.destroy(); this.transfer = undefined; this.transferring = false;
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
+      this.store = undefined;
+      this.storePromise = undefined;
     });
+  }
+
+  private loadStore(): Promise<SaveStore> {
+    const dev = parseDevTarget(typeof location !== "undefined" ? location.search : "");
+    if (dev.unlock) {
+      // Every review shortcut is a fresh, temporary journey. Never even open
+      // the player's durable backend for a URL that can unlock progression.
+      const satchel = dev.loadout === "bare" ? [] : dev.satchelOverride;
+      const store = this.createTemporaryDevStore(undefined, satchel);
+      this.storePromise = Promise.resolve(store);
+      return this.storePromise;
+    }
+    const backend = this.backend ??
+      (this.registry.get("saveBackend") as SaveBackend | undefined) ??
+      defaultSaveBackend();
+    this.backend = backend;
+    const token = this.run.token();
+    const pending = SaveStore.load(backend);
+    this.storePromise = pending;
+    // Loading can reject without destroying the original save. beginTransition
+    // presents a retry; this separate audio listener must also handle rejection.
+    void pending.then((store) => {
+      if (this.run.isCurrent(token)) setAudioLevel(store.get().audioLevel);
+    }, () => {});
+    return pending;
   }
 
   private startTitleSourceWakes(): void {
@@ -306,8 +386,8 @@ export class TitleScene extends Phaser.Scene {
 
   private startPromptIdleTween(): void {
     if (
-      this.hasTyped ||
-      this.transitioning ||
+      this.run.has("typed") ||
+      this.run.has("transition") ||
       this.promptTween ||
       !this.prompt.scene
     ) {
@@ -315,7 +395,7 @@ export class TitleScene extends Phaser.Scene {
     }
     this.promptTween = this.tweens.add({
       targets: this.prompt,
-      alpha: { from: 1, to: 0.35 },
+      alpha: { from: 1, to: 0.78 },
       duration: 1400,
       yoyo: true,
       repeat: -1,
@@ -341,7 +421,7 @@ export class TitleScene extends Phaser.Scene {
     item.setAlpha(0);
     item.setY(baseY + (opts.offsetY ?? 10));
     this.time.delayedCall(delayMs, () => {
-      if (opts.skipIfTyped && this.hasTyped) return;
+      if (opts.skipIfTyped && this.run.has("typed")) return;
       if (!object.scene) return;
       this.tweens.add({
         targets: item,
@@ -403,12 +483,20 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private onKeyDown(event: KeyboardEvent): void {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (this.transferring) return;
+    if (this.saveChoicePanel) {
+      this.handleSaveChoiceKey(event);
+      return;
+    }
+    if (event.key.toLowerCase() === "t" && !event.repeat && !parseDevTarget(typeof location !== "undefined" ? location.search : "").unlock) {
+      void this.openTransfer(); return;
+    }
     if (event.key.length !== 1 && event.key !== "Enter" && event.key !== " ") {
       return;
     }
     playClack();
-    if (!this.hasTyped) {
-      this.hasTyped = true;
+    if (this.run.once("typed")) {
       this.promptTween?.stop();
       this.tweens.killTweensOf(this.prompt);
       this.prompt.setAlpha(1);
@@ -420,38 +508,57 @@ export class TitleScene extends Phaser.Scene {
     void this.beginTransition();
   }
 
+  private async openTransfer(): Promise<void> {
+    if (this.transferring || this.run.has("transition") || this.recoveringSave || this.saveChoicePanel) return;
+    this.transferring = true;
+    const token = this.run.token();
+    this.recoveryDialog = showRecoveryDialog({ title: "Opening journey transfer", message: "Reading the saved journey before showing transfer options…", actions: [] });
+    this.recoveryDialog.setBusy(true);
+    try {
+      this.store = await (this.storePromise ?? this.loadStore());
+      if (!this.run.isCurrent(token)) return;
+      this.recoveryDialog.destroy(); this.recoveryDialog = undefined;
+      if (!this.backend) { this.transferring = false; return; }
+      this.transfer = showJourneyTransfer({ backend: this.backend,
+        native: this.backend instanceof DesktopSaveBackend ? this.backend : undefined,
+        onClose: () => { if (this.run.isCurrent(token)) this.scene.restart(); },
+        onImported: () => { if (this.run.isCurrent(token)) this.scene.restart(); },
+      });
+    } catch (error) {
+      if (!this.run.isCurrent(token)) return;
+      this.recoveryDialog?.destroy(); this.recoveryDialog = undefined;
+      this.transferring = false; this.storePromise = undefined;
+      await this.presentSaveLoadFailure(error, token);
+    }
+  }
+
   private async beginTransition(): Promise<void> {
-    if (this.transitioning) return;
-    this.transitioning = true;
+    if (!this.run.once("transition")) return;
+    const token = this.run.token();
     const dev = parseDevTarget(
       typeof location !== "undefined" ? location.search : "",
     );
-    // Dev unlock (opt-in via ?dev) — unlock every realm + fill the satchel, and
-    // with ?dev=<target> jump straight into a realm or the finale. For art +
-    // feel-tuning; a no-op in normal play. The standard unlock persists to the
-    // cloud save; temporary loadouts (`loadout=bare` or `satchel=id,id`) use an
-    // in-memory store so they cannot wipe the player's real saved satchel.
-    const temporarySatchel = dev.loadout === "bare" ? [] : dev.satchelOverride;
-    const immediateTemporaryDevJump =
-      dev.unlock && temporarySatchel !== undefined && !!dev.realmSceneKey;
-    if (immediateTemporaryDevJump) {
-      this.store = this.createTemporaryDevStore(undefined, temporarySatchel);
-    } else {
-      this.store = await this.storePromise;
-    }
-    if (dev.unlock && this.store && !immediateTemporaryDevJump) {
-      if (temporarySatchel !== undefined) {
-        this.store = this.createTemporaryDevStore(this.store, temporarySatchel);
-      } else {
-        this.store.update(applyDevUnlock);
-      }
+    // loadStore isolates every ?dev variant, including bare/unknown values.
+    // Normal play continues through the actual durable save and conflict UI.
+    try {
+      const loaded = await (this.storePromise ?? this.loadStore());
+      if (!this.run.isCurrent(token)) return;
+      this.store = loaded;
+    } catch (error) {
+      if (!this.run.isCurrent(token)) return;
+      this.storePromise = undefined;
+      this.run.release("transition");
+      await this.presentSaveLoadFailure(error, token);
+      return;
     }
     this.playTitleDepartureWake();
     this.time.delayedCall(240, () => {
+      if (!this.run.isCurrent(token)) return;
       this.cameras.main.fadeOut(640, 11, 10, 15);
       this.cameras.main.once(
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
         () => {
+          if (!this.run.isCurrent(token)) return;
           if (dev.realmSceneKey) {
             this.scene.start(dev.realmSceneKey, {
               store: this.store,
@@ -461,26 +568,248 @@ export class TitleScene extends Phaser.Scene {
             });
             return;
           }
+          const state = this.store?.get();
+          if (state && titleHomecoming(state)) {
+            this.scene.start("HomecomingScene", { store: this.store });
+            return;
+          }
+          const checkpoint = state ? titleCheckpoint(state) : null;
+          if (checkpoint) {
+            this.scene.start(checkpoint.scene, { store: this.store, checkpoint });
+            return;
+          }
           this.scene.start("PortalChamberScene", { store: this.store });
         },
       );
     });
   }
 
+  private async presentSaveLoadFailure(error: unknown, token: number, message?: string): Promise<void> {
+    let snapshot: SaveRecoverySnapshot | null | undefined;
+    let storageUnavailable = false;
+    let recoveryFailed = false;
+    try { snapshot = await this.backend?.getRecovery?.(); }
+    catch (recoveryError) {
+      recoveryFailed = true;
+      storageUnavailable = !(recoveryError instanceof CloudSaveError);
+    }
+    if (!this.run.isCurrent(token)) return;
+    // Damaged current bytes can coexist with a valid pending device choice.
+    // That choice cannot safely resolve until the unreadable bytes are handled.
+    if (!snapshot && !recoveryFailed && !(error instanceof InvalidSaveError) && !(error instanceof UnsupportedSaveVersionError)) {
+      const conflict = this.backend?.getConflict?.();
+      if (conflict && this.backend?.resolveConflict) { this.showSaveChoice(conflict); return; }
+    }
+    this.showSaveRecovery(error, snapshot, storageUnavailable, message);
+  }
+
+  private showSaveRecovery(error: unknown, snapshot?: SaveRecoverySnapshot | null, storageUnavailable = false, message?: string): void {
+    this.recoveryDialog?.destroy();
+    this.recoveringSave = false;
+    this.promptTween?.stop();
+    const token = this.run.token();
+    const copy = saveRecoveryPresentation(error, snapshot, storageUnavailable);
+    const actions = [{ label: "Try loading again · R", shortcut: "r", onSelect: () => {
+      if (!this.run.isCurrent(token)) return;
+      this.recoveryDialog?.destroy(); this.recoveryDialog = undefined;
+      this.storePromise = undefined;
+      this.run.release("transition");
+      this.prompt.setText("Loading your saved journey…");
+      this.redrawPromptPlate();
+      void this.beginTransition();
+    } }];
+    if (snapshot) actions.push({ label: "Download a recovery copy · D", shortcut: "d", onSelect: () => {
+      if (this.run.isCurrent(token)) void this.downloadRecovery(snapshot);
+    } });
+    if (snapshot?.canStartFresh && this.backend?.startFreshAfterRecovery) actions.push({ label: "Start a new journey… · N", shortcut: "n", onSelect: () => {
+      if (this.run.isCurrent(token)) this.confirmRecoveryJourney(snapshot);
+    } });
+    this.recoveryDialog = showRecoveryDialog({ title: copy.title, message: message ?? copy.message, detail: copy.detail, actions });
+  }
+
+  private confirmRecoveryJourney(snapshot: SaveRecoverySnapshot): void {
+    const token = this.run.token();
+    this.recoveryDialog?.destroy();
+    this.recoveryDialog = showRecoveryDialog({
+      title: "Start a new journey?",
+      message: "You will begin again at the opening. The unreadable saved data will first be kept in a separate recovery copy on this device.",
+      detail: "This does not repair the old journey. Keep a downloaded recovery copy if you want one outside this device.",
+      actions: [
+        { label: "Go back · Esc", shortcut: "Escape", onSelect: () => {
+          if (this.run.isCurrent(token)) this.showSaveRecovery(new InvalidSaveError(), snapshot);
+        } },
+        { label: "Keep the old data and start a new journey", onSelect: () => {
+          if (this.run.isCurrent(token)) void this.startRecoveryJourney(snapshot);
+        } },
+      ],
+    });
+  }
+
+  private async downloadRecovery(snapshot: SaveRecoverySnapshot): Promise<void> {
+    if (this.recoveringSave || !this.backend?.getRecovery) return;
+    const token = this.run.token();
+    this.recoveringSave = true; this.recoveryDialog?.setBusy(true);
+    try {
+      // Recheck identity/current bytes before exposing an account-scoped file.
+      const current = await this.backend.getRecovery();
+      if (!this.run.isCurrent(token)) return;
+      if (!current || current.token !== snapshot.token) {
+        this.showSaveRecovery(new InvalidSaveError(), current, false, "The saved data changed. Review the current recovery choices before downloading a copy.");
+        return;
+      }
+      downloadSaveRecovery(current);
+      this.recoveryDialog?.setMessage("Your browser will save a recovery file. Keep it somewhere safe. The saved journey on this device has not changed.");
+    } catch {
+      if (this.run.isCurrent(token)) this.recoveryDialog?.setMessage("The recovery copy could not be downloaded. Your saved data has been kept. Try loading again to review its current recovery options.");
+    } finally {
+      if (this.run.isCurrent(token)) { this.recoveringSave = false; this.recoveryDialog?.setBusy(false); }
+    }
+  }
+
+  private async startRecoveryJourney(snapshot: SaveRecoverySnapshot): Promise<void> {
+    if (this.recoveringSave || !this.backend?.startFreshAfterRecovery) return;
+    const token = this.run.token();
+    if (!this.run.isCurrent(token)) return;
+    this.recoveringSave = true; this.recoveryDialog?.setBusy(true);
+    this.recoveryDialog?.setMessage("Keeping the old data before opening a new journey…");
+    try {
+      const state = await this.backend.startFreshAfterRecovery(snapshot);
+      if (!this.run.isCurrent(token)) return;
+      this.store = new SaveStore(this.backend, state);
+      this.storePromise = Promise.resolve(this.store);
+      setAudioLevel(state.audioLevel);
+      this.recoveryDialog?.destroy(); this.recoveryDialog = undefined;
+      this.recoveringSave = false;
+      this.run.release("transition");
+      void this.beginTransition();
+    } catch (error) {
+      if (!this.run.isCurrent(token)) return;
+      this.recoveringSave = false;
+      await this.presentSaveLoadFailure(error, token, "A new journey could not open safely. Your saved data has been kept. Review the current choices, or try loading again.");
+    }
+  }
+
+  private showSaveChoice(conflict: SaveConflict, message?: string): void {
+    const copy = saveChoicePresentation(conflict);
+    this.saveChoicePanel?.destroy();
+    this.selectedSave = null;
+    this.resolvingSave = false;
+    this.saveChoiceRows = [];
+    const { width, height } = this.scale;
+    const panel = this.add.container(width / 2, height / 2).setDepth(2100);
+    this.saveChoicePanel = panel;
+    const shade = this.add.rectangle(0, 0, width, height, 0x080b12, 0.92);
+    const plate = this.add.rectangle(0, 0, 1360, 690, UI_HEX.panel, 1)
+      .setStrokeStyle(2, UI_HEX.brass, 0.9);
+    const title = this.add.text(0, -286, "Which journey would you like to continue?", {
+      fontFamily: SERIF, fontSize: "40px", color: UI_CSS.parchment, align: "center",
+    }).setOrigin(0.5);
+    const explanation = this.add.text(0, -222,
+      copy.explanation, {
+        fontFamily: SERIF, fontSize: "24px", color: UI_CSS.cream, align: "center",
+      }).setOrigin(0.5);
+    panel.add([shade, plate, title, explanation]);
+    for (const [index, source] of (["local", "cloud"] as const).entries()) {
+      const x = index === 0 ? -330 : 330;
+      const state = conflict[source];
+      const box = this.add.rectangle(x, -4, 600, 328, UI_HEX.panel, 1)
+        .setStrokeStyle(2, UI_HEX.brass, 0.35)
+        .setInteractive({ useHandCursor: true });
+      box.on("pointerover", () => {
+        if (!this.resolvingSave) this.focusSaveChoice(source);
+      });
+      box.on("pointerdown", () => {
+        if (this.resolvingSave) return;
+        this.focusSaveChoice(source);
+        void this.resolveSaveChoice(source);
+      });
+      const label = this.add.text(x, -126, copy.labels[source], {
+        fontFamily: SERIF, fontSize: "31px", color: UI_CSS.brass, align: "center",
+      }).setOrigin(0.5);
+      const summary = this.add.text(x, -38, saveJourneySummary(state), {
+        fontFamily: SERIF, fontSize: "25px", color: UI_CSS.cream, align: "center",
+        lineSpacing: 10, wordWrap: { width: 550 },
+      }).setOrigin(0.5);
+      const date = new Date(state.updatedAt).toLocaleString(undefined, {
+        dateStyle: "medium", timeStyle: "short",
+      });
+      const saved = this.add.text(x, 62, `${conflict.kind === "device" && source === "local" ? "Updated" : "Saved"} ${date}`, {
+        fontFamily: SERIF, fontSize: "21px", color: UI_CSS.cream, align: "center",
+      }).setOrigin(0.5);
+      const action = this.add.text(x, 122, copy.actions[source], {
+        fontFamily: SERIF, fontSize: "27px", color: UI_CSS.brass, align: "center",
+      }).setOrigin(0.5);
+      panel.add([box, label, summary, saved, action]);
+      this.saveChoiceRows.push({ source, box });
+    }
+    this.saveChoiceMessage = this.add.text(0, 234,
+      message ?? "L / C or arrow keys to choose · Enter to continue\nYou can also click a save above.", {
+        fontFamily: SERIF, fontSize: "24px", color: UI_CSS.cream, align: "center",
+        lineSpacing: 8, wordWrap: { width: 1190 },
+      }).setOrigin(0.5);
+    panel.add(this.saveChoiceMessage);
+  }
+
+  private focusSaveChoice(source: SaveSource): void {
+    this.selectedSave = source;
+    for (const row of this.saveChoiceRows) {
+      row.box.setStrokeStyle(row.source === source ? 4 : 2, UI_HEX.brass,
+        row.source === source ? 1 : 0.35);
+    }
+  }
+
+  private handleSaveChoiceKey(event: KeyboardEvent): void {
+    event.preventDefault();
+    if (event.repeat || this.resolvingSave) return;
+    const source = saveChoiceFocus(event.key, this.selectedSave);
+    if (source) this.focusSaveChoice(source);
+    if (event.key === "Enter" && this.selectedSave) {
+      void this.resolveSaveChoice(this.selectedSave);
+    }
+  }
+
+  private async resolveSaveChoice(source: SaveSource): Promise<void> {
+    if (this.resolvingSave || !this.backend?.resolveConflict) return;
+    this.resolvingSave = true;
+    const token = this.run.token();
+    this.saveChoiceMessage?.setText("Keeping both versions and opening your chosen journey…");
+    try {
+      const state = await this.backend.resolveConflict(source);
+      if (!this.run.isCurrent(token)) return;
+      this.store = new SaveStore(this.backend, state);
+      this.storePromise = Promise.resolve(this.store);
+      setAudioLevel(state.audioLevel);
+      this.saveChoicePanel?.destroy();
+      this.saveChoicePanel = undefined;
+      this.saveChoiceRows = [];
+      this.saveChoiceMessage = undefined;
+      this.resolvingSave = false;
+      this.run.release("transition");
+      void this.beginTransition();
+    } catch {
+      if (!this.run.isCurrent(token)) return;
+      const refreshed = this.backend.getConflict?.();
+      if (refreshed) {
+        this.showSaveChoice(refreshed, saveChoicePresentation(refreshed).retry);
+      } else {
+        this.resolvingSave = false;
+        this.saveChoiceMessage?.setText("The choice could not finish saving. Your versions are preserved.\nSelect a save to retry.");
+      }
+    }
+  }
+
   private createTemporaryDevStore(
     source: SaveStore | undefined,
-    satchel: readonly string[],
+    satchel?: readonly string[],
   ): SaveStore {
     const state = source
       ? (JSON.parse(JSON.stringify(source.get())) as SaveState)
       : emptySave();
-    applyDevUnlock(state, { satchel });
+    applyDevUnlock(state, satchel === undefined ? {} : { satchel });
     const backend: SaveBackend = {
       load: async () => state,
       save: async () => {
-        // Intentionally transient: this route is for visual/feel-tuning passes
-        // where the full satchel would obscure UI or auto-clear waves before
-        // inspection.
+        // Review actions, rewards and resets never reach the player's save.
       },
     };
     return new SaveStore(backend, state);

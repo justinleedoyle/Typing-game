@@ -1,0 +1,5 @@
+Generated with the built-in image_gen tool on 2026-10-27. Alternate empty-hand pose derived from art/sky/etta.png; original retained. Used when the separate world book appears so the single volume is not duplicated.
+
+Final prompt:
+
+Use case: precise-object-edit. Asset type: alternate transparent game character sprite. Input image 1 is the edit target: existing Scholar Etta sprite. Change ONLY the book she holds: remove the brown book from her chest and reconstruct the small covered area of golden robe naturally. Keep her arms and clasped hands in exactly their current pose, now empty, resting together in front of her. Preserve her exact face, round spectacles, expression, body proportions, hood, embroidered cloak, clasp, legs, shoes, floating pages and little lanterns, warm translucent gold ghost coloration, painted ink/watercolor style, full-body silhouette, framing and transparent margins. No new objects, no book, no staff, no scenery, no text. Genuine transparent alpha background, same portrait composition. This is the same character after handing her single book to Wren; identity and all other pixels should remain as faithful as possible.

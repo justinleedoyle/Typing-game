@@ -189,6 +189,9 @@ export class ScrollingPhrase {
       word: this.opts.phrase,
       x: this.container.x,
       y: this.container.y,
+      // The opaque parchment sits at20 and later actors reach50. Its answer
+      // is an independent container, so it must be layered above both.
+      depth: 70,
       fontSize: BANNER_FONT_SIZE,
       burstColor: PALETTE_HEX.brass,
       // UI-cohesion: the same legibility outline every other word target carries,
@@ -302,6 +305,12 @@ export class ScrollingPhrase {
 
   private handleMiss(): void {
     if (this.resolved) return;
+    // The last matched character beats the exit edge, even if the word's
+    // completion animation has not yet delivered its scene callback.
+    if (this.target?.isComplete()) {
+      this.handleComplete();
+      return;
+    }
     this.resolved = true;
     this.clearWordAttachTimer();
     this.entryTween?.stop();

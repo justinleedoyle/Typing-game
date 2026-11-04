@@ -30,6 +30,12 @@ const CHARS_PER_WORD = 5;
 const SOUL_MAX = 100;
 /** Base Soul poured in per clean keystroke, before the combo multiplier. */
 const SOUL_PER_CHAR = 3;
+export interface SessionCheckpoint {
+  statsHits: string;
+  statsSoul: number;
+  statsCombo: number;
+  statsBestCombo: number;
+}
 /** Soul cost of one modifier-spell cast. SOUL_MAX / SPELL_COST = the number of
  *  casts you can bank at a full meter (100 / 50 = 2). Exported so scenes gate
  *  and spend against one shared number. Starting value — tune on the live build. */
@@ -90,6 +96,30 @@ export class SessionStats {
     this.soul = 0;
     this.combo = 0;
     this.bestCombo = 0;
+    this.correctTimes = [];
+  }
+
+  /** Save only encounter-entry stakes, never elapsed wall-clock speed. */
+  captureCheckpoint(): SessionCheckpoint {
+    return {
+      statsHits: this.hits.slice(-HEART_WINDOW).map(hit => hit ? "1" : "0").join(""),
+      statsSoul: this.soul,
+      statsCombo: this.combo,
+      statsBestCombo: this.bestCombo,
+    };
+  }
+
+  restoreCheckpoint(data: Readonly<Record<string, unknown>>): void {
+    const finite = (value: unknown, fallback: number, max: number) =>
+      typeof value === "number" && Number.isFinite(value)
+        ? Math.max(0, Math.min(max, value)) : fallback;
+    if (typeof data.statsHits === "string" && /^[01]*$/.test(data.statsHits)) {
+      this.hits = data.statsHits.slice(-HEART_WINDOW).split("").map(hit => hit === "1");
+    }
+    this.soul = finite(data.statsSoul, this.soul, SOUL_MAX);
+    this.combo = Math.floor(finite(data.statsCombo, this.combo, Number.MAX_SAFE_INTEGER));
+    this.bestCombo = Math.max(this.combo,
+      Math.floor(finite(data.statsBestCombo, this.bestCombo, Number.MAX_SAFE_INTEGER)));
     this.correctTimes = [];
   }
 

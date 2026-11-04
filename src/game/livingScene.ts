@@ -1,4 +1,6 @@
+import { decorativeTween, reducedMotion, reducedFlashes } from "./presentation";
 import Phaser from "phaser";
+import { applySceneActorLighting, restoreSceneActorLighting } from "./actorLighting";
 
 export type AmbientKind = "ash" | "bubble" | "ember" | "mist" | "mote" | "snow";
 
@@ -321,6 +323,30 @@ export type DismissStagedCueOptions = DismissTrueNameSealOptions;
 
 const typedBodyPulseTimes = new WeakMap<object, number>();
 
+/** Nested low-opacity strokes feather into the painted floor, with no hard
+ * ellipse edge. The center retains the requested opacity. */
+function paintSoftEllipse(
+  g: Phaser.GameObjects.Graphics, x: number, y: number,
+  width: number, height: number, color: number, alpha: number,
+): void {
+  const layers = 12;
+  const opacity = 1 - Math.pow(1 - Math.min(0.95, Math.max(0, alpha)), 1 / layers);
+  for (let i = 0; i < layers; i++) {
+    const scale = 1 - (i / layers) * 0.76;
+    g.fillStyle(color, opacity);
+    g.fillEllipse(x, y, width * scale, height * scale);
+  }
+}
+
+/** Local feathered illumination for a moving body; no ring or hard disc. */
+export function addSoftLocalLight(
+  scene: Phaser.Scene, width: number, height: number, color: number, alpha: number,
+): Phaser.GameObjects.Graphics {
+  const light = scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+  paintSoftEllipse(light, 0, 0, width, height, color, alpha);
+  return light;
+}
+
 /** Local ellipse shadow for feet-anchored sprites inside a container. */
 export function addLocalGroundShadow(
   scene: Phaser.Scene,
@@ -329,8 +355,8 @@ export function addLocalGroundShadow(
   opts: ShadowOptions = {},
 ): Phaser.GameObjects.Graphics {
   const g = scene.add.graphics();
-  g.fillStyle(opts.color ?? 0x000000, opts.alpha ?? 0.28);
-  g.fillEllipse(opts.x ?? 0, opts.y ?? 4, width, height);
+  paintSoftEllipse(g, opts.x ?? 0, opts.y ?? 4, width, height,
+    opts.color ?? 0x100d0d, opts.alpha ?? 0.28);
   if (opts.depth !== undefined) g.setDepth(opts.depth);
   return g;
 }
@@ -345,8 +371,7 @@ export function addGroundShadow(
   opts: ShadowOptions = {},
 ): Phaser.GameObjects.Graphics {
   const g = scene.add.graphics();
-  g.fillStyle(opts.color ?? 0x000000, opts.alpha ?? 0.28);
-  g.fillEllipse(x, y, width, height);
+  paintSoftEllipse(g, x, y, width, height, opts.color ?? 0x100d0d, opts.alpha ?? 0.28);
   if (opts.depth !== undefined) g.setDepth(opts.depth);
   return g;
 }
@@ -358,7 +383,7 @@ export function addIdleBreath(
   opts: IdleBreathOptions = {},
 ): Phaser.Tweens.Tween {
   const baseY = target.y;
-  return scene.tweens.add({
+  const tween = scene.tweens.add({
     targets: target,
     y: baseY + (opts.dy ?? -5),
     duration: opts.durationMs ?? 1800,
@@ -367,6 +392,8 @@ export function addIdleBreath(
     repeat: -1,
     ease: "Sine.easeInOut",
   });
+  decorativeTween(scene, tween);
+  return tween;
 }
 
 /** Subtle breathing motion for a full-screen painted backdrop. The target is
@@ -384,7 +411,7 @@ export function addBackdropDrift(
   const scale = opts.scale ?? 1.012;
   const extraX = (backdrop.displayWidth * (scale - 1)) / 2;
   const extraY = (backdrop.displayHeight * (scale - 1)) / 2;
-  return scene.tweens.add({
+  const tween = scene.tweens.add({
     targets: backdrop,
     x: baseX - extraX + (opts.driftX ?? -4),
     y: baseY - extraY + (opts.driftY ?? -3),
@@ -396,6 +423,8 @@ export function addBackdropDrift(
     repeat: -1,
     ease: "Sine.easeInOut",
   });
+  decorativeTween(scene, tween);
+  return tween;
 }
 
 /** Subtle additive light for painted sources such as portals, candles, aurora,
@@ -412,13 +441,10 @@ export function addLivingLight(
     .setDepth(opts.depth ?? -6)
     .setAlpha(alpha)
     .setBlendMode(Phaser.BlendModes.ADD);
-  g.fillStyle(opts.color, 0.22);
-  g.fillEllipse(0, 0, opts.width, opts.height);
-  g.fillStyle(opts.color, 0.12);
-  g.fillEllipse(0, 0, opts.width * 1.42, opts.height * 1.36);
+  paintSoftEllipse(g, 0, 0, opts.width * 1.42, opts.height * 1.36, opts.color, 0.32);
 
   const scale = opts.scale ?? 1.08;
-  scene.tweens.add({
+  const tween = scene.tweens.add({
     targets: g,
     alpha: alpha * 0.56,
     scaleX: scale,
@@ -429,6 +455,8 @@ export function addLivingLight(
     repeat: -1,
     ease: "Sine.easeInOut",
   });
+  decorativeTween(scene, tween);
+  if (reducedFlashes(scene)) g.setAlpha(alpha * 0.5);
   return g;
 }
 
@@ -440,6 +468,7 @@ export function stageAnchoredSprite(
   sprite: Phaser.GameObjects.Image,
   opts: StagedSpriteOptions,
 ): Phaser.GameObjects.Graphics {
+  applySceneActorLighting(scene, sprite);
   const restY = sprite.y;
   const shadow = addGroundShadow(
     scene,
@@ -536,6 +565,7 @@ export function stageCompanionCameo(
 
   const sprite = scene.add.image(0, 0, opts.textureKey).setOrigin(0.5, 1);
   sprite.setScale(opts.height / Math.max(1, sprite.height));
+  applySceneActorLighting(scene, sprite);
   if (opts.flipX) sprite.setFlipX(true);
   c.add(sprite);
 
@@ -1327,7 +1357,7 @@ export function playActorAttention(
   if (opts.tint !== undefined) {
     target.setTintFill?.(opts.tint);
     scene.time.delayedCall(Math.min(140, opts.durationMs ?? 180), () =>
-      target.clearTint?.(),
+      restoreSceneActorLighting(target),
     );
   }
   scene.tweens.add({
@@ -1443,6 +1473,9 @@ export function addAmbientDrift(
   };
   const container = scene.add.container(0, 0).setDepth(opts.depth ?? -10);
   let alive = true;
+  const applyMotion = () => container.setVisible(!reducedMotion(scene));
+  applyMotion();
+  scene.events.on("chapter-presentation-changed", applyMotion);
 
   const defaultColor = colorFor(opts.kind);
   for (let i = 0; i < opts.count; i++) {
@@ -1461,6 +1494,7 @@ export function addAmbientDrift(
   const stop = (): void => {
     if (!alive) return;
     alive = false;
+    scene.events.off("chapter-presentation-changed", applyMotion);
     container.destroy();
   };
   scene.events.once(Phaser.Scenes.Events.SHUTDOWN, stop);

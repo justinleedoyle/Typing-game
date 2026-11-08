@@ -100,6 +100,8 @@ await import("./navigationPolicy.test.ts");
 await import("./homecoming.test.ts");
 await import("./soundscapePlayer.test.ts");
 await import("./audioOwnership.test.ts");
+await import("./bellSoundscape.test.ts");
+await import("./bellAudioIntegration.test.ts");
 
 console.log("\nAll logic test suites passed.");
 // Force a clean exit: saveState.test imports the real supabase client, whose

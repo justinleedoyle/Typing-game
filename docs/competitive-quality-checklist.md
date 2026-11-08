@@ -1,6 +1,6 @@
 # Competitive quality checklist
 
-Updated: 2026-11-03. Owner: Justin and the game team.
+Updated: 2026-11-08. Owner: Justin and the game team.
 
 The target is a beautiful, emotionally memorable typing adventure where words change places and relationships. Touch Type Tale is a benchmark for craft, interesting decisions and a finished product. Player preference and commercial success must be demonstrated; neither follows from a feature count or passing tests.
 
@@ -49,7 +49,7 @@ First contained slice: the wounded fox between Winter's first two wolf fights. L
 - [ ] Verify pause/resume, muted audio, interruption and re-entry without overlapping or orphaned playback.
 - [ ] Record and integrate voices only after gameplay, staging and text are stable. Preserve subtitles and deliberate reading controls.
 
-Opening, the chamber bridge and Winter now have original music/environmental audio; the other realms' older ambient entry points remain silent. The full sound/music production goal stays open.
+Opening, the chamber bridge, Winter and Sunken Bell now have original music/environmental audio; Forge, Sky and Wood retain their older silent ambient entry points. Sunken Bell's score is explicitly temporary and easy to replace with Justin's later externally created music. The full sound/music production goal stays open.
 
 ## 5. Almanac, progression and replay
 
@@ -99,6 +99,9 @@ New realms, multiplayer, broad localization and an engine rewrite are not the fi
 - Scene-owned sources retain playheads on pause, stop on shutdown/destroy and cannot resume merely because focus returns or a sound preference changes. Pending asset loads cannot resurrect old scenes. Browser autoplay unlock requires deliberate trusted input; audio failure never blocks a journey. Calm aftermath remains calm across burial, pelt, fox reunion, true name and return checkpoints.
 - Audio verification:662 logic groups /172,081 checks, typecheck and browser/desktop builds. All10MP3s decode at exact authored lengths without clipped/invalid samples; original browser scenes separately verify actual decoded loop lengths, live output, muted resume, frozen pause positions and deliberate resume. Screenshots document visual flow; meters/asset checks establish their technical scope, while artistic listening acceptance remains separate.
 - Audio local sprint `.claude/sessions/2026-11-03-opening-winter-audio.md`; screenshot, actual audio-meter and preview evidence `.claude/playthrough-audit/2026-11-03-opening-winter-audio/`. Fresh ordinary Opening→Winter trail/Heldur and recovery remain separate from synthetic later-phase fixture entries. Broad realm-wide audio work and voices remain open.
+- Sunken Bell audio milestone: replaceable exploration/aftermath scores, underwater water/masonry layers and action-linked lantern/latch/rubble/unbinding cues. Stable asset imports and replacement guidance are in `src/audio/soundscapes.ts` and `art/audio/README.md`; original temporary source/provenance is in `scripts/render-bell-audio.mjs`. No voices, save fields or difficulty changes.
+- Bell's practice and combat sections omit music to foreground the original timing tolls. Only visible rhythm phases emit those tolls; the underlying clock, encounter delays and input windows stay unchanged. Taking the clapper leaves water without music during aftermath/revisit, while other known/neutral aftermath stays warm. Checkpoint restoration settles props without replaying their action sounds.
+- Bell resolver, actual scene callbacks and shared player regression tests cover existing stages, known/unknown outcomes, music removal at rhythm entry, silent story tolls, live action cues and silent restored responses. Browser/asset/screenshots and later human listening retain distinct evidence scopes. New local sprint `.claude/sessions/2026-11-08-sunken-bell-audio.md`; audit `.claude/playthrough-audit/2026-11-08-sunken-bell-audio/`.
 - A checkbox closes only when its stated scope is implemented and verified. Partial milestones should link their evidence without checking the whole broad goal.
 - Local sprint: `.claude/sessions/2026-11-02-winter-fox-encounter.md`.
 - Screenshot audit: `.claude/playthrough-audit/2026-11-02-winter-fox-encounter/`.

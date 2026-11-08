@@ -5,12 +5,14 @@ import { ChapterReading } from "../game/ui/chapterReading";
 import { reducedFlashes, reducedMotion } from "../game/presentation";
 import Phaser from "phaser";
 import { applySceneActorLighting } from "../game/actorLighting";
-import { type AmbientHandle, playAmbientBell } from "../audio/ambient";
+import { installSoundscape, type SceneSoundscape } from "../audio/soundscapes";
+import { bellSoundscapeMood } from "../audio/bellSoundscape";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
 import { playDamageThud } from "../audio/damageThud";
 import { playWaveSting } from "../audio/waveSting";
+import { playBellToll } from "../audio/bellToll";
 import { flashDamageVignette } from "../game/vfx";
 import { BeatClock } from "../game/beatClock";
 import { decideBeatGate } from "../game/beatGate";
@@ -247,7 +249,7 @@ export class SunkenBellScene extends Phaser.Scene {
   /** True after the Quiet Lord's §5.5.10 intrusion has fired this playthrough. */
   private quietLordIntruded = false;
 
-  private ambientHandle?: AmbientHandle;
+  private soundscape?: SceneSoundscape;
   private revisit = false;
   private resumeCheckpoint: SaveCheckpoint | null = null;
   private combatSatchel: string[] = [];
@@ -536,6 +538,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
     this.beatClock = new BeatClock(this, {
       tempoMs: 2000,
+      audio: false,
       onBeat: () => this.onBeatTick(),
     });
 
@@ -549,7 +552,7 @@ export class SunkenBellScene extends Phaser.Scene {
       this.typingInput.reset();
       this.beatClock.stop();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
-      this.ambientHandle?.stop();
+      this.soundscape?.stop();
       this.clearBellForkCues();
       this.clearAurlandWordAnchors();
       this.clearAurlandToken();
@@ -564,7 +567,9 @@ export class SunkenBellScene extends Phaser.Scene {
       this.aurlandImage = undefined;
     });
 
-    this.ambientHandle = playAmbientBell();
+    this.soundscape = installSoundscape(this, bellSoundscapeMood(
+      this.revisit ? "ending" : this.resumeCheckpoint?.step, this.fork2Choice ?? undefined,
+    ));
 
     if (this.revisit) {
       this.startRevisit();
@@ -575,6 +580,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   /** Save only stable entry resources, never transient combat actors or timers. */
   private checkpoint(step: BellStep, data: SaveCheckpoint["data"] = {}): void {
+    this.soundscape?.setMood(bellSoundscapeMood(step, this.fork2Choice ?? undefined));
     if (this.revisit || this.store.get().realms["sunken-bell"]?.cleared) return;
     if (!this.store.get().realms["sunken-bell"]) {
       this.store.update(s => { s.realms["sunken-bell"] = { cleared: false, choices: {} }; });
@@ -899,6 +905,9 @@ export class SunkenBellScene extends Phaser.Scene {
    *  half-beat window so its entire visible span accepts a new word. */
   private onBeatTick(): void {
     if (this.beatPhase === "free") return;
+    // The clock retains its exact timing through untimed story passages, but
+    // only the visible teaching/combat rhythm owns an audible toll.
+    playBellToll();
     this.rhythmTrack?.setAlpha(0.38);
     this.rhythmLabel.setAlpha(0.9);
     this.pulseBeatRing();
@@ -1519,6 +1528,7 @@ export class SunkenBellScene extends Phaser.Scene {
             faceLeft: wordPos.x < this.wrenContainer.x,
           });
           releaseLanternAnchor();
+          this.soundscape?.cue("bell-lantern");
           this.lightDescentLantern(lantern);
           this.clearActiveTargets();
           index += 1;
@@ -1972,6 +1982,7 @@ export class SunkenBellScene extends Phaser.Scene {
 
   /** Original combat clock and encounter delay begin only after rehearsal. */
   private beginRhythmEncounters(): void {
+    this.soundscape?.setMood("bell-rhythm");
     this.band.setObjective("Listen for the bell. The tide-ghosts are drawing close.");
     this.beatPhase = "on";
     this.rhythmLabel.setAlpha(0.9);
@@ -2367,7 +2378,10 @@ export class SunkenBellScene extends Phaser.Scene {
       { word: "the doors remember weight.", narrator: "We knew them once." },
       { word: "we knew them once.", narrator: "They part with grace." },
       { word: "they part with grace.", narrator: "(the doors open)",
-        onFinalCharacter: () => this.openCathedralDoor("chant"),
+        onFinalCharacter: () => {
+          this.soundscape?.cue("bell-latch");
+          this.openCathedralDoor("chant");
+        },
         beforeResponse: () => this.openCathedralDoor("chant", true) },
     ];
     this.runBeatLockedChain(phrases, () => {
@@ -2443,7 +2457,10 @@ export class SunkenBellScene extends Phaser.Scene {
         y: pos.y,
         fontSize: 40,
         onAdvance: (cursor, length) => {
-          if (step === forcePhrases.length - 1 && cursor === length) this.openForceDoorCue();
+          if (step === forcePhrases.length - 1 && cursor === length) {
+            this.soundscape?.cue("bell-rubble");
+            this.openForceDoorCue();
+          }
         },
         onComplete: () => {
           step += 1;
@@ -4547,6 +4564,10 @@ export class SunkenBellScene extends Phaser.Scene {
         },
         onComplete: () => {
           playWrenAction(this.wrenSprite);
+          // Only a live completed phrase owns Foley. Restored held responses
+          // call the separate prop-settlement hooks below without replaying it.
+          if (freeingAurland && idx === steps.length - 1) this.soundscape?.cue("bell-release");
+          if (!freeingAurland) this.soundscape?.cue("bell-latch");
           if (freeingAurland) {
             playActorAttention(this, this.aurlandImage, {
               tint: BELL_BURST_COLOR,

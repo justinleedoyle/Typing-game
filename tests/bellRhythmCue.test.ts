@@ -25,7 +25,7 @@ const code = ts.transpileModule(`${constants}\nclass Harness { static nave = NAV
 const noop = () => {};
 const Harness = new Function("attachWrenHeldProp", "bellIndex", "reducedFlashes", "reducedMotion", "PALETTE_HEX", "Phaser",
   "applySceneActorLighting", "playWrenFocus", "playWrenAction", "playBodyImpact", "playDamageThud", "BELL_BURST_COLOR",
-  "setWrenPose", "isPuristToggleKey", "playClack", "satchelIconFor",
+  "setWrenPose", "isPuristToggleKey", "playClack", "satchelIconFor", "playBellToll",
   `${code}; return Harness;`)(
   attachWrenHeldPropFixture, bellIndex, (scene: { reducedFlashes: boolean }) => scene.reducedFlashes,
   (scene: { reducedMotion: boolean }) => scene.reducedMotion,
@@ -34,6 +34,7 @@ const Harness = new Function("attachWrenHeldProp", "bellIndex", "reducedFlashes"
   (_scene: unknown, actor: { lit: boolean }) => { actor.lit = true; }, noop, noop, noop, noop, 0x4ab8d6,
   (actor: { pose: string }, pose: string) => { actor.pose = pose; }, () => false, noop,
   (id: string) => ({ key: `almanac-icon-${id}` }),
+  noop,
 );
 
 function encounter(tempo: number, phase: "on" | "off" | "free", reducedFlashes = true) {

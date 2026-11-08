@@ -12,10 +12,20 @@ import wood from "../../art/audio/wood.mp3";
 import stone from "../../art/audio/stone.mp3";
 import bough from "../../art/audio/bough.mp3";
 import flame from "../../art/audio/flame.mp3";
+import bellTheme from "../../art/audio/bell-theme.mp3";
+import bellClearTheme from "../../art/audio/bell-clear-theme.mp3";
+import bellWater from "../../art/audio/bell-water.mp3";
+import bellMasonry from "../../art/audio/bell-masonry.mp3";
+import bellLantern from "../../art/audio/bell-lantern.mp3";
+import bellLatch from "../../art/audio/bell-latch.mp3";
+import bellRubble from "../../art/audio/bell-rubble.mp3";
+import bellRelease from "../../art/audio/bell-release.mp3";
 
-export type SoundscapeMood = "home" | "winter-trail" | "winter-glade" | "winter-threat" | "winter-rest" | "winter-return";
-export type MaterialSound = "snow" | "wood" | "stone" | "bough" | "flame";
-const materials: Record<MaterialSound, string> = { snow, wood, stone, bough, flame };
+export type SoundscapeMood = "home" | "winter-trail" | "winter-glade" | "winter-threat" | "winter-rest" | "winter-return"
+  | "bell-depths" | "bell-rhythm" | "bell-rest" | "bell-silence";
+export type MaterialSound = "snow" | "wood" | "stone" | "bough" | "flame" | "bell-lantern" | "bell-latch" | "bell-rubble" | "bell-release";
+const materials: Record<MaterialSound, string> = { snow, wood, stone, bough, flame,
+  "bell-lantern": bellLantern, "bell-latch": bellLatch, "bell-rubble": bellRubble, "bell-release": bellRelease };
 const loop = (id: string, url: string, gain: number): LoopSpec => ({ id, url, gain });
 const moods: Record<SoundscapeMood, readonly LoopSpec[]> = {
   home: [loop("home-theme", home, .65), loop("hearth", hearth, .6)],
@@ -24,6 +34,12 @@ const moods: Record<SoundscapeMood, readonly LoopSpec[]> = {
   "winter-threat": [loop("winter-theme", winter, .28), loop("wind", wind, .58)],
   "winter-rest": [loop("home-theme", home, .42), loop("wind", wind, .23)],
   "winter-return": [loop("home-theme", home, .42), loop("wind", wind, .28), loop("stream", stream, .4)],
+  "bell-depths": [loop("bell-theme", bellTheme, .48), loop("bell-water", bellWater, .55), loop("bell-masonry", bellMasonry, .3)],
+  // Existing tolls are the timing instruction. No competing musical pulse.
+  "bell-rhythm": [loop("bell-water", bellWater, .35)],
+  "bell-rest": [loop("bell-clear-theme", bellClearTheme, .4), loop("bell-water", bellWater, .35)],
+  // Taking the clapper leaves the place hollow: no score or recurring toll.
+  "bell-silence": [loop("bell-water", bellWater, .28)],
 };
 // Failed requests are evicted so deliberate re-entry can recover. No asset can
 // stall a scene's artwork gate or prevent a saved journey from loading.
@@ -83,6 +99,8 @@ export function installSoundscape(scene: Phaser.Scene, initial: SoundscapeMood):
   handle.setMood(initial);
   // Warm small material samples in the background so a first physical action
   // has the same timing as later ones. Failure remains optional and recoverable.
-  if (initial !== "home") for (const url of Object.values(materials)) void load(url).catch(() => {});
+  const samples = initial.startsWith("bell-") ? [bellLantern, bellLatch, bellRubble, bellRelease]
+    : initial === "home" ? [] : [snow, wood, stone, bough, flame];
+  for (const url of samples) void load(url).catch(() => {});
   return handle;
 }

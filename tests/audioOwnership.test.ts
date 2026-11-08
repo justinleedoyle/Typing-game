@@ -49,6 +49,10 @@ async function withWorld(work: (world: any) => Promise<void>) {
     document, window, fetch, home: "/home.mp3", winter: "/winter.mp3", hearth: "/hearth.mp3",
     wind: "/wind.mp3", stream: "/stream.mp3", snow: "/snow.mp3", wood: "/wood.mp3",
     stone: "/stone.mp3", bough: "/bough.mp3", flame: "/flame.mp3",
+    bellTheme: "/bell-theme.mp3", bellClearTheme: "/bell-clear-theme.mp3",
+    bellWater: "/bell-water.mp3", bellMasonry: "/bell-masonry.mp3",
+    bellLantern: "/bell-lantern.mp3", bellLatch: "/bell-latch.mp3",
+    bellRubble: "/bell-rubble.mp3", bellRelease: "/bell-release.mp3",
   });
   const game: any = { events: new EventEmitter(), loop: { inFocus: true } };
   const disposeTracker = installGameInterruptionTracker(game);
@@ -94,6 +98,25 @@ await suite("Audio ownership: scene pause preserves silent preferences and resum
   assertEqual([w.active().length, handle.status().mood], [3, "winter-trail"], "resume starts only the latest requested mood");
   scene.events.emit("resume"); scene.events.emit("wake"); await settle();
   assertEqual(w.active().length, 3, "repeated resume/wake cannot overlap a second soundscape");
+}));
+
+await suite("Bell audio ownership: rhythm and clapper aftermath remove the score without replacing the water playhead", async () => withWorld(async w => {
+  const scene = w.scene("SunkenBellScene"), handle = w.installSoundscape(scene, "bell-depths"); await settle();
+  assertEqual(handle.status().layers.map((layer: any) => layer.id), ["bell-theme", "bell-water", "bell-masonry"], "exploration owns its score and underwater layers");
+  assert(w.requests.every((request: any) => request.url.startsWith("/bell-")), "Bell prefetch does not fetch unrelated Winter material sounds");
+  w.context.currentTime = 13;
+  handle.setMood("bell-rhythm"); await settle();
+  assertEqual(handle.status().layers.map((layer: any) => layer.id), ["bell-water"], "rhythm has no competing score or masonry layer");
+  assertEqual(handle.status().layers[0].offset, 13, "the continuing water playhead does not restart on a rhythm transition");
+  handle.setMood("bell-rest"); await settle();
+  assertEqual(handle.status().layers.map((layer: any) => layer.id), ["bell-water", "bell-clear-theme"], "aftermath gains its warmer score");
+  handle.setMood("bell-silence"); await settle();
+  assertEqual(handle.status().layers.map((layer: any) => layer.id), ["bell-water"], "taking the clapper removes every musical layer");
+  scene.pause(); const count = w.sources.length;
+  handle.cue("bell-rubble"); await settle();
+  assertEqual([w.sources.length, w.active().length], [count, 0], "a paused Bell owner cannot play or queue an action cue");
+  scene.resume(); await settle();
+  assertEqual(handle.status().layers.map((layer: any) => layer.id), ["bell-water"], "resume cannot restore the discarded score");
 }));
 
 await suite("Audio ownership: hidden creation and focus return never autoplay before deliberate acknowledgment", async () => withWorld(async w => {

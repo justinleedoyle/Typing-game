@@ -101,3 +101,37 @@ All layers use the existing owned pause, mute, interruption and shutdown path.
 Regenerate Forge only with `node scripts/render-forge-audio.mjs` and ffmpeg/LAME.
 `forge-render-report.json` records the synthesis and decode measurements.
 Physical listening and artistic approval remain separate; voices remain last.
+
+## Temporary Sky Island palette
+
+Sky's score is a provisional open-air companion to the existing home motif.
+Replace `sky-theme.mp3` and `sky-clear-theme.mp3` at these stable paths, rebuild
+and check the loop, transitions and listening levels. Durations may change;
+audio filenames are never saved in a journey. Keep replacement provenance and
+licenses here. The environmental loops and action cues can remain unchanged
+when the music is replaced.
+
+`scripts/render-sky-audio.mjs` creates eight original deterministic recordings,
+seed 387241, without source samples, soundfonts, third-party compositions,
+provider calls or voices:
+
+- `sky-theme.mp3`: 96-second sparse airy plucked-string exploration theme,
+  with unequal rests and the established D/A/E family in a higher register.
+- `sky-clear-theme.mp3`: 96-second warmer aftermath theme, retaining the
+  same instrumental color while opening the harmony.
+- `sky-wind.mp3`: 22-second soft stereo open-air texture with slow swells.
+- `sky-paper.mp3`: 22-second sparse irregular paper-lantern/page flutter,
+  without a periodic beat or another gameplay timing signal.
+- `sky-stone`, `sky-lantern`, `sky-book`, `sky-tether`: 3-second material
+  cues for completed traversal, light, book-handling and fiber-release actions.
+
+The scene lowers the score during moving-scroll and riddle encounters. Etta's
+book/beacon work, a taken flame, a kind answer and freed tethered wind have
+distinct layer levels after the actual action completes; checkpoint and revisit
+reconstruction retain those consequences without replaying action sounds.
+All layers use the shared owned pause, mute, interruption and shutdown path.
+
+Regenerate Sky only with `node scripts/render-sky-audio.mjs` and ffmpeg/LAME.
+`sky-render-report.json` records the synthesis and MP3 decode measurements.
+These are technical checks, not physical listening or artistic acceptance.
+Voices remain last.

@@ -57,6 +57,10 @@ async function withWorld(work: (world: any) => Promise<void>) {
     forgeFurnace: "/forge-furnace.mp3", forgeMechanism: "/forge-mechanism.mp3",
     forgeWheel: "/forge-wheel.mp3", forgeLock: "/forge-lock.mp3",
     forgeGear: "/forge-gear.mp3", forgeFlame: "/forge-flame.mp3",
+    skyTheme: "/sky-theme.mp3", skyClearTheme: "/sky-clear-theme.mp3",
+    skyWind: "/sky-wind.mp3", skyPaper: "/sky-paper.mp3",
+    skyStone: "/sky-stone.mp3", skyLantern: "/sky-lantern.mp3",
+    skyBook: "/sky-book.mp3", skyTether: "/sky-tether.mp3",
   });
   const game: any = { events: new EventEmitter(), loop: { inFocus: true } };
   const disposeTracker = installGameInterruptionTracker(game);
@@ -142,6 +146,28 @@ await suite("Forge audio ownership: branch levels retain playheads and an obeyed
   assertEqual([w.sources.length, w.active().length], [count, 0], "a paused Forge owner cannot play or queue a metal-settling cue");
   scene.resume(); await settle();
   assertEqual(handle.status().layers.map((layer: any) => layer.id), ["forge-furnace", "forge-clear-theme"], "resume cannot reintroduce the stopped mechanism");
+}));
+
+await suite("Sky audio ownership: quiet action mixes retain wind playheads and freed wind omits paper without defeating pause", async () => withWorld(async w => {
+  const scene = w.scene("SkyIslandScene"), handle = w.installSoundscape(scene, "sky-terrace"); await settle();
+  assertEqual(handle.status().layers.map((layer: any) => layer.id), ["sky-theme", "sky-wind", "sky-paper"], "the arrival owns its open-air theme and two soft environmental layers");
+  assert(w.requests.every((request: any) => request.url.startsWith("/sky-")), "Sky prefetch remains in its own realm rather than loading unrelated materials");
+  assertEqual(w.requests.filter((request: any) => ["/sky-stone.mp3", "/sky-lantern.mp3", "/sky-book.mp3", "/sky-tether.mp3"].includes(request.url)).length, 4, "the owner prefetches its four live action cues exactly once");
+  w.context.currentTime = 11;
+  const before = w.sources.length; handle.setMood("sky-library"); await settle();
+  assertEqual(w.sources.length, before, "a quieter conversation changes gains without restarting score, wind or paper");
+  assert(handle.status().layers.every((layer: any) => layer.offset === 11), "the quieter scene retains every continuing playhead");
+  handle.setMood("sky-threat"); await settle();
+  assertEqual(handle.status().layers.map((layer: any) => layer.id), ["sky-theme", "sky-wind"], "a timed spirit/scroll encounter drops paper movement around the existing feedback");
+  handle.setMood("sky-rest-dim"); await settle();
+  const wind = handle.status().layers.find((layer: any) => layer.id === "sky-wind");
+  handle.setMood("sky-freed-dim"); await settle();
+  assertEqual(handle.status().layers.map((layer: any) => layer.id), ["sky-wind", "sky-clear-theme"], "a completed tether release leaves clear score and open wind without paper movement");
+  assertEqual(handle.status().layers.find((layer: any) => layer.id === "sky-wind").offset, wind.offset, "freed wind changes an existing layer gain without resetting its position");
+  scene.pause(); const count = w.sources.length; handle.cue("sky-tether"); await settle();
+  assertEqual([w.sources.length, w.active().length], [count, 0], "a paused Sky owner cannot start or queue a live tether cue");
+  scene.resume(); await settle();
+  assertEqual(handle.status().layers.map((layer: any) => layer.id), ["sky-wind", "sky-clear-theme"], "resume retains the actual freed outcome instead of returning to arrival paper");
 }));
 
 await suite("Audio ownership: hidden creation and focus return never autoplay before deliberate acknowledgment", async () => withWorld(async w => {

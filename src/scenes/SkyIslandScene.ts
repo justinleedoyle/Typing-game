@@ -5,7 +5,8 @@ import { ChapterReading } from "../game/ui/chapterReading";
 import { decorativeTween, reducedFlashes, reducedMotion } from "../game/presentation";
 import { applySceneActorLighting } from "../game/actorLighting";
 import Phaser from "phaser";
-import { type AmbientHandle, playAmbientSkyIsland } from "../audio/ambient";
+import { installSoundscape, type SceneSoundscape } from "../audio/soundscapes";
+import { skySoundscapeMood } from "../audio/skySoundscape";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
@@ -313,7 +314,7 @@ export class SkyIslandScene extends Phaser.Scene {
   private revisitMemoryCue: Phaser.GameObjects.Container | null = null;
   private revisitMemoryWordAnchor: WordBodyAnchorHandle | null = null;
 
-  private ambientHandle?: AmbientHandle;
+  private soundscape?: SceneSoundscape;
   private revisit = false;
   private resumeCheckpoint: SaveCheckpoint | null = null;
   private usedOneShots: OffensiveOneShot[] = [];
@@ -605,7 +606,7 @@ export class SkyIslandScene extends Phaser.Scene {
       if (this.wrenContainer?.scene) this.tweens.killTweensOf(this.wrenContainer);
       this.dismissPathCue(false);
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
-      this.ambientHandle?.stop();
+      this.soundscape?.stop();
       this.clearAmbientLanterns();
       this.templeLanterns.forEach((g) => g.destroy());
       this.templeLanterns = [];
@@ -620,7 +621,8 @@ export class SkyIslandScene extends Phaser.Scene {
       this.ettaSprite = null;
     });
 
-    this.ambientHandle = playAmbientSkyIsland();
+    this.soundscape = installSoundscape(this, skySoundscapeMood(this.resumeCheckpoint?.step,
+      this.fork1Choice, this.fork2Choice, this.resumeCheckpoint?.data));
 
     if (this.revisit) {
       this.startRevisit();
@@ -632,6 +634,7 @@ export class SkyIslandScene extends Phaser.Scene {
   /** Encounter checkpoints hold entry resources. Abandoning a live encounter
    * restarts that encounter with its entry Soul and one-shot charges together. */
   private checkpoint(step: SkyStep, data: SaveCheckpoint["data"] = {}): void {
+    this.soundscape?.setMood(skySoundscapeMood(step, this.fork1Choice, this.fork2Choice, data));
     if (this.revisit || this.store.get().realms["sky-island"]?.cleared) return;
     this.store.setCheckpoint({ scene: "SkyIslandScene", step, data: {
       ...this.typingInput.getStats().captureCheckpoint(),
@@ -832,6 +835,7 @@ export class SkyIslandScene extends Phaser.Scene {
         onAdvance: (cursor, length) => { if (cursor === length) this.ettaBookMoving = true; },
         onComplete: () => {
           playChime(); this.clearActiveTargets();
+          this.soundscape?.cue("sky-book");
           this.checkpoint("etta-book", { nextTemple: 3, stage: "shelved" });
           this.band.setObjective("Setting the book on its shelf…");
           this.moveEttaBook("shelved", () => this.finishRestoredEttaBook());
@@ -871,7 +875,9 @@ export class SkyIslandScene extends Phaser.Scene {
       color: 0xf5c842,
     });
     const state = this.store.get();
+    const first = resolveRealmFork("sky-island", "fork1", state.realms["sky-island"], state.satchel);
     const second = resolveRealmFork("sky-island", "fork2", state.realms["sky-island"], state.satchel);
+    this.soundscape?.setMood(skySoundscapeMood("ending", first, second));
     let narratorLine: string;
     let words: string[];
 
@@ -1149,6 +1155,7 @@ export class SkyIslandScene extends Phaser.Scene {
       onComplete: () => {
         playWrenAction(this.wrenSprite);
         this.pulsePathCue(true);
+        this.soundscape?.cue(beat === "lantern" ? "sky-lantern" : "sky-stone");
         playChime();
         this.clearActiveTargets();
         this.checkpoint("path", { index: idx, reading: true });
@@ -2203,6 +2210,7 @@ export class SkyIslandScene extends Phaser.Scene {
         onComplete: () => {
           playChime();
           this.clearActiveTargets();
+          this.soundscape?.cue("sky-book");
           this.checkpoint("etta-book", { nextTemple: nextTempleIdx, stage: "carried" });
           this.band.setObjective("Lifting the book…");
           this.moveEttaBook("carried", () => {
@@ -2222,6 +2230,7 @@ export class SkyIslandScene extends Phaser.Scene {
                 onComplete: () => {
                   playChime();
                   this.clearActiveTargets();
+                  this.soundscape?.cue("sky-book");
                   this.checkpoint("etta-book", { nextTemple: nextTempleIdx, stage: "shelved" });
                   this.band.setObjective("Setting the book on its shelf…");
                   this.moveEttaBook("shelved", () => {
@@ -2480,6 +2489,10 @@ export class SkyIslandScene extends Phaser.Scene {
             if (!helpedBefore) this.restoreEttaBookPose(index === 0 ? "carried" : "shelved");
             if (index === (helpedBefore ? 1 : 3)) this.setEttaHelpBeaconBright(true);
           },
+          onPhraseLiveComplete: (index) => {
+            if (!helpedBefore && (index === 0 || index === 1)) this.soundscape?.cue("sky-book");
+            if (index === (helpedBefore ? 1 : 3)) this.soundscape?.cue("sky-lantern");
+          },
         }, "help-etta", { helpedBefore },
       );
     };
@@ -2515,6 +2528,7 @@ export class SkyIslandScene extends Phaser.Scene {
             if (index === 1) this.dimBeaconFlameVisual();
             if (index === 2) this.takeBeaconSparkVisual();
           },
+          onPhraseLiveComplete: (index) => { if (index === 2) this.soundscape?.cue("sky-lantern"); },
         },
         "steal-flame",
       );
@@ -2813,7 +2827,7 @@ export class SkyIslandScene extends Phaser.Scene {
       const pos = this.skyOwnedWordPosition(this.fork2Scholar, -42, "you kept the light", { side: "left" });
       const target = this.makeSkyForkWord(this.fork2Scholar, {
         scene: this, word: "you kept the light", x: pos.x, y: pos.y, fontSize: 36,
-        onComplete: () => { playChime(); this.clearActiveTargets(); response(); },
+        onComplete: () => { playChime(); this.soundscape?.cue("sky-lantern"); this.clearActiveTargets(); response(); },
       }, -42);
       this.registerActiveTarget(target);
     };
@@ -2846,6 +2860,7 @@ export class SkyIslandScene extends Phaser.Scene {
           onPhraseComplete: (index) => {
             if (index === 1) this.releaseFork2Spirit(resume.reading === true && resume.index === 1);
           },
+          onPhraseLiveComplete: (index) => { if (index === 1) this.soundscape?.cue("sky-tether"); },
         }, "cut-tether",
       );
     };
@@ -3621,6 +3636,8 @@ export class SkyIslandScene extends Phaser.Scene {
       sourceOffsetY?: number;
       side?: "left" | "right";
       onPhraseComplete?: (index: number) => void;
+      /** Material audio belongs only to new input, never pose reconstruction. */
+      onPhraseLiveComplete?: (index: number) => void;
     },
     checkpointStep?: SkyStep,
     checkpointData: SaveCheckpoint["data"] = {},
@@ -3687,6 +3704,7 @@ export class SkyIslandScene extends Phaser.Scene {
           });
           this.clearActiveTargets();
           owner?.onPhraseComplete?.(step);
+          owner?.onPhraseLiveComplete?.(step);
           const line = narratorLines[step] ?? "";
           if (checkpointStep) this.checkpoint(checkpointStep, { ...checkpointData, index: step, reading: true });
           if (line) {

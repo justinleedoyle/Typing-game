@@ -49,7 +49,7 @@ First contained slice: the wounded fox between Winter's first two wolf fights. L
 - [ ] Verify pause/resume, muted audio, interruption and re-entry without overlapping or orphaned playback.
 - [ ] Record and integrate voices only after gameplay, staging and text are stable. Preserve subtitles and deliberate reading controls.
 
-Opening, the chamber bridge, Winter, Sunken Bell and Clockwork Forge now have original music/environmental audio; Sky and Wood retain their older silent ambient entry points. Bell and Forge scores are explicitly temporary and easy to replace with Justin's later externally created music. Forge's valve and peaceful-order outcomes change its atmosphere. The full sound/music production goal stays open.
+Opening, the chamber bridge, Winter, Sunken Bell, Clockwork Forge and Sky Island now have original music/environmental audio; Wood retains its older silent ambient entry point. Bell, Forge and Sky scores are explicitly temporary and easy to replace with Justin's later externally created music. Forge's valve/peaceful-order outcomes and Sky's completed beacon/kind-answer/tether actions change their atmosphere. The full sound/music production goal stays open.
 
 ## 5. Almanac, progression and replay
 
@@ -112,3 +112,6 @@ New realms, multiplayer, broad localization and an engine rewrite are not the fi
 - [Developer's gameplay description](https://www.pumpernickel-studio.com/press/sheet.php?p=touch_type_tale)
 
 The comparison used current source, representative screenshots and official competitor information. It was not a complete head-to-head player-preference study.
+
+- Sky audio milestone: eight original replaceable assets add airy exploration/aftermath themes, open wind, irregular paper-lantern texture and stone/light/book/tether cues. Completed-action checkpoint evidence controls layer changes; the sealed scroll and story scenes use quieter mixes, while live spirits, moving trials and riddles reserve space for typing feedback. Original timing, art, story, choices and save schema remain unchanged.
+- Sky restoration replays physical poses separately from new action sounds, including both book placements and fork passages. Tests cover actual scene callbacks, normal/spell dispatch, canonical/legacy/unknown revisit outcomes and shared pause ownership. Native isolated RAM review and public verification are recorded with exact limits in `.claude/sessions/2026-11-09-sky-island-audio.md`; screenshots/actual-output samples/two offline reference previews are in `.claude/playthrough-audit/2026-11-09-sky-island-audio/`. Prior-realm and later-case prerequisites are explicitly synthetic. Human listening/artistic acceptance remains separate; voices stay last.

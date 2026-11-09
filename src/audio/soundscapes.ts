@@ -28,16 +28,28 @@ import forgeWheel from "../../art/audio/forge-wheel.mp3";
 import forgeLock from "../../art/audio/forge-lock.mp3";
 import forgeGear from "../../art/audio/forge-gear.mp3";
 import forgeFlame from "../../art/audio/forge-flame.mp3";
+import skyTheme from "../../art/audio/sky-theme.mp3";
+import skyClearTheme from "../../art/audio/sky-clear-theme.mp3";
+import skyWind from "../../art/audio/sky-wind.mp3";
+import skyPaper from "../../art/audio/sky-paper.mp3";
+import skyStone from "../../art/audio/sky-stone.mp3";
+import skyLantern from "../../art/audio/sky-lantern.mp3";
+import skyBook from "../../art/audio/sky-book.mp3";
+import skyTether from "../../art/audio/sky-tether.mp3";
 
 export type SoundscapeMood = "home" | "winter-trail" | "winter-glade" | "winter-threat" | "winter-rest" | "winter-return"
   | "bell-depths" | "bell-rhythm" | "bell-rest" | "bell-silence"
   | "forge-workshop" | "forge-workshop-slow" | "forge-threat" | "forge-threat-slow"
-  | "forge-rest" | "forge-rest-slow" | "forge-still" | "forge-still-slow";
+  | "forge-rest" | "forge-rest-slow" | "forge-still" | "forge-still-slow"
+  | "sky-terrace" | "sky-library" | "sky-dim" | "sky-threat" | "sky-rest" | "sky-rest-dim"
+  | "sky-kind" | "sky-freed" | "sky-freed-dim";
 export type MaterialSound = "snow" | "wood" | "stone" | "bough" | "flame" | "bell-lantern" | "bell-latch" | "bell-rubble" | "bell-release"
-  | "forge-wheel" | "forge-lock" | "forge-gear" | "forge-flame";
+  | "forge-wheel" | "forge-lock" | "forge-gear" | "forge-flame"
+  | "sky-stone" | "sky-lantern" | "sky-book" | "sky-tether";
 const materials: Record<MaterialSound, string> = { snow, wood, stone, bough, flame,
   "bell-lantern": bellLantern, "bell-latch": bellLatch, "bell-rubble": bellRubble, "bell-release": bellRelease,
-  "forge-wheel": forgeWheel, "forge-lock": forgeLock, "forge-gear": forgeGear, "forge-flame": forgeFlame };
+  "forge-wheel": forgeWheel, "forge-lock": forgeLock, "forge-gear": forgeGear, "forge-flame": forgeFlame,
+  "sky-stone": skyStone, "sky-lantern": skyLantern, "sky-book": skyBook, "sky-tether": skyTether };
 const loop = (id: string, url: string, gain: number): LoopSpec => ({ id, url, gain });
 const moods: Record<SoundscapeMood, readonly LoopSpec[]> = {
   home: [loop("home-theme", home, .65), loop("hearth", hearth, .6)],
@@ -61,6 +73,16 @@ const moods: Record<SoundscapeMood, readonly LoopSpec[]> = {
   // The peaceful order stills the golems; the furnace can keep breathing.
   "forge-still": [loop("forge-clear-theme", forgeClearTheme, .35), loop("forge-furnace", forgeFurnace, .18)],
   "forge-still-slow": [loop("forge-clear-theme", forgeClearTheme, .32), loop("forge-furnace", forgeFurnace, .09)],
+  "sky-terrace": [loop("sky-theme", skyTheme, .42), loop("sky-wind", skyWind, .36), loop("sky-paper", skyPaper, .18)],
+  "sky-library": [loop("sky-theme", skyTheme, .30), loop("sky-wind", skyWind, .20), loop("sky-paper", skyPaper, .16)],
+  "sky-dim": [loop("sky-theme", skyTheme, .28), loop("sky-wind", skyWind, .32), loop("sky-paper", skyPaper, .08)],
+  // Sparse score and air leave the scrolling trials and riddles clear.
+  "sky-threat": [loop("sky-theme", skyTheme, .18), loop("sky-wind", skyWind, .26)],
+  "sky-rest": [loop("sky-clear-theme", skyClearTheme, .40), loop("sky-wind", skyWind, .28), loop("sky-paper", skyPaper, .14)],
+  "sky-rest-dim": [loop("sky-clear-theme", skyClearTheme, .27), loop("sky-wind", skyWind, .28), loop("sky-paper", skyPaper, .07)],
+  "sky-kind": [loop("sky-clear-theme", skyClearTheme, .44), loop("sky-wind", skyWind, .18), loop("sky-paper", skyPaper, .18)],
+  "sky-freed": [loop("sky-clear-theme", skyClearTheme, .36), loop("sky-wind", skyWind, .42)],
+  "sky-freed-dim": [loop("sky-clear-theme", skyClearTheme, .26), loop("sky-wind", skyWind, .42)],
 };
 // Failed requests are evicted so deliberate re-entry can recover. No asset can
 // stall a scene's artwork gate or prevent a saved journey from loading.
@@ -120,7 +142,8 @@ export function installSoundscape(scene: Phaser.Scene, initial: SoundscapeMood):
   handle.setMood(initial);
   // Warm small material samples in the background so a first physical action
   // has the same timing as later ones. Failure remains optional and recoverable.
-  const samples = initial.startsWith("forge-") ? [forgeWheel, forgeLock, forgeGear, forgeFlame]
+  const samples = initial.startsWith("sky-") ? [skyStone, skyLantern, skyBook, skyTether]
+    : initial.startsWith("forge-") ? [forgeWheel, forgeLock, forgeGear, forgeFlame]
     : initial.startsWith("bell-") ? [bellLantern, bellLatch, bellRubble, bellRelease]
     : initial === "home" ? [] : [snow, wood, stone, bough, flame];
   for (const url of samples) void load(url).catch(() => {});

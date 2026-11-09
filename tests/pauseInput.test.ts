@@ -37,8 +37,10 @@ const leave = pauseClass.members.find(member => member.name?.getText(pauseSource
 const chooseSave = pauseClass.members.find(member => member.name?.getText(pauseSource) === "chooseSave")!;
 class TestCloudSaveError extends Error {}
 class TestSaveConflictError extends Error {}
+class TestSaveReloadRequiredError extends Error {}
+let localSaveNotices = 0;
 const Pause = compile(`class Pause { ${resume.getText(pauseSource)} ${leave.getText(pauseSource)} ${chooseSave.getText(pauseSource)} }`, "Pause", {
-  acknowledgeGameInterruption, KEY: "ChapterPauseMenu", CloudSaveError: TestCloudSaveError, SaveConflictError: TestSaveConflictError, rememberLocalSaveNotice() {},
+  acknowledgeGameInterruption, KEY: "ChapterPauseMenu", CloudSaveError: TestCloudSaveError, SaveConflictError: TestSaveConflictError, SaveReloadRequiredError: TestSaveReloadRequiredError, rememberLocalSaveNotice() { localSaveNotices++; },
 });
 const install = pauseSource.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "installChapterMenu")!;
 const installMenu = compile(install.getText(pauseSource).replace(/^export /, ""), "installChapterMenu", {
@@ -430,6 +432,27 @@ await suite("pause interruption: deliberate actions acknowledge before saving so
   assertEqual(titleStarts, 1, "the explicit choose-save action still opens Title");
   assert(!needsInterruptionPause(game), "choosing a save also acknowledges the action deliberately");
   f.menu.destroy(); interrupted.menu.destroy(); game.events.emit("destroy");
+});
+
+await suite("pause recovery: recovered account-only and conflicting saves stay for explicit Title review", async () => {
+  for (const error of [new TestSaveReloadRequiredError("An account journey is available."), new TestSaveConflictError("Both journeys are preserved.")]) {
+    const f = fixture(), run = new SceneRunGuard(); run.begin();
+    let left = 0, message = "", renders = 0, interactive = false;
+    const noticesBefore = localSaveNotices;
+    Object.assign(f.pause, { run, render: () => renders++,
+      message: { setText(value: string) { message = value; }, setInteractive() { interactive = true; } },
+      config: { owner: f.owner, store: { flush: async () => { throw error; } }, onLeave: () => left++ },
+    });
+    await f.pause.leave();
+    assertEqual(left, 0, "a required review cannot leave as if a durable local copy were acknowledged");
+    assertEqual(localSaveNotices, noticesBefore, "no saved-on-this-device notice is fabricated");
+    assertEqual([f.pause.busy, f.pause.canResolve, renders, interactive], [false, true, 1, true], "the original pause stays available and exposes the deliberate Title action");
+    assert(message.includes(error.message) && message.includes("review saved journeys"), "actual recovery reason and next action are visible");
+    let title = 0; f.owner.scene.start = (key: string) => { if (key === "TitleScene") title++; };
+    f.pause.chooseSave();
+    assertEqual(title, 1, "the deliberate review action routes through original Title loading");
+    f.menu.destroy();
+  }
 });
 
 await suite("pause hint: follows the actual next Escape action and releases its scene listener", () => {

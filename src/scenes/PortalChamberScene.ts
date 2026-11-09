@@ -327,7 +327,7 @@ export class PortalChamberScene extends Phaser.Scene {
       escapeHint: () => this.confirmingNewGame ? "Esc · keep journey" : this.newGamePrepared ? "Save retry" : this.activeZone === "portals" ? "Esc · pause" : "Esc · portals",
       onLeave: () => this.scene.start("TitleScene"),
       leaveLabel: "Save & return to title",
-      leaveHint: "Your journey is saved. Continue from the title to resume your latest saved place.",
+      leaveHint: "Save & return checks your latest saved place. Continue from the title to resume there.",
     });
     if (!this.anims.exists("portal-spin")) {
       this.anims.create({

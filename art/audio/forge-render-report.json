@@ -1,0 +1,159 @@
+{
+  "status": "Temporary replaceable production palette",
+  "generator": "Original deterministic DSP; seed251903; no source samples, soundfonts, provider calls or voices",
+  "scope": "Pre-encode and decoded MP3 technical measurements; no physical listening or artistic approval implied",
+  "tracks": [
+    {
+      "name": "forge-theme",
+      "seconds": 96,
+      "peak": 0.10412454605102539,
+      "rms": 0.017163807236871057,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 96,
+        "peak": 0.09891017526388168,
+        "peakDbFS": -20.095180571768203,
+        "rms": 0.016305312582149678,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0
+      },
+      "bytes": 1537388,
+      "sha256": "a5fc4982034d61e02b5df28d6dcbda532eebf94c6b678c6ef0cf5ec1292e3443"
+    },
+    {
+      "name": "forge-clear-theme",
+      "seconds": 96,
+      "peak": 0.11328125,
+      "rms": 0.01795250042632272,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 96,
+        "peak": 0.10759273916482925,
+        "peakDbFS": -19.364340715966378,
+        "rms": 0.01705464470306263,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0
+      },
+      "bytes": 1537388,
+      "sha256": "507920e73cb39b25d0ab4b709ceab6d6af2a32594ca0296bb36991334afc1bf2"
+    },
+    {
+      "name": "forge-furnace",
+      "seconds": 22,
+      "peak": 0.09652238339185715,
+      "rms": 0.01660706111084147,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 22,
+        "peak": 0.09065499156713486,
+        "peakDbFS": -20.8521655632215,
+        "rms": 0.015847888496365578,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.003149978816509247
+      },
+      "bytes": 353708,
+      "sha256": "bf42630958d240f902a3cee4797bb1000fce61c15bf0824fb619c2708a229794"
+    },
+    {
+      "name": "forge-mechanism",
+      "seconds": 22,
+      "peak": 0.06378781050443649,
+      "rms": 0.005255636147460232,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 22,
+        "peak": 0.06098590046167374,
+        "peakDbFS": -24.295411188137845,
+        "rms": 0.005009424326519172,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0
+      },
+      "bytes": 353708,
+      "sha256": "9f93f93d0c67dbba4ce42eaaab14374d4966ca1cedcb65376f315a7af80d9ef1"
+    },
+    {
+      "name": "forge-wheel",
+      "seconds": 3,
+      "peak": 0.04851819947361946,
+      "rms": 0.005645532104764735,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 3,
+        "peak": 0.04663543403148651,
+        "peakDbFS": -26.625679538909253,
+        "rms": 0.005371308799039368,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.000001913959067678661
+      },
+      "bytes": 49580,
+      "sha256": "cd817e8b56f9b82b7e50bc768636db492fd8934684bd82bf9199e2269ea91e5b"
+    },
+    {
+      "name": "forge-lock",
+      "seconds": 3,
+      "peak": 0.09724430739879608,
+      "rms": 0.006781580932218687,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 3,
+        "peak": 0.09632005542516708,
+        "peakDbFS": -20.325665523627563,
+        "rms": 0.006464410610274841,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.000559772364795208
+      },
+      "bytes": 49580,
+      "sha256": "d289bdec439035276ea94a4b0d56becb642a78b52827f8e2ff47a3d55f027c15"
+    },
+    {
+      "name": "forge-gear",
+      "seconds": 3,
+      "peak": 0.0599459670484066,
+      "rms": 0.0063484668899437,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 3,
+        "peak": 0.05814455449581146,
+        "peakDbFS": -24.709819054019725,
+        "rms": 0.006054550017074819,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.00002515530832170043
+      },
+      "bytes": 49580,
+      "sha256": "da8aff20584f08fa19b6ef6cc0a98091586c613f6d734c5020e5f0853d8aafcc"
+    },
+    {
+      "name": "forge-flame",
+      "seconds": 3,
+      "peak": 0.08991828560829163,
+      "rms": 0.009020784277775588,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 3,
+        "peak": 0.08374281972646713,
+        "peakDbFS": -21.54104839910161,
+        "rms": 0.008565749494404654,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.00009116368892136961
+      },
+      "bytes": 49580,
+      "sha256": "ae6a10ae649f223780f2631a8fd0808fa38d29a5e7e7c72c6ff4548fa68f015b"
+    }
+  ]
+}

@@ -71,3 +71,33 @@ load-failure and shutdown behavior applies. Voices still come last.
 Regenerate Bell only with `node scripts/render-bell-audio.mjs` and ffmpeg/LAME.
 `bell-render-report.json` contains the pre-encode technical measurements.
 Physical listening and final musical/artistic approval remain separate.
+
+## Temporary Clockwork Forge palette
+
+The Forge score is provisional too. Replace `forge-theme.mp3` and
+`forge-clear-theme.mp3` at these stable paths, rebuild and check transitions,
+loop boundaries and listening levels. Durations may change; audio filenames
+are never saved in a journey. Keep replacement provenance/licenses here.
+Environmental loops and action cues can stay when the score is replaced.
+
+`scripts/render-forge-audio.mjs` creates eight original deterministic recordings
+without third-party samples, soundfonts, compositions or voices:
+
+- `forge-theme.mp3`:96-second restrained struck-metal/string exploration theme,
+  related to the home's D/A/E motif with room for reading and typing feedback.
+- `forge-clear-theme.mp3`:96-second warmer aftermath theme.
+- `forge-furnace.mp3`:22-second filtered heat/air texture.
+- `forge-mechanism.mp3`:22-second sparse irregular bearing/pipe friction,
+  without a periodic hammer beat or an independent gameplay timing signal.
+- `forge-wheel`, `forge-lock`, `forge-gear`, `forge-flame`:3-second material
+  cues tied to native catwalk, valve, repair and peaceful-order completions.
+
+Combat lowers the score. The apprentices' valve action lowers the furnace and
+machinery after it actually completes, including checkpoint restoration.
+The peaceful order removes machinery from the aftermath; completed revisits
+retain both known outcomes. Restoring a response never replays its action cue.
+All layers use the existing owned pause, mute, interruption and shutdown path.
+
+Regenerate Forge only with `node scripts/render-forge-audio.mjs` and ffmpeg/LAME.
+`forge-render-report.json` records the synthesis and decode measurements.
+Physical listening and artistic approval remain separate; voices remain last.

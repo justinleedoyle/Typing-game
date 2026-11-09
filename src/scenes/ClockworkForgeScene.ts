@@ -6,7 +6,8 @@ import { rememberRealmFork, resolveRealmFork, resolveCompanionDecision, remember
 import { ChapterReading } from "../game/ui/chapterReading";
 import { decorativeTween, reducedFlashes, reducedMotion } from "../game/presentation";
 import Phaser from "phaser";
-import { type AmbientHandle, playAmbientForge } from "../audio/ambient";
+import { installSoundscape, type SceneSoundscape } from "../audio/soundscapes";
+import { forgeSoundscapeMood } from "../audio/forgeSoundscape";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
@@ -271,7 +272,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   private songbirdWordAnchors: WordBodyAnchorHandle[] = [];
   /** True after the Quiet Lord's §5.5.10 intrusion has fired this playthrough. */
   private quietLordIntruded = false;
-  private ambientHandle?: AmbientHandle;
+  private soundscape?: SceneSoundscape;
   private revisit = false;
   private resumeCheckpoint: SaveCheckpoint | null = null;
 
@@ -556,7 +557,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.oneShotInvoker = null;
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.input.keyboard?.off("keyup", this.onKeyUp, this);
-      this.ambientHandle?.stop();
+      this.soundscape?.stop();
       this.releaseCatwalkCueWordAnchor();
       this.catwalkCue?.destroy();
       this.catwalkCue = null;
@@ -576,7 +577,8 @@ export class ClockworkForgeScene extends Phaser.Scene {
       this.clearForgeKeepsake();
     });
 
-    this.ambientHandle = playAmbientForge();
+    this.soundscape = installSoundscape(this, forgeSoundscapeMood(this.resumeCheckpoint?.step,
+      this.fork1Choice, this.fork2Choice, this.resumeCheckpoint?.data));
 
     if (this.revisit) {
       this.startRevisit();
@@ -586,6 +588,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
   }
 
   private checkpoint(step: ForgeStep, data: SaveCheckpoint["data"] = {}): void {
+    this.soundscape?.setMood(forgeSoundscapeMood(step, this.fork1Choice, this.fork2Choice, data));
     if (this.revisit || this.store.get().realms["clockwork-forge"]?.cleared) return;
     this.store.setCheckpoint({ scene: "ClockworkForgeScene", step, data: {
       ...this.typingInput.getStats().captureCheckpoint(), ...data,
@@ -702,6 +705,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
     // historical combined ending and any stale keepsakes in an old satchel.
     const first = resolveRealmFork("clockwork-forge", "fork1", progress, state.satchel);
     const second = resolveRealmFork("clockwork-forge", "fork2", progress, state.satchel);
+    this.soundscape?.setMood(forgeSoundscapeMood("ending", first, second));
     this.restoreForgeRevisitAftermath(first, second);
     playPortalArrivalWake(this, this.wrenContainer, {
       kind: "ember",
@@ -987,6 +991,7 @@ export class ClockworkForgeScene extends Phaser.Scene {
         this.pulseCatwalkCue(false);
       },
       onComplete: () => {
+        this.soundscape?.cue(idx === 0 ? "forge-gear" : idx === 1 ? "forge-flame" : "forge-lock");
         playWrenAction(this.wrenSprite, {
           faceLeft: wordPos.x < this.wrenContainer.x,
         });
@@ -2130,10 +2135,12 @@ export class ClockworkForgeScene extends Phaser.Scene {
         // The peaceful-branch finale demands the full capitalized order.
         caseSensitive: true,
         onComplete: () => {
+          this.soundscape?.cue("forge-lock");
           this.clearActiveTargets();
           this.showPeacefulOrderAnswer(false);
         },
         onSpellComplete: () => {
+          this.soundscape?.cue("forge-lock");
           this.clearActiveTargets();
           if (!reducedFlashes(this)) this.cameras.main.flash(350, 200, 180, 40);
           this.showPeacefulOrderAnswer(true);
@@ -2984,6 +2991,9 @@ export class ClockworkForgeScene extends Phaser.Scene {
         },
         onComplete: () => {
           releaseTrueNameAnchor();
+          if (checkpointStep === "forn" && step === 0) this.soundscape?.cue("forge-flame");
+          else if (checkpointStep === "forn" && step === 1) this.soundscape?.cue("forge-gear");
+          else if (checkpointStep === "cabal" && step === 0) this.soundscape?.cue("forge-wheel");
           if (!this.keepsakeSprite?.scene) playWrenAction(this.wrenSprite);
           if (trueNameSeal?.scene) {
             playBodyImpact(this, trueNameSeal, {

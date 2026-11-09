@@ -20,12 +20,24 @@ import bellLantern from "../../art/audio/bell-lantern.mp3";
 import bellLatch from "../../art/audio/bell-latch.mp3";
 import bellRubble from "../../art/audio/bell-rubble.mp3";
 import bellRelease from "../../art/audio/bell-release.mp3";
+import forgeTheme from "../../art/audio/forge-theme.mp3";
+import forgeClearTheme from "../../art/audio/forge-clear-theme.mp3";
+import forgeFurnace from "../../art/audio/forge-furnace.mp3";
+import forgeMechanism from "../../art/audio/forge-mechanism.mp3";
+import forgeWheel from "../../art/audio/forge-wheel.mp3";
+import forgeLock from "../../art/audio/forge-lock.mp3";
+import forgeGear from "../../art/audio/forge-gear.mp3";
+import forgeFlame from "../../art/audio/forge-flame.mp3";
 
 export type SoundscapeMood = "home" | "winter-trail" | "winter-glade" | "winter-threat" | "winter-rest" | "winter-return"
-  | "bell-depths" | "bell-rhythm" | "bell-rest" | "bell-silence";
-export type MaterialSound = "snow" | "wood" | "stone" | "bough" | "flame" | "bell-lantern" | "bell-latch" | "bell-rubble" | "bell-release";
+  | "bell-depths" | "bell-rhythm" | "bell-rest" | "bell-silence"
+  | "forge-workshop" | "forge-workshop-slow" | "forge-threat" | "forge-threat-slow"
+  | "forge-rest" | "forge-rest-slow" | "forge-still" | "forge-still-slow";
+export type MaterialSound = "snow" | "wood" | "stone" | "bough" | "flame" | "bell-lantern" | "bell-latch" | "bell-rubble" | "bell-release"
+  | "forge-wheel" | "forge-lock" | "forge-gear" | "forge-flame";
 const materials: Record<MaterialSound, string> = { snow, wood, stone, bough, flame,
-  "bell-lantern": bellLantern, "bell-latch": bellLatch, "bell-rubble": bellRubble, "bell-release": bellRelease };
+  "bell-lantern": bellLantern, "bell-latch": bellLatch, "bell-rubble": bellRubble, "bell-release": bellRelease,
+  "forge-wheel": forgeWheel, "forge-lock": forgeLock, "forge-gear": forgeGear, "forge-flame": forgeFlame };
 const loop = (id: string, url: string, gain: number): LoopSpec => ({ id, url, gain });
 const moods: Record<SoundscapeMood, readonly LoopSpec[]> = {
   home: [loop("home-theme", home, .65), loop("hearth", hearth, .6)],
@@ -40,6 +52,15 @@ const moods: Record<SoundscapeMood, readonly LoopSpec[]> = {
   "bell-rest": [loop("bell-clear-theme", bellClearTheme, .4), loop("bell-water", bellWater, .35)],
   // Taking the clapper leaves the place hollow: no score or recurring toll.
   "bell-silence": [loop("bell-water", bellWater, .28)],
+  "forge-workshop": [loop("forge-theme", forgeTheme, .45), loop("forge-furnace", forgeFurnace, .48), loop("forge-mechanism", forgeMechanism, .32)],
+  "forge-workshop-slow": [loop("forge-theme", forgeTheme, .38), loop("forge-furnace", forgeFurnace, .24), loop("forge-mechanism", forgeMechanism, .13)],
+  "forge-threat": [loop("forge-theme", forgeTheme, .22), loop("forge-furnace", forgeFurnace, .34), loop("forge-mechanism", forgeMechanism, .18)],
+  "forge-threat-slow": [loop("forge-theme", forgeTheme, .2), loop("forge-furnace", forgeFurnace, .18), loop("forge-mechanism", forgeMechanism, .08)],
+  "forge-rest": [loop("forge-clear-theme", forgeClearTheme, .4), loop("forge-furnace", forgeFurnace, .3), loop("forge-mechanism", forgeMechanism, .15)],
+  "forge-rest-slow": [loop("forge-clear-theme", forgeClearTheme, .36), loop("forge-furnace", forgeFurnace, .16), loop("forge-mechanism", forgeMechanism, .07)],
+  // The peaceful order stills the golems; the furnace can keep breathing.
+  "forge-still": [loop("forge-clear-theme", forgeClearTheme, .35), loop("forge-furnace", forgeFurnace, .18)],
+  "forge-still-slow": [loop("forge-clear-theme", forgeClearTheme, .32), loop("forge-furnace", forgeFurnace, .09)],
 };
 // Failed requests are evicted so deliberate re-entry can recover. No asset can
 // stall a scene's artwork gate or prevent a saved journey from loading.
@@ -99,7 +120,8 @@ export function installSoundscape(scene: Phaser.Scene, initial: SoundscapeMood):
   handle.setMood(initial);
   // Warm small material samples in the background so a first physical action
   // has the same timing as later ones. Failure remains optional and recoverable.
-  const samples = initial.startsWith("bell-") ? [bellLantern, bellLatch, bellRubble, bellRelease]
+  const samples = initial.startsWith("forge-") ? [forgeWheel, forgeLock, forgeGear, forgeFlame]
+    : initial.startsWith("bell-") ? [bellLantern, bellLatch, bellRubble, bellRelease]
     : initial === "home" ? [] : [snow, wood, stone, bough, flame];
   for (const url of samples) void load(url).catch(() => {});
   return handle;

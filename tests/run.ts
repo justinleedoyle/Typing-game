@@ -11,6 +11,8 @@ console.log("Running logic test suites…\n");
 
 await import("./runaLines.test.ts");
 await import("./winterSoundscape.test.ts");
+await import("./forgeSoundscape.test.ts");
+await import("./forgeAudioIntegration.test.ts");
 await import("./sayResolution.test.ts");
 await import("./narrationLayout.test.ts");
 await import("./pureMath.test.ts");

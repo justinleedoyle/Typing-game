@@ -1,6 +1,6 @@
 # Competitive quality checklist
 
-Updated: 2026-11-08. Owner: Justin and the game team.
+Updated: 2026-11-09. Owner: Justin and the game team.
 
 The target is a beautiful, emotionally memorable typing adventure where words change places and relationships. Touch Type Tale is a benchmark for craft, interesting decisions and a finished product. Player preference and commercial success must be demonstrated; neither follows from a feature count or passing tests.
 
@@ -49,7 +49,7 @@ First contained slice: the wounded fox between Winter's first two wolf fights. L
 - [ ] Verify pause/resume, muted audio, interruption and re-entry without overlapping or orphaned playback.
 - [ ] Record and integrate voices only after gameplay, staging and text are stable. Preserve subtitles and deliberate reading controls.
 
-Opening, the chamber bridge, Winter and Sunken Bell now have original music/environmental audio; Forge, Sky and Wood retain their older silent ambient entry points. Sunken Bell's score is explicitly temporary and easy to replace with Justin's later externally created music. The full sound/music production goal stays open.
+Opening, the chamber bridge, Winter, Sunken Bell and Clockwork Forge now have original music/environmental audio; Sky and Wood retain their older silent ambient entry points. Bell and Forge scores are explicitly temporary and easy to replace with Justin's later externally created music. Forge's valve and peaceful-order outcomes change its atmosphere. The full sound/music production goal stays open.
 
 ## 5. Almanac, progression and replay
 

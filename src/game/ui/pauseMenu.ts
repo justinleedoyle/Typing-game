@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { CloudSaveError, SaveConflictError, type AudioLevel, type Difficulty, type SaveStore } from "../saveState";
+import { CloudSaveError, SaveConflictError, SaveReloadRequiredError, type AudioLevel, type Difficulty, type SaveStore } from "../saveState";
 import { setAudioLevel } from "../../audio/context";
 import { installPresentation, PRESENTATION_CHANGED, rememberLocalSaveNotice, localSaveNotice } from "../presentation";
 import { SERIF } from "../palette";
@@ -32,6 +32,7 @@ class ChapterPauseMenu extends Phaser.Scene {
   private canResolve = false;
   private rows: Phaser.GameObjects.Text[] = [];
   private message!: Phaser.GameObjects.Text;
+  private saveHint!: Phaser.GameObjects.Text;
   private openedAt = 0;
 
   constructor() { super(KEY); }
@@ -69,7 +70,7 @@ class ChapterPauseMenu extends Phaser.Scene {
         fontFamily: SERIF, fontSize: "22px", color: UI_CSS.cream,
         align: "center", wordWrap: { width: 900 },
       }).setOrigin(0.5);
-    this.add.text(960, 885, this.config.leaveHint ?? "Leaving saves the latest chapter checkpoint. An unfinished fight restarts safely.", {
+    this.saveHint = this.add.text(960, 885, "", {
       fontFamily: SERIF, fontSize: "20px", color: UI_CSS.brass,
       align: "center", wordWrap: { width: 900 },
     }).setOrigin(0.5);
@@ -107,7 +108,11 @@ class ChapterPauseMenu extends Phaser.Scene {
   }
   private render(): void {
     const s = this.config.store.get();
-    const labels = ["Resume", this.config.leaveLabel ?? (this.config.owner.scene.key === "OpeningScene" ? "Save & return to title" : "Save & return to chamber"),
+    const needsRetry = this.config.store.getLastError() !== null;
+    this.saveHint.setText(needsRetry
+      ? "Saving needs attention. Resume retries saving; Save & return checks it before leaving."
+      : this.config.leaveHint ?? "Leaving saves the latest chapter checkpoint. An unfinished fight restarts safely.");
+    const labels = [needsRetry ? "Retry save & resume" : "Resume", this.config.leaveLabel ?? (this.config.owner.scene.key === "OpeningScene" ? "Save & return to title" : "Save & return to chamber"),
       `Difficulty: ${difficultyLabel(s.difficulty)}`, `Sound: ${s.audioLevel}`, `Dialogue text: ${s.textScale}`,
       `Reduced decorative motion: ${s.reducedMotion ? "on" : "off"}`,
       `Reduced flashes: ${s.reducedFlashes ? "on" : "off"}`];
@@ -162,11 +167,12 @@ class ChapterPauseMenu extends Phaser.Scene {
         return;
       }
       this.busy = false;
-      this.canResolve = error instanceof SaveConflictError;
+      this.canResolve = error instanceof SaveConflictError || error instanceof SaveReloadRequiredError;
       this.message.setText(this.canResolve
-        ? `${error instanceof Error ? error.message : "Saving needs attention."}\nPress T or click here to choose a save at the title.`
+        ? `${error instanceof Error ? error.message : "Saving needs attention."}\nPress T or click here to review saved journeys at the title.`
         : "Could not finish saving. Your session is still here.\nTry again, or press Esc to keep playing.");
       if (this.canResolve) this.message.setInteractive({ useHandCursor: true });
+      this.render();
     }
   }
 }
@@ -218,7 +224,7 @@ export function installChapterMenu(scene: Phaser.Scene, options: ChapterMenuOpti
     const notice = localSaveNotice(scene);
     status.setVisible(error !== null || notice !== null);
     if (notice) status.setText(notice);
-    else if (error) status.setText("Save needs attention · Esc to retry");
+    else if (error) status.setText("Save needs attention · Esc for options");
   };
   updateStatus();
   const statusTimer = scene.time.addEvent({ delay: 1200, loop: true, callback: updateStatus });

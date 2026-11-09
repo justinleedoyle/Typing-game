@@ -4,7 +4,7 @@ import { assert, assertEqual, suite } from "./_assert";
 import {
   emptySave, migrate, SaveStore, LocalStorageBackend, SyncedBackend,
   SupabaseBackend, InvalidSaveError, UnsupportedSaveVersionError,
-  SaveConflictError, LocalSaveConflictError, CloudSaveError, CURRENT_SCHEMA_VERSION,
+  SaveConflictError, LocalSaveConflictError, CloudSaveError, SaveReloadRequiredError, CURRENT_SCHEMA_VERSION,
   type SaveState, type SaveBackend, type StoragePort, type CloudSaveBackend, type LocalSaveLock,
 } from "../src/game/saveState";
 import { resetSave } from "../src/game/resetSave";
@@ -669,4 +669,411 @@ await suite("device saves: damaged recovery metadata preserves progress without 
   assertEqual(backend.getConflict(), null, "the title can safely ask whether its failed load has a renderable choice");
   assert(await rejects(backend.save(state("Must not replace", 200)), InvalidSaveError), "damaged recovery metadata also prevents blind writes");
   assertEqual(storage.getItem(backend.storageKey), raw, "valid primary progress remains untouched while recovery metadata needs attention");
+});
+
+await suite("saveSync: explicit flush retries a failed boot read without fabricating a write", async () => {
+  const { account, cloud, synced, storage } = fixture();
+  const original = state("Unchanged account", 100);
+  await account.save(original); cloud.rows.set("account-a", copy(original));
+  cloud.readError = new CloudSaveError();
+  const store = await SaveStore.load(synced);
+  const before = [...storage.values.entries()];
+  assert(store.getLastError() instanceof CloudSaveError, "fallback exposes the failed initial read");
+  assertEqual(cloud.reads, 1, "the initial failed read was actually attempted");
+  cloud.readError = null;
+  await store.flush();
+  assertEqual(cloud.reads, 2, "a clean store still rechecks the failed account read on explicit flush");
+  assertEqual([store.getLastError(), synced.getLastError()], [null, null], "the successful comparison clears both error surfaces");
+  assertEqual(store.get(), original, "the live journey is not silently replaced or retimestamped");
+  assertEqual([...storage.values.entries()], before, "matching retry does not rotate primary or backup");
+  assertEqual(cloud.writes, [], "matching retry never fabricates an upload");
+  await store.flush();
+  assertEqual(cloud.reads, 2, "ordinary clean flush is not ongoing cloud polling");
+});
+
+await suite("saveSync: failed boot-read retry uploads safe local progress through existing guards", async () => {
+  for (const existing of ["older", "absent"] as const) {
+    const { account, cloud, synced } = fixture();
+    const local = state("Device progress", 200);
+    await account.save(local);
+    if (existing === "older") cloud.rows.set("account-a", state("Old account", 100));
+    cloud.readError = new CloudSaveError();
+    const store = await SaveStore.load(synced);
+    cloud.readError = null;
+    await store.flush();
+    assertEqual(cloud.writes.map(write => write.state), [local], `${existing}: original guarded queue uploads the actual fallback once`);
+    assertEqual((await account.load()), local, `${existing}: device progress is not rewritten by the read retry`);
+    assertEqual(store.getLastError(), null, `${existing}: successful guarded sync clears warning`);
+  }
+});
+
+await suite("saveSync: newly available cloud progress requires choice instead of replacing a running store", async () => {
+  for (const kind of ["newer", "branch", "run", "lost-progress"] as const) {
+    const { account, cloud, synced, storage } = fixture();
+    const local = state("Live device fallback", 200);
+    const remote = state("Returned account", kind === "newer" ? 300 : 100);
+    if (kind === "branch") {
+      local.realms["winter-mountain"] = { cleared: false, choices: { fork1: "huntress" } };
+      remote.realms["winter-mountain"] = { cleared: false, choices: { fork1: "firefly" } };
+    }
+    if (kind === "run") remote.runId = "other-account-run";
+    if (kind === "lost-progress") remote.satchel.push("hunters-horn");
+    await account.save(local); cloud.rows.set("account-a", remote);
+    cloud.readError = new CloudSaveError();
+    const store = await SaveStore.load(synced);
+    const before = [...storage.values.entries()];
+    cloud.readError = null;
+    assert(await rejects(store.flush(), SaveConflictError), `${kind}: recovered remote needs an explicit choice`);
+    assertEqual(synced.getConflict(), { local, cloud: remote }, `${kind}: the real alternatives are exposed without losing either`);
+    assertEqual(store.get(), local, `${kind}: current scene retains its unchanged local state`);
+    assertEqual([...storage.values.entries()], before, `${kind}: no primary/backup mutation precedes selection`);
+    assertEqual(cloud.writes, [], `${kind}: retry never overwrites the returned cloud journey`);
+    assertEqual(cloud.rows.get("account-a"), remote, `${kind}: account progress stays exact`);
+  }
+});
+
+await suite("saveSync: no-local boot fallback can recheck absence but cannot adopt an account journey in place", async () => {
+  for (const remotePresent of [false, true]) {
+    const { account, cloud, synced, storage } = fixture();
+    const remote = state("Available only in account", 100);
+    if (remotePresent) cloud.rows.set("account-a", remote);
+    cloud.readError = new CloudSaveError();
+    const store = await SaveStore.load(synced), live = copy(store.get());
+    cloud.readError = null;
+    if (remotePresent) {
+      assert(await rejects(store.flush(), SaveReloadRequiredError), "an account-only journey requests a Title reload instead of an in-place change");
+      assert(!(store.getLastError() instanceof CloudSaveError), "account-only recovery cannot claim the empty fallback was saved on the device");
+      assert(store.getLastError()?.message.includes("Return to the title"), "the player gets the actual safe recovery instruction");
+      assertEqual(cloud.rows.get("account-a"), remote, "existing account-only journey is exact");
+    } else {
+      await store.flush();
+      assertEqual(store.getLastError(), null, "a successful absent-row read clears the old unavailable warning");
+    }
+    assertEqual(store.get(), live, "rechecking cloud never swaps the active fallback store");
+    assertEqual(await account.load(), null, "a read retry does not create or populate the empty device slot");
+    assertEqual(storage.values.size, 0, "no hidden device save or backup is fabricated");
+    assertEqual(cloud.writes, [], "a read retry never uploads an unearned empty run");
+  }
+});
+
+await suite("saveSync: retry failures and unreadable future cloud data remain visible and nonmutating", async () => {
+  const { account, cloud, synced, storage } = fixture();
+  const local = state("Preserved device", 100);
+  await account.save(local); cloud.readError = new CloudSaveError();
+  const store = await SaveStore.load(synced), before = [...storage.values.entries()];
+  assert(await rejects(store.flush(), CloudSaveError), "a repeated unavailable read is not reported as a successful retry");
+  assertEqual(cloud.reads, 2, "the failed retry still makes an actual read");
+  cloud.readError = null;
+  const future = { ...state("Future account", 200), schemaVersion: CURRENT_SCHEMA_VERSION + 1 };
+  cloud.rows.set("account-a", future);
+  assert(await rejects(store.flush(), UnsupportedSaveVersionError), "recovered newer-format account data cannot fall back into an overwrite");
+  assertEqual([...storage.values.entries()], before, "all original device bytes survive both failures");
+  assertEqual(cloud.rows.get("account-a"), future, "future account bytes remain unchanged");
+  assertEqual(cloud.writes, [], "neither failed read nor newer format authorizes an upload");
+});
+
+await suite("saveSync: boot-read retry refuses account changes before or during its read", async () => {
+  for (const when of ["before", "during"] as const) {
+    const { account, cloud, synced, storage } = fixture();
+    const original = state("Account A fallback", 100);
+    await account.save(original); cloud.rows.set("account-a", original);
+    cloud.rows.set("account-b", { ...state("Account B", 200), runId: "run-b" });
+    cloud.readError = new CloudSaveError();
+    const store = await SaveStore.load(synced), before = [...storage.values.entries()];
+    cloud.readError = null;
+    const read = cloud.load.bind(cloud);
+    if (when === "during") cloud.load = async owner => { const value = await read(owner); cloud.user = "account-b"; return value; };
+    else cloud.user = "account-b";
+    assert(await rejects(store.flush(), CloudSaveError), `${when}: owner mismatch remains a visible failure`);
+    assertEqual(cloud.reads, when === "before" ? 1 : 2, `${when}: a mismatched owner cannot start another scoped read`);
+    assertEqual([...storage.values.entries()], before, `${when}: neither account cache is rebound or mutated`);
+    assertEqual(store.get(), original, `${when}: old scene state is preserved`);
+    assertEqual(cloud.writes, [], `${when}: no account is written after identity changed`);
+  }
+});
+
+await suite("saveSync: boot-read retry does not refresh a stale device writer baseline", async () => {
+  const { account, cloud, synced, storage } = fixture();
+  const original = state("Old active scene", 100), newer = state("Other device window", 200);
+  await account.save(original); cloud.rows.set("account-a", original); cloud.readError = new CloudSaveError();
+  const store = await SaveStore.load(synced);
+  cloud.readError = null;
+  const read = cloud.load.bind(cloud);
+  cloud.load = async owner => { const value = await read(owner); await account.save(newer); return value; };
+  const originalRaw = storage.getItem(account.storageKey);
+  assert(await rejects(store.flush(), Error), "external device change while awaiting the remote read blocks success");
+  assertEqual(store.get(), original, "the active state is never changed behind the scene");
+  assertEqual(JSON.parse(storage.getItem(account.storageKey)!), newer, "external durable state remains primary");
+  assertEqual(storage.getItem(`${account.storageKey}.lkg`), originalRaw, "retry does not rotate the retained old primary out of the backup");
+  assertEqual(cloud.writes, [], "stale device writer cannot upload its previous fallback");
+  store.update(value => { value.profileName = "Still stale scene"; });
+  assert(await rejects(store.flush(), LocalSaveConflictError), "later real writes still need the original device conflict choice");
+  assertEqual(cloud.writes, [], "the failed read retry did not refresh stale authority");
+});
+
+await suite("saveSync: concurrent clean flushes share one failed-load retry read", async () => {
+  const { account, cloud, synced } = fixture();
+  const original = state("Same account", 100);
+  await account.save(original); cloud.rows.set("account-a", original); cloud.readError = new CloudSaveError();
+  const store = await SaveStore.load(synced);
+  cloud.readError = null;
+  const gate = deferred(), read = cloud.load.bind(cloud); let started = 0;
+  cloud.load = async owner => { started++; await gate.promise; return read(owner); };
+  const first = store.flush(), second = store.flush();
+  await sleep();
+  assertEqual(started, 1, "two explicit flush callers share the one initial-read probe");
+  gate.resolve(); await Promise.all([first, second]);
+  assertEqual([cloud.reads, cloud.writes.length, store.getLastError()], [2, 0, null], "shared success clears status without duplicate reads or writes");
+});
+
+await suite("saveSync: a write queued during failed-load retry owns the newer snapshot", async () => {
+  const { account, cloud, synced } = fixture();
+  const original = state("Boot fallback", 100);
+  await account.save(original); cloud.rows.set("account-a", original); cloud.readError = new CloudSaveError();
+  const store = await SaveStore.load(synced, { saveDelayMs: 60_000 });
+  cloud.readError = null;
+  const gate = deferred(), read = cloud.load.bind(cloud); let started = 0;
+  cloud.load = async owner => { started++; await gate.promise; return read(owner); };
+  const retry = store.flush(); await sleep();
+  assertEqual(started, 1, "clean retry has reached its read wait");
+  store.update(value => { value.profileName = "Newest live progress"; value.keyStats.x = { hits: 1, misses: 0 }; });
+  const save = store.flush(); await sleep();
+  gate.resolve(); await Promise.all([retry, save]);
+  await store.flush();
+  assertEqual(cloud.writes.map(write => write.state.profileName), ["Newest live progress"], "the old fallback cannot be resurrected or uploaded after newer input");
+  assertEqual((await account.load())?.keyStats, { x: { hits: 1, misses: 0 } }, "new progress is durable locally");
+  assertEqual(cloud.rows.get("account-a")?.keyStats, { x: { hits: 1, misses: 0 } }, "new progress reaches the guarded remote row");
+  assertEqual(store.getLastError(), null, "newer guarded sync clears the old read warning");
+});
+
+await suite("saveSync: Title reload is not held hostage by an older retry read", async () => {
+  const { account, cloud, synced } = fixture();
+  const original = state("Current account", 100);
+  await account.save(original); cloud.rows.set("account-a", original); cloud.readError = new CloudSaveError();
+  const oldStore = await SaveStore.load(synced);
+  cloud.readError = null;
+  const gate = deferred(), read = cloud.load.bind(cloud); let started = 0;
+  cloud.load = async owner => { if (++started === 1) await gate.promise; return read(owner); };
+  const oldRetry = oldStore.flush().then(() => null, error => error);
+  await sleep();
+  const reopened = await SaveStore.load(synced);
+  let completed = false;
+  const currentFlush = reopened.flush().then(() => { completed = true; });
+  await sleep();
+  assert(completed, "healthy newly loaded store does not wait for an older binding's blocked retry");
+  gate.resolve();
+  assert(await oldRetry instanceof CloudSaveError, "only the old caller receives its superseded-binding failure");
+  await currentFlush;
+  assertEqual(reopened.getLastError(), null, "stale retry cannot replace the new session's healthy status");
+  assertEqual(reopened.get(), original, "Title's new store keeps the selected account state");
+  assertEqual(cloud.writes, [], "neither old probe nor healthy clean reload writes an unnecessary snapshot");
+});
+
+await suite("saveSync: failed-load retry rechecks identity after waiting for the device lock", async () => {
+  const storage = new MemoryStorage(), cloud = new FakeCloud();
+  const gate = deferred(), entered = deferred(); let block = false;
+  const lock: LocalSaveLock = { async run<T>(_slot: string, work: () => T): Promise<T> {
+    if (block) { block = false; entered.resolve(); await gate.promise; }
+    return work();
+  } };
+  const local = new LocalStorageBackend(storage, null, lock), account = local.forUser("account-a");
+  const original = state("Account A", 100);
+  await account.save(original); cloud.rows.set("account-a", original); cloud.readError = new CloudSaveError();
+  const synced = new SyncedBackend(local, cloud, { cloudDelayMs: 60_000 });
+  const store = await SaveStore.load(synced), before = [...storage.values.entries()];
+  cloud.readError = null; block = true;
+  const retry = store.flush().then(() => null, error => error);
+  await entered.promise; cloud.user = "account-b"; gate.resolve();
+  assert(await retry instanceof CloudSaveError, "an identity change during the local authority check is still refused");
+  assertEqual(cloud.reads, 1, "retry does not begin an old-account remote read after the lock wait revealed a different owner");
+  assertEqual([...storage.values.entries()], before, "the interrupted identity check touches neither device cache");
+  assertEqual(cloud.writes, [], "no cross-account write is authorized by the earlier identity observation");
+});
+
+await suite("saveSync: repeating failed-load retry cannot bypass a discovered save choice", async () => {
+  for (const source of ["local", "cloud"] as const) {
+    const { account, cloud, synced, storage } = fixture();
+    const local = state("Device fallback", 100), remote = state("Newer account", 200);
+    await account.save(local); cloud.rows.set("account-a", remote); cloud.readError = new CloudSaveError();
+    const store = await SaveStore.load(synced), before = [...storage.values.entries()];
+    cloud.readError = null;
+    assert(await rejects(store.flush(), SaveConflictError), "first returned cloud journey opens the real choice");
+    const reads = cloud.reads;
+    assert(await rejects(store.flush(), SaveConflictError), "another retry does not count as selecting a journey");
+    assertEqual(cloud.reads, reads, "an unresolved choice is not reinterpreted as a fresh boot read");
+    assertEqual(synced.getConflict(), { local, cloud: remote }, "both alternatives remain stable until explicit choice");
+    assertEqual([...storage.values.entries()], before, "repeated retry changes no original primary or backup");
+    assertEqual(cloud.writes, [], "the newer account is never overwritten by retry alone");
+    cloud.rows.set("account-a", copy(local));
+    assert(await rejects(store.flush(), SaveConflictError), "a later remote change still cannot silently close the unresolved choice");
+    assertEqual(synced.getConflict(), { local, cloud: remote }, "retry keeps the original alternatives until the selection flow rechecks them");
+    cloud.rows.set("account-a", remote);
+    const selected = await synced.resolveConflict(source);
+    assertEqual(selected.profileName, source === "local" ? local.profileName : remote.profileName, "only explicit choice authorizes the selected continuation");
+    assertEqual(synced.getConflict(), null, "successful explicit choice clears the retained conflict");
+    const archived = [...storage.values.entries()].filter(([key]) => key.includes(".conflict."));
+    assertEqual(archived.length, 2, "both preselection originals receive the existing permanent recovery archives");
+  }
+});
+
+await suite("saveSync: ordinary input cannot dismiss a discovered cloud choice by advancing its timestamp", async () => {
+  for (const discovered of ["failed-load-newer", "failed-load-branch", "post-boot"] as const) {
+    for (const source of ["local", "cloud"] as const) {
+      const { account, cloud, synced, storage } = fixture();
+      const local = state("Device journey", 100), remote = state("Account alternative", 200);
+      if (discovered === "failed-load-branch") {
+        local.realms["winter-mountain"] = { cleared: false, choices: { fork1: "huntress" } };
+        remote.realms["winter-mountain"] = { cleared: false, choices: { fork1: "firefly" } };
+      }
+      await account.save(local);
+      cloud.rows.set("account-a", discovered === "post-boot" ? copy(local) : remote);
+      if (discovered !== "post-boot") cloud.readError = new CloudSaveError();
+      const store = await SaveStore.load(synced, { saveDelayMs: 60_000 });
+      cloud.readError = null;
+      if (discovered === "post-boot") {
+        cloud.rows.set("account-a", remote);
+        store.update(value => { value.profileName = "Current scene"; });
+      }
+      assert(await rejects(store.flush(), SaveConflictError), `${discovered}/${source}: actual cloud choice discovered`);
+      for (const level of ["quiet", "off"] as const) {
+        store.update(value => { value.audioLevel = level; value.keyStats.x = { hits: level === "quiet" ? 1 : 2, misses: 0 }; });
+        assert(await rejects(store.flush(), SaveConflictError), `${discovered}/${source}/${level}: newer ordinary preference/input remains blocked from upload`);
+        assertEqual(await account.load(), store.get(), `${discovered}/${source}/${level}: newest local progress remains durable`);
+        assertEqual(synced.getConflict()?.local, store.get(), `${discovered}/${source}/${level}: recovery shows the actual latest device alternative`);
+        assertEqual(cloud.rows.get("account-a"), remote, `${discovered}/${source}/${level}: remote journey stays exact`);
+        assertEqual(cloud.writes, [], `${discovered}/${source}/${level}: a newer timestamp grants no choice authorization`);
+      }
+      const latestLocal = copy(store.get());
+      const selected = await synced.resolveConflict(source);
+      assertEqual(selected.audioLevel, source === "local" ? latestLocal.audioLevel : remote.audioLevel,
+        `${discovered}/${source}: explicit choice retains the selected candidate's actual preferences`);
+      assertEqual(selected.keyStats, source === "local" ? latestLocal.keyStats : remote.keyStats,
+        `${discovered}/${source}: explicit local choice does not roll back input made after the warning`);
+      assertEqual(cloud.writes.length, 1, `${discovered}/${source}: only deliberate choice reaches the cloud`);
+      assertEqual(synced.getConflict(), null, `${discovered}/${source}: successful authorized upload releases the latch`);
+      const archived = [...storage.values.entries()].filter(([key]) => key.includes(".conflict.")).map(([,raw]) => JSON.parse(raw));
+      assert(archived.some(value => JSON.stringify(value) === JSON.stringify(latestLocal)), `${discovered}/${source}: latest preselection local progress remains archived`);
+      assert(archived.some(value => JSON.stringify(value) === JSON.stringify(remote)), `${discovered}/${source}: original remote alternative remains archived`);
+      assertEqual((await SaveStore.load(synced)).get(), selected, `${discovered}/${source}: chosen state remains normally loadable`);
+    }
+  }
+});
+
+await suite("saveSync: an explicitly selected snapshot can retry a failed cloud request without reopening the choice", async () => {
+  const { account, cloud, synced } = fixture();
+  const local = state("Local", 100), remote = state("Newer account", 200);
+  await account.save(local); cloud.rows.set("account-a", remote); cloud.readError = new CloudSaveError();
+  const store = await SaveStore.load(synced); cloud.readError = null;
+  await rejects(store.flush(), SaveConflictError);
+  cloud.writeError = new CloudSaveError();
+  assert(await rejects(synced.resolveConflict("cloud"), CloudSaveError), "explicit selection can still encounter a real provider failure");
+  const selected = await account.load();
+  assertEqual(selected?.profileName, remote.profileName, "selected progress is already durable locally");
+  assertEqual(cloud.rows.get("account-a"), remote, "failed request leaves prior remote intact");
+  cloud.writeError = null;
+  await synced.flush();
+  assertEqual(cloud.writes.map(write => write.state), [selected], "normal retry is authorized only for that exact deliberately selected snapshot");
+  assertEqual([synced.getLastError(), synced.getConflict()], [null, null], "successful authorized retry clears both status and conflict");
+});
+
+await suite("saveSync: ordinary progress revokes a failed explicit upload instead of inheriting its authorization", async () => {
+  const { account, cloud, synced } = fixture();
+  const local = state("Local", 100), remote = state("Newer account", 200);
+  await account.save(local); cloud.rows.set("account-a", remote); cloud.readError = new CloudSaveError();
+  const store = await SaveStore.load(synced, { saveDelayMs: 60_000 }); cloud.readError = null;
+  await rejects(store.flush(), SaveConflictError);
+  cloud.writeError = new CloudSaveError();
+  await rejects(synced.resolveConflict("local"), CloudSaveError);
+  cloud.writeError = null;
+  store.update(value => { value.audioLevel = "quiet"; value.keyStats.z = { hits: 3, misses: 0 }; });
+  assert(await rejects(store.flush(), SaveConflictError), "later ordinary progress cannot reuse an earlier exact-snapshot authorization");
+  assertEqual(cloud.writes, [], "provider recovery alone cannot upload the revised unchosen candidate");
+  assertEqual(await account.load(), store.get(), "later ordinary progress is durable on the device");
+  assertEqual(synced.getConflict()?.local, store.get(), "the next choice offers latest local input");
+  const selected = await synced.resolveConflict("local");
+  assertEqual(selected.keyStats.z.hits, 3, "fresh explicit choice selects the latest local input");
+  assertEqual(cloud.writes.map(write => write.state), [selected], "fresh authorization permits exactly the chosen continuation");
+});
+
+await suite("saveSync: device progress changing during a choice read requires refreshed consent", async () => {
+  const { account, cloud, synced } = fixture();
+  const local = state("Local", 100), remote = state("Newer account", 200);
+  await account.save(local); cloud.rows.set("account-a", remote); cloud.readError = new CloudSaveError();
+  const store = await SaveStore.load(synced, { saveDelayMs: 60_000 }); cloud.readError = null;
+  await rejects(store.flush(), SaveConflictError);
+  const gate = deferred(), entered = deferred(), read = cloud.load.bind(cloud);
+  cloud.load = async owner => { entered.resolve(); await gate.promise; return read(owner); };
+  const choice = synced.resolveConflict("local").then(() => null, error => error);
+  await entered.promise;
+  store.update(value => { value.audioLevel = "off"; });
+  await rejects(store.flush(), SaveConflictError);
+  gate.resolve();
+  assert(await choice instanceof SaveConflictError, "choice based on an older local summary does not silently proceed");
+  assertEqual(synced.getConflict()?.local.audioLevel, "off", "updated local candidate remains offered");
+  assertEqual(cloud.writes, [], "stale choice uploads neither the old nor new local candidate");
+  assertEqual((await account.load())?.audioLevel, "off", "new device preference remains saved");
+});
+
+await suite("saveSync: Title loading cannot silently choose an already discovered same-owner conflict", async () => {
+  for (const offline of [false, true]) {
+    const { account, cloud, synced, storage } = fixture();
+    const local = state("Device fallback", 100), remote = state("Recovered newer account", 200);
+    await account.save(local); cloud.rows.set("account-a", remote); cloud.readError = new CloudSaveError();
+    const store = await SaveStore.load(synced); cloud.readError = null;
+    await rejects(store.flush(), SaveConflictError);
+    const before = [...storage.values.entries()];
+    if (offline) cloud.readError = new CloudSaveError();
+    assert(await rejects(SaveStore.load(synced), SaveConflictError), `${offline}: normal Title reload still requires the actual discovered choice`);
+    assertEqual(synced.getConflict(), { local, cloud: remote }, `${offline}: Title retains both same-owner alternatives`);
+    assertEqual([...storage.values.entries()], before, `${offline}: reload never auto-adopts the newer compatible remote into the device slot`);
+    assertEqual(cloud.writes, [], `${offline}: reload does not queue an unchosen branch`);
+    cloud.readError = null;
+    const selected = await synced.resolveConflict("cloud");
+    assertEqual((await SaveStore.load(synced)).get(), selected, `${offline}: explicit choice releases normal Title loading`);
+  }
+});
+
+await suite("saveSync: an account rebind cannot expose or upload the previous owner's retained conflict", async () => {
+  const { account, cloud, synced, local } = fixture();
+  const a = state("Account A fallback", 100), remoteA = state("Account A newer", 200);
+  const b = { ...state("Account B only", 300), runId: "run-b" };
+  await account.save(a); cloud.rows.set("account-a", remoteA);
+  await local.forUser("account-b").save(b); cloud.rows.set("account-b", b);
+  cloud.readError = new CloudSaveError();
+  const store = await SaveStore.load(synced, { saveDelayMs: 60_000 }); cloud.readError = null;
+  await rejects(store.flush(), SaveConflictError);
+  store.update(value => { value.audioLevel = "quiet"; });
+  await rejects(store.flush(), SaveConflictError);
+  const latestA = await account.load();
+  cloud.user = "account-b";
+  const reopened = await SaveStore.load(synced);
+  await reopened.flush();
+  assertEqual(reopened.get(), b, "only B's acknowledged cache/account state is exposed after rebind");
+  assertEqual([synced.getConflict(), synced.getLastError()], [null, null], "A's retained alternatives and errors do not leak into B's screen");
+  assertEqual(await account.load(), latestA, "A's latest durable input remains separately preserved");
+  assertEqual(cloud.rows.get("account-a"), remoteA, "A's unchosen account alternative stays exact");
+  assertEqual(cloud.rows.get("account-b"), b, "A's old pending snapshot never replaces B's account journey");
+  assertEqual(cloud.writes, [], "rebinding discards old pending authorization instead of uploading it to a new owner");
+});
+
+await suite("saveSync: an old in-flight completion cannot set a newly bound owner's error or pending upload", async () => {
+  const { account, cloud, synced, local } = fixture();
+  const a = state("Account A", 100), b = { ...state("Account B", 200), runId: "run-b" };
+  await account.save(a); cloud.rows.set("account-a", a);
+  await local.forUser("account-b").save(b); cloud.rows.set("account-b", b);
+  const first = await SaveStore.load(synced, { saveDelayMs: 60_000 });
+  const gate = deferred(), entered = deferred();
+  cloud.beforeWrite = async () => { entered.resolve(); await gate.promise; };
+  first.update(value => { value.audioLevel = "quiet"; });
+  const oldFlush = first.flush().then(() => null, error => error);
+  await entered.promise;
+  cloud.user = "account-b";
+  const reopened = await SaveStore.load(synced);
+  gate.resolve();
+  assert(await oldFlush instanceof CloudSaveError, "old caller receives the binding-change failure even if its previously authorized request completed");
+  await reopened.flush();
+  assertEqual(reopened.get(), b, "B's active store remains exact");
+  assertEqual(cloud.rows.get("account-b"), b, "old request never targets B");
+  assertEqual(cloud.writes.map(write => write.owner), ["account-a"], "only A's request already authorized before its account changed can finish");
+  assertEqual([synced.getLastError(), synced.getConflict()], [null, null], "old completion cannot poison B's warning or resurrect A's conflict");
 });

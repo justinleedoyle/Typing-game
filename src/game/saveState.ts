@@ -83,6 +83,13 @@ export class CloudSaveError extends Error {
     super(message); this.name = "CloudSaveError";
   }
 }
+/** A successful retry found an account journey that the active scene did not
+ * load. This does not promise that an empty fallback was saved on the device. */
+export class SaveReloadRequiredError extends Error {
+  constructor(message = "An account journey is available. Return to the title and continue to load it; neither copy has been changed.") {
+    super(message); this.name = "SaveReloadRequiredError";
+  }
+}
 
 type RawSave = Record<string, unknown>;
 function record(value: unknown): value is RawSave {
@@ -795,6 +802,13 @@ export class SyncedBackend implements SaveBackend {
   private cloudError: Error | null = null;
   private cloudSequence = 0;
   private conflict: SaveConflict | null = null;
+  private choiceUpload: SaveState | null = null;
+  private applyingChoice = false;
+  /** A failed boot read is not evidence that the account has no save. Keep
+   * the exact fallback so an explicit flush can recheck without reloading or
+   * replacing the active store behind its scene. */
+  private loadFallback: SaveState | null | undefined;
+  private readRetry: Promise<void> | null = null;
   constructor(private readonly local = new LocalStorageBackend(), private readonly cloud: CloudSaveBackend = new SupabaseBackend(), private readonly options: SyncOptions = {}) {
     this.scoped = local;
   }
@@ -859,35 +873,57 @@ export class SyncedBackend implements SaveBackend {
   }
   private checkCompatibility(local: SaveState, cloud: SaveState): void {
     try { assertCompatible(local, cloud); }
-    catch (error) { this.conflict = { local: migrate(local), cloud: migrate(cloud) }; throw error; }
+    catch (error) { this.conflict = { local: migrate(local), cloud: migrate(cloud) }; this.choiceUpload = null; throw error; }
   }
   private bind(owner: string | null): void {
+    // A reload establishes a new device writer. Older queued work belongs to
+    // the previous binding, never whichever account is selected next.
+    if (this.cloudTimer !== null) { clearTimeout(this.cloudTimer); this.cloudTimer = null; }
+    this.pendingCloud = null; this.cloudSequence++; this.choiceUpload = null;
+    if (this.bound && owner !== this.owner) { this.conflict = null; this.cloudError = null; }
     this.owner = owner; this.scoped = this.local.forUser(owner); this.bound = true;
   }
   async load(): Promise<SaveState | null> {
     this.observedCloud = undefined;
+    this.loadFallback = undefined;
+    // A Title reload creates a new scoped writer. An older read can finish
+    // only for its old caller; it cannot block or change the new binding.
+    this.readRetry = null;
     try {
       this.bind(await deadline(this.cloud.currentUserId(), this.options.loadTimeoutMs ?? CLOUD_TIMEOUT_MS));
     } catch (error) {
-      this.cloudError = asError(error);
       // Without verified identity, never expose another account's cached save.
       // Guest progress remains playable; account caches stay untouched.
       this.bind(null);
+      this.cloudError = asError(error);
       return this.scoped.load();
     }
     const local = await this.scoped.load();
-    if (this.owner === null) return local;
+    if (this.owner === null) { this.cloudError = null; return local; }
     let remote: SaveState | null;
     try { remote = await deadline(this.cloud.load(this.owner), this.options.loadTimeoutMs ?? CLOUD_TIMEOUT_MS); }
     catch (error) {
       // Invalid/newer cloud data is protected just like local data. Network
       // failure permits local play but NEVER implies there is no cloud row.
       if (error instanceof InvalidSaveError || error instanceof UnsupportedSaveVersionError) throw error;
+      this.loadFallback = local === null ? null : migrate(local);
+      if (this.conflict) {
+        this.conflict.local = local ?? this.conflict.local;
+        this.cloudError = new SaveConflictError("The account save could not be refreshed. Both known journeys remain available; retry the save choice when the account is reachable.");
+        throw this.cloudError;
+      }
       this.cloudError = asError(error); return local;
     }
     this.cloudError = null;
     const cloud = remote === null ? null : migrate(remote);
     this.observedCloud = cloud;
+    if (this.conflict) {
+      // A player already needs an explicit choice for this owner. Title
+      // reload may refresh its candidates, but cannot choose the newer one.
+      this.conflict = { local: local ?? this.conflict.local, cloud: cloud ?? this.conflict.cloud };
+      this.cloudError = new SaveConflictError();
+      throw this.cloudError;
+    }
     if (cloud && local) this.checkCompatibility(local, cloud);
     if (cloud && (!local || cloud.updatedAt > local.updatedAt)) {
       await this.scoped.save(cloud); return cloud;
@@ -898,7 +934,18 @@ export class SyncedBackend implements SaveBackend {
   async save(state: SaveState): Promise<void> {
     if (!this.bound) await this.load();
     const valid = migrate(state);
-    await this.scoped.save(valid);
+    const scoped = this.scoped, owner = this.owner;
+    await scoped.save(valid);
+    if (scoped !== this.scoped || owner !== this.owner) throw new CloudSaveError("The active save changed. Your original device progress is preserved; return to the title before continuing.");
+    if (this.conflict) {
+      // Continued typing/preferences are still made durable on this device,
+      // but a newer clock is never permission to dismiss a discovered choice.
+      this.conflict.local = migrate(valid);
+      if (!this.choiceUpload || !sameSave(valid, this.choiceUpload)) {
+        this.choiceUpload = null;
+        this.cloudError = new SaveConflictError();
+      }
+    }
     if (this.owner !== null) this.queueCloud(valid);
   }
   private queueCloud(state: SaveState): void {
@@ -917,18 +964,28 @@ export class SyncedBackend implements SaveBackend {
     const snapshot = this.pendingCloud;
     const sequence = this.cloudSequence;
     const owner = this.owner;
+    const scoped = this.scoped;
+    const requireBinding = () => {
+      if (owner !== this.owner || scoped !== this.scoped) throw new CloudSaveError("The active save changed. Your original device progress is preserved; return to the title before syncing.");
+    };
     this.pendingCloud = null;
     const write = this.cloudChain.then(async () => {
-      if (!await this.scoped.isCurrentWriter()) throw new Error("The device save changed in another window. Reopen or resolve its device-save choice before syncing; pending cloud work has been retained.");
+      requireBinding();
+      this.requireCloudChoice(snapshot);
+      if (!await scoped.isCurrentWriter()) throw new Error("The device save changed in another window. Reopen or resolve its device-save choice before syncing; pending cloud work has been retained.");
+      requireBinding();
+      this.requireCloudChoice(snapshot);
       const remote = await this.cloud.load(owner);
+      requireBinding();
       const current = remote === null ? null : migrate(remote);
+      this.requireCloudChoice(snapshot);
       if (this.observedCloud !== undefined) {
         if (!sameNullableSave(current, this.observedCloud)) {
           // An uncertain previous request may already have written exactly this
           // snapshot. Recognize that success without rewriting someone else.
           if (current && sameSave(current, snapshot)) {
             this.observedCloud = current;
-            this.cloudError = null;
+            this.finishCloudChoice(snapshot);
             return;
           }
           this.cloudChanged(snapshot, current);
@@ -938,15 +995,20 @@ export class SyncedBackend implements SaveBackend {
         if (current.updatedAt > snapshot.updatedAt) this.cloudChanged(snapshot, current);
       }
       this.observedCloud = current;
-      if (!await this.scoped.isCurrentWriter()) throw new Error("The device save changed in another window. Reopen or resolve its device-save choice before syncing; pending cloud work has been retained.");
+      if (!await scoped.isCurrentWriter()) throw new Error("The device save changed in another window. Reopen or resolve its device-save choice before syncing; pending cloud work has been retained.");
+      requireBinding();
+      this.requireCloudChoice(snapshot);
       if (!this.cloud.saveIfUnchanged) throw new CloudSaveError("This cloud adapter cannot protect simultaneous saves. Your device progress is preserved.");
       if (!await this.cloud.saveIfUnchanged(snapshot, current, owner)) {
         const latest = await this.cloud.load(owner);
+        requireBinding();
         this.cloudChanged(snapshot, latest === null ? null : migrate(latest));
       }
+      requireBinding();
       this.observedCloud = migrate(snapshot);
-      this.cloudError = null;
+      this.finishCloudChoice(snapshot);
     }).catch((error: unknown) => {
+      if (owner !== this.owner || scoped !== this.scoped) throw error;
       this.cloudError = asError(error);
       // Retain the newest unsynced snapshot for an explicit retry. A failed
       // old write must never replace an already pending newer snapshot.
@@ -956,16 +1018,81 @@ export class SyncedBackend implements SaveBackend {
     this.cloudChain = write.catch(() => {});
     return write;
   }
+  private requireCloudChoice(snapshot: SaveState): void {
+    if (this.conflict && (!this.choiceUpload || !sameSave(snapshot, this.choiceUpload))) throw new SaveConflictError();
+  }
+  private finishCloudChoice(snapshot: SaveState): void {
+    if (this.choiceUpload && sameSave(snapshot, this.choiceUpload)) {
+      this.conflict = null; this.choiceUpload = null; this.loadFallback = undefined;
+    }
+    // A later ordinary save may have revoked this upload's choice while the
+    // conditional request was already in flight. Keep that newer choice live.
+    this.cloudError = this.conflict ? new SaveConflictError() : null;
+  }
   private cloudChanged(local: SaveState, cloud: SaveState | null): never {
     if (cloud) {
       this.conflict = { local: migrate(local), cloud: migrate(cloud) };
+      this.choiceUpload = null;
       throw new SaveConflictError("The cloud save changed on another device. Both journeys are preserved; choose which to continue.");
     }
     throw new CloudSaveError("The cloud copy changed while you were playing. Your device progress is preserved; reopen the game before syncing.");
   }
+  private retryFailedLoad(): Promise<void> {
+    if (this.readRetry) return this.readRetry;
+    if (this.loadFallback === undefined || this.owner === null || !this.cloudError) return Promise.resolve();
+    // Once recovery discovers another journey, retry is not permission to
+    // select either alternative, even if the remote row changes again.
+    if (this.conflict) return Promise.reject(this.cloudError instanceof SaveConflictError ? this.cloudError : new SaveConflictError());
+    const local = this.loadFallback, owner = this.owner, scoped = this.scoped;
+    const sequence = this.cloudSequence;
+    const verify = async () => {
+      const currentOwner = await deadline(this.cloud.currentUserId(), this.options.loadTimeoutMs ?? CLOUD_TIMEOUT_MS);
+      if (owner !== this.owner || scoped !== this.scoped || currentOwner !== owner) {
+        throw new CloudSaveError("The signed-in account changed. Return to the title before retrying cloud saving.");
+      }
+      if (!await scoped.isCurrentWriter()) throw new Error("The device save changed in another window. Return to the title to review its current save before syncing.");
+      const confirmedOwner = await deadline(this.cloud.currentUserId(), this.options.loadTimeoutMs ?? CLOUD_TIMEOUT_MS);
+      if (owner !== this.owner || scoped !== this.scoped || confirmedOwner !== owner) throw new CloudSaveError("The signed-in account changed. Return to the title before retrying cloud saving.");
+    };
+    const retry = (async () => {
+      try {
+        await verify();
+        const remote = await deadline(this.cloud.load(owner), this.options.loadTimeoutMs ?? CLOUD_TIMEOUT_MS);
+        const current = remote === null ? null : migrate(remote);
+        await verify();
+        // A normal save may have queued (or begun uploading) newer progress
+        // while the read waited. Its existing guarded queue owns that result;
+        // never resurrect this older boot fallback or change its baseline.
+        if (sequence !== this.cloudSequence || this.pendingCloud) return;
+        if (local && current) this.checkCompatibility(local, current);
+        if (current && (!local || current.updatedAt > local.updatedAt)) {
+          if (local) this.cloudChanged(local, current);
+          // There is no active local journey to compare. Loading the newly
+          // available account save belongs to Title, not a silent store swap.
+          throw new SaveReloadRequiredError();
+        }
+        this.observedCloud = current;
+        this.cloudError = null;
+        this.loadFallback = undefined;
+        if (local && (!current || !sameSave(local, current))) this.queueCloud(local);
+      } catch (error) {
+        if (owner === this.owner && scoped === this.scoped) this.cloudError = asError(error);
+        throw error;
+      }
+    })();
+    this.readRetry = retry;
+    void retry.finally(() => { if (this.readRetry === retry) this.readRetry = null; }).catch(() => {});
+    return retry;
+  }
   async flush(): Promise<void> {
     if (this.cloudTimer !== null) { clearTimeout(this.cloudTimer); this.cloudTimer = null; }
-    await this.cloudChain;
+    // A second flush or a timer may enqueue behind the chain first observed
+    // here. Reach a settled writer before considering the boot-read retry.
+    let settled: Promise<void>;
+    do { settled = this.cloudChain; await settled; } while (settled !== this.cloudChain);
+    if (!this.pendingCloud) await this.retryFailedLoad();
+    // Progress saved while the retry waited can already be on the queue.
+    do { settled = this.cloudChain; await settled; } while (settled !== this.cloudChain);
     while (this.pendingCloud) {
       if (this.cloudTimer !== null) { clearTimeout(this.cloudTimer); this.cloudTimer = null; }
       await this.drainCloud();
@@ -986,22 +1113,36 @@ export class SyncedBackend implements SaveBackend {
       this.observedCloud = undefined; this.cloudError = null; this.conflict = null;
       return selected;
     }
-    const conflict = this.getConflict();
-    if (!conflict || this.owner === null) throw new SaveConflictError("There is no pending account-save choice.");
-    if (await this.cloud.currentUserId() !== this.owner) throw new CloudSaveError("The signed-in account changed. Reopen the game before choosing a save.");
-    const latest = await this.cloud.load(this.owner);
-    if (latest && !sameSave(migrate(latest), conflict.cloud)) {
-      this.conflict = { local: conflict.local, cloud: migrate(latest) };
-      throw new SaveConflictError("The cloud save changed while this choice was open. Review the refreshed choices before continuing.");
-    }
-    this.scoped.preserveConflict("local", conflict.local);
-    this.scoped.preserveConflict("cloud", conflict.cloud);
-    const selected = migrate({ ...conflict[source], updatedAt: Math.max(Date.now(), conflict.local.updatedAt + 1, conflict.cloud.updatedAt + 1) });
-    this.observedCloud = latest === null ? null : migrate(latest);
-    await this.save(selected);
-    await this.flush();
-    this.conflict = null;
-    return selected;
+    if (this.applyingChoice) throw new SaveConflictError("A save choice is already being applied. Wait for it to finish before choosing again.");
+    this.applyingChoice = true;
+    try {
+      const owner = this.owner, scoped = this.scoped;
+      const conflict = this.getConflict();
+      if (!conflict || owner === null) throw new SaveConflictError("There is no pending account-save choice.");
+      const requireBinding = () => {
+        if (owner !== this.owner || scoped !== this.scoped) throw new CloudSaveError("The active save changed. Return to the title before choosing a save.");
+      };
+      if (await this.cloud.currentUserId() !== owner) throw new CloudSaveError("The signed-in account changed. Reopen the game before choosing a save.");
+      requireBinding();
+      const latest = await this.cloud.load(owner);
+      requireBinding();
+      if (latest && !sameSave(migrate(latest), conflict.cloud)) {
+        this.conflict = { local: conflict.local, cloud: migrate(latest) }; this.choiceUpload = null;
+        throw new SaveConflictError("The cloud save changed while this choice was open. Review the refreshed choices before continuing.");
+      }
+      // An ordinary device save may have completed while the remote read was
+      // waiting. Ask for an informed choice of that updated candidate instead.
+      if (!this.conflict || !sameSave(this.conflict.local, conflict.local)) throw new SaveConflictError("Device progress changed while this choice was open. Review the refreshed choices before continuing.");
+      scoped.preserveConflict("local", conflict.local);
+      scoped.preserveConflict("cloud", conflict.cloud);
+      const selected = migrate({ ...conflict[source], updatedAt: Math.max(Date.now(), conflict.local.updatedAt + 1, conflict.cloud.updatedAt + 1) });
+      this.observedCloud = latest === null ? null : migrate(latest);
+      this.choiceUpload = migrate(selected);
+      await this.save(selected);
+      requireBinding();
+      await this.flush();
+      return selected;
+    } finally { this.applyingChoice = false; }
   }
   /** Explicit opt-in only. Legacy/guest saves remain untouched; they are never
    * silently uploaded when another person signs into a shared computer. */

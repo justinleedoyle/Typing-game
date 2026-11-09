@@ -53,6 +53,10 @@ async function withWorld(work: (world: any) => Promise<void>) {
     bellWater: "/bell-water.mp3", bellMasonry: "/bell-masonry.mp3",
     bellLantern: "/bell-lantern.mp3", bellLatch: "/bell-latch.mp3",
     bellRubble: "/bell-rubble.mp3", bellRelease: "/bell-release.mp3",
+    forgeTheme: "/forge-theme.mp3", forgeClearTheme: "/forge-clear-theme.mp3",
+    forgeFurnace: "/forge-furnace.mp3", forgeMechanism: "/forge-mechanism.mp3",
+    forgeWheel: "/forge-wheel.mp3", forgeLock: "/forge-lock.mp3",
+    forgeGear: "/forge-gear.mp3", forgeFlame: "/forge-flame.mp3",
   });
   const game: any = { events: new EventEmitter(), loop: { inFocus: true } };
   const disposeTracker = installGameInterruptionTracker(game);
@@ -117,6 +121,27 @@ await suite("Bell audio ownership: rhythm and clapper aftermath remove the score
   assertEqual([w.sources.length, w.active().length], [count, 0], "a paused Bell owner cannot play or queue an action cue");
   scene.resume(); await settle();
   assertEqual(handle.status().layers.map((layer: any) => layer.id), ["bell-water"], "resume cannot restore the discarded score");
+}));
+
+await suite("Forge audio ownership: branch levels retain playheads and an obeyed order removes mechanism sources", async () => withWorld(async w => {
+  const scene = w.scene("ClockworkForgeScene"), handle = w.installSoundscape(scene, "forge-workshop"); await settle();
+  assertEqual(handle.status().layers.map((layer: any) => layer.id), ["forge-theme", "forge-furnace", "forge-mechanism"], "working foundry owns its score and two physical environment layers");
+  assert(w.requests.every((request: any) => request.url.startsWith("/forge-")), "Forge prefetch does not request another realm's material sounds");
+  assertEqual(w.requests.filter((request: any) => ["/forge-wheel.mp3", "/forge-lock.mp3", "/forge-gear.mp3", "/forge-flame.mp3"].includes(request.url)).length, 4, "the owner prefetches its four short physical cues exactly once");
+  w.context.currentTime = 11;
+  const before = w.sources.length; handle.setMood("forge-workshop-slow"); await settle();
+  assertEqual(w.sources.length, before, "lowering a closed valve changes existing gains without restarting a score or furnace");
+  assert(handle.status().layers.every((layer: any) => layer.offset === 11), "the quieter branch preserves every existing buffer position");
+  handle.setMood("forge-rest-slow"); await settle();
+  assertEqual(handle.status().layers.map((layer: any) => layer.id), ["forge-furnace", "forge-mechanism", "forge-clear-theme"], "aftermath replaces only the musical theme while continuing its environment");
+  const furnace = handle.status().layers.find((layer: any) => layer.id === "forge-furnace");
+  handle.setMood("forge-still-slow"); await settle();
+  assertEqual(handle.status().layers.map((layer: any) => layer.id), ["forge-furnace", "forge-clear-theme"], "an obeyed command removes the mechanism instead of merely making moving machinery quieter");
+  assertEqual(handle.status().layers.find((layer: any) => layer.id === "forge-furnace").offset, furnace.offset, "stopping machinery does not restart the continuing low furnace");
+  scene.pause(); const count = w.sources.length; handle.cue("forge-lock"); await settle();
+  assertEqual([w.sources.length, w.active().length], [count, 0], "a paused Forge owner cannot play or queue a metal-settling cue");
+  scene.resume(); await settle();
+  assertEqual(handle.status().layers.map((layer: any) => layer.id), ["forge-furnace", "forge-clear-theme"], "resume cannot reintroduce the stopped mechanism");
 }));
 
 await suite("Audio ownership: hidden creation and focus return never autoplay before deliberate acknowledgment", async () => withWorld(async w => {

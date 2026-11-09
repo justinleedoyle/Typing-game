@@ -5,7 +5,8 @@ import { rememberRealmFork, resolveRealmFork, resolveCompanionDecision, remember
 import { ChapterReading } from "../game/ui/chapterReading";
 import { reducedFlashes, reducedMotion } from "../game/presentation";
 import Phaser from "phaser";
-import { type AmbientHandle, playAmbientWood } from "../audio/ambient";
+import { installSoundscape, type SceneSoundscape } from "../audio/soundscapes";
+import { woodSoundscapeMood } from "../audio/woodSoundscape";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
@@ -231,7 +232,7 @@ export class HauntedWoodScene extends Phaser.Scene {
    *  direction-punctuation mapping diegetically. Drawn on first ghost
    *  spawn, persists through Act 2 + boss. */
   private compassGlyphs: Phaser.GameObjects.Text[] = [];
-  private ambientHandle?: AmbientHandle;
+  private soundscape?: SceneSoundscape;
   private revisit = false;
 
   constructor() {
@@ -530,11 +531,12 @@ export class HauntedWoodScene extends Phaser.Scene {
       this.ghostKingBody = null;
       this.wispCatCompanion = null;
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
-      this.ambientHandle?.stop();
+      this.soundscape?.stop();
       this.ambientMistFields = [];
     });
 
-    this.ambientHandle = playAmbientWood();
+    this.soundscape = installSoundscape(this, woodSoundscapeMood(this.resumeCheckpoint?.step,
+      this.fork1Choice, this.fork2Choice, this.resumeCheckpoint?.data));
 
     if (this.revisit) {
       this.startRevisit();
@@ -547,6 +549,7 @@ export class HauntedWoodScene extends Phaser.Scene {
   }
 
   private checkpoint(step: WoodStep, data: SaveCheckpoint["data"] = {}): void {
+    this.soundscape?.setMood(woodSoundscapeMood(step, this.fork1Choice, this.fork2Choice, data));
     if (this.revisit || this.store.get().realms["haunted-wood"]?.cleared) return;
     this.checkpointStep = step;
     const stats = this.typingInput.getStats().captureCheckpoint();
@@ -659,6 +662,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     const first = resolveRealmFork("haunted-wood", "fork1", progress, state.satchel);
     const second = resolveRealmFork("haunted-wood", "fork2", progress, state.satchel);
     this.restoreWoodRevisitAftermath(first, second);
+    this.soundscape?.setMood(woodSoundscapeMood("ending", first, second));
     let narratorLine: string;
     let words: string[];
 
@@ -976,6 +980,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           playWrenAction(this.wrenSprite);
           this.releasePathCueWordAnchor();
           this.pulsePathCue(true);
+          if (i === 0) this.soundscape?.cue("wood-root");
           playChime();
           this.clearActiveTargets();
           this.checkpoint("path", { index: i, response: true });
@@ -1758,6 +1763,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         [
           {
             word: "i remember you.",
+            onLiveComplete: () => this.soundscape?.cue("wood-lantern"),
             narrator: "The shrine glows. Something settles.",
           },
         ],
@@ -1807,6 +1813,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           { word: "reach in", narrator: "Your fingers close around it." },
           {
             word: "take it",
+            onLiveComplete: () => this.soundscape?.cue("wood-stone"),
             narrator: "The flute is cold. It makes no sound. The ghosts grow restless.",
             beforeResponse: (onSettled) => this.settleBoneFluteInHand(onSettled),
           },
@@ -1941,6 +1948,7 @@ export class HauntedWoodScene extends Phaser.Scene {
       onComplete: () => {
         this.clearActiveTargets();
         this.fork2Choice = "force";
+        this.soundscape?.cue("wood-lantern");
         this.startFork2Force();
       },
     }, -58);
@@ -1963,6 +1971,7 @@ export class HauntedWoodScene extends Phaser.Scene {
         [
           {
             word: "you are the keeper of what is lost.",
+            onLiveComplete: () => this.soundscape?.cue("wood-root"),
             narrator: "His roots uncurl. He listens.",
           },
           {
@@ -2176,6 +2185,7 @@ export class HauntedWoodScene extends Phaser.Scene {
             depth: 58,
           });
           idx += 1;
+          if (step === "final2" && idx === words.length) this.soundscape?.cue("wood-seal");
           this.checkpoint(step, { index: idx, begun: true });
           this.clearActiveTargets();
           this.time.delayedCall(160, advance);
@@ -2766,6 +2776,7 @@ export class HauntedWoodScene extends Phaser.Scene {
     steps: Array<{
       word: string;
       narrator: string;
+      onLiveComplete?: () => void;
       beforeResponse?: (onSettled: () => void) => void;
     }>,
     onDone: () => void,
@@ -2817,6 +2828,7 @@ export class HauntedWoodScene extends Phaser.Scene {
           if (step.beforeResponse && cursor === wordLength) this.fluteHandoffPending = true;
         },
         onComplete: () => {
+          step.onLiveComplete?.();
           playChime();
           playWrenAction(this.wrenSprite);
           playBodyImpact(this, this.wrenContainer, {

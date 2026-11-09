@@ -135,3 +135,47 @@ Regenerate Sky only with `node scripts/render-sky-audio.mjs` and ffmpeg/LAME.
 `sky-render-report.json` records the synthesis and MP3 decode measurements.
 These are technical checks, not physical listening or artistic acceptance.
 Voices remain last.
+
+## Temporary Whispering Wood, finale and homecoming palette
+
+These scores complete the provisional instrumental palette and remain intended
+for replacement by Justin's final music. Replace `wood-theme.mp3`,
+`wood-clear-theme.mp3`, `finale-theme.mp3` or `homecoming-theme.mp3` independently
+at the same paths, rebuild, and check loop boundaries, scene transitions and
+listening levels. Different durations are supported; filenames and playheads
+are not saved in a journey. Retain replacement provenance and licenses here.
+
+`scripts/render-wood-finale-audio.mjs` creates eleven original deterministic
+recordings, seed 592813, without source samples, soundfonts, third-party
+compositions, voices or provider calls:
+
+- `wood-theme.mp3`: 96-second restrained wooden/string exploration theme,
+  with lower-register responses to the established D/A/E musical family.
+- `wood-clear-theme.mp3`: 96-second warmer forest aftermath theme.
+- `wood-air.mp3`: 22-second sheltered canopy-air loop.
+- `wood-leaves.mp3`: 22-second sparse irregular leaf movement. Neither loop
+  contains voices, literal ghost whispers, animal calls or periodic footsteps.
+- `wood-root`, `wood-stone`, `wood-lantern`, `wood-seal`: 3-second material
+  cues for authored completed traversal, shrine/light and sealing actions.
+  The stolen bone-flute remains silent as the story says; it gains no melody.
+- `finale-theme.mp3`: 96-second sparse low-string confrontation theme,
+  without drums or an independent beat signal beneath the original feedback.
+- `finale-air.mp3`: 22-second quiet castle/courtyard air texture.
+- `homecoming-theme.mp3`: 96-second resolving instrumental reprise of the
+  home musical family, shared by the reunion and credits. The existing
+  `hearth.mp3` supplies the room/fire texture and is not regenerated here.
+
+The Wood's completed actions and remembered branches select different layer
+levels; restoring a response does not replay its material cue. Finale mixes
+lower during the duel. Its final phrase without companions remains silent;
+the companion route has low instrumental support. Music and air stop around
+the period seal. Existing chimes, damage sounds and the period-snap sting
+retain their roles; this palette adds no extra generic victory hit. Homecoming
+and credits share their score's playhead. All playback uses the existing owned
+pause, mute, interruption and scene-shutdown path.
+
+Regenerate only these eleven recordings with
+`node scripts/render-wood-finale-audio.mjs` and ffmpeg/LAME.
+`wood-finale-render-report.json` records pre-encode and decoded measurements.
+Numeric headroom and boundary checks do not establish physical listening,
+musical acceptance or a whole-game clipping guarantee. Voices remain last.

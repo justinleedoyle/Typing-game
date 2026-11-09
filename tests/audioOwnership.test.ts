@@ -61,6 +61,11 @@ async function withWorld(work: (world: any) => Promise<void>) {
     skyWind: "/sky-wind.mp3", skyPaper: "/sky-paper.mp3",
     skyStone: "/sky-stone.mp3", skyLantern: "/sky-lantern.mp3",
     skyBook: "/sky-book.mp3", skyTether: "/sky-tether.mp3",
+    woodTheme: "/wood-theme.mp3", woodClearTheme: "/wood-clear-theme.mp3",
+    woodAir: "/wood-air.mp3", woodLeaves: "/wood-leaves.mp3",
+    woodRoot: "/wood-root.mp3", woodStone: "/wood-stone.mp3",
+    woodLantern: "/wood-lantern.mp3", woodSeal: "/wood-seal.mp3",
+    finaleTheme: "/finale-theme.mp3", finaleAir: "/finale-air.mp3", homecomingTheme: "/homecoming-theme.mp3",
   });
   const game: any = { events: new EventEmitter(), loop: { inFocus: true } };
   const disposeTracker = installGameInterruptionTracker(game);
@@ -279,3 +284,38 @@ await suite("Audio context: browsers without userActivation unlock only from tru
     assertEqual(resumed, 1, "later native gestures cannot resume an already-running context again");
   }
 });
+
+await suite("Wood audio ownership: quiet, threat and aftermath keep their air playhead and prefetch only physical forest cues", async () => withWorld(async w => {
+  const scene = w.scene("HauntedWoodScene"), handle = w.installSoundscape(scene, "wood-path"); await settle();
+  assertEqual(handle.status().layers.map((layer: any) => layer.id), ["wood-theme", "wood-air", "wood-leaves"], "forest owns the score, sheltered air and irregular leaves");
+  assert(w.requests.every((request: any) => request.url.startsWith("/wood-")), "forest entry cannot request unrelated realm materials");
+  assertEqual(w.requests.filter((request: any) => ["/wood-root.mp3", "/wood-stone.mp3", "/wood-lantern.mp3", "/wood-seal.mp3"].includes(request.url)).length, 4, "only the four new forest contacts prefetch once");
+  w.context.currentTime = 9; const count = w.sources.length;
+  for (const mood of ["wood-hush", "wood-restless", "wood-ash"]) handle.setMood(mood);
+  await settle(); assertEqual(w.sources.length, count, "gain changes retain the same source playheads");
+  handle.setMood("wood-threat"); await settle();
+  assertEqual(handle.status().layers.map((layer: any) => layer.id), ["wood-theme", "wood-air"], "live directional combat removes extra leaf texture");
+  const air = handle.status().layers.find((layer: any) => layer.id === "wood-air").offset;
+  handle.setMood("wood-rest-ash"); await settle();
+  assertEqual(handle.status().layers.find((layer: any) => layer.id === "wood-air").offset, air, "sealed ash aftermath changes atmosphere without resetting the place");
+  scene.pause(); const pausedCount = w.sources.length; handle.cue("wood-seal"); await settle();
+  assertEqual([w.sources.length, w.active().length], [pausedCount, 0], "a paused forest cannot emit or queue an ending seal");
+}));
+
+await suite("Finale and home audio ownership: intentional silence survives resume and credits retain one homecoming playhead", async () => withWorld(async w => {
+  const battle = w.scene("GreatBattleScene"), finale = w.installSoundscape(battle, "finale-wall"); await settle();
+  assert(w.requests.every((request: any) => request.url.startsWith("/finale-")), "finale entry prefetches no realm material cues");
+  w.context.currentTime = 7; const before = w.sources.length;
+  finale.setMood("finale-duel-kind"); await settle();
+  assertEqual(w.sources.length, before, "the quieter kind duel keeps the same score and ruins playheads");
+  finale.setMood("finale-silence"); await settle();
+  assertEqual(finale.status().layers, [], "the lone phrase/final period retain true surrounding silence");
+  battle.pause(); battle.resume(); await settle();
+  assertEqual(w.active(), [], "resume cannot revive music removed for the original silent ending");
+  const home = w.scene("HomecomingScene"), arrival = w.installSoundscape(home, "homecoming"); await settle();
+  assertEqual([finale.status().stopped, arrival.status().layers.map((layer: any) => layer.id)], [true, ["homecoming-theme", "hearth"]], "homecoming takes ownership and permanently releases the battle");
+  const count = w.sources.length; w.context.currentTime = 19; arrival.setMood("credits"); await settle();
+  assertEqual(w.sources.length, count, "credits lower the existing homecoming layers without restarting the ending");
+  assert(w.requests.every((request: any) => !["/snow.mp3", "/wood.mp3", "/stone.mp3"].includes(request.url)), "finale/home/credits never accidentally prefetch Winter materials");
+  home.events.emit("shutdown"); assertEqual(w.active(), [], "leaving credits stops every active soundscape source");
+}));

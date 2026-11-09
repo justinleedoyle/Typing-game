@@ -179,11 +179,11 @@ function homecomingFixture(gender: "boy" | "girl" | null = "boy", reduced = fals
     ...Object.fromEntries(["fillStyle", "fillRoundedRect", "lineStyle", "strokeRoundedRect", "lineBetween", "strokeCircle"].map(name =>
       [name, function(this: any, ...args: any[]) { this.commands.push([name, ...args]); return this; }])),
   });
-  const Arrival = new Function("beginAssetLoad", "assetLoadBlocked", ...Object.keys(assets), "preloadWren", "installChapterMenu", "addLocalGroundShadow",
+  const Arrival = new Function("installSoundscape", "beginAssetLoad", "assetLoadBlocked", ...Object.keys(assets), "preloadWren", "installChapterMenu", "addLocalGroundShadow",
     "applySceneActorLighting", "addIdleBreath", "makeWrenSprite", "makeSiblingDrawing", "NarrationManager", "ChapterReading",
     "homecomingLines", "reducedMotion", "rememberLocalSaveNotice", "CloudSaveError", "SERIF", "UI_CSS", "UI_HEX", "cornerTicks", `${code}; return Arrival;`)(
     // Artwork failure lifecycle is covered separately; this fixture isolates the homecoming.
-    noop, () => false,
+    () => ({ setMood: noop, stop: noop }), noop, () => false,
     ...Object.values(assets), noop, () => ({ handleKey: () => false, destroy: noop }), () => node(), noop, noop,
     () => ({ ...node(), height: 1000 }), makeSiblingDrawing,
     class { sayRaw(text: string) { captions.push(text); } clear() {} replay() {} }, Reading, homecomingLines,

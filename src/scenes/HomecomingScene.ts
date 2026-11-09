@@ -1,5 +1,6 @@
 import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
 import Phaser from "phaser";
+import { installSoundscape, type SceneSoundscape } from "../audio/soundscapes";
 import { CloudSaveError, type SaveStore } from "../game/saveState";
 import { homecomingLines } from "../game/homecoming";
 import { NarrationManager } from "../game/narrationManager";
@@ -36,6 +37,7 @@ export class HomecomingScene extends Phaser.Scene {
   private drawingOnDesk = false;
   private returningDrawing = false;
   private returnStatus: Phaser.GameObjects.Text | null = null;
+  private soundscape?: SceneSoundscape;
 
   constructor() { super("HomecomingScene"); }
   init(data: { store: SaveStore }): void {
@@ -60,6 +62,7 @@ export class HomecomingScene extends Phaser.Scene {
   }
   create(): void {
     if (assetLoadBlocked(this)) return;
+    this.soundscape = installSoundscape(this, "homecoming");
     this.menu = installChapterMenu(this, {
       store: this.store, hasClaim: () => false,
       onLeave: () => { void this.returnToLibrary(); },
@@ -123,6 +126,7 @@ export class HomecomingScene extends Phaser.Scene {
     };
     this.input.keyboard?.on("keydown", onKey);
     this.events.once("shutdown", () => {
+      this.soundscape?.stop();
       this.returnGeneration++;
       this.leaving = true;
       this.clearDrawingReturn();
@@ -240,6 +244,7 @@ export class HomecomingScene extends Phaser.Scene {
     this.tweens.add({ targets: sibling, x: 1255, duration: 420, ease: "Sine.easeInOut", onComplete: settle });
   }
   private showCredits(): void {
+    this.soundscape?.setMood("credits");
     this.narration.clear();
     const panel = this.add.container(960, 365).setDepth(25);
     const bg = this.add.graphics();

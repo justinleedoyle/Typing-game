@@ -36,20 +36,36 @@ import skyStone from "../../art/audio/sky-stone.mp3";
 import skyLantern from "../../art/audio/sky-lantern.mp3";
 import skyBook from "../../art/audio/sky-book.mp3";
 import skyTether from "../../art/audio/sky-tether.mp3";
+import woodTheme from "../../art/audio/wood-theme.mp3";
+import woodClearTheme from "../../art/audio/wood-clear-theme.mp3";
+import woodAir from "../../art/audio/wood-air.mp3";
+import woodLeaves from "../../art/audio/wood-leaves.mp3";
+import woodRoot from "../../art/audio/wood-root.mp3";
+import woodStone from "../../art/audio/wood-stone.mp3";
+import woodLantern from "../../art/audio/wood-lantern.mp3";
+import woodSeal from "../../art/audio/wood-seal.mp3";
+import finaleTheme from "../../art/audio/finale-theme.mp3";
+import finaleAir from "../../art/audio/finale-air.mp3";
+import homecomingTheme from "../../art/audio/homecoming-theme.mp3";
 
 export type SoundscapeMood = "home" | "winter-trail" | "winter-glade" | "winter-threat" | "winter-rest" | "winter-return"
   | "bell-depths" | "bell-rhythm" | "bell-rest" | "bell-silence"
   | "forge-workshop" | "forge-workshop-slow" | "forge-threat" | "forge-threat-slow"
   | "forge-rest" | "forge-rest-slow" | "forge-still" | "forge-still-slow"
   | "sky-terrace" | "sky-library" | "sky-dim" | "sky-threat" | "sky-rest" | "sky-rest-dim"
-  | "sky-kind" | "sky-freed" | "sky-freed-dim";
+  | "sky-kind" | "sky-freed" | "sky-freed-dim"
+  | "wood-path" | "wood-hush" | "wood-restless" | "wood-ash" | "wood-threat" | "wood-rest" | "wood-rest-ash"
+  | "finale-wall" | "finale-duel" | "finale-duel-kind" | "finale-alone" | "finale-phrase" | "finale-silence" | "finale-loss"
+  | "homecoming" | "credits";
 export type MaterialSound = "snow" | "wood" | "stone" | "bough" | "flame" | "bell-lantern" | "bell-latch" | "bell-rubble" | "bell-release"
   | "forge-wheel" | "forge-lock" | "forge-gear" | "forge-flame"
-  | "sky-stone" | "sky-lantern" | "sky-book" | "sky-tether";
+  | "sky-stone" | "sky-lantern" | "sky-book" | "sky-tether"
+  | "wood-root" | "wood-stone" | "wood-lantern" | "wood-seal";
 const materials: Record<MaterialSound, string> = { snow, wood, stone, bough, flame,
   "bell-lantern": bellLantern, "bell-latch": bellLatch, "bell-rubble": bellRubble, "bell-release": bellRelease,
   "forge-wheel": forgeWheel, "forge-lock": forgeLock, "forge-gear": forgeGear, "forge-flame": forgeFlame,
-  "sky-stone": skyStone, "sky-lantern": skyLantern, "sky-book": skyBook, "sky-tether": skyTether };
+  "sky-stone": skyStone, "sky-lantern": skyLantern, "sky-book": skyBook, "sky-tether": skyTether,
+  "wood-root": woodRoot, "wood-stone": woodStone, "wood-lantern": woodLantern, "wood-seal": woodSeal };
 const loop = (id: string, url: string, gain: number): LoopSpec => ({ id, url, gain });
 const moods: Record<SoundscapeMood, readonly LoopSpec[]> = {
   home: [loop("home-theme", home, .65), loop("hearth", hearth, .6)],
@@ -83,6 +99,24 @@ const moods: Record<SoundscapeMood, readonly LoopSpec[]> = {
   "sky-kind": [loop("sky-clear-theme", skyClearTheme, .44), loop("sky-wind", skyWind, .18), loop("sky-paper", skyPaper, .18)],
   "sky-freed": [loop("sky-clear-theme", skyClearTheme, .36), loop("sky-wind", skyWind, .42)],
   "sky-freed-dim": [loop("sky-clear-theme", skyClearTheme, .26), loop("sky-wind", skyWind, .42)],
+  "wood-path": [loop("wood-theme", woodTheme, .40), loop("wood-air", woodAir, .36), loop("wood-leaves", woodLeaves, .20)],
+  "wood-hush": [loop("wood-theme", woodTheme, .25), loop("wood-air", woodAir, .24), loop("wood-leaves", woodLeaves, .10)],
+  "wood-restless": [loop("wood-theme", woodTheme, .24), loop("wood-air", woodAir, .38), loop("wood-leaves", woodLeaves, .25)],
+  "wood-ash": [loop("wood-theme", woodTheme, .18), loop("wood-air", woodAir, .32), loop("wood-leaves", woodLeaves, .09)],
+  // The spirits' directional marks and feedback remain the only typing cues.
+  "wood-threat": [loop("wood-theme", woodTheme, .15), loop("wood-air", woodAir, .23)],
+  "wood-rest": [loop("wood-clear-theme", woodClearTheme, .42), loop("wood-air", woodAir, .24), loop("wood-leaves", woodLeaves, .15)],
+  "wood-rest-ash": [loop("wood-clear-theme", woodClearTheme, .30), loop("wood-air", woodAir, .28), loop("wood-leaves", woodLeaves, .07)],
+  "finale-wall": [loop("finale-theme", finaleTheme, .30), loop("finale-air", finaleAir, .26)],
+  "finale-duel": [loop("finale-theme", finaleTheme, .24), loop("finale-air", finaleAir, .22)],
+  "finale-duel-kind": [loop("finale-theme", finaleTheme, .15), loop("finale-air", finaleAir, .16)],
+  "finale-alone": [loop("finale-air", finaleAir, .16)],
+  "finale-phrase": [loop("finale-theme", finaleTheme, .13), loop("finale-air", finaleAir, .10)],
+  // The original lone/empty-satchel phrase and final period own real silence.
+  "finale-silence": [],
+  "finale-loss": [loop("finale-air", finaleAir, .12)],
+  homecoming: [loop("homecoming-theme", homecomingTheme, .46), loop("hearth", hearth, .32)],
+  credits: [loop("homecoming-theme", homecomingTheme, .38), loop("hearth", hearth, .24)],
 };
 // Failed requests are evicted so deliberate re-entry can recover. No asset can
 // stall a scene's artwork gate or prevent a saved journey from loading.
@@ -142,10 +176,11 @@ export function installSoundscape(scene: Phaser.Scene, initial: SoundscapeMood):
   handle.setMood(initial);
   // Warm small material samples in the background so a first physical action
   // has the same timing as later ones. Failure remains optional and recoverable.
-  const samples = initial.startsWith("sky-") ? [skyStone, skyLantern, skyBook, skyTether]
+  const samples = initial.startsWith("wood-") ? [woodRoot, woodStone, woodLantern, woodSeal]
+    : initial.startsWith("sky-") ? [skyStone, skyLantern, skyBook, skyTether]
     : initial.startsWith("forge-") ? [forgeWheel, forgeLock, forgeGear, forgeFlame]
     : initial.startsWith("bell-") ? [bellLantern, bellLatch, bellRubble, bellRelease]
-    : initial === "home" ? [] : [snow, wood, stone, bough, flame];
+    : initial === "home" || initial === "homecoming" || initial === "credits" || initial.startsWith("finale-") ? [] : [snow, wood, stone, bough, flame];
   for (const url of samples) void load(url).catch(() => {});
   return handle;
 }

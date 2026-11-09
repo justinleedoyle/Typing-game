@@ -5,7 +5,7 @@ import { isPuristToggleKey, togglePuristMode } from "../game/purist";
 import Phaser from "phaser";
 import { applySceneActorLighting } from "../game/actorLighting";
 import { addSoftLocalLight } from "../game/livingScene";
-import { type AmbientHandle, playAmbientBattle } from "../audio/ambient";
+import { installSoundscape, type SceneSoundscape } from "../audio/soundscapes";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playDamageThud } from "../audio/damageThud";
@@ -574,7 +574,7 @@ export class GreatBattleScene extends Phaser.Scene {
   private brassSongbirdStallTimer: Phaser.Time.TimerEvent | null = null;
   private brassSongbirdActiveTarget: TextWordTarget | null = null;
 
-  private ambientHandle?: AmbientHandle;
+  private soundscape?: SceneSoundscape;
 
   constructor() {
     super("GreatBattleScene");
@@ -809,7 +809,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.onShutdown, this);
 
-    this.ambientHandle = playAmbientBattle();
+    this.soundscape = installSoundscape(this, "finale-wall");
 
     // Begin
     this.time.delayedCall(FINALE_START_DELAY_MS, () => this.startInitialFinalePhase());
@@ -859,7 +859,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.clearTargetAnchors();
     this.dismissWrenDefender(0);
     this.input.keyboard?.off("keydown", this.onKeyDown, this);
-    this.ambientHandle?.stop();
+    this.soundscape?.stop();
     this.clearFacetSigil(false);
     if (this.brassSongbirdStallTimer) {
       this.brassSongbirdStallTimer.remove();
@@ -2184,7 +2184,7 @@ export class GreatBattleScene extends Phaser.Scene {
     this.clearActiveTargets();
     this.dismissWallWard(760);
     this.input.keyboard?.off("keydown", this.onKeyDown, this);
-    this.ambientHandle?.stop();
+    this.soundscape?.setMood("finale-loss");
 
     if (!reducedMotion(this)) this.cameras.main.shake(260, 0.008);
     const dim = this.add.graphics().setDepth(40).setAlpha(0);
@@ -2222,6 +2222,7 @@ export class GreatBattleScene extends Phaser.Scene {
   // ─── PHASE 1 — The Wall ─────────────────────────────────────────────────────
 
   private startPhase1(): void {
+    this.soundscape?.setMood("finale-wall");
     this.narration.say("finale_phase1_arrival");
     playSceneEventPulse(this, {
       kind: "ash",
@@ -2253,6 +2254,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
     // §5.5.11 — Zero allies: Walked Alone tone — no chorus, quiet music
     if (this.waveQueue.length === 0) {
+      this.soundscape?.setMood("finale-alone");
       this.narration.say("finale_phase1_walked_alone");
       this.time.delayedCall(2000, () => this.transitionToPhase2());
       return;
@@ -3242,6 +3244,7 @@ export class GreatBattleScene extends Phaser.Scene {
 
   private startPhase2(): void {
     this.preparePhase2RelicState();
+    this.soundscape?.setMood(this.isKindnessDuel ? "finale-duel-kind" : "finale-duel");
 
     this.band.setObjective("Face the Quiet Lord; watch for realm facets.");
     this.drawQuietLord(this.isForceDuel, this.isKindnessDuel);
@@ -4506,12 +4509,9 @@ export class GreatBattleScene extends Phaser.Scene {
     const hasAnyCompanion = COMPANION_IDS.some((id) => satchel.includes(id));
     const walkedAlone = satchel.length === 0;
 
-    // §5.5.11 — Walked Alone (no allies, no creature): music drops out completely
-    if (walkedAlone || !hasAnyCompanion) {
-      // TODO: mute ambient track when audio layer exposes a volume knob
-      // For now, stop ambient and let silence + typewriter carry the moment
-      this.ambientHandle?.stop();
-    }
+    // §5.5.11 — Without a companion, silence and the typewriter carry the
+    // final words. Keep that silence owned so pause/resume cannot revive combat.
+    this.soundscape?.setMood(walkedAlone || !hasAnyCompanion ? "finale-silence" : "finale-phrase");
 
     // Pull the surviving word out of the Quiet Lord, then bring Wren back into
     // the courtyard. The final phrase now travels between a visible speaker
@@ -4747,6 +4747,7 @@ export class GreatBattleScene extends Phaser.Scene {
   }
 
   private onFinalPhraseComplete(): void {
+    this.soundscape?.setMood("finale-silence");
     this.clearActiveTargets();
     this.commitFinalVictory();
     this.band.setObjective("Again is sealed; watch the final mark.");

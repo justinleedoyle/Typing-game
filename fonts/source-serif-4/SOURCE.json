@@ -1,0 +1,35 @@
+{
+  "family": "Source Serif 4",
+  "version": "4.005R",
+  "upstream": "https://github.com/adobe-fonts/source-serif",
+  "tag": "https://github.com/adobe-fonts/source-serif/releases/tag/4.005R",
+  "upstreamTagObject": "2823e993c53fca27c5c8749f529b56a5a7c77b6b",
+  "license": "SIL Open Font License 1.1",
+  "modified": false,
+  "files": [
+    {
+      "file": "SourceSerif4-Bold.otf.woff2",
+      "bytes": 112824,
+      "sha256": "c1c3741a0292062e9694c927cf483fa24d725b4e5a64b5af73f411e2a0a631ce",
+      "url": "https://raw.githubusercontent.com/adobe-fonts/source-serif/4.005R/WOFF2/OTF/SourceSerif4-Bold.otf.woff2"
+    },
+    {
+      "file": "SourceSerif4-BoldIt.otf.woff2",
+      "bytes": 83900,
+      "sha256": "96e6a14dff163fae4031f5adb582357cdab55c9a3aad0cd7d72ac4181addf312",
+      "url": "https://raw.githubusercontent.com/adobe-fonts/source-serif/4.005R/WOFF2/OTF/SourceSerif4-BoldIt.otf.woff2"
+    },
+    {
+      "file": "SourceSerif4-It.otf.woff2",
+      "bytes": 79940,
+      "sha256": "e65464583be3cb56b9fee2bff0f2f7d11706aba31435144f87f393e62ed316c8",
+      "url": "https://raw.githubusercontent.com/adobe-fonts/source-serif/4.005R/WOFF2/OTF/SourceSerif4-It.otf.woff2"
+    },
+    {
+      "file": "SourceSerif4-Regular.otf.woff2",
+      "bytes": 107408,
+      "sha256": "42aa010dbb82d90764a28f6cc7d809a9395999b7390eb3b212028c6975e97402",
+      "url": "https://raw.githubusercontent.com/adobe-fonts/source-serif/4.005R/WOFF2/OTF/SourceSerif4-Regular.otf.woff2"
+    }
+  ]
+}

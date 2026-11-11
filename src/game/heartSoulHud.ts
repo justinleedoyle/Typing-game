@@ -339,7 +339,9 @@ export class HeartSoulHud {
 
   private tickLowHeartWatcher(heartTarget: number): void {
     if (!this.opts.onSustainedLowHeart) return;
-    const now = performance.now();
+    // This clock advances only on the owner's active scene updates. A pause
+    // must not count toward either sustained strain or its feedback cooldown.
+    const now = this.pulseMs;
     if (heartTarget >= LOW_HEART_THRESHOLD) {
       this.lowHeartSinceMs = null;
       return;

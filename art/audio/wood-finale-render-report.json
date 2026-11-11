@@ -1,0 +1,216 @@
+{
+  "status": "Temporary replaceable production palette",
+  "generator": "Original deterministic DSP; seed592813; no source samples, soundfonts, provider calls or voices",
+  "scope": "Pre-encode and decoded MP3 technical measurements; no physical listening or artistic approval implied",
+  "tracks": [
+    {
+      "name": "wood-theme",
+      "seconds": 96,
+      "peak": 0.10143627971410751,
+      "rms": 0.015965709699066258,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 96,
+        "peak": 0.09638483077287674,
+        "peakDbFS": -20.31982621613761,
+        "rms": 0.015167367297193896,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.0000671168090775609
+      },
+      "bytes": 1537388,
+      "sha256": "858f158b81e86f128449ed33a772254544c993adb24266cadb20d032716134a5"
+    },
+    {
+      "name": "wood-clear-theme",
+      "seconds": 96,
+      "peak": 0.09492227435112,
+      "rms": 0.01647821102912011,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 96,
+        "peak": 0.09017891436815262,
+        "peakDbFS": -20.89789994629282,
+        "rms": 0.015654222950067753,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.0000702075194567442
+      },
+      "bytes": 1537388,
+      "sha256": "d926375105dda255d8f508751f30daa65d436babda4f5f9c2f5a080a2de16350"
+    },
+    {
+      "name": "wood-air",
+      "seconds": 22,
+      "peak": 0.09864486753940582,
+      "rms": 0.018703673296478204,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 22,
+        "peak": 0.09351995587348938,
+        "peakDbFS": -20.581914135278602,
+        "rms": 0.017829502644877548,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.011004415806382895
+      },
+      "bytes": 353708,
+      "sha256": "2f3514a479c4487912a3b6e4b65620b6d80fd5f210919477134da6e77962b2f9"
+    },
+    {
+      "name": "wood-leaves",
+      "seconds": 22,
+      "peak": 0.0621907040476799,
+      "rms": 0.004234687629021453,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 22,
+        "peak": 0.0597444586455822,
+        "peakDbFS": -24.47404739462536,
+        "rms": 0.004054740394980554,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.003830255940556526
+      },
+      "bytes": 353708,
+      "sha256": "7a45e96b78507a29063045f7345c3bd13b32ca7d5d6300456c54b3f2a299206d"
+    },
+    {
+      "name": "wood-root",
+      "seconds": 3,
+      "peak": 0.12019768357276917,
+      "rms": 0.00603264423881149,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 3,
+        "peak": 0.11310605704784393,
+        "peakDbFS": -18.9302827428669,
+        "rms": 0.00574102877164218,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.0012023308081552386
+      },
+      "bytes": 49580,
+      "sha256": "ffd616391137a6d9bc6de89a88470c4b40d2f15d9709cb11d4a32e537d0356dc"
+    },
+    {
+      "name": "wood-stone",
+      "seconds": 3,
+      "peak": 0.06547568738460541,
+      "rms": 0.004045522208522617,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 3,
+        "peak": 0.06339981406927109,
+        "peakDbFS": -23.958240315175438,
+        "rms": 0.003839906531374395,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.0005329253035597503
+      },
+      "bytes": 49580,
+      "sha256": "959852d9c2d9a562eeecc7cb13ece0e091f8d90aa955ee53a7f9d015c53a902c"
+    },
+    {
+      "name": "wood-lantern",
+      "seconds": 3,
+      "peak": 0.059497635811567307,
+      "rms": 0.005809679475007849,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 3,
+        "peak": 0.05727112665772438,
+        "peakDbFS": -24.84128546418014,
+        "rms": 0.005530292409153512,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.00007391629333142191
+      },
+      "bytes": 49580,
+      "sha256": "16c33eb949c9b5d6d457b82981ebc8e51152d4ed34eaa7783a6ab9ca487f5eb2"
+    },
+    {
+      "name": "wood-seal",
+      "seconds": 3,
+      "peak": 0.06542851030826569,
+      "rms": 0.008178560971450786,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 3,
+        "peak": 0.06143482029438019,
+        "peakDbFS": -24.231708155232973,
+        "rms": 0.007778618900659482,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.0027353616897016764
+      },
+      "bytes": 49580,
+      "sha256": "b633c1e54c04b1dfa67888630e66a3e8da92fae23836c551251ccfbfd6face0c"
+    },
+    {
+      "name": "finale-theme",
+      "seconds": 96,
+      "peak": 0.09254072606563568,
+      "rms": 0.0179067230534739,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 96,
+        "peak": 0.08792510628700256,
+        "peakDbFS": -21.117741960401048,
+        "rms": 0.01701157768440413,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.000016545687685720623
+      },
+      "bytes": 1537388,
+      "sha256": "11154f2617e7cdc7664d8c306057a053faed48afb68259d0a4055361736f68a7"
+    },
+    {
+      "name": "finale-air",
+      "seconds": 22,
+      "peak": 0.10835625231266022,
+      "rms": 0.021404856144013825,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 22,
+        "peak": 0.10968038439750671,
+        "peakDbFS": -19.19742072282757,
+        "rms": 0.020438430274662585,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.014411743963137269
+      },
+      "bytes": 353708,
+      "sha256": "719884d948c46f5ca4513e24cf2100b2ce6e13222f0a99b7a531d2be4ca643f9"
+    },
+    {
+      "name": "homecoming-theme",
+      "seconds": 96,
+      "peak": 0.09697352349758148,
+      "rms": 0.01861803329617314,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 96,
+        "peak": 0.09214524924755096,
+        "peakDbFS": -20.710541017636004,
+        "rms": 0.017687186355706905,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.000026742141926661134
+      },
+      "bytes": 1537388,
+      "sha256": "9ccd2990857b178dcb26c5953f112912155ae8152a7f8c1724a0a3afa664eac6"
+    }
+  ]
+}

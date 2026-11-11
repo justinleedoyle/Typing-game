@@ -1,7 +1,10 @@
 // Prefix-match typing input — a target is claimed only once the typed prefix
 // uniquely identifies it among all live targets.  This resolves conflicts when
 // several targets share a first letter (e.g. "the winter mountain" vs
-// "the almanac") without the player having to think about priorities.
+// "the almanac") without the player having to think about priorities. Identical
+// labels select the highest-priority target, then the earliest registered one;
+// the other target stays live and can be typed next. A complete shorter label
+// also wins over labels that extend it ("ice" before "iceberg").
 //
 // Backspace reverses one character mid-claim (the target stays claimed; only
 // the typed prefix shrinks). If you backspace past the start of the claimed
@@ -65,7 +68,8 @@ export interface WordTarget {
    */
   setCandidate?(candidate: boolean): void;
   /**
-   * Tiebreaker when two targets share a first letter. Higher wins. Default
+   * Tiebreaker when targets have identical or fully typed labels. Higher wins.
+   * Equal priorities resolve in registration order. Default
    * 0; chrome/UI targets (the almanac, settings, etc.) should sit below
    * gameplay targets (a wolf, a portal, a choice).
    */
@@ -110,13 +114,23 @@ export class TypingInputController {
   }
 
   register(target: WordTarget): void {
-    this.targets.push(target);
+    if (!this.targets.includes(target)) this.targets.push(target);
   }
 
   unregister(target: WordTarget): void {
     const i = this.targets.indexOf(target);
     if (i >= 0) this.targets.splice(i, 1);
     if (this.claimed === target) this.releaseClaim();
+    // Moving targets can expire before a shared prefix identifies one of
+    // them. Once its last candidate leaves, that prefix has no owner and
+    // must not swallow the first input at the next encounter or story choice.
+    if (!this.claimed && this.typingBuffer.length > 0) {
+      if (this.findCandidates(this.typingBuffer, this.rawTypingBuffer).length === 0) {
+        this.typingBuffer = "";
+        this.rawTypingBuffer = "";
+      }
+      this.refreshCandidateDisplay();
+    }
   }
 
   /** Drop every registered target. Call on scene shutdown. */
@@ -131,6 +145,12 @@ export class TypingInputController {
   /** True when a target is currently claimed (prefix matched, mid-word). */
   hasClaim(): boolean {
     return this.claimed !== null;
+  }
+
+  /** A word has started once its first prefix character is accepted, even
+   *  while several matching targets are still being disambiguated. */
+  hasPendingInput(): boolean {
+    return this.claimed !== null || this.typingBuffer.length > 0;
   }
 
   /** Next expected (lowercase) char of the claimed word, or null when nothing
@@ -205,36 +225,44 @@ export class TypingInputController {
 
     // ── Mid-claim: validate against the claimed target ───────────────────────
     if (this.claimed) {
+      const target = this.claimed;
       // Case-sensitive targets compare the RAW keystroke against the raw
       // expected char (preserves case). Non-case-sensitive targets compare
       // the lowercased forms (existing behavior; default for all targets
       // that don't opt in).
       const isCaseSensitive =
-        this.claimed.caseSensitive?.() === true && !!this.claimed.rawRemaining;
+        target.caseSensitive?.() === true && !!target.rawRemaining;
       const expected = isCaseSensitive
-        ? this.claimed.rawRemaining!()[0]
-        : this.claimed.remaining()[0];
+        ? target.rawRemaining!()[0]
+        : target.remaining()[0];
       const inputChar = isCaseSensitive ? char : ch;
 
       if (inputChar === expected) {
-        this.claimed.advance();
+        target.advance();
         this.store?.recordKeystroke(ch, true);
         this.stats.record(true);
         this.onCorrectChar?.();
-        if (this.claimed.isComplete()) {
+        if (this.claimed === target && target.isComplete()) {
           this.completeClaimed();
         }
         return true;
       }
-      this.claimed.miss();
-      this.store?.recordKeystroke(ch, false);
+      target.miss();
+      // Practice the key the player was asked for, rather than penalizing the
+      // unrelated key they accidentally pressed. Ambiguous pre-claim misses
+      // still have no single expected key and retain their existing logging.
+      this.store?.recordKeystroke(expected?.toLowerCase() ?? ch, false);
       this.stats.record(false);
       this.onMissChar?.();
+      // A miss can end the encounter synchronously (the finale's last candle),
+      // or a feedback hook can replace its targets. Never reset or release a
+      // different claim after those callbacks have handed input to a new beat.
+      if (this.claimed !== target) return true;
       // Difficulty: standard+ wipes the word's typed progress; purist also
       // drops the claim, so the enemy keeps coming and you must re-acquire it.
       if (this.store && missResetsProgress(this.store)) {
-        this.claimed.resetCursor?.();
-        if (missReleasesClaim(this.store)) {
+        target.resetCursor?.();
+        if (this.claimed === target && missReleasesClaim(this.store)) {
           this.releaseClaim();
           this.typingBuffer = "";
           this.rawTypingBuffer = "";
@@ -264,9 +292,16 @@ export class TypingInputController {
     this.typingBuffer = newBuffer;
     this.rawTypingBuffer = newRawBuffer;
 
-    if (candidates.length === 1) {
-      // Unique match — claim it and fast-forward the cursor to buffer length.
-      const target = pickBest(candidates);
+    const fullyTyped = candidates.filter((target) =>
+      target.remaining().length === newBuffer.length,
+    );
+    const sameLabels = candidates.every((target) =>
+      matchingLabel(target) === matchingLabel(candidates[0]),
+    );
+    if (candidates.length === 1 || sameLabels || fullyTyped.length > 0) {
+      // Unique action, duplicate label, or exact shorter word: pick one live
+      // target deterministically, never leave an unfinishable full buffer.
+      const target = pickBest(fullyTyped.length > 0 ? fullyTyped : candidates);
       const claimMods: ClaimMods = {
         spell: mods?.spell === true,
         alt: mods?.alt === true,
@@ -356,6 +391,12 @@ function pickBest(candidates: WordTarget[]): WordTarget {
     const bp = best.priority ?? 0;
     return p > bp ? t : best;
   });
+}
+
+function matchingLabel(target: WordTarget): string {
+  return target.caseSensitive?.() === true && target.rawRemaining
+    ? `case:${target.rawRemaining()}`
+    : `fold:${target.remaining()}`;
 }
 
 function normalize(char: string): string | null {

@@ -136,7 +136,7 @@ export const RELICS: Record<string, Relic> = {
     id: "tether-cord",
     name: "Tether Cord",
     realmId: "sky-island",
-    flavor: "Cuts the mooring line that kept the island too low.",
+    flavor: "A length of the mooring line, carried away after the wind was freed.",
   },
   "untethered-wind": {
     id: "untethered-wind",

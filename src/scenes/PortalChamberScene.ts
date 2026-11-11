@@ -1,11 +1,20 @@
+import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
+import { installChapterMenu } from "../game/ui/pauseMenu";
+import { navigationAction } from "../game/ui/navigationPolicy";
+import { decorativeTween, PRESENTATION_CHANGED, reducedMotion } from "../game/presentation";
 import Phaser from "phaser";
-import { type AmbientHandle, playAmbientHub } from "../audio/ambient";
+import { applySceneActorLighting } from "../game/actorLighting";
+import { resetSave } from "../game/resetSave";
+import { type SceneSoundscape, installSoundscape } from "../audio/soundscapes";
 import { playChime } from "../audio/chime";
 import { playClack } from "../audio/clack";
 import { playClaim } from "../audio/claim";
 import { NarrationManager } from "../game/narrationManager";
 import { PALETTE, PALETTE_HEX, SERIF } from "../game/palette";
+import { desktopBridge } from "../game/desktopBridge";
 import { RELICS } from "../game/relics";
+import { resolveRealmFork } from "../game/realmChoices";
+import { winterReturnRoute } from "../game/winterReturnRoute";
 import type { Difficulty, SaveStore } from "../game/saveState";
 import {
   currentUserDisplayName,
@@ -18,7 +27,6 @@ import { TextWordTarget } from "../game/wordTarget";
 import { difficultyLabel, isPuristToggleKey, togglePuristMode } from "../game/purist";
 import {
   addAmbientDrift,
-  addBackdropDrift,
   addContainerWake,
   addGroundShadow,
   addIdleBreath,
@@ -75,6 +83,7 @@ interface ArchSpec {
   readonly baseY: number;
   readonly label: string;
   readonly sceneKey: string;
+  readonly glyph: "mountain" | "bell" | "cog" | "lantern" | "branch";
 }
 
 // Geometry maps each arch onto a painted opening in the hub backdrop art.
@@ -82,56 +91,75 @@ interface ArchSpec {
 // painted stone frame (no programmatic surround).
 // Painted arch positions in the hub-portal-chamber-clean backdrop, measured
 // from the source 1672×941 image scaled to the 1920×1080 game canvas.
-// width × height ≈ painted arch silhouette so the portal sprite fills the
-// painted stone frame instead of floating inside it.
+// These are the inner apertures, excluding the stone surrounds. Their
+// centers are 401/618/836/1053/1271 px in the 1672 px source painting.
 const ARCHES: readonly ArchSpec[] = [
-  { id: "winter-mountain", x: 655,  width: 280, height: 360, baseY: 680, label: "Winter Mountain", sceneKey: "WinterMountainScene"  },
-  { id: "sunken-bell",     x: 913,  width: 280, height: 360, baseY: 680, label: "Sunken Bell",     sceneKey: "SunkenBellScene"      },
-  { id: "clockwork-forge", x: 1147, width: 280, height: 360, baseY: 680, label: "Clockwork Forge", sceneKey: "ClockworkForgeScene"   },
-  { id: "sky-island",      x: 1381, width: 280, height: 360, baseY: 680, label: "Sky Island",      sceneKey: "SkyIslandScene"        },
-  { id: "haunted-wood",    x: 1638, width: 280, height: 360, baseY: 680, label: "Haunted Wood",    sceneKey: "HauntedWoodScene"      },
+  { id: "winter-mountain", x: 461,  width: 142, height: 318, baseY: 696, label: "Winter Mountain", sceneKey: "WinterMountainScene", glyph: "mountain" },
+  { id: "sunken-bell",     x: 709,  width: 142, height: 318, baseY: 696, label: "Sunken Bell",     sceneKey: "SunkenBellScene", glyph: "bell" },
+  { id: "clockwork-forge", x: 960,  width: 142, height: 318, baseY: 696, label: "Clockwork Forge", sceneKey: "ClockworkForgeScene", glyph: "cog" },
+  { id: "sky-island",      x: 1209, width: 142, height: 318, baseY: 696, label: "Sky Island",      sceneKey: "SkyIslandScene", glyph: "lantern" },
+  { id: "haunted-wood",    x: 1459, width: 142, height: 318, baseY: 696, label: "Haunted Wood",    sceneKey: "HauntedWoodScene", glyph: "branch" },
 ] as const;
 
 const REALM_SEQUENCE = ARCHES.map((a) => a.id);
+const COMPLETED_PORTAL_ALPHA = 0.22;
+const COMPLETED_PORTAL_FOCUS_ALPHA = 0.52;
+
+// Source-pixel contours of the foreground chair crest in the accepted painting.
+// Its wood crosses Winter's aperture. Keep the carved openings transparent;
+// a rectangular backdrop copy would block the portal through those gaps.
+const CHAIR_CROP = { x: 337, y: 569, width: 83, height: 43 } as const;
+const CHAIR_WOOD_OUTLINE = [
+  [339, 588], [344, 584], [350, 583], [354, 585], [359, 589],
+  [363, 586], [366, 578], [374, 574], [379, 571], [387, 570],
+  [392, 573], [396, 578], [400, 586], [403, 581], [407, 579],
+  [413, 581], [417, 584], [419, 589], [416, 595], [414, 612],
+  [337, 612], [338, 602],
+] as const;
+const CHAIR_OPENINGS = [
+  [[348, 594], [352, 595], [353, 602], [351, 611], [347, 612]],
+  [[399, 600], [404, 598], [408, 601], [406, 612], [398, 612]],
+  [[375, 608], [380, 606], [384, 608], [383, 612], [375, 612]],
+] as const;
 
 // Wren's X position when standing in each zone — aligned to the painted
 // desk (left), portal floor (centre), and utility stations. Shelf uses the
 // cabinet's approach lane so the expanded keepsakes stay on the shelves.
 const ZONE_X: Record<Zone, number> = {
-  desk:    300,
+  desk:    420,
   portals: 990,
   shelf:   1510,
   account: 1660,
 };
-const WREN_Y = 900;
+// Stand in the foreground of the portal thresholds.
+const WREN_Y = 1000;
 const SHELF_GRID = {
-  cols: 5,
-  startX: 1648,
-  startY: 448,
-  colGap: 46,
-  rowGap: 56,
-  tileSize: 40,
-  iconSize: 30,
+  cols: 4,
+  startX: 1750,
+  colGap: 28,
+  // Centers above the four painted shelf surfaces, not a floating UI grid.
+  rowY: [444, 530, 620, 693],
+  iconSize: 24,
 } as const;
 const SHELF_STATION = {
-  x: 1740,
-  y: 558,
-  width: 220,
-  height: 100,
-  summaryY: 536,
-  targetY: 592,
+  x: 1788,
+  y: 580,
+  width: 150,
+  height: 310,
+  summaryY: 780,
+  targetY: 852,
 } as const;
 const RUNA_DESK_STATION = {
-  x: 274,
-  y: 788,
-  width: 152,
+  x: 250,
+  y: 1010,
+  width: 170,
   height: 48,
-  targetX: 274,
-  targetY: 791,
+  targetX: 250,
+  targetY: 1046,
 } as const;
 const DESK_REFLECTION_CARD = {
   x: 258,
-  y: 704,
+  y: 628,
   width: 218,
   height: 82,
 } as const;
@@ -143,6 +171,7 @@ const ACCOUNT_PANEL = {
   statusY: 184,
   authY: 232,
   settingsY: 280,
+  restartY: 328,
 } as const;
 const ACCOUNT_STATION = {
   x: ACCOUNT_PANEL.x,
@@ -157,7 +186,7 @@ const HUB_STATIONS = {
     width: RUNA_DESK_STATION.width,
     height: RUNA_DESK_STATION.height,
   },
-  almanac: { x: 190, y: 734, width: 210, height: 50 },
+  almanac: { x: 230, y: 690, width: 185, height: 42 },
   portalFloor: { x: 960, y: 962, width: 330, height: 46 },
   shelf: {
     x: SHELF_STATION.x,
@@ -177,9 +206,8 @@ const PORTAL_CALL_SOURCE_Y = HUB_STATIONS.portalFloor.y - 100;
 const HUB_FIRST_ARRIVAL_CAPTION_MS = 6_400;
 const HUB_SHORT_CAPTION_MS = 2_600;
 
-// Maps the last-cleared realm to its Runa desk-line ID in runaLines.ts. The
-// line text now lives there (single source of truth); the hub renders it via
-// narration.say(id) as the top caption, voice-ready like every other scene.
+// Default desk-line IDs. Realms with distinct consequences choose a line from
+// the saved branch below; absent history gets a neutral reflection.
 const DESK_LINE_IDS: Record<string, string> = {
   none:              "hub_desk_none",
   "winter-mountain": "hub_desk_winter",
@@ -192,9 +220,11 @@ const DESK_LINE_IDS: Record<string, string> = {
 export class PortalChamberScene extends Phaser.Scene {
   private store!: SaveStore;
   private typingInput!: TypingInputController;
+  private chapterMenu?: ReturnType<typeof installChapterMenu>;
   private archGraphics = new Map<string, Phaser.GameObjects.Graphics>();
   private archGlows = new Map<string, Phaser.GameObjects.Graphics>();
   private archSprites = new Map<string, Phaser.GameObjects.Sprite>();
+  private portalInstructionObjects: Array<Phaser.GameObjects.Graphics | Phaser.GameObjects.Text> = [];
   private narration!: NarrationManager;
   private wrenContainer!: Phaser.GameObjects.Container;
   private wrenSprite!: Phaser.GameObjects.Image;
@@ -212,24 +242,37 @@ export class PortalChamberScene extends Phaser.Scene {
   private portalFloorCallWakeObjects: Phaser.GameObjects.GameObject[] = [];
   private stationTypingPulseTimes = new WeakMap<StationSpec, number>();
   private portalTypingPulseTimes = new Map<string, number>();
-  private ambientHandle?: AmbientHandle;
-  private showPortalRevisits = false;
+  private ambientHandle?: SceneSoundscape;
+  private focusedCompletedPortal: string | null = null;
   private hubArrival: HubArrivalSource | null = null;
+  private hubArrivalEpoch = 0;
+  private hubArrivalInFlight = false;
+  private hubArrivalTimer?: Phaser.Time.TimerEvent;
+  private hubArrivalTween?: Phaser.Tweens.Tween;
   private activeZone: Zone = "portals";
   private openingUtilityScene = false;
+  private almanacOverlayOpen = false;
+  private almanacReturnZone: "portals" | "desk" | "shelf" = "desk";
   private enteringGreatBattle = false;
   private restartingNewGame = false;
+  private confirmingNewGame = false;
+  private newGameRequest = 0;
+  private newGamePrepared = false;
+  private newGameLifetime = 0;
 
   constructor() {
     super("PortalChamberScene");
   }
 
   init(data: ChamberSceneData): void {
+    this.newGameLifetime += 1;
+    this.settleHubArrival();
     this.store = data.store;
     this.hubArrival = data.arrival ?? null;
     this.archGraphics = new Map();
     this.archGlows = new Map();
     this.archSprites = new Map();
+    this.portalInstructionObjects = [];
     this.zoneTargets = [];
     this.portalWordAnchors = [];
     this.stationWordAnchorReleases = [];
@@ -243,14 +286,20 @@ export class PortalChamberScene extends Phaser.Scene {
     this.portalFloorCallWakeObjects = [];
     this.stationTypingPulseTimes = new WeakMap();
     this.portalTypingPulseTimes = new Map();
-    this.showPortalRevisits = false;
+    this.focusedCompletedPortal = null;
     this.activeZone = "portals";
     this.openingUtilityScene = false;
+    this.almanacOverlayOpen = false;
+    this.almanacReturnZone = "desk";
     this.enteringGreatBattle = false;
     this.restartingNewGame = false;
+    this.confirmingNewGame = false;
+    this.newGameRequest += 1;
+    this.newGamePrepared = false;
   }
 
   preload(): void {
+    beginAssetLoad(this);
     this.load.image("hub-backdrop", hubBackdrop);
     this.load.image("runa-sprite", runaSprite);
     preloadSatchelIcons(this, this.store.get().satchel ?? []);
@@ -265,12 +314,21 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Redirect first-time players to the opening cinematic.
+    if (assetLoadBlocked(this)) return;
+    // This transient redirect owns no UI or pause overlay. The Opening will
+    // inherit any pending interruption when its artwork has finished loading.
     if (!this.store.get().typewriterAwakened) {
       this.scene.start("OpeningScene", { store: this.store });
       return;
     }
-
+    this.chapterMenu = installChapterMenu(this, {
+      store: this.store,
+      hasClaim: () => !!this.typingInput && (this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0),
+      escapeHint: () => this.confirmingNewGame ? "Esc · keep journey" : this.newGamePrepared ? "Save retry" : this.activeZone === "portals" ? "Esc · pause" : "Esc · portals",
+      onLeave: () => this.scene.start("TitleScene"),
+      leaveLabel: "Save & return to title",
+      leaveHint: "Save & return checks your latest saved place. Continue from the title to resume there.",
+    });
     if (!this.anims.exists("portal-spin")) {
       this.anims.create({
         key: "portal-spin",
@@ -287,6 +345,7 @@ export class PortalChamberScene extends Phaser.Scene {
     }
     this.updateAllArchAppearances();
     this.drawArchLabels();
+    this.events.on(PRESENTATION_CHANGED, this.updateAllArchAppearances, this);
 
     this.wrenContainer = this.drawWren(ZONE_X.portals, WREN_Y);
 
@@ -311,23 +370,27 @@ export class PortalChamberScene extends Phaser.Scene {
       onCorrect: () => bobWrenSprite(this.wrenSprite),
       onMiss: () => {
         flashWrenMiss(this.wrenSprite);
-        this.cameras.main.shake(80, 0.002);
+        if (!reducedMotion(this)) this.cameras.main.shake(80, 0.002);
       },
       onClaim: () => playClaim(),
     });
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
     this.events.on(Phaser.Scenes.Events.RESUME, this.resumeAfterAlmanac, this);
-    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.newGameLifetime += 1;
+      this.settleHubArrival();
+      this.chapterMenu?.destroy();
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
       this.events.off(Phaser.Scenes.Events.RESUME, this.resumeAfterAlmanac, this);
+      this.events.off(PRESENTATION_CHANGED, this.updateAllArchAppearances, this);
       this.ambientHandle?.stop();
       this.clearPersistentStationWordAnchors();
       this.difficultyNotice?.destroy();
       this.difficultyNotice = undefined;
     });
 
-    this.ambientHandle = playAmbientHub();
+    this.ambientHandle = installSoundscape(this, "home");
 
     // Enter the portals zone initially.
     this.enterZone("portals", false);
@@ -348,8 +411,11 @@ export class PortalChamberScene extends Phaser.Scene {
   // ─── Zone system ──────────────────────────────────────────────────────────
 
   private enterZone(zone: Zone, animate = true): void {
+    this.confirmingNewGame = false;
+    this.newGameRequest += 1;
     this.activeZone = zone;
     this.clearZoneTargets();
+    for (const object of this.portalInstructionObjects) object.setVisible(zone === "portals");
     if (zone === "shelf") this.drawDisplayShelf();
     else this.clearShelfDisplay();
     this.walkWrenTo(ZONE_X[zone], animate);
@@ -361,6 +427,11 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private clearZoneTargets(): void {
+    // A zone replacement also ends any ambiguous prefix. Unregistering every
+    // old target alone leaves that buffer invisible against the new targets.
+    this.typingInput.handleChar("Escape");
+    const focusedArch = ARCHES.find((arch) => arch.id === this.focusedCompletedPortal);
+    if (focusedArch) this.setCompletedPortalFocus(focusedArch, false);
     for (const anchor of this.portalWordAnchors) {
       anchor.destroy();
     }
@@ -382,6 +453,7 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private walkWrenTo(targetX: number, animate: boolean): void {
+    this.settleHubArrival();
     this.tweens.killTweensOf(this.wrenContainer);
     if (!animate || targetX === this.wrenContainer.x) {
       this.wrenContainer.x = targetX;
@@ -419,7 +491,7 @@ export class PortalChamberScene extends Phaser.Scene {
       // Primary portal target — next uncompleted realm.
       const arch = ARCHES[nextAvailableIdx];
       this.registerRealmPortalTarget(arch, nextAvailableIdx, false, {
-        fontSize: 30,
+        fontSize: 24,
         entryDelayMs: 40,
       });
       // First-arrival narration — only while nothing is cleared yet (the
@@ -438,7 +510,7 @@ export class PortalChamberScene extends Phaser.Scene {
         let releaseAnchor = (): void => {};
         const battleTarget = new TextWordTarget({
           scene: this,
-          word: "defend hearthward",
+          word: "defend holdfast",
           x: this.scale.width / 2,
           y: PORTAL_CALL_WORD_Y,
           fontSize: 36,
@@ -460,67 +532,21 @@ export class PortalChamberScene extends Phaser.Scene {
         this.narration.say("hub_all_cleared");
         this.narration.clearAfter(HUB_SHORT_CAPTION_MS);
       } else {
-        // Battle cleared — show begin again target (New Game+).
-        let releaseAnchor = (): void => {};
-        const ngPlusTarget = new TextWordTarget({
-          scene: this,
-          word: "begin again",
-          x: this.scale.width / 2,
-          y: PORTAL_CALL_WORD_Y,
-          fontSize: 34,
-          outline: true,
-          idleAlpha: 0.9,
-          onClaim: () => this.focusStation(HUB_STATIONS.portalFloor),
-          onAdvance: () => this.pulseStationTyping(HUB_STATIONS.portalFloor),
-          onComplete: () => {
-            releaseAnchor();
-            this.portalFloorCallGlow?.destroy();
-            this.portalFloorCallGlow = undefined;
-            this.clearPortalFloorCallWake();
-            this.playHubActorAction(HUB_STATIONS.portalFloor.x);
-            this.pulseStation(HUB_STATIONS.portalFloor);
-            this.startNewGame();
-          },
-        });
-        releaseAnchor = this.attachPortalFloorCallAnchor(ngPlusTarget, UI_HEX.brass);
-        this.showPortalFloorCallGlow(UI_HEX.brass);
-        this.showPortalFloorCallWake(UI_HEX.brass);
-        this.typingInput.register(ngPlusTarget);
-        this.zoneTargets.push(ngPlusTarget);
-        this.stageHubTarget(ngPlusTarget, 80);
+        // The completed room keeps its earned places and book available.
+        // Starting a replacement journey belongs in Profile, behind confirmation.
+        this.registerDeskAlmanacTarget();
         this.narration.say("hub_post_battle");
         this.narration.clearAfter(HUB_SHORT_CAPTION_MS);
       }
     }
 
     // Secondary targets — all cleared realms are revisitable at lower priority.
-    const allRealmsCleared = nextAvailableIdx >= REALM_SEQUENCE.length;
-    if (!allRealmsCleared || this.showPortalRevisits) {
-      for (let i = 0; i < nextAvailableIdx; i++) {
-        this.registerRealmPortalTarget(ARCHES[i], i, true, {
-          fontSize: 22,
-          priority: -1,
-          entryDelayMs: 80 + i * 28,
-        });
-      }
-    } else {
-      this.registerNavTarget(
-        "old paths",
-        HUB_STATIONS.portalFloor.x - 170,
-        HUB_STATIONS.portalFloor.y - 120,
-        () => {
-          this.showPortalRevisits = true;
-          this.enterZone("portals", false);
-        },
-        {
-          fontSize: 18,
-          priority: -1,
-          stationPulse: HUB_STATIONS.portalFloor,
-          frame: "banner",
-          entryDelayMs: 130,
-          idleAlpha: 0.84,
-        },
-      );
+    for (let i = 0; i < nextAvailableIdx; i++) {
+      this.registerRealmPortalTarget(ARCHES[i], i, true, {
+        fontSize: state.realms["great-battle"]?.cleared ? 24 : 20,
+        priority: -1,
+        entryDelayMs: 80 + i * 28,
+      });
     }
 
     // Zone navigation (away from portals).
@@ -532,7 +558,7 @@ export class PortalChamberScene extends Phaser.Scene {
       {
         fontSize: 19,
         stationPulse: HUB_STATIONS.desk,
-        frame: "banner",
+        frame: "inscription",
         entryDelayMs: 110,
         idleAlpha: 0.84,
       },
@@ -545,7 +571,7 @@ export class PortalChamberScene extends Phaser.Scene {
       {
         fontSize: 19,
         stationPulse: HUB_STATIONS.shelf,
-        frame: "banner",
+        frame: "inscription",
         entryDelayMs: 150,
         idleAlpha: 0.84,
       },
@@ -554,12 +580,13 @@ export class PortalChamberScene extends Phaser.Scene {
     // settings/sign-in controls after the player intentionally focuses it.
     this.registerNavTarget(
       "profile",
-      ACCOUNT_STATION.x,
-      ACCOUNT_STATION.y,
+      this.scale.width - 104,
+      104,
       () => this.enterZone("account"),
       {
         fontSize: 17,
-        stationPulse: HUB_STATIONS.account,
+        // Account controls are utilities alongside Pause, not a floating
+        // pretend object on the painted bookcase.
         frame: "banner",
         entryDelayMs: 190,
         idleAlpha: 0.84,
@@ -582,9 +609,15 @@ export class PortalChamberScene extends Phaser.Scene {
       fontSize: opts.fontSize,
       priority: opts.priority,
       outline: true,
+      frame: "inscription",
+      idleAlpha: revisit ? 0.82 : 1,
       onClaim: () => {
+        if (revisit) this.setCompletedPortalFocus(arch, true);
         this.playPortalClaimLine(arch);
         this.focusPortalForScene(arch.sceneKey);
+      },
+      onRelease: () => {
+        if (revisit) this.setCompletedPortalFocus(arch, false);
       },
       onAdvance: () => this.pulsePortalTyping(arch.sceneKey),
       onComplete: () => {
@@ -819,13 +852,41 @@ export class PortalChamberScene extends Phaser.Scene {
     const lastCleared = [...REALM_SEQUENCE]
       .reverse()
       .find((id) => state.realms[id]?.cleared) ?? "none";
-    this.narration.say(DESK_LINE_IDS[lastCleared] ?? DESK_LINE_IDS["none"]);
+    this.narration.say(this.deskReflectionLineId(lastCleared));
     this.drawDeskReflectionCard(lastCleared);
     this.playDeskReflectionWake();
     this.playRunaAttention();
 
     this.registerDeskAlmanacTarget();
     this.registerPortalReturnTarget(70);
+  }
+
+  private deskReflectionLineId(realmId: string): string {
+    const state = this.store.get();
+    if (realmId === "winter-mountain") {
+      const winter = state.realms[realmId];
+      if (winter?.cleared && winter.choices.returnRouteDone === "1") {
+        const route = winterReturnRoute(winter.choices);
+        if (route === "crossing" && winter.choices.returnPrepared === "1") return "hub_desk_winter_crossing";
+        if (route === "bank") return "hub_desk_winter_bank";
+      }
+    }
+    if (realmId === "sunken-bell") {
+      const ending = resolveRealmFork(realmId, "fork2", state.realms[realmId], state.satchel);
+      return ending === "free-aurland" ? "hub_desk_sunken_freed"
+        : ending === "claim-tongue" ? "hub_desk_sunken" : "hub_desk_sunken_unrecorded";
+    }
+    if (realmId === "clockwork-forge") {
+      const path = resolveRealmFork(realmId, "fork1", state.realms[realmId], state.satchel);
+      return path === "forn" ? "hub_desk_forge"
+        : path === "cabal" ? "hub_desk_forge_cabal" : "hub_desk_forge_unrecorded";
+    }
+    if (realmId === "sky-island") {
+      const ending = resolveRealmFork(realmId, "fork2", state.realms[realmId], state.satchel);
+      return ending === "answer-kindly" ? "hub_desk_sky_kind"
+        : ending === "cut-tether" ? "hub_desk_sky_untethered" : "hub_desk_sky";
+    }
+    return DESK_LINE_IDS[realmId] ?? DESK_LINE_IDS["none"]!;
   }
 
   private drawDeskReflectionCard(lastCleared: string): void {
@@ -959,7 +1020,14 @@ export class PortalChamberScene extends Phaser.Scene {
     this.narration.clear();
     this.playShelfDisplayWake();
 
-    this.registerPortalReturnTarget(70);
+    this.registerNavTarget("almanac", SHELF_STATION.x, SHELF_STATION.targetY,
+      () => this.openAlmanac(), {
+        fontSize: 20, stationPulse: HUB_STATIONS.shelf, frame: "inscription", entryDelayMs: 70,
+      });
+    this.registerNavTarget("portals", SHELF_STATION.x, SHELF_STATION.targetY + 58,
+      () => this.enterZone("portals"), {
+        fontSize: 19, stationPulse: HUB_STATIONS.shelf, frame: "inscription", entryDelayMs: 100,
+      });
   }
 
   private registerPortalReturnTarget(entryDelayMs: number): void {
@@ -971,7 +1039,7 @@ export class PortalChamberScene extends Phaser.Scene {
       {
         fontSize: 20,
         stationPulse: HUB_STATIONS.portalFloor,
-        frame: "banner",
+        frame: "inscription",
         entryDelayMs,
         idleAlpha: 0.84,
       },
@@ -1108,7 +1176,7 @@ export class PortalChamberScene extends Phaser.Scene {
     opts: {
       fontSize?: number;
       priority?: number;
-      frame?: "banner";
+      frame?: "banner" | "inscription";
       stationPulse?: StationSpec;
       entryDelayMs?: number;
       idleAlpha?: number;
@@ -1154,11 +1222,7 @@ export class PortalChamberScene extends Phaser.Scene {
       durationMs,
       offsetY: 10,
     });
-    target.playIdleFloat({
-      delayMs: delayMs + durationMs + 140,
-      dy: -2,
-      durationMs: 1900,
-    });
+    // Commands are attached to fixed objects; do not let their labels drift.
   }
 
   private attachStationWordAnchor(
@@ -1211,6 +1275,7 @@ export class PortalChamberScene extends Phaser.Scene {
   // ─── Portal entry ─────────────────────────────────────────────────────────
 
   private onEnterPortal(sceneKey: string, revisit: boolean): void {
+    this.settleHubArrival();
     playChime();
     this.narration.clear();
     // The selected target is complete, so leave the room input-quiet while Wren
@@ -1231,6 +1296,7 @@ export class PortalChamberScene extends Phaser.Scene {
 
   private enterGreatBattle(): void {
     if (this.enteringGreatBattle) return;
+    this.settleHubArrival();
     this.enteringGreatBattle = true;
     playChime();
     this.narration.clear();
@@ -1481,7 +1547,7 @@ export class PortalChamberScene extends Phaser.Scene {
       fontSize: 20,
       priority: -1,
       outline: true,
-      frame: "banner",
+      frame: "inscription",
       idleAlpha: 0.76,
       onClaim: () => this.focusStation(HUB_STATIONS.almanac),
       onAdvance: () => this.pulseStationTyping(HUB_STATIONS.almanac),
@@ -1502,11 +1568,13 @@ export class PortalChamberScene extends Phaser.Scene {
 
   private async renderAccountStatus(): Promise<void> {
     const zoneAtRequest = this.activeZone;
+    const request = this.newGameRequest;
     const name = await currentUserDisplayName();
-    if (zoneAtRequest !== "account" || this.activeZone !== "account") return;
+    if (zoneAtRequest !== "account" || this.activeZone !== "account" ||
+        request !== this.newGameRequest || this.confirmingNewGame || (!this.scene.isActive() && !this.scene.isPaused())) return;
 
     const status = this.add
-      .text(ACCOUNT_PANEL.x, ACCOUNT_PANEL.statusY, name ? `signed in as ${name}` : "local save", {
+      .text(ACCOUNT_PANEL.x, ACCOUNT_PANEL.statusY, desktopBridge() ? "saved on this computer · offline edition" : name ? `signed in as ${name}` : "local save", {
         fontFamily: SERIF,
         fontSize: "15px",
         fontStyle: "italic",
@@ -1546,14 +1614,23 @@ export class PortalChamberScene extends Phaser.Scene {
         idleAlpha: 0.88,
       },
     );
+    if (this.store.get().realms["great-battle"]?.cleared) {
+      this.registerNavTarget("begin again", ACCOUNT_PANEL.x, ACCOUNT_PANEL.restartY,
+        () => this.requestNewGame(), {
+          fontSize: 18, frame: "banner", entryDelayMs: 110, idleAlpha: 0.7,
+        });
+    }
     this.registerPortalReturnTarget(130);
     void this.addAccountAuthTarget();
   }
 
   private async addAccountAuthTarget(): Promise<void> {
+    if (desktopBridge()) return;
     const zoneAtRequest = this.activeZone;
+    const request = this.newGameRequest;
     const name = await currentUserDisplayName();
-    if (zoneAtRequest !== "account" || this.activeZone !== "account") return;
+    if (zoneAtRequest !== "account" || this.activeZone !== "account" ||
+        request !== this.newGameRequest || this.confirmingNewGame || (!this.scene.isActive() && !this.scene.isPaused())) return;
 
     let releaseAnchor = (): void => {};
     const target = new TextWordTarget({
@@ -1587,22 +1664,28 @@ export class PortalChamberScene extends Phaser.Scene {
     this.stageHubTarget(target, 110);
   }
 
+  private accountPanelGeometry(): { y: number; height: number } {
+    const extra = this.store.get().realms["great-battle"]?.cleared ? 48 : 0;
+    return { y: ACCOUNT_PANEL.y + extra / 2, height: ACCOUNT_PANEL.height + extra };
+  }
+
   private drawAccountStationPanel(): void {
+    const { y, height } = this.accountPanelGeometry();
     const panel = this.add.graphics().setDepth(0);
     panel.fillStyle(UI_HEX.panel, 0.44);
     panel.fillRoundedRect(
       ACCOUNT_PANEL.x - ACCOUNT_PANEL.width / 2,
-      ACCOUNT_PANEL.y - ACCOUNT_PANEL.height / 2,
+      y - height / 2,
       ACCOUNT_PANEL.width,
-      ACCOUNT_PANEL.height,
+      height,
       9,
     );
     panel.lineStyle(1.5, UI_HEX.brass, 0.58);
     panel.strokeRoundedRect(
       ACCOUNT_PANEL.x - ACCOUNT_PANEL.width / 2,
-      ACCOUNT_PANEL.y - ACCOUNT_PANEL.height / 2,
+      y - height / 2,
       ACCOUNT_PANEL.width,
-      ACCOUNT_PANEL.height,
+      height,
       9,
     );
     panel.lineStyle(1, UI_HEX.brass, 0.3);
@@ -1615,12 +1698,12 @@ export class PortalChamberScene extends Phaser.Scene {
     this.accountDisplayObjects.push(panel);
     this.stageAccountObject(panel, 35, { offsetY: 8 });
 
-    const corners = cornerTicks(this, ACCOUNT_PANEL.width, ACCOUNT_PANEL.height, {
+    const corners = cornerTicks(this, ACCOUNT_PANEL.width, height, {
       inset: 6,
       size: 9,
       width: 1,
     })
-      .setPosition(ACCOUNT_PANEL.x, ACCOUNT_PANEL.y)
+      .setPosition(ACCOUNT_PANEL.x, y)
       .setAlpha(0.58)
       .setDepth(0.1);
     this.accountDisplayObjects.push(corners);
@@ -1657,30 +1740,31 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 
   private playAccountPanelWake(): void {
+    const { y, height } = this.accountPanelGeometry();
     const frame = this.add
-      .container(ACCOUNT_PANEL.x, ACCOUNT_PANEL.y)
+      .container(ACCOUNT_PANEL.x, y)
       .setDepth(8)
       .setAlpha(0.52);
     const g = this.add.graphics();
     g.fillStyle(UI_HEX.brass, 0.04);
     g.fillRoundedRect(
       -ACCOUNT_PANEL.width / 2,
-      -ACCOUNT_PANEL.height / 2,
+      -height / 2,
       ACCOUNT_PANEL.width,
-      ACCOUNT_PANEL.height,
+      height,
       10,
     );
     g.lineStyle(1.5, UI_HEX.brass, 0.52);
     g.strokeRoundedRect(
       -ACCOUNT_PANEL.width / 2,
-      -ACCOUNT_PANEL.height / 2,
+      -height / 2,
       ACCOUNT_PANEL.width,
-      ACCOUNT_PANEL.height,
+      height,
       10,
     );
     frame.add(g);
     frame.add(
-      cornerTicks(this, ACCOUNT_PANEL.width, ACCOUNT_PANEL.height, {
+      cornerTicks(this, ACCOUNT_PANEL.width, height, {
         inset: 5,
         size: 11,
         width: 2,
@@ -1700,38 +1784,73 @@ export class PortalChamberScene extends Phaser.Scene {
   private openAlmanac(): void {
     if (this.openingUtilityScene) return;
     this.openingUtilityScene = true;
+    this.settleHubArrival();
+    this.almanacReturnZone = this.activeZone === "shelf" ? "shelf" : this.activeZone === "portals" ? "portals" : "desk";
+    const station = this.almanacReturnZone === "shelf" ? HUB_STATIONS.shelf : HUB_STATIONS.almanac;
     playChime();
-    this.playHubActorAction(HUB_STATIONS.almanac.x, true);
-    this.pulseStation(HUB_STATIONS.almanac);
-    this.playUtilityStationExitWake(HUB_STATIONS.almanac, "book");
+    this.playHubActorAction(station.x, true);
+    this.pulseStation(station);
+    this.playUtilityStationExitWake(station, "book");
     this.time.delayedCall(210, () => {
-      // The Almanac is a book on Runa's desk, not a separate destination. Keep
-      // the chamber rendered beneath it and give the overlay exclusive typing.
+      // Keep the chamber and the initiating station beneath the book overlay,
+      // with exclusive typing until it closes.
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
+      this.almanacOverlayOpen = true;
       this.scene.launch("AlmanacScene", { store: this.store, overlay: true });
       this.scene.pause();
     });
   }
 
   private resumeAfterAlmanac(): void {
-    if (!this.openingUtilityScene) return;
+    // Blur/pause may resume the chamber during the book's short opening beat.
+    // Only an overlay that actually launched owns this return transition.
+    if (!this.almanacOverlayOpen) return;
+    this.almanacOverlayOpen = false;
     this.openingUtilityScene = false;
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
-    // Rebuild the desk targets after the completed `almanac` word is gone, but
-    // retain Wren's exact desk position and all chamber actors beneath the book.
-    this.enterZone("desk", false);
+    // Rebuild the initiating station after its completed word is gone.
+    this.enterZone(this.almanacReturnZone ?? "desk", false);
   }
 
   // ─── Input ────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
+    if (this.restartingNewGame) return;
+    // Once a confirmed reset is prepared, only its save retry is available.
+    if (this.newGamePrepared) {
+      if (!event.ctrlKey && !event.metaKey) this.typingInput.handleChar(event.key);
+      return;
+    }
+    if (this.confirmingNewGame) {
+      if (event.repeat) return;
+      if (event.ctrlKey || event.metaKey) return;
+      const typing = this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0;
+      if (event.key === "Escape" && !typing) {
+        event.preventDefault();
+        this.enterZone("account", false);
+      } else {
+        this.typingInput.handleChar(event.key);
+      }
+      return;
+    }
     // Ctrl+Shift+P: toggle purist mode from the hub too.
     if (isPuristToggleKey(event)) {
+      event.preventDefault();
       const next = togglePuristMode(this, this.store, { announce: false });
       this.showHubDifficultyNotice(next);
       return;
     }
+    if (event.ctrlKey || event.metaKey) return;
+    const activeTyping = this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0;
+    const navigation = navigationAction(event, this.activeZone === "portals" ? "hub" : "hub-zone", activeTyping);
+    if (navigation === "ignore") return;
+    if (navigation === "back") {
+      event.preventDefault();
+      if (!this.openingUtilityScene) this.enterZone("portals");
+      return;
+    }
+    if (this.chapterMenu?.handleKey(event)) return;
     if (event.key.length === 1 || event.key === " ") playClack();
     this.typingInput.handleChar(event.key);
   }
@@ -1743,8 +1862,8 @@ export class PortalChamberScene extends Phaser.Scene {
     const width = 236;
     const height = 46;
     const y =
-      ACCOUNT_PANEL.y +
-      ACCOUNT_PANEL.height / 2 +
+      this.accountPanelGeometry().y +
+      this.accountPanelGeometry().height / 2 +
       (this.activeZone === "account" ? 48 : 38);
     const container = this.add
       .container(station.x, y)
@@ -1810,7 +1929,6 @@ export class PortalChamberScene extends Phaser.Scene {
       (id) => !state.realms[id]?.cleared,
     );
     const nextIdx = firstUnclearedIdx === -1 ? REALM_SEQUENCE.length : firstUnclearedIdx;
-    const allRealmsCleared = nextIdx >= REALM_SEQUENCE.length;
 
     ARCHES.forEach((arch, i) => {
       const isNext    = i === nextIdx;
@@ -1819,13 +1937,12 @@ export class PortalChamberScene extends Phaser.Scene {
       this.renderArch(
         arch,
         isNext ? "next" : isCleared ? "cleared" : isLocked ? "locked" : "dark",
-        allRealmsCleared,
       );
     });
   }
 
   private drawArch(spec: ArchSpec): void {
-    // Graphics for the warm-amber cleared-realm ring (static).
+    // Keep the painted opening as the portal's sole frame.
     const g = this.add.graphics().setDepth(-4);
     this.archGraphics.set(spec.id, g);
 
@@ -1840,7 +1957,7 @@ export class PortalChamberScene extends Phaser.Scene {
       .setAlpha(0.2);
     this.archGlows.set(spec.id, glow);
     const stagger = ARCHES.findIndex((a) => a.id === spec.id) * 130;
-    this.tweens.add({
+    decorativeTween(this, this.tweens.add({
       targets: glow,
       alpha: { from: 0.15, to: 0.36 },
       scaleX: { from: 0.97, to: 1.04 },
@@ -1849,31 +1966,43 @@ export class PortalChamberScene extends Phaser.Scene {
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
-    });
+    }));
 
     // Painted portal sprite — 168x338 frames, arch fills the frame top to
     // bottom. Anchored bottom-center on the painted arch bottom (baseY).
-    // The painted hub arches are wide-and-short (≈220×290) while the source
-    // swirl is narrow-and-tall (168×338, aspect 1:2), so we scale non-
-    // uniformly: x to match arch width, y to match arch height.
+    // Fit the swirl to the measured inner aperture, leaving the painted
+    // stone surround visible. A mask prevents light spilling onto the frame.
     const sprite = this.add
       .sprite(spec.x, spec.baseY, "portal-active", 0)
       .setOrigin(0.5, 1)
       .setVisible(false)
       .setDepth(-5);
     sprite.setScale(spec.width / 168, spec.height / 338);
+    const aperture = this.make.graphics({ x: 0, y: 0 }, false);
+    aperture.fillStyle(0xffffff);
+    aperture.fillRoundedRect(spec.x - spec.width / 2, spec.baseY - spec.height,
+      spec.width, spec.height, { tl: spec.width / 2, tr: spec.width / 2, bl: 7, br: 7 });
+    const mask = aperture.createGeometryMask();
+    sprite.setMask(mask);
+    glow.setMask(mask);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      sprite.clearMask();
+      glow.clearMask();
+      mask.destroy();
+      aperture.destroy();
+    });
     this.archSprites.set(spec.id, sprite);
   }
 
   private renderArch(
     spec: ArchSpec,
     state: "next" | "cleared" | "dark" | "locked",
-    quietCleared = false,
   ): void {
     const g = this.archGraphics.get(spec.id);
     const glow = this.archGlows.get(spec.id);
     const sprite = this.archSprites.get(spec.id);
     if (!g || !sprite) return;
+    this.tweens.killTweensOf(sprite);
     g.clear();
 
     if (state === "locked" || state === "dark") {
@@ -1884,46 +2013,17 @@ export class PortalChamberScene extends Phaser.Scene {
     }
 
     if (state === "cleared") {
-      if (quietCleared) {
-        glow?.setVisible(false);
-        sprite.setVisible(false);
-        if (sprite.anims.isPlaying) sprite.stop();
-        return;
-      }
-      // Dormant amber trace — cleared portals should read as stamped passages,
-      // not five active blue panes competing with the main floor call.
-      const archTopY = spec.baseY - spec.height + 54;
-      const shoulderY = archTopY + spec.width * 0.3;
-      const bottomY = spec.baseY - 8;
-      const leftX = spec.x - spec.width * 0.31;
-      const rightX = spec.x + spec.width * 0.31;
+      // A dim version of the same painted swirl means this passage is still
+      // usable. The keystone carries completion; blue remains the next call.
       if (glow) {
-        this.drawPortalGlow(
-          glow,
-          { ...spec, width: spec.width * 0.34, height: spec.height * 0.28 },
-          PALETTE_HEX.brass,
-          0.16,
-        );
+        this.drawPortalGlow(glow, spec, PALETTE_HEX.brass, 0.1);
         glow.setVisible(true);
       }
-      g.lineStyle(2, PALETTE_HEX.brass, 0.3);
-      g.beginPath();
-      g.moveTo(leftX, bottomY);
-      g.lineTo(leftX, shoulderY);
-      g.arc(spec.x, shoulderY, spec.width * 0.31, Math.PI, 0);
-      g.lineTo(rightX, bottomY);
-      g.strokePath();
-      g.lineStyle(1.25, PALETTE_HEX.brass, 0.18);
-      g.beginPath();
-      g.moveTo(leftX + 18, bottomY - 12);
-      g.lineTo(leftX + 18, shoulderY + 20);
-      g.arc(spec.x, shoulderY + 20, spec.width * 0.31 - 18, Math.PI, 0);
-      g.lineTo(rightX - 18, bottomY - 12);
-      g.strokePath();
-      g.lineStyle(1.5, PALETTE_HEX.brass, 0.2);
-      g.lineBetween(spec.x - 44, bottomY - 18, spec.x + 44, bottomY - 18);
-      sprite.setVisible(false);
-      if (sprite.anims.isPlaying) sprite.stop();
+      sprite.setVisible(true).setTint(0xe9b56b);
+      sprite.setScale(spec.width / 168, spec.height / 338);
+      sprite.setAlpha(this.focusedCompletedPortal === spec.id
+        ? COMPLETED_PORTAL_FOCUS_ALPHA : COMPLETED_PORTAL_ALPHA);
+      this.setPortalSpin(sprite, 0.25);
       return;
     }
 
@@ -1936,7 +2036,29 @@ export class PortalChamberScene extends Phaser.Scene {
     sprite.setScale(spec.width / 168, spec.height / 338);
     sprite.clearTint();
     sprite.setAlpha(1);
+    this.setPortalSpin(sprite, 1);
+  }
+
+  private setPortalSpin(sprite: Phaser.GameObjects.Sprite, speed: number): void {
+    if (reducedMotion(this)) {
+      sprite.stop().setFrame(0);
+      return;
+    }
     if (!sprite.anims.isPlaying) sprite.play("portal-spin");
+    sprite.anims.timeScale = speed;
+  }
+
+  private setCompletedPortalFocus(arch: ArchSpec, focused: boolean): void {
+    if (!this.store.get().realms[arch.id]?.cleared) return;
+    if (focused && this.focusedCompletedPortal === arch.id) return;
+    if (!focused && this.focusedCompletedPortal !== arch.id) return;
+    this.focusedCompletedPortal = focused ? arch.id : null;
+    const sprite = this.archSprites.get(arch.id);
+    if (!sprite?.active) return;
+    this.tweens.killTweensOf(sprite);
+    const alpha = focused ? COMPLETED_PORTAL_FOCUS_ALPHA : COMPLETED_PORTAL_ALPHA;
+    if (reducedMotion(this)) sprite.setAlpha(alpha);
+    else this.tweens.add({ targets: sprite, alpha, duration: 160, ease: "Sine.easeOut" });
   }
 
   private drawPortalGlow(
@@ -1961,53 +2083,94 @@ export class PortalChamberScene extends Phaser.Scene {
 
     ARCHES.forEach((arch, i) => {
       if (!arch.label) return;
-      const isNext    = i === nextIdx;
       const isCleared = state.realms[arch.id]?.cleared === true;
-      const isLocked  = i > nextIdx;
+      const isNext = !isCleared && i === nextIdx;
+
+      this.drawArchKeystone(arch, isCleared ? "cleared" : isNext ? "next" : "locked");
 
       if (isNext) {
-        this.drawArchStatusPlaque(arch, "open passage", "type name", "next");
-      } else if (isCleared) {
-        this.drawArchStateSeal(arch, "cleared");
-      } else if (isLocked) {
-        this.drawArchStateSeal(arch, "locked");
+        this.drawArchStatusPlaque(arch, "type to enter", "", "next");
       }
     });
   }
 
-  private drawArchStateSeal(
+  private drawArchKeystone(
     arch: ArchSpec,
-    tone: "cleared" | "locked",
+    tone: "next" | "cleared" | "locked",
   ): void {
     const x = arch.x;
-    const y = arch.baseY + 34;
+    // The existing trapezoidal stone is centered at source y311 (game y357).
+    // Engrave its face directly; do not add a badge or another stone surround.
+    const y = arch.baseY - arch.height - 21;
     const cleared = tone === "cleared";
-    const color = cleared ? UI_HEX.brass : 0x4a4352;
-    const alpha = cleared ? 0.42 : 0.24;
+    const color = cleared ? 0xe0bf70 : tone === "next" ? 0x9bdaed : 0x8b877d;
+    const alpha = tone === "locked" ? 0.64 : 0.96;
     const g = this.add.graphics().setDepth(-1);
 
-    g.fillStyle(UI_HEX.panel, alpha * 0.72);
-    g.fillCircle(x, y, cleared ? 18 : 16);
-    g.lineStyle(1.5, color, alpha + 0.18);
-    g.strokeCircle(x, y, cleared ? 18 : 16);
-    g.lineStyle(1, color, alpha * 0.78);
-    g.strokeCircle(x, y, cleared ? 12 : 10);
+    if (tone !== "locked") {
+      g.fillStyle(color, 0.08);
+      g.fillEllipse(x, y - 2, 26, 30);
+    }
+    // A recessed edge keeps even the unlit glyph legible against painted stone.
+    this.drawKeystoneGlyph(g, arch.glyph, x + 0.8, y - 1.2, 0x080a0c, 0.8);
+    this.drawKeystoneGlyph(g, arch.glyph, x, y - 2, color, alpha);
 
     if (cleared) {
-      g.lineStyle(2, color, alpha + 0.28);
+      // Shape as well as color distinguishes a finished realm from an open one.
+      g.lineStyle(1.7, color, 1);
       g.beginPath();
-      g.moveTo(x - 8, y + 1);
-      g.lineTo(x - 2, y + 7);
-      g.lineTo(x + 10, y - 8);
+      g.moveTo(x - 4, y + 11);
+      g.lineTo(x - 1, y + 14);
+      g.lineTo(x + 5, y + 9);
       g.strokePath();
-      return;
     }
+  }
 
-    g.lineStyle(2, color, alpha + 0.16);
-    g.strokeRoundedRect(x - 8, y - 2, 16, 13, 3);
-    g.beginPath();
-    g.arc(x, y - 2, 8, Math.PI, Math.PI * 2);
-    g.strokePath();
+  private drawKeystoneGlyph(
+    g: Phaser.GameObjects.Graphics,
+    glyph: ArchSpec["glyph"],
+    x: number,
+    y: number,
+    color: number,
+    alpha: number,
+  ): void {
+    g.lineStyle(1.8, color, alpha);
+    const path = (points: readonly (readonly [number, number])[]) => {
+      g.beginPath();
+      points.forEach(([dx, dy], i) => i ? g.lineTo(x + dx, y + dy) : g.moveTo(x + dx, y + dy));
+      g.strokePath();
+    };
+    switch (glyph) {
+      case "mountain":
+        path([[-10, 8], [-1, -9], [9, 8], [-10, 8]]);
+        path([[-5, -1], [-1, 1], [3, -1]]);
+        break;
+      case "bell":
+        path([[-9, 6], [-6, 2], [-6, -3], [-3, -7], [3, -7], [6, -3], [6, 2], [9, 6], [-9, 6]]);
+        g.lineBetween(x, y - 10, x, y - 7);
+        g.lineBetween(x - 2, y + 9, x + 2, y + 9);
+        break;
+      case "cog":
+        g.strokeCircle(x, y, 6);
+        g.strokeCircle(x, y, 2);
+        for (let i = 0; i < 8; i++) {
+          const angle = i * Math.PI / 4;
+          g.lineBetween(x + Math.cos(angle) * 7, y + Math.sin(angle) * 7,
+            x + Math.cos(angle) * 10, y + Math.sin(angle) * 10);
+        }
+        break;
+      case "lantern":
+        // Peaked roof and tapered cage distinguish this from a padlock.
+        path([[-9, -4], [0, -10], [9, -4], [-9, -4]]);
+        path([[-7, -3], [-5, 8], [5, 8], [7, -3]]);
+        path([[0, -1], [2, 3], [0, 6], [-2, 3], [0, -1]]);
+        break;
+      case "branch":
+        path([[0, 9], [0, -9]]);
+        path([[0, -3], [-8, -8], [-7, -2], [0, 2]]);
+        path([[0, 2], [8, -4], [7, 2], [0, 6]]);
+        break;
+    }
   }
 
   private drawArchStatusPlaque(
@@ -2016,11 +2179,12 @@ export class PortalChamberScene extends Phaser.Scene {
     subtitle: string,
     tone: "next" | "cleared" | "locked",
   ): void {
-    const width = tone === "locked" ? 212 : 164;
-    const height = subtitle ? 58 : 42;
-    const y = arch.baseY + (subtitle ? 48 : 34);
+    const width = arch.width - 18;
+    const height = subtitle ? 50 : 30;
+    // The entry hint stays inside the opening; the typed name sits above it.
+    const y = arch.baseY - 64;
     const isLocked = tone === "locked";
-    const alpha = isLocked ? 0.24 : tone === "next" ? 0.42 : 0.34;
+    const alpha = isLocked ? 0.24 : tone === "next" ? 0.78 : 0.34;
     const textColor = isLocked
       ? "#4a4352"
       : tone === "next"
@@ -2033,25 +2197,27 @@ export class PortalChamberScene extends Phaser.Scene {
     g.lineStyle(1, isLocked ? 0x4a4352 : UI_HEX.brass, alpha + 0.2);
     g.strokeRoundedRect(arch.x - width / 2, y - height / 2, width, height, 8);
 
-    this.add
+    const titleText = this.add
       .text(arch.x, y - (subtitle ? 9 : 1), title, {
         fontFamily: SERIF,
-        fontSize: isLocked ? "17px" : "16px",
+        fontSize: "14px",
         fontStyle: "italic",
         color: textColor,
       })
       .setOrigin(0.5)
       .setDepth(0);
+    if (tone === "next") this.portalInstructionObjects.push(g, titleText);
 
     if (!subtitle) return;
-    this.add
+    const subtitleText = this.add
       .text(arch.x, y + 13, subtitle, {
         fontFamily: SERIF,
         fontSize: "14px",
-        color: "#4a4352",
+        color: tone === "next" ? PALETTE.cream : "#4a4352",
       })
       .setOrigin(0.5)
       .setDepth(0);
+    if (tone === "next") this.portalInstructionObjects.push(subtitleText);
   }
 
   private flashPortalForScene(sceneKey: string): void {
@@ -2096,6 +2262,12 @@ export class PortalChamberScene extends Phaser.Scene {
     const arch = ARCHES.find((a) => a.sceneKey === sceneKey);
     if (!arch) return;
     this.playHubActorFocus(arch.x);
+
+    if (this.store.get().realms[arch.id]?.cleared) {
+      // Arrival also calls this helper; sustained emphasis belongs only to an
+      // actual claimed word, set explicitly by that word's onClaim callback.
+      return;
+    }
 
     const sprite = this.archSprites.get(arch.id);
     const glow = this.archGlows.get(arch.id);
@@ -2146,7 +2318,7 @@ export class PortalChamberScene extends Phaser.Scene {
       .setOrigin(0)
       .setDisplaySize(this.scale.width, this.scale.height)
       .setDepth(-100);
-    addBackdropDrift(this, backdrop, { durationMs: 18000, driftX: -3, driftY: -2 });
+    // Architecture and its masks/labels share one stationary painted frame.
     addAmbientDrift(this, {
       kind: "mote",
       count: 34,
@@ -2189,7 +2361,7 @@ export class PortalChamberScene extends Phaser.Scene {
       durationMs: 2800,
       delayMs: 900,
     });
-    addLivingLight(this, {
+    const chairRoomLight = addLivingLight(this, {
       x: 1148,
       y: 650,
       width: 980,
@@ -2199,6 +2371,7 @@ export class PortalChamberScene extends Phaser.Scene {
       durationMs: 3400,
       scale: 1.035,
     });
+    this.drawChairForeground(backdrop, chairRoomLight);
     addAmbientDrift(this, {
       kind: "mote",
       count: 12,
@@ -2215,6 +2388,50 @@ export class PortalChamberScene extends Phaser.Scene {
     this.startHubForegroundLife();
 
     this.drawHubStations();
+  }
+
+  private drawChairForeground(
+    backdrop: Phaser.GameObjects.Image,
+    roomLight: Phaser.GameObjects.Graphics,
+  ): void {
+    const contours = [CHAIR_WOOD_OUTLINE, ...CHAIR_OPENINGS];
+    const vertices = contours.flatMap(contour => contour.flatMap(([x, y]) => [x, y]));
+    const holes: number[] = [];
+    let count = CHAIR_WOOD_OUTLINE.length;
+    for (const opening of CHAIR_OPENINGS) { holes.push(count); count += opening.length; }
+    const indices = Phaser.Geom.Polygon.Earcut(vertices, holes, 2);
+    const shape = this.make.graphics({ x: 0, y: 0 }, false).fillStyle(0xffffff);
+    const sx = this.scale.width / 1672, sy = this.scale.height / 941;
+    for (let i = 0; i < indices.length; i += 3) {
+      const a = indices[i] * 2, b = indices[i + 1] * 2, c = indices[i + 2] * 2;
+      shape.fillTriangle(vertices[a] * sx, vertices[a + 1] * sy,
+        vertices[b] * sx, vertices[b + 1] * sy, vertices[c] * sx, vertices[c + 1] * sy);
+    }
+    const mask = shape.createGeometryMask();
+    // Reuse the original texture/frame and its exact stationary mapping. Only
+    // the intersecting crest is copied, below people and above portal surfaces.
+    const chair = this.add.image(backdrop.x, backdrop.y, "hub-backdrop", backdrop.frame.name)
+      .setOrigin(backdrop.originX, backdrop.originY)
+      .setDisplaySize(backdrop.displayWidth, backdrop.displayHeight)
+      .setAlpha(backdrop.alpha)
+      .setTint(backdrop.tintTopLeft, backdrop.tintTopRight, backdrop.tintBottomLeft, backdrop.tintBottomRight)
+      .setCrop(CHAIR_CROP.x, CHAIR_CROP.y, CHAIR_CROP.width, CHAIR_CROP.height)
+      .setDepth(-4.9).setMask(mask);
+    // The broad room wash reaches this crest. Mirror that same live drawing
+    // only on the copied wood, rather than changing any room/portal ordering.
+    const light = this.add.graphics().setDepth(-4.8).setBlendMode(roomLight.blendMode).setMask(mask);
+    light.commandBuffer = roomLight.commandBuffer.slice();
+    const syncLight = (): void => {
+      light.setPosition(roomLight.x, roomLight.y).setScale(roomLight.scaleX, roomLight.scaleY)
+        .setAlpha(roomLight.alpha).setVisible(roomLight.visible);
+    };
+    syncLight();
+    this.events.on(Phaser.Scenes.Events.POST_UPDATE, syncLight);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.events.off(Phaser.Scenes.Events.POST_UPDATE, syncLight);
+      chair.clearMask(); light.clearMask();
+      chair.destroy(); light.destroy(); mask.destroy(); shape.destroy();
+    });
   }
 
   private startHubForegroundLife(): void {
@@ -2425,6 +2642,7 @@ export class PortalChamberScene extends Phaser.Scene {
 
     const arch = ARCHES.find((a) => a.sceneKey === sceneKey);
     if (!arch) return;
+    if (this.store.get().realms[arch.id]?.cleared) return;
     const pulse = this.add
       .graphics()
       .setPosition(arch.x, arch.baseY - arch.height / 2 + 34)
@@ -2492,10 +2710,27 @@ export class PortalChamberScene extends Phaser.Scene {
     this.playHubArrivalMaterialize(sourceX, color);
   }
 
+  /** Navigation owns Wren immediately, even during the short arrival beat. */
+  private settleHubArrival(): void {
+    this.hubArrivalEpoch += 1;
+    this.hubArrivalTimer?.remove(false);
+    this.hubArrivalTimer = undefined;
+    this.hubArrivalTween?.remove();
+    this.hubArrivalTween = undefined;
+    const arriving = this.hubArrivalInFlight;
+    this.hubArrivalInFlight = false;
+    if (arriving && this.wrenContainer?.active) {
+      this.wrenContainer.setPosition(this.wrenContainer.x, WREN_Y).setScale(1).setAlpha(1);
+    }
+  }
+
   /** A realm return resolves at the portal floor before the hub settles. This
    * keeps the existing source-to-Wren flecks from reading as a detached overlay. */
   private playHubArrivalMaterialize(sourceX: number, color: number): void {
     if (!this.wrenContainer?.active || !this.wrenSprite?.active) return;
+    this.settleHubArrival();
+    const epoch = this.hubArrivalEpoch;
+    this.hubArrivalInFlight = true;
 
     const landingX = this.wrenContainer.x;
     const landingY = WREN_Y;
@@ -2507,8 +2742,9 @@ export class PortalChamberScene extends Phaser.Scene {
       .setScale(0.92)
       .setAlpha(0);
 
-    this.time.delayedCall(150, () => {
-      if (!this.wrenContainer?.active || !this.wrenSprite?.active) return;
+    this.hubArrivalTimer = this.time.delayedCall(150, () => {
+      if (epoch !== this.hubArrivalEpoch || !this.hubArrivalInFlight || !this.wrenContainer?.active || !this.wrenSprite?.active) return;
+      this.hubArrivalTimer = undefined;
       playSceneEventPulse(this, {
         kind: "mote",
         color,
@@ -2523,7 +2759,7 @@ export class PortalChamberScene extends Phaser.Scene {
         spreadX: 38,
         spreadY: 12,
       });
-      this.tweens.add({
+      this.hubArrivalTween = this.tweens.add({
         targets: this.wrenContainer,
         y: landingY,
         alpha: 1,
@@ -2532,7 +2768,9 @@ export class PortalChamberScene extends Phaser.Scene {
         duration: 460,
         ease: "Sine.easeOut",
         onComplete: () => {
-          if (!this.wrenContainer?.active || !this.wrenSprite?.active) return;
+          if (epoch !== this.hubArrivalEpoch || !this.hubArrivalInFlight || !this.wrenContainer?.active || !this.wrenSprite?.active) return;
+          this.hubArrivalTween = undefined;
+          this.hubArrivalInFlight = false;
           setWrenPose(this.wrenSprite, "front", faceLeft);
           playWrenFocus(this.wrenSprite, { faceLeft, durationMs: 150 });
           addIdleBreath(this, this.wrenContainer, { dy: -4, durationMs: 2100 });
@@ -2545,6 +2783,7 @@ export class PortalChamberScene extends Phaser.Scene {
     if (this.hubArrival || this.activeZone !== "portals") return;
 
     const state = this.store.get();
+    if (state.realms["great-battle"]?.cleared) return;
     const firstUnclearedIdx = REALM_SEQUENCE.findIndex(
       (id) => !state.realms[id]?.cleared,
     );
@@ -2738,6 +2977,7 @@ export class PortalChamberScene extends Phaser.Scene {
     },
   ): void {
     if (this.openingUtilityScene) return;
+    this.settleHubArrival();
     this.openingUtilityScene = true;
     if (opts.playChime) playChime();
     this.playHubActorAction(station.x, opts.includeRuna === true);
@@ -2843,12 +3083,14 @@ export class PortalChamberScene extends Phaser.Scene {
 
   /** Painted Runa stands at her desk on the far left of the hub. */
   private drawRuna(): void {
-    addGroundShadow(this, 420, 982, 170, 26, { depth: -1, alpha: 0.34 });
+    addGroundShadow(this, 250, 1016, 140, 22, { depth: -1, alpha: 0.34 });
     const img = this.add
-      .image(420, 975, "runa-sprite")
+      .image(250, 1010, "runa-sprite")
       .setOrigin(0.5, 1);
     this.runaSprite = img;
-    img.setScale(360 / img.height);
+    // Foreground desk space leaves the first arch and its nameplate readable.
+    img.setScale(280 / img.height);
+    applySceneActorLighting(this, img);
     addIdleBreath(this, img, { dy: -4, durationMs: 2200, delayMs: 300 });
     addContainerWake(this, img, {
       kind: "mote",
@@ -2866,58 +3108,49 @@ export class PortalChamberScene extends Phaser.Scene {
     });
   }
 
-  /** Relic icons displayed on the painted cabinet shelves (far right). */
+  /** Collected keepsakes sit on the cabinet's painted shelf surfaces. */
   private drawDisplayShelf(): void {
-    const items = this.store.get().satchel;
+    const items = this.store.get().satchel.filter(id => !!RELICS[id]);
     this.clearShelfDisplay();
 
-    if (items.length === 0) {
-      this.drawShelfEmptyPlate();
-      return;
-    }
-
-    this.drawShelfGridBacker(items.length);
+    const label = this.add.text(SHELF_STATION.x, SHELF_STATION.summaryY,
+      items.length ? `${items.length} keepsake${items.length === 1 ? "" : "s"} collected` : "Your shelf is empty", {
+        fontFamily: SERIF, fontSize: "18px", color: PALETTE.cream, align: "center",
+        stroke: "#0b0a0f", strokeThickness: 4,
+      }).setOrigin(0.5).setDepth(1);
+    const hint = this.add.text(SHELF_STATION.x, SHELF_STATION.summaryY + 28,
+      items.length ? "Read their stories in the" : "Find keepsakes beyond the portals.", {
+        fontFamily: SERIF, fontSize: "15px", fontStyle: "italic", color: PALETTE.cream,
+        align: "center", stroke: "#0b0a0f", strokeThickness: 3,
+      }).setOrigin(0.5).setDepth(1);
+    this.shelfDisplayObjects.push(label, hint);
+    this.stageShelfObject(label, 35);
+    this.stageShelfObject(hint, 35);
 
     items.forEach((id, i) => {
       const relic = RELICS[id];
-      if (!relic) return;
-
+      const row = Math.floor(i / SHELF_GRID.cols);
+      const iy = SHELF_GRID.rowY[row];
+      if (iy === undefined) return;
       const ix = SHELF_GRID.startX + (i % SHELF_GRID.cols) * SHELF_GRID.colGap;
-      const iy = SHELF_GRID.startY + Math.floor(i / SHELF_GRID.cols) * SHELF_GRID.rowGap;
-      const tile = this.add.container(ix, iy).setDepth(1).setAlpha(0.9);
+      const tile = this.add.container(ix, iy).setDepth(1).setAlpha(0.95);
       this.shelfDisplayObjects.push(tile);
       this.stageShelfObject(tile, 80 + i * 28);
-      const tileBg = this.add.graphics();
-      const half = SHELF_GRID.tileSize / 2;
-      tileBg.fillStyle(UI_HEX.panel, 0.42);
-      tileBg.fillRoundedRect(-half, -half, SHELF_GRID.tileSize, SHELF_GRID.tileSize, 7);
-      tileBg.lineStyle(1, UI_HEX.brass, 0.34);
-      tileBg.strokeRoundedRect(-half, -half, SHELF_GRID.tileSize, SHELF_GRID.tileSize, 7);
-      tile.add(tileBg);
-
+      const shadow = this.add.graphics();
+      shadow.fillStyle(0x080807, 0.45);
+      shadow.fillEllipse(0, 13, 23, 4);
+      tile.add(shadow);
       const icon = satchelIconFor(id);
       if (icon && this.textures.exists(icon.key)) {
         const img = this.add.image(0, 0, icon.key);
         img.setScale(Math.min(SHELF_GRID.iconSize / img.width, SHELF_GRID.iconSize / img.height));
-        img.setAlpha(0.9);
         tile.add(img);
       } else {
-        tile.add(
-          this.add
-            .text(0, 0, relic.name.slice(0, 1), {
-              fontFamily: SERIF,
-              fontSize: "22px",
-              color: "#d6c087",
-            })
-            .setOrigin(0.5),
-        );
+        tile.add(this.add.text(0, 0, relic.name.slice(0, 1), {
+          fontFamily: SERIF, fontSize: "20px", color: PALETTE.brass,
+        }).setOrigin(0.5));
       }
-
-      addIdleBreath(this, tile, {
-        dy: -2,
-        durationMs: 1800 + (i % SHELF_GRID.cols) * 150,
-        delayMs: i * 45,
-      });
+      // Keepsakes rest on wood; no floating tiles or independent idle bob.
     });
   }
 
@@ -2927,53 +3160,6 @@ export class PortalChamberScene extends Phaser.Scene {
       obj.destroy();
     }
     this.shelfDisplayObjects = [];
-  }
-
-  private drawShelfEmptyPlate(): void {
-    const width = 180;
-    const height = 42;
-    const x = SHELF_STATION.x;
-    const y = SHELF_STATION.summaryY;
-    const plate = this.add.graphics().setDepth(0);
-    this.shelfDisplayObjects.push(plate);
-    this.stageShelfObject(plate, 35);
-    plate.fillStyle(UI_HEX.panel, 0.34);
-    plate.fillRoundedRect(x - width / 2, y - height / 2, width, height, 8);
-    plate.lineStyle(1, UI_HEX.brass, 0.34);
-    plate.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 8);
-
-    const label = this.add
-      .text(x, y, "nothing yet", {
-        fontFamily: SERIF,
-        fontSize: "17px",
-        fontStyle: "italic",
-        color: "#8f8161",
-      })
-      .setOrigin(0.5)
-      .setDepth(1);
-    this.shelfDisplayObjects.push(label);
-    this.stageShelfObject(label, 70);
-  }
-
-  private drawShelfGridBacker(itemCount: number): void {
-    const rows = Math.ceil(itemCount / SHELF_GRID.cols);
-    const width = SHELF_GRID.colGap * (SHELF_GRID.cols - 1) + SHELF_GRID.tileSize + 24;
-    const height = SHELF_GRID.rowGap * Math.max(0, rows - 1) + SHELF_GRID.tileSize + 26;
-    const x = SHELF_GRID.startX + ((SHELF_GRID.cols - 1) * SHELF_GRID.colGap) / 2;
-    const y = SHELF_GRID.startY + ((rows - 1) * SHELF_GRID.rowGap) / 2;
-    const backer = this.add.graphics().setDepth(-1);
-    this.shelfDisplayObjects.push(backer);
-    this.stageShelfObject(backer, 35);
-    backer.fillStyle(UI_HEX.panel, 0.18);
-    backer.fillRoundedRect(x - width / 2, y - height / 2, width, height, 10);
-    backer.lineStyle(1, UI_HEX.brass, 0.22);
-    backer.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 10);
-
-    for (let row = 0; row < rows; row++) {
-      const railY = SHELF_GRID.startY + row * SHELF_GRID.rowGap + SHELF_GRID.tileSize / 2 + 9;
-      backer.lineStyle(1, UI_HEX.brass, 0.13);
-      backer.lineBetween(x - width / 2 + 16, railY, x + width / 2 - 16, railY);
-    }
   }
 
   private stageShelfObject(
@@ -3044,29 +3230,71 @@ export class PortalChamberScene extends Phaser.Scene {
 
   // ─── New Game+ ────────────────────────────────────────────────────────────
 
-  private startNewGame(): void {
+  private requestNewGame(): void {
+    if (this.confirmingNewGame || this.restartingNewGame || this.newGamePrepared ||
+        this.activeZone !== "account" || !this.store.get().realms["great-battle"]?.cleared) return;
+    this.clearZoneTargets();
+    this.confirmingNewGame = true;
+    const request = ++this.newGameRequest;
+    this.narration.sayRaw("A new journey replaces this journey’s progress, discoveries and keepsakes. Your name and settings stay.");
+    const add = (word: string, y: number, confirm: boolean): void => {
+      const target = new TextWordTarget({
+        scene: this, word, x: this.scale.width / 2, y,
+        fontSize: 26, outline: true, frame: "banner",
+        onComplete: () => {
+          if (!this.confirmingNewGame || request !== this.newGameRequest) return;
+          if (!confirm) { this.enterZone("account", false); return; }
+          this.confirmingNewGame = false;
+          this.newGameRequest += 1;
+          this.clearZoneTargets();
+          void this.startNewGame();
+        },
+      });
+      this.typingInput.register(target);
+      this.zoneTargets.push(target);
+    };
+    add("keep this journey", 510, false);
+    add("confirm new journey", 590, true);
+  }
+
+  private async startNewGame(): Promise<void> {
     if (this.restartingNewGame) return;
     this.restartingNewGame = true;
+    const lifetime = this.newGameLifetime;
+    const store = this.store;
+    const ownsScene = (): boolean => lifetime === this.newGameLifetime &&
+      (this.scene.isActive() || this.scene.isPaused());
     playChime();
     this.narration.clear();
-    // Preserve keystroke calibration so adaptive word selection carries over.
-    const oldStats = this.store.get().keyStats;
-    const oldName = this.store.get().profileName;
-    this.store.update((s) => {
-      // Reset everything...
-      s.typewriterAwakened = false;
-      s.realms = {};
-      s.satchel = [];
-      s.almanacLore = [];
-      // ...but keep the player's identity and typing stats
-      s.profileName = oldName;
-      s.keyStats = oldStats;
-    });
+    this.settleHubArrival();
+    // A failed save retry must not reset an already prepared journey again.
+    if (!this.newGamePrepared) {
+      resetSave(store, true);
+      this.newGamePrepared = true;
+    }
+    try {
+      await store.flush();
+    } catch {
+      if (!ownsScene()) return;
+      this.restartingNewGame = false;
+      this.clearZoneTargets();
+      this.narration.sayRaw("Your new journey is ready, but could not be saved. Type retry to save it before continuing.");
+      const retry = new TextWordTarget({
+        scene: this, word: "retry", x: this.scale.width / 2, y: PORTAL_CALL_WORD_Y,
+        fontSize: 34, outline: true, frame: "banner",
+        onComplete: () => { if (ownsScene()) void this.startNewGame(); },
+      });
+      this.typingInput.register(retry);
+      this.zoneTargets.push(retry);
+      return;
+    }
+    if (!ownsScene()) return;
     this.playBeginAgainWake();
     this.time.delayedCall(320, () => {
+      if (!ownsScene()) return;
       this.cameras.main.fadeOut(720, 10, 8, 15);
       this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-        this.scene.start("OpeningScene", { store: this.store });
+        if (ownsScene()) this.scene.start("OpeningScene", { store });
       });
     });
   }
@@ -3178,9 +3406,8 @@ export class PortalChamberScene extends Phaser.Scene {
   }
 }
 
-// Stagger portal typing targets inside their painted arch surfaces so the words
-// belong to the portal instead of hovering above the room.
-function archTargetY(arch: ArchSpec, archIndex: number): number {
-  const surfaceCenter = arch.baseY - arch.height * 0.5;
-  return surfaceCenter + (archIndex % 2 === 0 ? 30 : -26);
+// Center the typed name above its arch, below the caption lane and clear of
+// both the carved keystone and foreground furniture.
+function archTargetY(arch: ArchSpec, _archIndex: number): number {
+  return arch.baseY - arch.height - 80;
 }

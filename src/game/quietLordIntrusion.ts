@@ -146,7 +146,19 @@ export function playQuietLordIntrusion(
     .text(opts.x, opts.y, opts.text, {
       fontFamily: SERIF,
       fontSize: `${fontSize}px`,
+      fontStyle: "italic",
       color: "#f3ead2",
+    })
+    .setOrigin(0.5)
+    .setDepth(52)
+    .setAlpha(0);
+  // Give the scar a speaker, so its words read as a whisper beside live
+  // targets. The scratched sentence, timing and underlying challenge stay intact.
+  const speaker = scene.add
+    .text(opts.x, opts.y - fontSize / 2 - 16, "The Quiet Lord · whisper", {
+      fontFamily: SERIF,
+      fontSize: "14px",
+      color: "#d4bddc",
     })
     .setOrigin(0.5)
     .setDepth(52)
@@ -161,7 +173,7 @@ export function playQuietLordIntrusion(
   );
   playScarEntry(scene, scar, fadeInMs);
   scene.tweens.add({
-    targets: text,
+    targets: [text, speaker],
     alpha: 1,
     duration: fadeInMs,
     ease: "Sine.easeOut",
@@ -209,12 +221,13 @@ export function playQuietLordIntrusion(
   // 4) Hold, then fade everything out together and clean up.
   scene.time.delayedCall(fadeInMs + holdMs, () => {
     scene.tweens.add({
-      targets: [text, stroke, scar, dim],
+      targets: [text, speaker, stroke, scar, dim],
       alpha: 0,
       duration: fadeOutMs,
       ease: "Sine.easeIn",
       onComplete: () => {
         text.destroy();
+        speaker.destroy();
         stroke.destroy();
         scar.destroy();
         dim.destroy();

@@ -1,0 +1,159 @@
+{
+  "status": "Temporary replaceable production palette",
+  "generator": "Original deterministic DSP; seed387241; no source samples, soundfonts, provider calls or voices",
+  "scope": "Pre-encode and decoded MP3 technical measurements; no physical listening or artistic approval implied",
+  "tracks": [
+    {
+      "name": "sky-theme",
+      "seconds": 96,
+      "peak": 0.09270571172237396,
+      "rms": 0.01666773994782061,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 96,
+        "peak": 0.08807976543903351,
+        "peakDbFS": -21.102477011668203,
+        "rms": 0.015834250309870925,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.000020942185074090958
+      },
+      "bytes": 1537388,
+      "sha256": "9b4937555f521ae6db3d14ed20905d887df388bb79b5469ecf197f9edc3aadd9"
+    },
+    {
+      "name": "sky-clear-theme",
+      "seconds": 96,
+      "peak": 0.09139540791511536,
+      "rms": 0.017752762180161922,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 96,
+        "peak": 0.08684279024600983,
+        "peakDbFS": -21.22532462351916,
+        "rms": 0.016864539276412443,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.00004773889440912171
+      },
+      "bytes": 1537388,
+      "sha256": "095417990b872da4ed6c4e8a5ff4fcc3cc9f5360a2c8692b63421bf6f9ef9a56"
+    },
+    {
+      "name": "sky-wind",
+      "seconds": 22,
+      "peak": 0.13376981019973755,
+      "rms": 0.023145581072525373,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 22,
+        "peak": 0.1274050921201706,
+        "peakDbFS": -17.896264275885184,
+        "rms": 0.02211126884987636,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.02747129276394844
+      },
+      "bytes": 353708,
+      "sha256": "07477bf20541c76ccc73ecb6e6423d917d3201bab88bb7fbdd706a19524925bb"
+    },
+    {
+      "name": "sky-paper",
+      "seconds": 22,
+      "peak": 0.056019727140665054,
+      "rms": 0.005149144304303564,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 22,
+        "peak": 0.05379323288798332,
+        "peakDbFS": -25.385447090484654,
+        "rms": 0.004923717827222366,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.0029903481481596828
+      },
+      "bytes": 353708,
+      "sha256": "3699ecc10ee768557520a7f55a572da6175517c10ac82987957ce58410f84248"
+    },
+    {
+      "name": "sky-stone",
+      "seconds": 3,
+      "peak": 0.07658330351114273,
+      "rms": 0.004538030690242874,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 3,
+        "peak": 0.0728578269481659,
+        "peakDbFS": -22.750475722682037,
+        "rms": 0.004333630973637288,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.0006121449987404048
+      },
+      "bytes": 49580,
+      "sha256": "f7b0e2b3092d02bd858e649ff235dbf683c35b3218a07cdacf35c6c27fb044e3"
+    },
+    {
+      "name": "sky-lantern",
+      "seconds": 3,
+      "peak": 0.04864832013845444,
+      "rms": 0.004926480125031314,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 3,
+        "peak": 0.04634203016757965,
+        "peakDbFS": -26.68049888814823,
+        "rms": 0.004706284929028341,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.000058446446928428486
+      },
+      "bytes": 49580,
+      "sha256": "9f464d92013a2cad1bdf5599fa57953a97413e956661411ad4a89ca4f885d602"
+    },
+    {
+      "name": "sky-book",
+      "seconds": 3,
+      "peak": 0.07120195031166077,
+      "rms": 0.007551501787080937,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 3,
+        "peak": 0.07388130575418472,
+        "peakDbFS": -22.62930875168901,
+        "rms": 0.007210970023328856,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.0022251957561820745
+      },
+      "bytes": 49580,
+      "sha256": "66f1880d07d60f446a7b19109238ac14ebf6f6697764ebd57c6773f0afcdb309"
+    },
+    {
+      "name": "sky-tether",
+      "seconds": 3,
+      "peak": 0.14336062967777252,
+      "rms": 0.014268223287638887,
+      "sampleRate": 32000,
+      "channels": 2,
+      "decoded": {
+        "seconds": 3,
+        "peak": 0.14222906529903412,
+        "peakDbFS": -16.940232880969244,
+        "rms": 0.013543596286936346,
+        "nonfinite": 0,
+        "fullscale": 0,
+        "boundaryJump": 0.003928730729967356
+      },
+      "bytes": 49580,
+      "sha256": "5f858588071f609af1a77c83d9b9e1d143d39dc0e33c5f942abe104668697adf"
+    }
+  ]
+}

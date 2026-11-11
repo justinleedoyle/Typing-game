@@ -1,16 +1,4 @@
-// Logic harness: save migration + merge (src/game/saveState.ts).
-//
-// The migration we care about is PURE-ish but lives inside SaveStore.load(),
-// which awaits a SaveBackend. There is no standalone migrate() to import, so we
-// drive the REAL SaveStore.load() through a tiny in-memory backend — that
-// exercises the real merge (`{ ...emptySave(name), ...loaded }`) and the real
-// legacy `purist: boolean` → difficulty mapping, with zero network/Supabase.
-//
-// Importing saveState transitively imports supabaseClient, which calls
-// createClient() at module-eval — that needs global WebSocket/window/etc. under
-// bare tsx. `./_setup` installs inert shims and MUST be the first import so its
-// side effects run before the saveState import below is evaluated.
-import "./_setup";
+// Save migration and validation tests use injected in-memory backends only.
 import { assert, assertEqual, suite } from "./_assert";
 import {
   SaveStore,
@@ -18,6 +6,11 @@ import {
   type SaveBackend,
   type SaveState,
   type Difficulty,
+  CURRENT_SCHEMA_VERSION,
+  migrate,
+  InvalidSaveError,
+  UnsupportedSaveVersionError,
+  validateCheckpoint,
 } from "../src/game/saveState";
 
 /** In-memory backend: returns whatever legacy/partial blob we hand it, with no
@@ -120,4 +113,53 @@ await suite("saveState.merge: an explicit difficulty already set is preserved", 
   assertEqual(s.audioLevel, "quiet", "explicit audioLevel preserved");
   assertEqual(s.satchel, ["pelt-of-the-old-one"], "non-empty satchel preserved");
   assertEqual(s.almanacLore, ["winter-1"], "non-empty almanacLore preserved");
+});
+
+
+function rejectsSync(fn: () => unknown, type: new (...args: never[]) => Error): boolean {
+  try { fn(); return false; } catch (error) { return error instanceof type; }
+}
+
+await suite("saveState.v2: historical saves gain checkpoint and presentation defaults", () => {
+  const state = migrate({ ...legacySave(undefined), schemaVersion: 1 });
+  assertEqual(state.schemaVersion, CURRENT_SCHEMA_VERSION, "version advances to current");
+  assertEqual(state.checkpoint, null, "no invented checkpoint for existing progress");
+  assertEqual(state.textScale, "standard", "standard text by default");
+  assertEqual(state.reducedMotion, false, "motion default preserved");
+  assertEqual(state.reducedFlashes, false, "flash default preserved");
+});
+
+await suite("saveState.validation: malformed nested progress is refused instead of erased", () => {
+  for (const patch of [
+    { satchel: null }, { satchel: [123] }, { realms: null },
+    { realms: { winter: { cleared: true, choices: { fork: null } } } },
+    { realms: { winter: { cleared: "yes", choices: {} } } },
+    { keyStats: { a: { hits: -1, misses: 0 } } },
+    { keyStats: { a: { hits: 1, misses: NaN } } },
+    { difficulty: "impossible" }, { audioLevel: null }, { updatedAt: Infinity },
+    { reducedMotion: "false" }, { textScale: "tiny" }, { schemaVersion: 1.5 },
+  ]) {
+    assert(rejectsSync(() => migrate({ ...emptySave(), ...patch }), InvalidSaveError), "invalid field refuses load");
+  }
+  assert(rejectsSync(() => migrate([]), InvalidSaveError), "array is not a save");
+  assert(rejectsSync(() => migrate(null), InvalidSaveError), "null is not a save");
+  assert(rejectsSync(() => migrate({ schemaVersion: CURRENT_SCHEMA_VERSION + 1 }), UnsupportedSaveVersionError), "future progress is protected");
+});
+
+await suite("saveState.checkpoint: flat finite data round trips and stale routes clear", () => {
+  const checkpoint = { scene: "WinterMountainScene", step: "wave", data: { idx: 2, foxSpared: true, choice: "huntress", last: null } };
+  const state = migrate({ ...emptySave(), typewriterAwakened: true, checkpoint, textScale: "large", reducedMotion: true, reducedFlashes: true });
+  assertEqual(state.checkpoint, checkpoint, "valid checkpoint preserved");
+  assertEqual(state.textScale, "large", "text choice preserved");
+  assertEqual(state.reducedMotion, true, "motion choice preserved");
+  assertEqual(state.reducedFlashes, true, "flash choice preserved");
+  assertEqual(migrate({ ...state, realms: { "winter-mountain": { cleared: true, choices: {} } } }).checkpoint, null, "cleared Winter never resumes stale combat");
+  assertEqual(migrate({ ...state, typewriterAwakened: false }).checkpoint, null, "Winter checkpoint requires finished opening");
+  assertEqual(migrate({ ...state, checkpoint: { scene: "OpeningScene", step: "name", data: {} } }).checkpoint, null, "finished opening does not reopen");
+  for (const bad of [
+    { scene: "GreatBattleScene", step: "wave", data: {} },
+    { scene: "OpeningScene", step: "", data: {} },
+    { scene: "OpeningScene", step: "name", data: { nested: {} } },
+    { scene: "OpeningScene", step: "name", data: { idx: NaN } },
+  ]) assert(rejectsSync(() => validateCheckpoint(bad), InvalidSaveError), "invalid checkpoint refused");
 });

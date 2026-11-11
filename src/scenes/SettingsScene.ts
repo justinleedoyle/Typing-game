@@ -1,3 +1,8 @@
+import { beginAssetLoad, assetLoadBlocked } from "../game/assetLoadRecovery";
+import { CloudSaveError, SaveConflictError } from "../game/saveState";
+import { installPresentation, PRESENTATION_CHANGED, rememberLocalSaveNotice } from "../game/presentation";
+import { navigationAction } from "../game/ui/navigationPolicy";
+import { SceneRunGuard } from "../game/sceneRunGuard";
 // Player-facing settings menu — purist toggle, audio level, profile rename,
 // and a guarded save reset. Entered from the Hub (or any other scene that
 // passes a `returnTo` key in scene data) by typing a word.
@@ -28,11 +33,11 @@ import {
 import { SERIF } from "../game/palette";
 import { difficultyLabel, togglePuristMode } from "../game/purist";
 import {
-  emptySave,
   type AudioLevel,
   type Difficulty,
   type SaveStore,
 } from "../game/saveState";
+import { resetSave } from "../game/resetSave";
 import { TypingInputController } from "../game/typingInput";
 import { cornerTicks, UI_CSS, UI_HEX } from "../game/ui/uiTheme";
 import { TextWordTarget } from "../game/wordTarget";
@@ -52,18 +57,21 @@ const DIFFICULTY_CYCLE: readonly Difficulty[] = ["forgiving", "standard", "puris
 const MAX_NAME_LENGTH = 16;
 
 const ROW_X = 960;
-const ROW_START_Y = 320;
-const ROW_SPACING = 110;
+const ROW_START_Y = 290;
+const ROW_SPACING = 84;
 const LABEL_OFFSET_X = -360;
 const VALUE_OFFSET_X = 80;
-const ACTION_OFFSET_Y = 44;
+const ACTION_OFFSET_Y = 32;
 const PANEL_W = 1180;
-const PANEL_H = 720;
+const PANEL_H = 800;
 const PANEL_X = 960;
 const PANEL_Y = 560;
 
 export class SettingsScene extends Phaser.Scene {
+  private readonly run = new SceneRunGuard();
   private store!: SaveStore;
+  private resetApplied = false;
+  private saveConflict = false;
   private returnTo = "PortalChamberScene";
   private typingInput!: TypingInputController;
   private mode: Mode = "normal";
@@ -97,6 +105,9 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   init(data: SettingsSceneData): void {
+    this.run.begin();
+    this.resetApplied = false;
+    this.saveConflict = false;
     this.store = data.store;
     this.returnTo = data.returnTo ?? "PortalChamberScene";
     this.mode = "normal";
@@ -110,10 +121,13 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   preload(): void {
+    beginAssetLoad(this);
     this.load.image("settings-hub-backdrop", hubBackdrop);
   }
 
   create(): void {
+    if (assetLoadBlocked(this)) return;
+    installPresentation(this, this.store);
     this.cameras.main.fadeIn(350, 11, 10, 15);
     this.drawLedgerBackdrop();
 
@@ -187,10 +201,10 @@ export class SettingsScene extends Phaser.Scene {
       .text(
         this.scale.width / 2,
         220,
-        "Type a word to change it. Type `back` to return.",
+        "Type a word to change it. Esc cancels typing, then goes back.",
         {
           fontFamily: SERIF,
-          fontSize: "32px",
+          fontSize: this.store.get().textScale === "large" ? "38px" : "32px",
           color: UI_CSS.ink,
           fontStyle: "italic",
           align: "center",
@@ -199,6 +213,9 @@ export class SettingsScene extends Phaser.Scene {
       )
       .setOrigin(0.5);
     this.redrawNarratorPlate();
+    this.narrator.on("pointerdown", () => {
+      if (this.saveConflict && !this.closing) this.scene.start("TitleScene");
+    });
 
     this.typingInput = new TypingInputController(this.store);
     this.typingInput.setKeystrokeHooks({
@@ -206,7 +223,8 @@ export class SettingsScene extends Phaser.Scene {
     });
 
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
-    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.run.end();
       this.typingInput.reset();
       this.input.keyboard?.off("keydown", this.onKeyDown, this);
     });
@@ -353,14 +371,22 @@ export class SettingsScene extends Phaser.Scene {
     );
     this.drawAction(1, "sound", () => this.handleSound());
 
-    this.drawRow(2, "Profile name", state.profileName);
-    this.drawAction(2, "rename", () => this.handleRename());
+    this.drawRow(2, "Dialogue text");
+    this.drawTokenTrack(2, ["standard", "large"] as const, state.textScale, value => value,
+      { tokenW: 126, tokenH: 38, gap: 10 });
+    this.drawAction(2, "text", () => this.handleComfort("textScale"));
 
-    this.drawRow(3, "Reset save", "wipe everything");
-    this.drawAction(3, "reset", () => this.handleReset());
+    this.drawRow(3, "Decorative motion", state.reducedMotion ? "reduced" : "full");
+    this.drawAction(3, "motion", () => this.handleComfort("reducedMotion"));
+    this.drawRow(4, "Screen flashes", state.reducedFlashes ? "reduced" : "full");
+    this.drawAction(4, "flashes", () => this.handleComfort("reducedFlashes"));
 
-    this.drawRow(4, "Return", `to ${returnLabel(this.returnTo)}`);
-    this.drawAction(4, "back", () => this.handleBack(), -2);
+    this.drawRow(5, "Profile name", state.profileName);
+    this.drawAction(5, "rename", () => this.handleRename());
+    this.drawRow(6, "Reset save", "wipe everything");
+    this.drawAction(6, "reset", () => this.handleReset());
+    this.drawRow(7, "Return", `to ${returnLabel(this.returnTo)}`);
+    this.drawAction(7, "back", () => { void this.handleBack(); }, -2);
   }
 
   private clearMenu(): void {
@@ -392,7 +418,7 @@ export class SettingsScene extends Phaser.Scene {
     const labelText = this.add
       .text(ROW_X + LABEL_OFFSET_X, y, label, {
         fontFamily: SERIF,
-        fontSize: "32px",
+        fontSize: "28px",
         color: UI_CSS.cream,
       })
       .setOrigin(0, 0.5);
@@ -403,7 +429,7 @@ export class SettingsScene extends Phaser.Scene {
       const valueText = this.add
         .text(ROW_X + VALUE_OFFSET_X, y, value, {
           fontFamily: SERIF,
-          fontSize: "32px",
+          fontSize: "28px",
           fontStyle: "italic",
           color: UI_CSS.brass,
         })
@@ -656,7 +682,7 @@ export class SettingsScene extends Phaser.Scene {
         onComplete: () => frame.destroy(),
       });
 
-      for (let i = 0; i < 5; i += 1) {
+      for (let i = 0; i < 8; i += 1) {
         this.time.delayedCall(90 + i * 55, () => {
           this.pulseTypingBox(
             ROW_X + 30,
@@ -687,7 +713,7 @@ export class SettingsScene extends Phaser.Scene {
       onComplete: () => frame.destroy(),
     });
 
-    for (let i = 0; i < 5; i += 1) {
+    for (let i = 0; i < 8; i += 1) {
       this.time.delayedCall(i * 28, () => {
         const y = ROW_START_Y + i * ROW_SPACING + 28;
         const lane = this.add.graphics().setDepth(23).setAlpha(0.4).setPosition(ROW_X + 30, y);
@@ -754,6 +780,20 @@ export class SettingsScene extends Phaser.Scene {
     });
     setAudioLevel(next);
     this.setNarrator(`Sound: ${next}.`);
+    this.renderMenu();
+  }
+
+  private handleComfort(field: "textScale" | "reducedMotion" | "reducedFlashes"): void {
+    this.store.update(state => {
+      if (field === "textScale") state.textScale = state.textScale === "large" ? "standard" : "large";
+      else state[field] = !state[field];
+    });
+    this.events.emit(PRESENTATION_CHANGED);
+    const state = this.store.get();
+    this.narrator.setFontSize(state.textScale === "large" ? 38 : 32);
+    this.setNarrator(field === "textScale" ? `Dialogue text: ${state.textScale}.`
+      : field === "reducedMotion" ? `Decorative motion: ${state.reducedMotion ? "reduced" : "full"}.`
+      : `Screen flashes: ${state.reducedFlashes ? "reduced" : "full"}.`);
     this.renderMenu();
   }
 
@@ -901,7 +941,7 @@ export class SettingsScene extends Phaser.Scene {
       frame: "banner",
       onClaim: () => this.pulseResetPanel(),
       onAdvance: () => this.pulseResetPanelTyping(),
-      onComplete: () => this.performReset(),
+      onComplete: () => { void this.performReset(); },
     });
     this.attachResetTargetAnchor(confirmTarget, -160);
     this.typingInput.register(confirmTarget);
@@ -919,11 +959,7 @@ export class SettingsScene extends Phaser.Scene {
       frame: "banner",
       onClaim: () => this.pulseResetPanel(),
       onAdvance: () => this.pulseResetPanelTyping(),
-      onComplete: () => {
-        this.mode = "normal";
-        this.setNarrator("Save kept. Nothing changed.");
-        this.renderMenu();
-      },
+      onComplete: () => this.cancelReset(),
     });
     this.attachResetTargetAnchor(cancelTarget, 160);
     this.typingInput.register(cancelTarget);
@@ -992,35 +1028,63 @@ export class SettingsScene extends Phaser.Scene {
     this.stageLedgerObject(warning, 90);
   }
 
-  private performReset(): void {
-    // Replace state entirely with a fresh default save — same shape the game
-    // sees on a brand-new install. Use the SaveStore mutator so the autosave
-    // debouncer schedules a flush like any other update.
-    const fresh = emptySave();
-    this.store.update((s) => {
-      s.profileName = fresh.profileName;
-      s.typewriterAwakened = fresh.typewriterAwakened;
-      s.realms = fresh.realms;
-      s.satchel = fresh.satchel;
-      s.keyStats = fresh.keyStats;
-      s.almanacLore = fresh.almanacLore;
-      s.difficulty = fresh.difficulty;
-      s.audioLevel = fresh.audioLevel;
-    });
-    playChime();
-    // Land in the Title scene so the player sees the world re-introduce
-    // itself rather than dropping back into a now-empty Hub. TitleScene
-    // re-loads the SaveStore from the backend, which now reflects the wipe.
-    this.cameras.main.fadeOut(600, 11, 10, 15);
-    this.cameras.main.once(
-      Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-      () => this.scene.start("TitleScene"),
-    );
+  private async performReset(): Promise<void> {
+    if (this.closing) return;
+    const token = this.run.token();
+    this.closing = true;
+    this.clearMenu();
+    this.setNarrator("Saving the fresh start…");
+    resetSave(this.store);
+    this.resetApplied = true;
+    try {
+      // A title reload must never race the old cloud snapshot.
+      await this.store.flush();
+      if (!this.run.isCurrent(token)) return;
+      setAudioLevel(this.store.get().audioLevel);
+      playChime();
+      this.cameras.main.fadeOut(600, 11, 10, 15);
+      this.cameras.main.once(
+        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+        () => this.scene.start("TitleScene"),
+      );
+    } catch (error) {
+      if (!this.run.isCurrent(token)) return;
+      this.closing = false;
+      this.handleReset();
+      this.saveConflict = error instanceof SaveConflictError;
+      if (this.saveConflict) this.narrator.setInteractive({ useHandCursor: true });
+      this.setNarrator(this.saveConflict
+        ? `${error instanceof Error ? error.message : "Saving needs attention."} Press T or click here to choose a save at the title.`
+        : "Could not finish saving the reset. Type confirm to retry, or back to continue this fresh session.");
+    }
   }
 
-  private handleBack(): void {
+  private cancelReset(): void {
+    this.mode = "normal";
+    this.setNarrator(this.resetApplied ? "The fresh session is kept." : "Save kept. Nothing changed.");
+    this.renderMenu();
+  }
+
+  private async handleBack(): Promise<void> {
     if (this.closing) return;
+    const token = this.run.token();
     this.closing = true;
+    try { await this.store.flush(); }
+    catch (error) {
+      if (!this.run.isCurrent(token)) return;
+      if (error instanceof CloudSaveError) rememberLocalSaveNotice(this);
+      else {
+        this.closing = false;
+        this.saveConflict = error instanceof SaveConflictError;
+        if (this.saveConflict) this.narrator.setInteractive({ useHandCursor: true });
+        this.setNarrator(this.saveConflict
+          ? `${error instanceof Error ? error.message : "Saving needs attention."} Press T or click here to choose a save at the title.`
+          : "Could not finish saving. Your changes are still here. Type back or press Esc to retry.");
+        this.renderMenu();
+        return;
+      }
+    }
+    if (!this.run.isCurrent(token)) return;
     playChime();
     this.clearMenu();
     this.playSettingsExitWake();
@@ -1038,8 +1102,22 @@ export class SettingsScene extends Phaser.Scene {
   // ─── Input ──────────────────────────────────────────────────────────────────
 
   private onKeyDown(event: KeyboardEvent): void {
+    if (this.closing || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (this.saveConflict && event.key.toLowerCase() === "t" && !event.repeat) {
+      event.preventDefault();
+      this.scene.start("TitleScene");
+      return;
+    }
     if (this.mode === "renaming") {
       this.handleRenameKey(event);
+      return;
+    }
+    const navigation = navigationAction(event, "settings", this.typingInput.hasClaim() || this.typingInput.getTypingBuffer().length > 0);
+    if (navigation === "ignore") return;
+    if (navigation === "back") {
+      event.preventDefault();
+      if (this.mode === "confirming-reset") this.cancelReset();
+      else void this.handleBack();
       return;
     }
     if (event.key.length === 1 || event.key === " ") playClack();

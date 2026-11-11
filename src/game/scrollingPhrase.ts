@@ -47,6 +47,7 @@ const BANNER_FONT_SIZE = 30;
 const BANNER_ENTRY_MS = 420;
 const BANNER_WORD_ATTACH_DELAY_MS = 140;
 const BANNER_ENTRY_MARGIN_X = 70;
+const BANNER_READ_IN_MS = 900;
 
 export class ScrollingPhrase {
   private readonly container: Phaser.GameObjects.Container;
@@ -189,6 +190,9 @@ export class ScrollingPhrase {
       word: this.opts.phrase,
       x: this.container.x,
       y: this.container.y,
+      // The opaque parchment sits at20 and later actors reach50. Its answer
+      // is an independent container, so it must be layered above both.
+      depth: 70,
       fontSize: BANNER_FONT_SIZE,
       burstColor: PALETTE_HEX.brass,
       // UI-cohesion: the same legibility outline every other word target carries,
@@ -302,6 +306,12 @@ export class ScrollingPhrase {
 
   private handleMiss(): void {
     if (this.resolved) return;
+    // The last matched character beats the exit edge, even if the word's
+    // completion animation has not yet delivered its scene callback.
+    if (this.target?.isComplete()) {
+      this.handleComplete();
+      return;
+    }
     this.resolved = true;
     this.clearWordAttachTimer();
     this.entryTween?.stop();
@@ -456,7 +466,10 @@ export class ScrollingPhrase {
    *  No-op once resolved so the completion / miss fade is not undone. */
   setBlur(amount: number): void {
     if (this.resolved || !this.target) return;
-    const clamped = Math.max(0, Math.min(1, amount));
+    // A wide banner can enter inside a beam. Give the player a look at the
+    // letters before masking them, without extending the scroll's deadline.
+    const elapsed = this.progress * this.opts.durationMs;
+    const clamped = elapsed < BANNER_READ_IN_MS ? 0 : Math.max(0, Math.min(1, amount));
     this.target.setSuffixMasked(shouldEatSuffix(clamped));
     const alpha = blurAlphaFor(clamped);
     this.container.setAlpha(alpha);

@@ -60,7 +60,7 @@ export type BeatGateDecision =
   | "desync";
 
 export interface BeatGateParams {
-  /** Is a target currently claimed (i.e. are we mid-word)? */
+  /** Has a word started, including an accepted prefix still shared by targets? */
   hasClaim: boolean;
   /** Is "now" inside the encounter's accept window? The caller resolves on- vs
    *  off-beat (antiphon) and passes the already-decided boolean. */

@@ -1,0 +1,186 @@
+import type Phaser from "phaser";
+import { getAudioContext, getMasterGain } from "./context";
+import { needsInterruptionPause } from "../game/sceneInterruption";
+import { SoundscapePlayer, type LoopSpec, type SoundscapeStatus } from "./soundscapePlayer";
+import home from "../../art/audio/hearth-theme.mp3";
+import winter from "../../art/audio/winter-theme.mp3";
+import hearth from "../../art/audio/hearth.mp3";
+import wind from "../../art/audio/wind.mp3";
+import stream from "../../art/audio/stream.mp3";
+import snow from "../../art/audio/snow.mp3";
+import wood from "../../art/audio/wood.mp3";
+import stone from "../../art/audio/stone.mp3";
+import bough from "../../art/audio/bough.mp3";
+import flame from "../../art/audio/flame.mp3";
+import bellTheme from "../../art/audio/bell-theme.mp3";
+import bellClearTheme from "../../art/audio/bell-clear-theme.mp3";
+import bellWater from "../../art/audio/bell-water.mp3";
+import bellMasonry from "../../art/audio/bell-masonry.mp3";
+import bellLantern from "../../art/audio/bell-lantern.mp3";
+import bellLatch from "../../art/audio/bell-latch.mp3";
+import bellRubble from "../../art/audio/bell-rubble.mp3";
+import bellRelease from "../../art/audio/bell-release.mp3";
+import forgeTheme from "../../art/audio/forge-theme.mp3";
+import forgeClearTheme from "../../art/audio/forge-clear-theme.mp3";
+import forgeFurnace from "../../art/audio/forge-furnace.mp3";
+import forgeMechanism from "../../art/audio/forge-mechanism.mp3";
+import forgeWheel from "../../art/audio/forge-wheel.mp3";
+import forgeLock from "../../art/audio/forge-lock.mp3";
+import forgeGear from "../../art/audio/forge-gear.mp3";
+import forgeFlame from "../../art/audio/forge-flame.mp3";
+import skyTheme from "../../art/audio/sky-theme.mp3";
+import skyClearTheme from "../../art/audio/sky-clear-theme.mp3";
+import skyWind from "../../art/audio/sky-wind.mp3";
+import skyPaper from "../../art/audio/sky-paper.mp3";
+import skyStone from "../../art/audio/sky-stone.mp3";
+import skyLantern from "../../art/audio/sky-lantern.mp3";
+import skyBook from "../../art/audio/sky-book.mp3";
+import skyTether from "../../art/audio/sky-tether.mp3";
+import woodTheme from "../../art/audio/wood-theme.mp3";
+import woodClearTheme from "../../art/audio/wood-clear-theme.mp3";
+import woodAir from "../../art/audio/wood-air.mp3";
+import woodLeaves from "../../art/audio/wood-leaves.mp3";
+import woodRoot from "../../art/audio/wood-root.mp3";
+import woodStone from "../../art/audio/wood-stone.mp3";
+import woodLantern from "../../art/audio/wood-lantern.mp3";
+import woodSeal from "../../art/audio/wood-seal.mp3";
+import finaleTheme from "../../art/audio/finale-theme.mp3";
+import finaleAir from "../../art/audio/finale-air.mp3";
+import homecomingTheme from "../../art/audio/homecoming-theme.mp3";
+
+export type SoundscapeMood = "home" | "winter-trail" | "winter-glade" | "winter-threat" | "winter-rest" | "winter-return"
+  | "bell-depths" | "bell-rhythm" | "bell-rest" | "bell-silence"
+  | "forge-workshop" | "forge-workshop-slow" | "forge-threat" | "forge-threat-slow"
+  | "forge-rest" | "forge-rest-slow" | "forge-still" | "forge-still-slow"
+  | "sky-terrace" | "sky-library" | "sky-dim" | "sky-threat" | "sky-rest" | "sky-rest-dim"
+  | "sky-kind" | "sky-freed" | "sky-freed-dim"
+  | "wood-path" | "wood-hush" | "wood-restless" | "wood-ash" | "wood-threat" | "wood-rest" | "wood-rest-ash"
+  | "finale-wall" | "finale-duel" | "finale-duel-kind" | "finale-alone" | "finale-phrase" | "finale-silence" | "finale-loss"
+  | "homecoming" | "credits";
+export type MaterialSound = "snow" | "wood" | "stone" | "bough" | "flame" | "bell-lantern" | "bell-latch" | "bell-rubble" | "bell-release"
+  | "forge-wheel" | "forge-lock" | "forge-gear" | "forge-flame"
+  | "sky-stone" | "sky-lantern" | "sky-book" | "sky-tether"
+  | "wood-root" | "wood-stone" | "wood-lantern" | "wood-seal";
+const materials: Record<MaterialSound, string> = { snow, wood, stone, bough, flame,
+  "bell-lantern": bellLantern, "bell-latch": bellLatch, "bell-rubble": bellRubble, "bell-release": bellRelease,
+  "forge-wheel": forgeWheel, "forge-lock": forgeLock, "forge-gear": forgeGear, "forge-flame": forgeFlame,
+  "sky-stone": skyStone, "sky-lantern": skyLantern, "sky-book": skyBook, "sky-tether": skyTether,
+  "wood-root": woodRoot, "wood-stone": woodStone, "wood-lantern": woodLantern, "wood-seal": woodSeal };
+const loop = (id: string, url: string, gain: number): LoopSpec => ({ id, url, gain });
+const moods: Record<SoundscapeMood, readonly LoopSpec[]> = {
+  home: [loop("home-theme", home, .65), loop("hearth", hearth, .6)],
+  "winter-trail": [loop("winter-theme", winter, .55), loop("wind", wind, .48), loop("stream", stream, .43)],
+  "winter-glade": [loop("winter-theme", winter, .55), loop("wind", wind, .35)],
+  "winter-threat": [loop("winter-theme", winter, .28), loop("wind", wind, .58)],
+  "winter-rest": [loop("home-theme", home, .42), loop("wind", wind, .23)],
+  "winter-return": [loop("home-theme", home, .42), loop("wind", wind, .28), loop("stream", stream, .4)],
+  "bell-depths": [loop("bell-theme", bellTheme, .48), loop("bell-water", bellWater, .55), loop("bell-masonry", bellMasonry, .3)],
+  // Existing tolls are the timing instruction. No competing musical pulse.
+  "bell-rhythm": [loop("bell-water", bellWater, .35)],
+  "bell-rest": [loop("bell-clear-theme", bellClearTheme, .4), loop("bell-water", bellWater, .35)],
+  // Taking the clapper leaves the place hollow: no score or recurring toll.
+  "bell-silence": [loop("bell-water", bellWater, .28)],
+  "forge-workshop": [loop("forge-theme", forgeTheme, .45), loop("forge-furnace", forgeFurnace, .48), loop("forge-mechanism", forgeMechanism, .32)],
+  "forge-workshop-slow": [loop("forge-theme", forgeTheme, .38), loop("forge-furnace", forgeFurnace, .24), loop("forge-mechanism", forgeMechanism, .13)],
+  "forge-threat": [loop("forge-theme", forgeTheme, .22), loop("forge-furnace", forgeFurnace, .34), loop("forge-mechanism", forgeMechanism, .18)],
+  "forge-threat-slow": [loop("forge-theme", forgeTheme, .2), loop("forge-furnace", forgeFurnace, .18), loop("forge-mechanism", forgeMechanism, .08)],
+  "forge-rest": [loop("forge-clear-theme", forgeClearTheme, .4), loop("forge-furnace", forgeFurnace, .3), loop("forge-mechanism", forgeMechanism, .15)],
+  "forge-rest-slow": [loop("forge-clear-theme", forgeClearTheme, .36), loop("forge-furnace", forgeFurnace, .16), loop("forge-mechanism", forgeMechanism, .07)],
+  // The peaceful order stills the golems; the furnace can keep breathing.
+  "forge-still": [loop("forge-clear-theme", forgeClearTheme, .35), loop("forge-furnace", forgeFurnace, .18)],
+  "forge-still-slow": [loop("forge-clear-theme", forgeClearTheme, .32), loop("forge-furnace", forgeFurnace, .09)],
+  "sky-terrace": [loop("sky-theme", skyTheme, .42), loop("sky-wind", skyWind, .36), loop("sky-paper", skyPaper, .18)],
+  "sky-library": [loop("sky-theme", skyTheme, .30), loop("sky-wind", skyWind, .20), loop("sky-paper", skyPaper, .16)],
+  "sky-dim": [loop("sky-theme", skyTheme, .28), loop("sky-wind", skyWind, .32), loop("sky-paper", skyPaper, .08)],
+  // Sparse score and air leave the scrolling trials and riddles clear.
+  "sky-threat": [loop("sky-theme", skyTheme, .18), loop("sky-wind", skyWind, .26)],
+  "sky-rest": [loop("sky-clear-theme", skyClearTheme, .40), loop("sky-wind", skyWind, .28), loop("sky-paper", skyPaper, .14)],
+  "sky-rest-dim": [loop("sky-clear-theme", skyClearTheme, .27), loop("sky-wind", skyWind, .28), loop("sky-paper", skyPaper, .07)],
+  "sky-kind": [loop("sky-clear-theme", skyClearTheme, .44), loop("sky-wind", skyWind, .18), loop("sky-paper", skyPaper, .18)],
+  "sky-freed": [loop("sky-clear-theme", skyClearTheme, .36), loop("sky-wind", skyWind, .42)],
+  "sky-freed-dim": [loop("sky-clear-theme", skyClearTheme, .26), loop("sky-wind", skyWind, .42)],
+  "wood-path": [loop("wood-theme", woodTheme, .40), loop("wood-air", woodAir, .36), loop("wood-leaves", woodLeaves, .20)],
+  "wood-hush": [loop("wood-theme", woodTheme, .25), loop("wood-air", woodAir, .24), loop("wood-leaves", woodLeaves, .10)],
+  "wood-restless": [loop("wood-theme", woodTheme, .24), loop("wood-air", woodAir, .38), loop("wood-leaves", woodLeaves, .25)],
+  "wood-ash": [loop("wood-theme", woodTheme, .18), loop("wood-air", woodAir, .32), loop("wood-leaves", woodLeaves, .09)],
+  // The spirits' directional marks and feedback remain the only typing cues.
+  "wood-threat": [loop("wood-theme", woodTheme, .15), loop("wood-air", woodAir, .23)],
+  "wood-rest": [loop("wood-clear-theme", woodClearTheme, .42), loop("wood-air", woodAir, .24), loop("wood-leaves", woodLeaves, .15)],
+  "wood-rest-ash": [loop("wood-clear-theme", woodClearTheme, .30), loop("wood-air", woodAir, .28), loop("wood-leaves", woodLeaves, .07)],
+  "finale-wall": [loop("finale-theme", finaleTheme, .30), loop("finale-air", finaleAir, .26)],
+  "finale-duel": [loop("finale-theme", finaleTheme, .24), loop("finale-air", finaleAir, .22)],
+  "finale-duel-kind": [loop("finale-theme", finaleTheme, .15), loop("finale-air", finaleAir, .16)],
+  "finale-alone": [loop("finale-air", finaleAir, .16)],
+  "finale-phrase": [loop("finale-theme", finaleTheme, .13), loop("finale-air", finaleAir, .10)],
+  // The original lone/empty-satchel phrase and final period own real silence.
+  "finale-silence": [],
+  "finale-loss": [loop("finale-air", finaleAir, .12)],
+  homecoming: [loop("homecoming-theme", homecomingTheme, .46), loop("hearth", hearth, .32)],
+  credits: [loop("homecoming-theme", homecomingTheme, .38), loop("hearth", hearth, .24)],
+};
+// Failed requests are evicted so deliberate re-entry can recover. No asset can
+// stall a scene's artwork gate or prevent a saved journey from loading.
+const decoded = new Map<string, Promise<AudioBuffer>>();
+function load(url: string): Promise<AudioBuffer> {
+  let pending = decoded.get(url);
+  if (!pending) {
+    pending = fetch(url).then(response => {
+      if (!response.ok) throw new Error("Sound asset unavailable");
+      return response.arrayBuffer();
+    }).then(bytes => getAudioContext().decodeAudioData(bytes)).catch(error => { decoded.delete(url); throw error; });
+    decoded.set(url, pending);
+  }
+  return pending;
+}
+export interface SceneSoundscape {
+  setMood(mood: SoundscapeMood): void;
+  cue(material: MaterialSound): void;
+  stop(): void;
+  status(): SoundscapeStatus & { mood: SoundscapeMood; scene: string };
+}
+let current: SceneSoundscape | undefined;
+
+/** Read-only engineering evidence, also used by the local audio review page.
+ * Contains no save, identity, text input or account data. */
+export function soundscapeStatus(): ReturnType<SceneSoundscape["status"]> | null { return current?.status() ?? null; }
+
+export function installSoundscape(scene: Phaser.Scene, initial: SoundscapeMood): SceneSoundscape {
+  current?.stop();
+  let mood = initial, disposed = false;
+  const player = new SoundscapePlayer(getAudioContext(), getMasterGain(), load,
+    needsInterruptionPause(scene.game) || scene.sys.isPaused());
+  const pause = (): void => player.pause();
+  const resume = (): void => { if (!needsInterruptionPause(scene.game)) player.resume(); };
+  const hidden = (): void => { if (document.hidden) pause(); };
+  const stop = (): void => {
+    if (disposed) return;
+    disposed = true; player.stop();
+    scene.events.off("pause", pause); scene.events.off("sleep", pause);
+    scene.events.off("resume", resume); scene.events.off("wake", resume);
+    scene.events.off("shutdown", stop); scene.events.off("destroy", stop);
+    scene.game.events.off("blur", pause); scene.game.events.off("hidden", pause);
+    window.removeEventListener("pagehide", pause); document.removeEventListener("visibilitychange", hidden);
+    if (current === handle) current = undefined;
+  };
+  const handle: SceneSoundscape = {
+    setMood(next) { if (!disposed) { mood = next; player.setLayers(moods[next]); } },
+    cue(material) { if (!disposed) player.cue(materials[material]); }, stop,
+    status: () => ({ ...player.status(), mood, scene: scene.scene.key }),
+  };
+  current = handle;
+  scene.events.on("pause", pause); scene.events.on("sleep", pause);
+  scene.events.on("resume", resume); scene.events.on("wake", resume);
+  scene.events.once("shutdown", stop); scene.events.once("destroy", stop);
+  scene.game.events.on("blur", pause); scene.game.events.on("hidden", pause);
+  window.addEventListener("pagehide", pause); document.addEventListener("visibilitychange", hidden);
+  handle.setMood(initial);
+  // Warm small material samples in the background so a first physical action
+  // has the same timing as later ones. Failure remains optional and recoverable.
+  const samples = initial.startsWith("wood-") ? [woodRoot, woodStone, woodLantern, woodSeal]
+    : initial.startsWith("sky-") ? [skyStone, skyLantern, skyBook, skyTether]
+    : initial.startsWith("forge-") ? [forgeWheel, forgeLock, forgeGear, forgeFlame]
+    : initial.startsWith("bell-") ? [bellLantern, bellLatch, bellRubble, bellRelease]
+    : initial === "home" || initial === "homecoming" || initial === "credits" || initial.startsWith("finale-") ? [] : [snow, wood, stone, bough, flame];
+  for (const url of samples) void load(url).catch(() => {});
+  return handle;
+}

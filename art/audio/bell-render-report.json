@@ -1,0 +1,70 @@
+{
+  "status": "Temporary replaceable production palette",
+  "generator": "Original deterministic DSP; seed148307; no source samples or voices",
+  "tracks": [
+    {
+      "name": "bell-theme",
+      "seconds": 96,
+      "peak": 0.13120849430561066,
+      "rms": 0.023524807874913272,
+      "sampleRate": 32000,
+      "channels": 2
+    },
+    {
+      "name": "bell-clear-theme",
+      "seconds": 96,
+      "peak": 0.13044944405555725,
+      "rms": 0.02337190195806223,
+      "sampleRate": 32000,
+      "channels": 2
+    },
+    {
+      "name": "bell-water",
+      "seconds": 22,
+      "peak": 0.1060761883854866,
+      "rms": 0.02075029047411343,
+      "sampleRate": 32000,
+      "channels": 2
+    },
+    {
+      "name": "bell-masonry",
+      "seconds": 22,
+      "peak": 0.03305845707654953,
+      "rms": 0.002399699373043949,
+      "sampleRate": 32000,
+      "channels": 2
+    },
+    {
+      "name": "bell-lantern",
+      "seconds": 3,
+      "peak": 0.07175124436616898,
+      "rms": 0.004194754614735833,
+      "sampleRate": 32000,
+      "channels": 2
+    },
+    {
+      "name": "bell-latch",
+      "seconds": 3,
+      "peak": 0.08741972595453262,
+      "rms": 0.006685886583273415,
+      "sampleRate": 32000,
+      "channels": 2
+    },
+    {
+      "name": "bell-rubble",
+      "seconds": 3,
+      "peak": 0.14142249524593353,
+      "rms": 0.009290513719247589,
+      "sampleRate": 32000,
+      "channels": 2
+    },
+    {
+      "name": "bell-release",
+      "seconds": 3,
+      "peak": 0.06219596043229103,
+      "rms": 0.006030516585973679,
+      "sampleRate": 32000,
+      "channels": 2
+    }
+  ]
+}

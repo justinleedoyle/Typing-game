@@ -7,6 +7,7 @@ import { selectFinalPhrase, FORCE_RELICS, KINDNESS_RELICS } from "../src/game/re
 import { forgePassageIndex } from "../src/game/forgeCheckpoint";
 import { winterFoxCareBindings } from "./_winterFoxCare";
 import { woodIndex } from "../src/game/woodCheckpoint";
+import { blurAlphaFor, shouldEatSuffix } from "../src/game/skyBlur";
 
 function sceneSource(name: string) {
   const path = new URL(`../src/scenes/${name}.ts`, import.meta.url);
@@ -342,6 +343,7 @@ await suite("Finale instructions: the sentence preview and exact word tasks pres
       w.runFinalPhraseWords(words, i);
       assertEqual(accepted, words[i], "the original word and authored punctuation remain the accepted target");
       assert(objective.endsWith(`"${accepted}"`), "the task quotes the exact target without appending a misleading extra period");
+      assert(objective.includes("unfilled part"), "the task also applies after the Songbird fills some of the word");
     }
   }
 });
@@ -755,6 +757,36 @@ await suite("Sky crossing beams: hazards leave story scenes and return for movin
   s.activePhrases = [inactivePhrase];
   s.update();
   assertEqual(inactivePhrase.blur, 0, "an inactive crossing hazard cannot mask a phrase in a story or sealed-scroll scene");
+});
+
+await suite("Sky moving scrolls show their first letters even when they enter under a beam", () => {
+  const path = new URL("../src/game/scrollingPhrase.ts", import.meta.url);
+  const source = ts.createSourceFile(path.pathname, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
+  const Phrase = actualMethod(source, "setBlur", { BANNER_READ_IN_MS: 900, blurAlphaFor, shouldEatSuffix });
+  for (const durationMs of [8_000, 9_500, 12_500, 14_000]) {
+    const phrase = new Phrase();
+    let masked = false;
+    let bannerAlpha = 1;
+    let textAlpha = 1;
+    Object.assign(phrase, {
+      opts: { durationMs },
+      target: {
+        setSuffixMasked(value: boolean) { masked = value; },
+        setVisualAlpha(value: number) { textAlpha = value; },
+      },
+      container: { setAlpha(value: number) { bannerAlpha = value; } },
+    });
+    for (const elapsed of [0, 899]) {
+      phrase.progress = elapsed / durationMs;
+      phrase.setBlur(1);
+      assertEqual([masked, bannerAlpha, textAlpha], [false, 1, 1], "a beam cannot hide an entering word");
+    }
+    phrase.progress = 901 / durationMs;
+    phrase.setBlur(1);
+    assertEqual([masked, bannerAlpha, textAlpha], [true, 0.6, 0.6], "the same beam hides unread letters after the entrance");
+    phrase.setBlur(0);
+    assertEqual([masked, bannerAlpha, textAlpha], [false, 1, 1], "leaving the beam restores the text");
+  }
 });
 
 await suite("Mechanic teaching: Wood and Sky explain hidden marks before timed encounters start", () => {

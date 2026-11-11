@@ -90,8 +90,8 @@ export interface TextWordTargetOptions {
   idleAlpha?: number;
 }
 
-/** Replace punctuation marks with a neutral placeholder for masked display. */
-const WARD_MARK_PLACEHOLDER = "·";
+/** Keep the masked ward slot visible even between narrow letters such as ll. */
+const WARD_MARK_PLACEHOLDER = "\u2009·\u2009";
 function maskWardMarks(text: string): string {
   return text.replace(/[.,?!;:]/g, WARD_MARK_PLACEHOLDER);
 }

@@ -210,7 +210,7 @@ await suite("Bell choir labels: ordinary and split ghosts opt into their existin
   }
 });
 
-await suite("Bell Warden layout: compound rows keep spacing when their boss is near the right edge", () => {
+await suite("Bell Warden layout: compound rows stay readable at the recess and near the right edge", () => {
   const method = owner.members.find((member) => member.name?.getText(source) === "wardenWordPosition")!;
   const code = ts.transpileModule(`class Harness { ${method.getText(source)} }`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },
@@ -225,9 +225,9 @@ await suite("Bell Warden layout: compound rows keep spacing when their boss is n
     { words: ["tide-and-toll", "deep-and-dark", "still-and-stir"], fontSize: 34 },
     { words: ["i", "am", "the", "bell.", "drink", "sea."], fontSize: 40, sequential: true },
   ];
-  for (const bossX of [1400, 1650]) for (const phase of phases) {
+  for (const bossX of [655, 1400, 1650]) for (const phase of phases) {
     const positions = phase.words.map((word, index) => bell.wardenWordPosition(
-      { x: bossX, y: 610 }, word, phase.sequential ? 0 : index, phase.sequential ? 1 : phase.words.length,
+      { x: bossX, y: 648 }, word, phase.sequential ? 0 : index, phase.sequential ? 1 : phase.words.length,
     ));
     for (const [index, position] of positions.entries()) {
       // A conservative3/4em per glyph is wider than these serif labels; checking

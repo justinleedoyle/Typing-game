@@ -145,11 +145,9 @@ const AURLAND_SPRITE_HEIGHT = 360;
 const OLIN_X = 430;
 const OLIN_PEW_Y = 780;
 
-// The Warden's painted sprite sits at the same anchor the procedural bell used
-// (trapezoid centred at bx, vertical mid-point ~by+110). Keep these in sync with
-// the values the procedural drawWarden baked in.
-const WARDEN_X = 1400;
-const WARDEN_Y = 610;
+// The recess left of Wren gives the Warden its own silhouette and floor contact.
+const WARDEN_X = 655;
+const WARDEN_Y = 648;
 const DESCENT_LANTERN_WORDS = ["swim", "glow", "breathe"] as const;
 const DESCENT_LANTERN_POSITIONS = [
   { x: 400, y: 600 },
@@ -2523,21 +2521,22 @@ export class SunkenBellScene extends Phaser.Scene {
 
   // ─── Act 3: The Bell-Warden ───────────────────────────────────────────────
 
-  /** Add the painted Bell-Warden boss sprite at the bell's old anchor, scaled to
-   *  the procedural body height so the word anchors + feel line up. Returns the
-   *  Image so the phase-2 "eyes open" beat can tint it (replacing the old
-   *  redrawWardenPhase2 graphics). Drawn at absolute coords (no scaled container),
-   *  same as the procedural bell. */
+  /** Stage the Warden with its own contact wake and return the sprite for phase tints. */
   private drawWarden(): Phaser.GameObjects.Image {
-    this.drawWardenStageBase();
+    const base = this.drawWardenStageBase();
     const sprite = this.add.image(WARDEN_X, WARDEN_Y, "bell-warden").setDepth(8);
     sprite.setScale(WARDEN_SPRITE_HEIGHT / sprite.height);
     applySceneActorLighting(this, sprite);
     addIdleBreath(this, sprite, { dy: -3, durationMs: 2800 });
+    sprite.once(Phaser.GameObjects.Events.DESTROY, () => {
+      if (!base.scene) return;
+      this.tweens.killTweensOf(base);
+      base.destroy();
+    });
     return sprite;
   }
 
-  private drawWardenStageBase(): void {
+  private drawWardenStageBase(): Phaser.GameObjects.Container {
     const base = this.add.container(WARDEN_X, WARDEN_Y + 150).setDepth(7);
     base.add(addLocalGroundShadow(this, 210, 34, {
       y: 8,
@@ -2586,6 +2585,7 @@ export class SunkenBellScene extends Phaser.Scene {
       repeat: -1,
       ease: "Sine.easeInOut",
     });
+    return base;
   }
 
   private playWardenStagePulse(
@@ -2656,15 +2656,12 @@ export class SunkenBellScene extends Phaser.Scene {
     this.readThen(() => this.startWardenPhase2(wardenSprite));
   }
 
-  /** The Warden wakes — its eyes open. Replaces the old phase-2 graphics redraw
-   *  (which repainted glowing eyes) now that the Warden is a painted sprite: tint
-   *  it cyan to read as "awake". `intense` brightens the tint for the phase-2→3
-   *  surge; the dim cyan is the first eyes-open beat. */
+  /** Cool the metal as the Warden wakes, keeping its silhouette readable. */
   private flashWardenAwake(
     sprite: Phaser.GameObjects.Image,
     intense: boolean,
   ): void {
-    sprite.setTint(intense ? 0x8de8ff : 0x4ab8d6);
+    sprite.setTint(intense ? 0xc6f1ff : 0xa4dce8);
   }
 
   private startWardenPhase2(wardenSprite: Phaser.GameObjects.Image): void {

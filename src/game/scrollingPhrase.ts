@@ -47,6 +47,7 @@ const BANNER_FONT_SIZE = 30;
 const BANNER_ENTRY_MS = 420;
 const BANNER_WORD_ATTACH_DELAY_MS = 140;
 const BANNER_ENTRY_MARGIN_X = 70;
+const BANNER_READ_IN_MS = 900;
 
 export class ScrollingPhrase {
   private readonly container: Phaser.GameObjects.Container;
@@ -465,7 +466,10 @@ export class ScrollingPhrase {
    *  No-op once resolved so the completion / miss fade is not undone. */
   setBlur(amount: number): void {
     if (this.resolved || !this.target) return;
-    const clamped = Math.max(0, Math.min(1, amount));
+    // A wide banner can enter inside a beam. Give the player a look at the
+    // letters before masking them, without extending the scroll's deadline.
+    const elapsed = this.progress * this.opts.durationMs;
+    const clamped = elapsed < BANNER_READ_IN_MS ? 0 : Math.max(0, Math.min(1, amount));
     this.target.setSuffixMasked(shouldEatSuffix(clamped));
     const alpha = blurAlphaFor(clamped);
     this.container.setAlpha(alpha);

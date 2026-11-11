@@ -4652,7 +4652,7 @@ export class GreatBattleScene extends Phaser.Scene {
       return;
     }
     const word = words[idx]!;
-    this.band.setObjective(`Final phrase ${idx + 1}/${words.length}: type "${word}"`);
+    this.band.setObjective(`Final phrase ${idx + 1}/${words.length}: type the unfilled part of "${word}"`);
 
     const wordPos = this.finalPhraseWordPosition(idx);
     const target = this.makeFinalPhraseWord({
